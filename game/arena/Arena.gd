@@ -293,13 +293,15 @@ func _setup_grid_highlight() -> void:
 
 
 ## Rebuilds the grid glow mesh for the current hover cell.
-## Draws the 2x2 footprint at full brightness, plus the four immediately
-## adjacent 2x2 blocks (north, south, east, west) at reduced alpha —
-## showing where a neighboring trap could be placed next to this one.
+## Each cell's alpha is derived from its Manhattan distance to the nearest
+## cell in the 2x2 footprint — cells right against the trap are brightest,
+## fading smoothly outward for up to MAX_GLOW_DIST cells.
 func _update_grid_highlight() -> void:
 	if not _grid.is_in_bounds(_hover_cell):
 		_grid_highlight.mesh = null
 		return
+
+	const MAX_GLOW_DIST: int = 3
 
 	var im := ImmediateMesh.new()
 	var hs := Grid.CELL_SIZE * 0.5
@@ -307,37 +309,46 @@ func _update_grid_highlight() -> void:
 
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
 
-	_draw_2x2_glow(im, _hover_cell, hs, y, 0.90)
-
-	for offset in [Vector2i(0, -2), Vector2i(0, 2), Vector2i(-2, 0), Vector2i(2, 0)]:
-		_draw_2x2_glow(im, _hover_cell + offset, hs, y, 0.30)
+	for dr in range(-MAX_GLOW_DIST, 2 + MAX_GLOW_DIST):
+		for dc in range(-MAX_GLOW_DIST, 2 + MAX_GLOW_DIST):
+			var cell := Vector2i(_hover_cell.x + dc, _hover_cell.y + dr)
+			if not _grid.is_in_bounds(cell):
+				continue
+			var dist  := _dist_to_footprint(cell, _hover_cell)
+			if dist > MAX_GLOW_DIST:
+				continue
+			var alpha := 0.90 * pow(1.0 - float(dist) / float(MAX_GLOW_DIST + 1), 1.5)
+			_draw_cell_glow(im, cell, hs, y, alpha)
 
 	im.surface_end()
 	_grid_highlight.mesh = im
 
 
-## Draws the four cell borders of a 2x2 block as line segments into im.
-## Skips any cell that falls outside the grid boundary.
-func _draw_2x2_glow(im: ImmediateMesh, anchor: Vector2i, hs: float, y: float, alpha: float) -> void:
+## Returns the Manhattan distance from cell to the nearest cell in the
+## 2x2 footprint anchored at anchor (top-left). Returns 0 if cell is
+## inside the footprint.
+func _dist_to_footprint(cell: Vector2i, anchor: Vector2i) -> int:
+	var dx := maxi(0, maxi(anchor.x - cell.x, cell.x - (anchor.x + 1)))
+	var dy := maxi(0, maxi(anchor.y - cell.y, cell.y - (anchor.y + 1)))
+	return dx + dy
+
+
+## Draws the four border edges of a single cell as line segments into im.
+func _draw_cell_glow(im: ImmediateMesh, cell: Vector2i, hs: float, y: float, alpha: float) -> void:
 	var color := Color(COLOR_GRID_GLOW.r, COLOR_GRID_GLOW.g, COLOR_GRID_GLOW.b, alpha)
-	for dr in range(2):
-		for dc in range(2):
-			var cell := Vector2i(anchor.x + dc, anchor.y + dr)
-			if not _grid.is_in_bounds(cell):
-				continue
-			var c  := _cell_to_world(cell)
-			var tl := Vector3(c.x - hs, y, c.z - hs)
-			var tr := Vector3(c.x + hs, y, c.z - hs)
-			var bl := Vector3(c.x - hs, y, c.z + hs)
-			var br := Vector3(c.x + hs, y, c.z + hs)
-			im.surface_set_color(color); im.surface_add_vertex(tl)
-			im.surface_set_color(color); im.surface_add_vertex(tr)
-			im.surface_set_color(color); im.surface_add_vertex(tr)
-			im.surface_set_color(color); im.surface_add_vertex(br)
-			im.surface_set_color(color); im.surface_add_vertex(br)
-			im.surface_set_color(color); im.surface_add_vertex(bl)
-			im.surface_set_color(color); im.surface_add_vertex(bl)
-			im.surface_set_color(color); im.surface_add_vertex(tl)
+	var c  := _cell_to_world(cell)
+	var tl := Vector3(c.x - hs, y, c.z - hs)
+	var tr := Vector3(c.x + hs, y, c.z - hs)
+	var bl := Vector3(c.x - hs, y, c.z + hs)
+	var br := Vector3(c.x + hs, y, c.z + hs)
+	im.surface_set_color(color); im.surface_add_vertex(tl)
+	im.surface_set_color(color); im.surface_add_vertex(tr)
+	im.surface_set_color(color); im.surface_add_vertex(tr)
+	im.surface_set_color(color); im.surface_add_vertex(br)
+	im.surface_set_color(color); im.surface_add_vertex(br)
+	im.surface_set_color(color); im.surface_add_vertex(bl)
+	im.surface_set_color(color); im.surface_add_vertex(bl)
+	im.surface_set_color(color); im.surface_add_vertex(tl)
 
 
 # ---------------------------------------------------------------------------
@@ -353,7 +364,7 @@ func _spawn_preview_trap(anchor: Vector2i) -> void:
 		return
 	_preview_trap = _make_box_mesh_instance(
 		Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9),
-		Color(COLOR_TRAP.r, COLOR_TRAP.g, COLOR_TRAP.b, 0.15)
+		Color(COLOR_TRAP.r, COLOR_TRAP.g, COLOR_TRAP.b, 0.50)
 	)
 	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 	_preview_trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
