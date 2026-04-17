@@ -91,9 +91,12 @@ var _multi_origin: Vector2i = Vector2i(-1, -1)
 var _multi_anchors: Array[Vector2i] = []
 var _multi_ghosts: Array[MeshInstance3D] = []
 
-# One cell outside the left and right arena walls — enemies spawn and despawn here.
-var _spawn_cell: Vector2i = Vector2i.ZERO
-var _despawn_cell: Vector2i = Vector2i.ZERO
+# Outside-wall reference positions (x only matters; y is chosen per enemy).
+var _spawn_cell: Vector2i = Vector2i.ZERO    # centre spawn cell (used for x and gap centre)
+var _despawn_cell: Vector2i = Vector2i.ZERO  # fixed despawn cell on the exit side
+
+# The three rows an enemy may spawn from (randomly chosen each spawn).
+var _entrance_rows: Array[int] = []
 
 
 # ---------------------------------------------------------------------------
@@ -102,33 +105,37 @@ var _despawn_cell: Vector2i = Vector2i.ZERO
 
 func _ready() -> void:
 	# Phase 1: entrance and exit are hardcoded for the prototype.
-	# In the full game, Arena receives these from the run manager after
-	# randomly selecting an arena from the pool.
-	var entrance := Vector2i(0, 14)    # left wall, row 14
-	var exit     := Vector2i(29, 15)  # right wall, row 15
+	var entrance := Vector2i(0, 14)
+	var exit     := Vector2i(29, 15)
 
-	# Offset by 2: index ±1 is inside the 1-cell-wide wall, index ±2 is outside it.
 	_spawn_cell   = Vector2i(entrance.x - 2, entrance.y)
-	_despawn_cell = Vector2i(exit.x + 2,    exit.y)
+	_despawn_cell = Vector2i(exit.x + 2, exit.y)
 
+	# Three rows the enemy may enter from; gap is centred on the canonical row.
+	for i in range(3):
+		_entrance_rows.append(entrance.y - 1 + i)   # [13, 14, 15]
+
+	# Mark the centre entrance/exit cells first, then the two flanking cells.
+	# Done before pathfinder.initialize() so cell_changed isn't connected yet
+	# and won't fire premature recalculations.
 	_grid.setup_run(entrance, exit)
+	_grid.set_cell(Vector2i(entrance.x, entrance.y - 1), Grid.CellState.ENTRANCE)
+	_grid.set_cell(Vector2i(entrance.x, entrance.y + 1), Grid.CellState.ENTRANCE)
+	_grid.set_cell(Vector2i(exit.x, exit.y - 1), Grid.CellState.EXIT)
+	_grid.set_cell(Vector2i(exit.x, exit.y + 1), Grid.CellState.EXIT)
+
 	GameState.start_run(entrance, exit)
 	_pathfinder.initialize(_grid)
-
 	_pathfinder.path_updated.connect(_on_path_updated)
 
-	# Markers sit one cell outside the arena wall so the entrance and exit
-	# are clearly visible beyond the border gap.
-	_spawn_flat_marker(_spawn_cell,   COLOR_ENTRANCE)
-	_spawn_flat_marker(_despawn_cell, COLOR_EXIT)
+	# Spawn one elongated marker covering all 3 rows for entrance and exit.
+	_spawn_zone_marker(_spawn_cell,   3, COLOR_ENTRANCE)
+	_spawn_zone_marker(_despawn_cell, 3, COLOR_EXIT)
 
 	_setup_grid_highlight()
 	_spawn_arena_border()
 
-	# Trigger the first path calculation now that entrance and exit are set.
 	_pathfinder.recalculate()
-
-	# Phase 1: launch the first wave immediately.
 	_start_wave()
 
 
@@ -336,7 +343,8 @@ func _on_path_updated(new_path: Array[Vector2i]) -> void:
 		var full: Array[Vector2i] = []
 		var wall_out := Vector2i(_despawn_cell.x - 1, _despawn_cell.y)
 		if not _grid.is_in_bounds(current):
-			full = _build_full_path(grid_path)
+			# Preserve the enemy's approach row when rebuilding from outside.
+			full = _build_full_path(grid_path, current.y)
 		else:
 			full.append_array(grid_path)
 			full.append(wall_out)
@@ -437,24 +445,29 @@ func _start_wave() -> void:
 
 
 ## Spawns one enemy then schedules the next, until the wave is exhausted.
+## Each enemy picks a random row from the entrance gap.
 func _spawn_next_in_wave() -> void:
 	if _enemies_left_to_spawn <= 0:
 		return
 	_enemies_left_to_spawn -= 1
-	var grid_path := _pathfinder.get_current_path()
+	var spawn_row: int  = _entrance_rows[randi() % _entrance_rows.size()]
+	var spawn_grid      := Vector2i(GameState.entrance_cell.x, spawn_row)
+	var grid_path       := _pathfinder.find_path_from(spawn_grid)
+	if grid_path.is_empty():
+		grid_path = _pathfinder.get_current_path()
 	if not grid_path.is_empty():
-		_spawn_enemy(_build_full_path(grid_path))
+		_spawn_enemy(_build_full_path(grid_path, spawn_row))
 	if _enemies_left_to_spawn > 0:
 		get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
 
 
 ## Builds the full enemy path: outside spawn → wall gap → grid → wall gap → outside despawn.
-## The intermediate wall-gap cells (±1 from the outside cells) make the enemy
-## visibly pass through the opening rather than jumping over the wall.
-func _build_full_path(grid_path: Array[Vector2i]) -> Array[Vector2i]:
-	var wall_in  := Vector2i(_spawn_cell.x + 1,   _spawn_cell.y)
-	var wall_out := Vector2i(_despawn_cell.x - 1, _despawn_cell.y)
-	var full: Array[Vector2i] = [_spawn_cell, wall_in]
+## spawn_row selects which of the 3 entrance rows this enemy enters through.
+func _build_full_path(grid_path: Array[Vector2i], spawn_row: int) -> Array[Vector2i]:
+	var outside_spawn := Vector2i(_spawn_cell.x,     spawn_row)
+	var wall_in       := Vector2i(_spawn_cell.x + 1, spawn_row)
+	var wall_out      := Vector2i(_despawn_cell.x - 1, _despawn_cell.y)
+	var full: Array[Vector2i] = [outside_spawn, wall_in]
 	full.append_array(grid_path)
 	full.append(wall_out)
 	full.append(_despawn_cell)
@@ -608,13 +621,12 @@ func _spawn_arena_border() -> void:
 	var half := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
 	var cs   := Grid.CELL_SIZE
 
-	var ent_row := GameState.entrance_cell.y
-	var ent_top := ent_row * cs - half
-	var ent_bot := (ent_row + 1) * cs - half
+	# 3-cell gaps: one cell above and one cell below the canonical entrance/exit row.
+	var ent_top := (GameState.entrance_cell.y - 1) * cs - half
+	var ent_bot := (GameState.entrance_cell.y + 2) * cs - half
 
-	var ex_row  := GameState.exit_cell.y
-	var ex_top  := ex_row * cs - half
-	var ex_bot  := (ex_row + 1) * cs - half
+	var ex_top  := (GameState.exit_cell.y - 1) * cs - half
+	var ex_bot  := (GameState.exit_cell.y  + 2) * cs - half
 
 	var full_w := (Grid.GRID_SIZE + 2) * cs
 
@@ -692,6 +704,17 @@ func _spawn_flat_marker(cell: Vector2i, color: Color) -> void:
 		color
 	)
 	marker.position = _cell_to_world(cell)
+	add_child(marker)
+
+
+## Spawns a flat marker spanning `rows` cells tall, centred on center_cell.
+## Used for the 3-row entrance and exit zone indicators.
+func _spawn_zone_marker(center_cell: Vector2i, rows: int, color: Color) -> void:
+	var marker := _make_box_mesh_instance(
+		Vector3(Grid.CELL_SIZE * 0.9, 0.05, Grid.CELL_SIZE * rows * 0.9),
+		color
+	)
+	marker.position = _cell_to_world(center_cell)
 	add_child(marker)
 
 
