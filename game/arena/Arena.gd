@@ -35,9 +35,6 @@ const COLOR_TRAP      := Color(0.40, 0.40, 0.80, 1.0)   # blue-grey box
 const COLOR_PATH      := Color(0.80, 0.70, 0.20, 0.5)   # yellow, semi-transparent
 const COLOR_GRID_GLOW := Color(0.65, 0.90, 1.0)         # cool blue-white for cursor glow
 
-## How many cells outward from the cursor the grid glow extends.
-const GRID_GLOW_RADIUS: int = 3
-
 
 # ---------------------------------------------------------------------------
 # Node references — resolved at scene load via @onready
@@ -73,6 +70,10 @@ var _active_enemies: Array[Node3D] = []
 var _grid_highlight: MeshInstance3D = null
 var _hover_cell: Vector2i = Vector2i(-1, -1)
 
+# Placement drag state — press starts a drag, release commits the placement.
+var _pressing: bool = false
+var _preview_trap: MeshInstance3D = null
+
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -99,6 +100,11 @@ func _ready() -> void:
 	# Trigger the first path calculation now that entrance and exit are set.
 	_pathfinder.recalculate()
 
+	# Phase 1: spawn one enemy immediately so the arena is populated on launch.
+	var initial_path := _pathfinder.get_current_path()
+	if not initial_path.is_empty():
+		_spawn_enemy(initial_path)
+
 
 # ---------------------------------------------------------------------------
 # Input
@@ -110,25 +116,46 @@ func _input(event: InputEvent) -> void:
 		if cell != _hover_cell:
 			_hover_cell = cell
 			_update_grid_highlight()
+			if _pressing:
+				_update_preview_position(cell)
 		return
 
-	if not event is InputEventMouseButton or not event.pressed:
+	if not event is InputEventMouseButton:
 		return
 
 	var cell := _screen_to_grid(event.position)
-	if not _grid.is_in_bounds(cell):
-		return
 
 	match event.button_index:
 		MOUSE_BUTTON_LEFT:
-			_try_place_trap(cell)
+			if event.pressed:
+				if _grid.is_in_bounds(cell):
+					_start_placement(cell)
+			else:
+				_finish_placement(cell)
 		MOUSE_BUTTON_RIGHT:
-			_try_remove_trap(cell)
+			if event.pressed and _grid.is_in_bounds(cell):
+				_try_remove_trap(cell)
 
 
 # ---------------------------------------------------------------------------
 # Placement logic
 # ---------------------------------------------------------------------------
+
+## Called on mouse/finger down. Spawns an invisible ghost showing where the
+## trap will land. The player can drag before releasing to reposition it.
+func _start_placement(anchor: Vector2i) -> void:
+	_pressing = true
+	_spawn_preview_trap(anchor)
+
+
+## Called on mouse/finger up. Commits the trap at the current hover cell
+## and removes the ghost regardless of whether placement succeeds.
+func _finish_placement(cell: Vector2i) -> void:
+	_pressing = false
+	_clear_preview()
+	if _grid.is_in_bounds(cell):
+		_try_place_trap(cell)
+
 
 func _try_place_trap(anchor: Vector2i) -> void:
 	var cells := _get_trap_cells(anchor)
@@ -243,6 +270,11 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 	_active_enemies.erase(enemy)
 	# enemy.queue_free() is called inside Enemy.gd — no double-free needed.
 
+	# Phase 1: immediately respawn so the arena stays populated for testing.
+	var current_path := _pathfinder.get_current_path()
+	if not current_path.is_empty():
+		_spawn_enemy(current_path)
+
 
 # ---------------------------------------------------------------------------
 # Grid highlight
@@ -260,37 +292,44 @@ func _setup_grid_highlight() -> void:
 	add_child(_grid_highlight)
 
 
-## Rebuilds the grid glow mesh around the current hover cell.
-## Each cell within GRID_GLOW_RADIUS has its four edges drawn as line segments.
-## Alpha falls off quadratically so cells further away appear dimmer.
+## Rebuilds the grid glow mesh for the current hover cell.
+## Draws the 2x2 footprint at full brightness, plus the four immediately
+## adjacent 2x2 blocks (north, south, east, west) at reduced alpha —
+## showing where a neighboring trap could be placed next to this one.
 func _update_grid_highlight() -> void:
 	if not _grid.is_in_bounds(_hover_cell):
 		_grid_highlight.mesh = null
 		return
 
-	var im  := ImmediateMesh.new()
-	var hs  := Grid.CELL_SIZE * 0.5
-	var y   := 0.08   # sit above path markers and floor markers
+	var im := ImmediateMesh.new()
+	var hs := Grid.CELL_SIZE * 0.5
+	var y  := 0.08   # sit above path markers and floor markers
 
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
 
-	for dr in range(-GRID_GLOW_RADIUS, GRID_GLOW_RADIUS + 1):
-		for dc in range(-GRID_GLOW_RADIUS, GRID_GLOW_RADIUS + 1):
-			var cell := Vector2i(_hover_cell.x + dc, _hover_cell.y + dr)
+	_draw_2x2_glow(im, _hover_cell, hs, y, 0.90)
+
+	for offset in [Vector2i(0, -2), Vector2i(0, 2), Vector2i(-2, 0), Vector2i(2, 0)]:
+		_draw_2x2_glow(im, _hover_cell + offset, hs, y, 0.30)
+
+	im.surface_end()
+	_grid_highlight.mesh = im
+
+
+## Draws the four cell borders of a 2x2 block as line segments into im.
+## Skips any cell that falls outside the grid boundary.
+func _draw_2x2_glow(im: ImmediateMesh, anchor: Vector2i, hs: float, y: float, alpha: float) -> void:
+	var color := Color(COLOR_GRID_GLOW.r, COLOR_GRID_GLOW.g, COLOR_GRID_GLOW.b, alpha)
+	for dr in range(2):
+		for dc in range(2):
+			var cell := Vector2i(anchor.x + dc, anchor.y + dr)
 			if not _grid.is_in_bounds(cell):
 				continue
-
-			var dist  := maxi(absi(dc), absi(dr))
-			var t     := float(dist) / float(GRID_GLOW_RADIUS + 1)
-			var alpha := pow(1.0 - t, 2.0)
-			var color := Color(COLOR_GRID_GLOW.r, COLOR_GRID_GLOW.g, COLOR_GRID_GLOW.b, alpha)
-
 			var c  := _cell_to_world(cell)
 			var tl := Vector3(c.x - hs, y, c.z - hs)
 			var tr := Vector3(c.x + hs, y, c.z - hs)
 			var bl := Vector3(c.x - hs, y, c.z + hs)
 			var br := Vector3(c.x + hs, y, c.z + hs)
-
 			im.surface_set_color(color); im.surface_add_vertex(tl)
 			im.surface_set_color(color); im.surface_add_vertex(tr)
 			im.surface_set_color(color); im.surface_add_vertex(tr)
@@ -300,8 +339,43 @@ func _update_grid_highlight() -> void:
 			im.surface_set_color(color); im.surface_add_vertex(bl)
 			im.surface_set_color(color); im.surface_add_vertex(tl)
 
-	im.surface_end()
-	_grid_highlight.mesh = im
+
+# ---------------------------------------------------------------------------
+# Placement preview
+# ---------------------------------------------------------------------------
+
+## Spawns a nearly transparent ghost trap so the player can see placement
+## position while dragging. Very low alpha keeps the path visible beneath.
+func _spawn_preview_trap(anchor: Vector2i) -> void:
+	_clear_preview()
+	var cells := _get_trap_cells(anchor)
+	if cells.is_empty():
+		return
+	_preview_trap = _make_box_mesh_instance(
+		Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9),
+		Color(COLOR_TRAP.r, COLOR_TRAP.g, COLOR_TRAP.b, 0.15)
+	)
+	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
+	_preview_trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
+	add_child(_preview_trap)
+
+
+## Moves the ghost trap to a new anchor position while the player is dragging.
+func _update_preview_position(anchor: Vector2i) -> void:
+	if _preview_trap == null:
+		return
+	var cells := _get_trap_cells(anchor)
+	if cells.is_empty():
+		return
+	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
+	_preview_trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
+
+
+## Removes the ghost trap node.
+func _clear_preview() -> void:
+	if _preview_trap != null:
+		_preview_trap.queue_free()
+		_preview_trap = null
 
 
 # ---------------------------------------------------------------------------
