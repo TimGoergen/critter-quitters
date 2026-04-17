@@ -1,0 +1,7 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="PackedScene" path="res://arena/Arena.tscn" id="1"]
+
+[node name="Main" type="Node3D"]
+
+[node name="Arena" parent="." instance=ExtResource("1")]
