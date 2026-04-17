@@ -317,6 +317,8 @@ func _update_grid_highlight() -> void:
 			var dist  := _dist_to_footprint(cell, _hover_cell)
 			if dist > MAX_GLOW_DIST:
 				continue
+			if dist == 0 and _pressing:
+				continue
 			var alpha := 0.90 * pow(1.0 - float(dist) / float(MAX_GLOW_DIST + 1), 1.5)
 			_draw_cell_glow(im, cell, hs, y, alpha)
 
