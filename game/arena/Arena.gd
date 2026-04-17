@@ -320,12 +320,15 @@ func _update_grid_highlight() -> void:
 			if not _grid.is_in_bounds(cell):
 				continue
 			var dist  := _dist_to_footprint(cell, _hover_cell)
-			if dist > MAX_GLOW_DIST:
+			if dist == 0 or dist > MAX_GLOW_DIST:
 				continue
-			if dist == 0 and _pressing:
-				continue
-			var alpha := 0.90 * pow(1.0 - float(dist) / float(MAX_GLOW_DIST + 1), 2.5)
+			var alpha := 0.80 * pow(1.0 - float(dist) / float(MAX_GLOW_DIST + 1), 2.5)
 			_draw_cell_glow(im, cell, hs, y, alpha)
+
+	# Draw the 2x2 footprint as a single outer rectangle — no interior lines.
+	# Skip entirely while pressing; the ghost trap is already visible there.
+	if not _pressing:
+		_draw_2x2_perimeter(im, _hover_cell, hs, y, 0.80)
 
 	im.surface_end()
 	_grid_highlight.mesh = im
@@ -338,6 +341,25 @@ func _dist_to_footprint(cell: Vector2i, anchor: Vector2i) -> int:
 	var dx := maxi(0, maxi(anchor.x - cell.x, cell.x - (anchor.x + 1)))
 	var dy := maxi(0, maxi(anchor.y - cell.y, cell.y - (anchor.y + 1)))
 	return dx + dy
+
+
+## Draws the outer perimeter of the 2x2 footprint as a single rectangle.
+## Anchored at the top-left cell; spans 2 cell widths in each direction.
+func _draw_2x2_perimeter(im: ImmediateMesh, anchor: Vector2i, hs: float, y: float, alpha: float) -> void:
+	var color := Color(COLOR_GRID_GLOW.r, COLOR_GRID_GLOW.g, COLOR_GRID_GLOW.b, alpha)
+	var c  := _cell_to_world(anchor)
+	var tl := Vector3(c.x - hs,                    y, c.z - hs)
+	var tr := Vector3(c.x + hs + Grid.CELL_SIZE,    y, c.z - hs)
+	var bl := Vector3(c.x - hs,                    y, c.z + hs + Grid.CELL_SIZE)
+	var br := Vector3(c.x + hs + Grid.CELL_SIZE,    y, c.z + hs + Grid.CELL_SIZE)
+	im.surface_set_color(color); im.surface_add_vertex(tl)
+	im.surface_set_color(color); im.surface_add_vertex(tr)
+	im.surface_set_color(color); im.surface_add_vertex(tr)
+	im.surface_set_color(color); im.surface_add_vertex(br)
+	im.surface_set_color(color); im.surface_add_vertex(br)
+	im.surface_set_color(color); im.surface_add_vertex(bl)
+	im.surface_set_color(color); im.surface_add_vertex(bl)
+	im.surface_set_color(color); im.surface_add_vertex(tl)
 
 
 ## Draws the four border edges of a single cell as line segments into im.
