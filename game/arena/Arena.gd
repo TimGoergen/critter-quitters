@@ -34,7 +34,8 @@ const COLOR_EXIT      := Color(0.80, 0.20, 0.20, 1.0)   # red
 const COLOR_TRAP      := Color(0.40, 0.40, 0.80, 1.0)   # blue-grey box
 const COLOR_PATH      := Color(0.80, 0.70, 0.20, 0.5)   # yellow, semi-transparent
 const COLOR_GRID_GLOW    := Color(0.65, 0.90, 1.0)       # cool blue-white for cursor glow
-const COLOR_ARENA_BORDER := Color(0.20, 0.85, 0.20, 1.0) # green perimeter line
+const COLOR_WALL_FILL    := Color(0.72, 0.72, 0.72, 1.0) # light gray wall fill
+const COLOR_WALL_BORDER  := Color(0.25, 0.25, 0.25, 1.0) # dark gray cell border lines
 
 
 # ---------------------------------------------------------------------------
@@ -601,9 +602,8 @@ func _clear_preview() -> void:
 # Visual helpers — Phase 1 placeholder geometry
 # ---------------------------------------------------------------------------
 
-## Draws the arena border as 1-cell-wide solid slabs surrounding the arena,
-## with gaps at the entrance (left wall) and exit (right wall).
-## Corner pieces are included in the top/bottom slabs so no seams appear.
+## Draws the arena border as 1-cell-wide light gray slabs with a dark gray
+## 1px border around every individual cell, giving a stone-block appearance.
 func _spawn_arena_border() -> void:
 	var half := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
 	var cs   := Grid.CELL_SIZE
@@ -616,30 +616,70 @@ func _spawn_arena_border() -> void:
 	var ex_top  := ex_row * cs - half
 	var ex_bot  := (ex_row + 1) * cs - half
 
-	# Top and bottom slabs span the full width including the corner cells.
 	var full_w := (Grid.GRID_SIZE + 2) * cs
+
+	# --- Fill slabs (light gray) ---
 	_spawn_wall_slab(Vector3(0.0, 0.0, -half - cs * 0.5), Vector2(full_w, cs))
 	_spawn_wall_slab(Vector3(0.0, 0.0,  half + cs * 0.5), Vector2(full_w, cs))
 
-	# Left wall — two slabs that skip the entrance row.
 	var lup  := ent_top - (-half)
 	var lbot := half - ent_bot
 	if lup  > 0.0: _spawn_wall_slab(Vector3(-half - cs * 0.5, 0.0, -half + lup  * 0.5), Vector2(cs, lup))
 	if lbot > 0.0: _spawn_wall_slab(Vector3(-half - cs * 0.5, 0.0,  ent_bot + lbot * 0.5), Vector2(cs, lbot))
 
-	# Right wall — two slabs that skip the exit row.
 	var rup  := ex_top - (-half)
 	var rbot := half - ex_bot
 	if rup  > 0.0: _spawn_wall_slab(Vector3( half + cs * 0.5, 0.0, -half + rup  * 0.5), Vector2(cs, rup))
 	if rbot > 0.0: _spawn_wall_slab(Vector3( half + cs * 0.5, 0.0,  ex_bot + rbot * 0.5), Vector2(cs, rbot))
 
+	# --- Cell border lines (dark gray, one grid per wall cell) ---
+	var im := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
 
-## Creates one flat wall segment. size.x = slab width (X axis), size.y = slab depth (Z axis).
-## The slab sits flat on the floor with the same height as the floor markers.
+	_draw_wall_cell_borders(im, -(half + cs), half + cs, -(half + cs), -half)
+	_draw_wall_cell_borders(im, -(half + cs), half + cs,  half,         half + cs)
+	if lup  > 0.0: _draw_wall_cell_borders(im, -(half + cs), -half, -half,   ent_top)
+	if lbot > 0.0: _draw_wall_cell_borders(im, -(half + cs), -half,  ent_bot, half)
+	if rup  > 0.0: _draw_wall_cell_borders(im,  half, half + cs, -half,   ex_top)
+	if rbot > 0.0: _draw_wall_cell_borders(im,  half, half + cs,  ex_bot,  half)
+
+	im.surface_end()
+
+	var lines     := MeshInstance3D.new()
+	lines.mesh     = im
+	var mat       := StandardMaterial3D.new()
+	mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	lines.material_override = mat
+	add_child(lines)
+
+
+## Draws dark gray grid lines at every cell boundary within the given rectangle.
+func _draw_wall_cell_borders(
+	im: ImmediateMesh,
+	min_x: float, max_x: float,
+	min_z: float, max_z: float
+) -> void:
+	var cs := Grid.CELL_SIZE
+	var y  := 0.03   # just above the slab surface
+	im.surface_set_color(COLOR_WALL_BORDER)
+	var x := min_x
+	while x <= max_x + 0.001:
+		im.surface_add_vertex(Vector3(x, y, min_z))
+		im.surface_add_vertex(Vector3(x, y, max_z))
+		x += cs
+	var z := min_z
+	while z <= max_z + 0.001:
+		im.surface_add_vertex(Vector3(min_x, y, z))
+		im.surface_add_vertex(Vector3(max_x, y, z))
+		z += cs
+
+
+## Creates one flat wall fill slab.
 func _spawn_wall_slab(center: Vector3, size: Vector2) -> void:
 	var slab := _make_box_mesh_instance(
 		Vector3(size.x, 0.05, size.y),
-		COLOR_ARENA_BORDER
+		COLOR_WALL_FILL
 	)
 	slab.position = center
 	add_child(slab)
