@@ -324,7 +324,7 @@ func _redraw_path_display() -> void:
 	_clear_path_visuals()
 	var start_idx := 0
 	if not _active_enemies.is_empty():
-		var target := _active_enemies[0].get_target_cell()
+		var target: Vector2i = _active_enemies[0].get_target_cell()
 		var idx    := _display_path.find(target)
 		if idx >= 0:
 			start_idx = idx
