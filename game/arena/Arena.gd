@@ -337,18 +337,20 @@ func _on_path_updated(new_path: Array[Vector2i]) -> void:
 		# If the enemy is still in the outside approach cell, A* must start
 		# from the entrance (first in-bounds cell) to stay within the grid.
 		var from: Vector2i = current if _grid.is_in_bounds(current) else GameState.entrance_cell
-		var grid_path := _pathfinder.find_path_from(from)
+		var target_exit   := _nearest_exit_cell(from.y)
+		var grid_path     := _pathfinder.find_path_from(from, target_exit)
 		if grid_path.is_empty():
 			continue
 		var full: Array[Vector2i] = []
-		var wall_out := Vector2i(_despawn_cell.x - 1, _despawn_cell.y)
 		if not _grid.is_in_bounds(current):
-			# Preserve the enemy's approach row when rebuilding from outside.
 			full = _build_full_path(grid_path, current.y)
 		else:
+			var exit_row := grid_path.back().y
+			var wall_out := Vector2i(_despawn_cell.x - 1, exit_row)
+			var despawn  := Vector2i(_despawn_cell.x,     exit_row)
 			full.append_array(grid_path)
 			full.append(wall_out)
-			full.append(_despawn_cell)
+			full.append(despawn)
 		enemy.update_path(full)
 		_display_path = grid_path
 	_redraw_path_display()
@@ -445,14 +447,15 @@ func _start_wave() -> void:
 
 
 ## Spawns one enemy then schedules the next, until the wave is exhausted.
-## Each enemy picks a random row from the entrance gap.
+## Each enemy picks a random entrance row and routes to the nearest exit row.
 func _spawn_next_in_wave() -> void:
 	if _enemies_left_to_spawn <= 0:
 		return
 	_enemies_left_to_spawn -= 1
 	var spawn_row: int  = _entrance_rows[randi() % _entrance_rows.size()]
 	var spawn_grid      := Vector2i(GameState.entrance_cell.x, spawn_row)
-	var grid_path       := _pathfinder.find_path_from(spawn_grid)
+	var target_exit     := _nearest_exit_cell(spawn_row)
+	var grid_path       := _pathfinder.find_path_from(spawn_grid, target_exit)
 	if grid_path.is_empty():
 		grid_path = _pathfinder.get_current_path()
 	if not grid_path.is_empty():
@@ -461,16 +464,26 @@ func _spawn_next_in_wave() -> void:
 		get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
 
 
+## Returns the exit cell (on the grid edge) whose row is nearest to from_row.
+## Clamps to the 3-cell exit gap so the result is always a valid exit opening.
+func _nearest_exit_cell(from_row: int) -> Vector2i:
+	var nearest_row := clampi(from_row, GameState.exit_cell.y - 1, GameState.exit_cell.y + 1)
+	return Vector2i(GameState.exit_cell.x, nearest_row)
+
+
 ## Builds the full enemy path: outside spawn → wall gap → grid → wall gap → outside despawn.
-## spawn_row selects which of the 3 entrance rows this enemy enters through.
+## spawn_row selects which entrance row this enemy uses.
+## The exit row is derived from the last cell of grid_path (the nearest exit opening).
 func _build_full_path(grid_path: Array[Vector2i], spawn_row: int) -> Array[Vector2i]:
 	var outside_spawn := Vector2i(_spawn_cell.x,     spawn_row)
 	var wall_in       := Vector2i(_spawn_cell.x + 1, spawn_row)
-	var wall_out      := Vector2i(_despawn_cell.x - 1, _despawn_cell.y)
+	var exit_row      := grid_path.back().y
+	var wall_out      := Vector2i(_despawn_cell.x - 1, exit_row)
+	var despawn       := Vector2i(_despawn_cell.x,     exit_row)
 	var full: Array[Vector2i] = [outside_spawn, wall_in]
 	full.append_array(grid_path)
 	full.append(wall_out)
-	full.append(_despawn_cell)
+	full.append(despawn)
 	return full
 
 
