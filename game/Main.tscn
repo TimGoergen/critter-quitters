@@ -1,4 +1,4 @@
-[gd_scene load_steps=2 format=3]
+[gd_scene load_steps=2 format=3 uid="uid://dudxbop6e28sq"]
 
 [ext_resource type="PackedScene" path="res://arena/Arena.tscn" id="1"]
 
