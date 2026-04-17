@@ -101,9 +101,15 @@ func update_path(new_path: Array[Vector2i]) -> void:
 	if new_path.size() < 2:
 		_path = new_path
 		return
-	_path        = new_path
-	_path_index  = 1
-	_target_cell = new_path[1]
+	_path = new_path
+	var target_idx := new_path.find(_target_cell)
+	if target_idx > 0:
+		# Already heading toward a cell on the new path — finish the segment
+		# without interruption rather than snapping to a new direction mid-cell.
+		_path_index = target_idx
+	else:
+		_path_index  = 1
+		_target_cell = new_path[1]
 
 
 ## Returns the last cell the enemy fully arrived at.

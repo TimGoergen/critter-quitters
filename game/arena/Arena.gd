@@ -198,23 +198,23 @@ func _try_remove_trap(cell: Vector2i) -> void:
 # ---------------------------------------------------------------------------
 
 func _on_path_updated(new_path: Array[Vector2i]) -> void:
-	_clear_path_visuals()
+	# Compute a fresh optimal path for each enemy, then use that path for the
+	# yellow line so it always shows the enemy's actual route to the exit.
+	# Phase 1 has one enemy — falls back to entrance→exit if none are active.
+	var display_path := new_path
+	for enemy in _active_enemies:
+		var enemy_path := _pathfinder.find_path_from(enemy.get_current_cell())
+		if not enemy_path.is_empty():
+			enemy.update_path(enemy_path)
+			display_path = enemy_path
 
-	for cell in new_path:
-		# Only draw path markers on traversable cells — skip trap cells
-		# (they block the path) and entrance/exit (already have markers).
+	_clear_path_visuals()
+	for cell in display_path:
 		var state := _grid.get_cell(cell)
 		if state == Grid.CellState.EMPTY \
 				or state == Grid.CellState.ENTRANCE \
 				or state == Grid.CellState.EXIT:
 			_spawn_path_marker(cell)
-
-	# Give each enemy a fresh A* path from its current cell to the exit
-	# so every enemy takes the optimal route given the new grid layout.
-	for enemy in _active_enemies:
-		var enemy_path := _pathfinder.find_path_from(enemy.get_current_cell())
-		if not enemy_path.is_empty():
-			enemy.update_path(enemy_path)
 
 
 # ---------------------------------------------------------------------------
