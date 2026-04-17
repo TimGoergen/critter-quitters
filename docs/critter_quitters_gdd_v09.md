@@ -17,6 +17,7 @@
 | v0.7 | Game structure overhaul. Single persistent arena replaces multi-level structure. Currency renamed to Bug Bucks. Property HP replaced by Infestation Level. Arena Evolution introduced (every 10 waves). Wave complexity model defined. Boss wave structure defined. Single entrance / single exit on separate walls replaces dual entrance model. Starting trap selection added (3 offered, pick 2). Store fully redesigned: 3 tiered upgrade options, reroll mechanic, trap unlocks. Infestation healing added as store option and trap modifier. |
 | v0.8 | Tech stack defined. Development path defined across 6 phases. Save file system added to Phase 4. |
 | v0.9 | Boss wave frequency confirmed: every 10 waves. Arena Evolution timing updated: occurs in the wave immediately following each boss wave. Store reroll cost confirmed: progressive linear, resets each visit (e.g. 5, 10, 15, 20...); exact base amount and increment TBD via playtesting. |
+| v0.10 | Meta-progression system added: Service Fees currency, The Truck hub, equipment and business upgrades, stats screen. Arena pool defined: 4 residential arenas (Kitchen, Backyard, Basement, Attic). All open design questions resolved or deferred. GDScript code standards documented in CLAUDE.md. |
 
 ---
 
@@ -30,12 +31,13 @@
 6. Mechanics
 6a. Blocking Terrain & Arena Evolution
 7. Progression & Economy
-8. Aesthetic Direction
-9. Mobile UX Considerations
-10. Open Questions
-11. Future Pass
-12. Tech Stack
-13. Development Path
+8. Meta Progression & The Truck
+9. Aesthetic Direction
+10. Mobile UX Considerations
+11. Open Questions
+12. Future Pass
+13. Tech Stack
+14. Development Path
 
 ---
 
@@ -85,7 +87,9 @@ Before the first wave, the player is presented with 3 randomly selected trap typ
 
 **Unit interaction rules:** Pests cannot affect player traps in any way. Each trap defines only its own trigger rate, damage, and range — traps do not buff or debuff other traps. Traps may apply fire or ice DoT effects directly to pests they hit.
 
-**Targeting:** Each trap targets the pest within its range that is farthest along the current path toward the exit — prioritising the most immediate threat.
+**Range:** Each trap has a circular range field. A pest becomes exposed to a trap as soon as it enters that circle. The range circle is always displayed around a selected placed trap.
+
+**Targeting:** Each trap targets the exposed pest (within its range circle) that is farthest along the current path toward the exit — prioritising the most immediate threat.
 
 **Projectiles:** Traps fire projectiles or release effects that travel visually toward their target. Damage is applied instantly on firing — projectile travel is cosmetic.
 
@@ -105,8 +109,27 @@ Each run has one entrance and one exit, assigned to separate walls at run start.
 | :---- | :---- |
 | Entry points | One — assigned to a wall at run start |
 | Exit points | One — assigned to a different wall at run start |
-| Grid size | TBD |
+| Grid size | 14×14 (fixed) |
 | Pathfinding | A\* real-time |
+| Arena selection | Random from pool at run start |
+| Starting obstacles | None — arena is empty at run start |
+
+**Arena pool**
+
+The game includes a pool of arenas, each with a distinct location theme, color palette, and obstacle name. One arena is selected randomly at the start of each run. All arenas share the same grid size and rules; they differ only in aesthetics and obstacle naming.
+
+Obstacles are never present at run start. They are introduced exclusively through Arena Evolution, beginning at wave 11. See Section 6a.
+
+All v1 arenas are set within a single residential home. This grounds the pest control theme and provides a cohesive setting across runs.
+
+**v1 Arena Pool**
+
+| Arena | Pest Destination | Obstacle Name | Palette |
+| :---- | :---- | :---- | :---- |
+| Kitchen | Food source | Appliances | Warm cream / yellow |
+| Backyard | Foraging / outdoor access | Yard Clutter | Greens / dirt brown |
+| Basement | Shelter / nesting | Storage | Cool dark grey |
+| Attic | Shelter / nesting | Clutter | Dusty warm brown |
 
 The arena evolves over the course of the run. See Section 6a.
 
@@ -118,7 +141,7 @@ Each trap is a tool in an exterminator's kit. Names below are working titles —
 
 **Availability:** Not all traps are available at run start. The player selects 2 of 3 randomly offered traps before wave 1. Remaining traps may be unlocked through the store.
 
-**Upgrade system:** Each trap has branching upgrade paths. Within each branch, the player purchases incremental upgrades that improve a core metric (damage, trigger rate, range, or other stats). When a branch is fully upgraded, a new path unlocks — evolving the trap into a more advanced unit with expanded abilities.
+**Upgrade system:** Each trap can be upgraded up to 5 times, tracked by a star rating (1–5). Each upgrade improves a core metric (damage, trigger rate, range, or other stats). After 5 upgrades, a variation becomes available — evolving the trap into a more advanced unit with expanded abilities.
 
 Fully evolved units can inflict damage-over-time (DoT) effects:
 
@@ -142,25 +165,25 @@ Fully evolved units can inflict damage-over-time (DoT) effects:
 
 **Archetype:** Basic / single-target
 
-Cheap, reliable. Fast trigger rate, low damage. The expendable backbone of any build. Upgrade path: faster trigger rate or wider detection range.
+Cheap, reliable. Small range circle, fast trigger rate, low damage. Fires at the nearest exposed pest. The expendable backbone of any build.
 
 ### **The Zapper**
 
 **Archetype:** Long range / high damage
 
-Extreme range, very slow trigger rate. Prioritizes highest-HP target. Eliminates standard pests outright late in upgrade path.
+Large range circle, very slow trigger rate, high damage. Fires an electrical bolt at the exposed pest farthest along the path. Its wide range circle allows it to reach pests deep in corridors without being placed near them. Eliminates standard pests outright late in upgrade path.
 
 ### **The Fogger**
 
 **Archetype:** Area of effect / high damage
 
-Slow trigger rate, high damage per burst. Attacks deal AoE damage to all pests in a radius around the target. Ideal for chokepoints and tightly packed groups. AoE radius TBD.
+Medium range circle, slow trigger rate, high damage per burst. When it fires, the fog cloud fills its entire range circle — damaging all exposed pests simultaneously. The range circle defines both targeting and AoE coverage. Ideal for chokepoints and tightly packed groups.
 
 ### **The Glue Board**
 
 **Archetype:** Ice / area slow
 
-Applies ice DoT to pests in a radius — reducing their movement speed for a duration. Low cost, low footprint.
+Medium range circle, passive and continuous. Any pest inside the circle has the ice slow applied for as long as it remains in range. Low cost, low footprint.
 
 ---
 
@@ -192,26 +215,29 @@ Applies ice DoT to pests in a radius — reducing their movement speed for a dur
 
 ## **6a. Blocking Terrain & Arena Evolution**
 
-**Blocking terrain** consists of environmental obstacles appropriate to the run's location — furniture, appliances, boxes, pipes, pallets. They are inert: no secondary effects on pests or traps. They act purely as physical barriers that reshape the maze.
+**Blocking terrain** consists of environmental obstacles appropriate to the run's location. They are inert: no secondary effects on pests or traps. They act purely as physical barriers that reshape the maze. Obstacle names are location-specific — see the arena pool in Section 3.
 
-**Arena Evolution** is triggered by boss waves — it occurs at the start of the wave immediately following each boss wave (waves 11, 21, 31, ...). At each evolution:
+**Arena Evolution** is triggered by boss waves — it occurs at the start of the wave immediately following each boss wave (waves 11, 21, 31, ...). At each evolution, two independent checks are made:
 
-- There is a small chance that 1 or a few obstacle cells are added to the arena
-- Obstacles are placed randomly, subject to pathfinding validity (cannot block all paths, cannot spawn on entrance or exit cells)
-- If an obstacle is placed on a cell already occupied by a player trap, the trap is destroyed and the player receives no refund. The obstacle still provides path-blocking value in place of the lost trap.
-- Not every evolution is guaranteed to add obstacles — the chance is intentionally small
+**Obstacle spawn check:**
+
+| Outcome | Probability |
+| :---- | :---- |
+| 3 obstacles added | 5% |
+| 2 obstacles added | 10% |
+| 1 obstacle added | 15% |
+| No obstacles added | 70% |
+
+**Obstacle removal check** (independent of spawn check):
+
+| Outcome | Probability |
+| :---- | :---- |
+| 1 random existing obstacle removed | 3% |
+| No removal | 97% |
+
+Obstacles are placed on a randomly selected cell anywhere in the arena. The only restrictions are pathfinding validity (the placement cannot eliminate all valid paths) and that entrance and exit cells are excluded. Cells occupied by player traps are not excluded — if an obstacle spawns on a trap, the trap is destroyed with no refund. The obstacle occupies that cell in its place.
 
 Arena Evolution creates a sense of progression and forces the player to adapt their maze strategy as the environment slowly changes around them.
-
-**Blocking terrain name:** TBD — see candidates below.
-
-| Candidate Name | Theme Fit |
-| :---- | :---- |
-| Furniture | Strong — sofas, tables, chairs block movement naturally |
-| Appliances | Strong — fridges, washing machines, large fixed objects |
-| Boxes / Clutter | Strong — storage rooms, attics, basements |
-| Pipes | Good — utility rooms, basements |
-| Pallets | Good — warehouse, grocery store, restaurant back-of-house |
 
 ---
 
@@ -298,7 +324,53 @@ Composite of total pests eliminated and highest wave reached. Exact formula TBD.
 
 ---
 
-## **8. Aesthetic Direction**
+## **8. Meta Progression & The Truck**
+
+Between runs, the player returns to **The Truck** — their vehicle, home base, and equipment storage. The Truck is the hub screen between jobs. It reinforces the one-man pest control business framing: everything the player owns is in that truck.
+
+**Hub options:**
+
+| Option | Description |
+| :---- | :---- |
+| Start New Job | Begins a new run — randomly selects an arena and starts wave 1 |
+| Upgrades | Opens the meta-upgrade screen; spend Service Fees on equipment and business improvements |
+| Stats | View lifetime performance — total pests killed, highest wave reached, runs completed, and other tracked metrics |
+
+---
+
+**Meta Currency: Service Fees**
+
+Service Fees are the player's profit across runs. While Bug Bucks represent gross earnings on the job — much of which goes to overhead and in-run expenses — Service Fees are what's left over: clean profit that goes back into the business.
+
+Service Fees are earned at the end of each run based on performance:
+
+- Pests eliminated during the run
+- Highest wave reached
+
+Better performance earns more Service Fees. Service Fees persist across runs and are never lost.
+
+---
+
+**Meta Upgrades**
+
+Meta upgrades are permanent improvements purchased with Service Fees. They persist across all future runs. Two categories are available:
+
+**Equipment upgrades** — improvements to the player's tools and traps:
+- Starting stats for specific trap types (damage, range, trigger rate)
+- Unlocking traps as permanent starting options
+- DoT effectiveness, duration, or other trap modifiers
+
+**Business upgrades** — improvements to the operation itself:
+- Starting Bug Bucks amount at the beginning of each run
+- Store options (more choices, reduced reroll costs)
+- Starting Infestation Level threshold improvements
+- Other run-start advantages
+
+Specific upgrade trees and costs are TBD via playtesting.
+
+---
+
+## **9. Aesthetic Direction**
 
 The game is intentionally graphically minimal. Game elements — traps, pests, terrain, projectiles — are represented by ASCII characters rendered as physical 3D objects. Characters are not flat sprites; they exist in three-dimensional space and move with physical weight and smoothness. A pest crossing the arena tilts into turns, bobs as it moves, and reacts physically when hit.
 
@@ -320,9 +392,11 @@ ASCII characters are rendered as flat planes (billboards) that always face the c
 
 **Key aesthetic tags:** ASCII-as-physical-objects, colored, dark background, 3D smooth movement, minimal HUD.
 
+**Audio:** Understated and quirky. Light enough to stay out of the way of gameplay, but with enough personality to reinforce the pest control theme. Tone sits between ambient/minimal and playfully odd. Licensed vs. original score TBD.
+
 ---
 
-## **9. Mobile UX Considerations**
+## **10. Mobile UX Considerations**
 
 * Grid cells must meet minimum touch target size (44×44pt iOS guideline)
 
@@ -354,21 +428,28 @@ Additional considerations:
 * HUD elements must remain fixed on screen outside the scrollable arena viewport
 * Pinch-to-zoom (optional) — allows strategic overview; minimum zoom must keep cells tappable
 
-**Trap shop UX — open**
+**Trap shop UX**
 
-How the player views trap stats before purchasing:
+Long-pressing a trap in the selection screen opens a modal stat card. The card is visible for the duration of the press and dismisses automatically on release. This does not enter placement mode.
 
-* **Tap to preview** — tapping a trap opens a stat card before entering placement mode
-* **Always visible** — stats shown inline without tapping
-* **Placement preview** — stats visible once placement mode is active with trap ghosted on grid
+**Placed trap interaction**
 
-**Placed trap interaction — open**
+When the player taps an already-placed trap, a context panel appears showing:
 
-When the player taps an already-placed trap, a context panel appears. Contents TBD — candidates: upgrade tree, sell option, stats panel. Layout and interaction flow TBD.
+- Trap type name
+- Trap type description
+- Damage
+- Damage type
+- Range
+- Upgrade star rating (1–5 stars) — tracks how many times this trap has been upgraded
+
+Additionally, the trap's range circle is always rendered on the arena when the trap is selected, overlaid on the grid.
+
+A trap must be upgraded 5 times (reaching 5 stars) before a variation becomes available.
 
 ---
 
-## **10. Open Questions**
+## **11. Open Questions**
 
 | Status | Question |
 | :---- | :---- |
@@ -388,21 +469,21 @@ When the player taps an already-placed trap, a context panel appears. Contents T
 | Resolved | Pathfinding: minimum one valid path always enforced |
 | Resolved | Trap footprint: mostly 1×1; some use 3+ contiguous cells in irregular shapes |
 | Resolved | Sell value: 70% of buy price |
-| Open | Grid dimensions — exact cell count TBD via playtesting |
+| Resolved | Grid dimensions — 14×14 (fixed; subject to change via playtesting) |
 | Resolved | Boss wave frequency — every 10 waves (waves 10, 20, 30, ...) |
 | Resolved | Store reroll cost — progressive linear per visit, resets each visit; base amount and increment TBD via playtesting |
-| Open | Trap shop UX — stat preview method |
-| Open | Placed trap interaction — context panel contents and layout |
-| Open | Blocking terrain name — see Section 6a candidates |
-| Open | Blocking terrain spawn rules — exact probability and count per evolution |
-| Open | Trap names — Snap Trap, Zapper, Fogger, Glue Board are working titles |
-| Open | Audio — licensed tracks vs. original score; tone TBD |
-| Open | Fogger AoE radius |
-| Open | All numeric values (Infestation Level threshold, Bug Bucks rewards, wave clear bonus, reroll cost, etc.) — TBD via playtesting |
+| Resolved | Trap shop UX — long-press on trap in selection screen shows a modal stat card; dismisses on release |
+| Resolved | Placed trap interaction — context panel shows trap type, description, damage, damage type, range, and upgrade star rating (1–5); variation unlocks after 5 upgrades |
+| Resolved | Blocking terrain name — location-specific per arena (Appliances, Yard Clutter, Storage, Clutter) |
+| Resolved | Blocking terrain spawn rules — 15% chance 1 spawns, 10% chance 2, 5% chance 3; independent 3% chance 1 existing obstacle removed |
+| Resolved | Trap names — Snap Trap, Zapper, Fogger, Glue Board (final) |
+| Resolved | Audio — tone is understated and quirky; light enough to not distract, with enough personality to reinforce the pest control theme |
+| Resolved | Fogger AoE radius — equals the Fogger's range circle; no separate value needed |
+| Deferred | All numeric values (Infestation Level threshold, Bug Bucks rewards per pest type, wave clear bonus, early wave trigger bonus, reroll cost base and increment, high score formula) — to be determined via playtesting |
 
 ---
 
-## **11. Future Pass**
+## **12. Future Pass**
 
 The following mechanics were identified during design but deferred to a later pass. They should not block v1 development.
 
@@ -420,7 +501,7 @@ The following mechanics were identified during design but deferred to a later pa
 
 ---
 
-## **12. Tech Stack**
+## **13. Tech Stack**
 
 | Decision | Choice |
 | :---- | :---- |
@@ -433,7 +514,7 @@ The following mechanics were identified during design but deferred to a later pa
 
 ---
 
-## **13. Development Path**
+## **14. Development Path**
 
 Development is phased to front-load the highest technical risk. The pathfinding system is the core mechanic and must be proven before other systems are built on top of it.
 
@@ -475,6 +556,15 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 - Save file system — multiple independent run slots
 
 *Goal: complete playable game from start to run-end*
+
+### **Phase 4b — Meta Progression**
+- Service Fees earned at run end based on performance
+- The Truck hub screen — Start New Job, Upgrades, Stats
+- Equipment upgrade tree
+- Business upgrade tree
+- Stats tracking — pests killed, highest wave, runs completed
+
+*Goal: long-term progression loop across runs*
 
 ### **Phase 5 — Depth & Polish**
 - Full upgrade trees and DoT system (fire, ice)
