@@ -75,9 +75,15 @@ var _display_path: Array[Vector2i] = []
 var _grid_highlight: MeshInstance3D = null
 var _hover_cell: Vector2i = Vector2i(-1, -1)
 
-# Placement drag state — press starts a drag, release commits the placement.
+# Single-placement drag state — press starts a drag, release commits.
 var _pressing: bool = false
 var _preview_trap: MeshInstance3D = null
+
+# Multi-placement state — activated by double-click, drag draws a line of ghosts.
+var _multi_placing: bool = false
+var _multi_origin: Vector2i = Vector2i(-1, -1)
+var _multi_anchors: Array[Vector2i] = []
+var _multi_ghosts: Array[MeshInstance3D] = []
 
 
 # ---------------------------------------------------------------------------
@@ -122,7 +128,9 @@ func _input(event: InputEvent) -> void:
 		if cell != _hover_cell:
 			_hover_cell = cell
 			_update_grid_highlight()
-			if _pressing:
+			if _multi_placing:
+				_update_multi_ghosts(cell)
+			elif _pressing:
 				_update_preview_position(cell)
 		return
 
@@ -134,10 +142,20 @@ func _input(event: InputEvent) -> void:
 	match event.button_index:
 		MOUSE_BUTTON_LEFT:
 			if event.pressed:
-				if _grid.is_in_bounds(cell):
+				if event.double_click:
+					# Double-click cancels any single-press in progress and
+					# enters multi-placement mode.
+					_pressing = false
+					_clear_preview()
+					if _grid.is_in_bounds(cell):
+						_start_multi_placement(cell)
+				elif not _multi_placing and _grid.is_in_bounds(cell):
 					_start_placement(cell)
 			else:
-				_finish_placement(cell)
+				if _multi_placing:
+					_finish_multi_placement()
+				else:
+					_finish_placement(cell)
 		MOUSE_BUTTON_RIGHT:
 			if event.pressed and _grid.is_in_bounds(cell):
 				_try_remove_trap(cell)
@@ -161,6 +179,75 @@ func _finish_placement(cell: Vector2i) -> void:
 	_clear_preview()
 	if _grid.is_in_bounds(cell):
 		_try_place_trap(cell)
+
+
+# ---------------------------------------------------------------------------
+# Multi-placement
+# ---------------------------------------------------------------------------
+
+## Enters multi-placement mode at the double-clicked anchor cell.
+func _start_multi_placement(anchor: Vector2i) -> void:
+	_multi_placing = true
+	_multi_origin  = anchor
+	_update_multi_ghosts(anchor)
+
+
+## Rebuilds the line of ghost traps from origin to target.
+## Ghosts step every 2 cells along the dominant axis.
+func _update_multi_ghosts(target: Vector2i) -> void:
+	_clear_multi_ghosts()
+	_multi_anchors = _compute_multi_anchors(_multi_origin, target)
+	for anchor in _multi_anchors:
+		if _get_trap_cells(anchor).is_empty():
+			continue
+		var ghost  := _make_box_mesh_instance(
+			Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9),
+			Color(COLOR_TRAP.r, COLOR_TRAP.g, COLOR_TRAP.b, 0.50)
+		)
+		var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
+		ghost.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
+		add_child(ghost)
+		_multi_ghosts.append(ghost)
+
+
+## On release, commits all anchors in order from origin to target.
+## Phase 1: no currency — places every valid trap.
+## When currency is added: stop once Bug Bucks are exhausted.
+func _finish_multi_placement() -> void:
+	_multi_placing = false
+	_clear_multi_ghosts()
+	for anchor in _multi_anchors:
+		_try_place_trap(anchor)
+	_multi_anchors.clear()
+
+
+## Returns a sequence of 2x2 trap anchor cells stepping every 2 cells from
+## origin toward target along whichever axis has the larger displacement.
+func _compute_multi_anchors(origin: Vector2i, target: Vector2i) -> Array[Vector2i]:
+	var dir   := target - origin
+	var step  : Vector2i
+	var count : int
+
+	if abs(dir.x) >= abs(dir.y):
+		if dir.x == 0:
+			return [origin]
+		step  = Vector2i(2 if dir.x > 0 else -2, 0)
+		count = abs(dir.x) / 2 + 1
+	else:
+		step  = Vector2i(0, 2 if dir.y > 0 else -2)
+		count = abs(dir.y) / 2 + 1
+
+	var anchors: Array[Vector2i] = []
+	for i in range(count):
+		anchors.append(origin + step * i)
+	return anchors
+
+
+## Frees all ghost nodes from the current multi-placement line.
+func _clear_multi_ghosts() -> void:
+	for ghost in _multi_ghosts:
+		ghost.queue_free()
+	_multi_ghosts.clear()
 
 
 func _try_place_trap(anchor: Vector2i) -> void:
