@@ -238,24 +238,34 @@ func _cancel_multi_placement() -> void:
 	_multi_anchors.clear()
 
 
-## Returns a sequence of 2x2 trap anchor cells stepping every 2 cells from
-## origin toward target along whichever axis has the larger displacement.
+## Returns a sequence of 2x2 trap anchor cells from origin toward target.
+## Direction is snapped to one of 8 discrete angles (every 45°). All step
+## vectors use 2-cell spacing so adjacent 2x2 footprints never overlap.
 func _compute_multi_anchors(origin: Vector2i, target: Vector2i) -> Array[Vector2i]:
-	var dir   := target - origin
-	var step  : Vector2i
-	var count : int
+	var dir := target - origin
+	if dir == Vector2i.ZERO:
+		return [origin]
 
-	if abs(dir.x) >= abs(dir.y):
-		if dir.x == 0:
-			return [origin]
-		step  = Vector2i(2 if dir.x > 0 else -2, 0)
-		count = abs(dir.x) / 2 + 1
-	else:
-		step  = Vector2i(0, 2 if dir.y > 0 else -2)
-		count = abs(dir.y) / 2 + 1
+	# Eight step vectors at 2-cell spacing, indexed by 45° angle sector.
+	# Steps are multiples of 2, keeping 2x2 footprints non-overlapping.
+	var steps: Array[Vector2i] = [
+		Vector2i( 2,  0), Vector2i( 2,  2), Vector2i( 0,  2), Vector2i(-2,  2),
+		Vector2i(-2,  0), Vector2i(-2, -2), Vector2i( 0, -2), Vector2i( 2, -2),
+	]
+	var angle := atan2(float(dir.y), float(dir.x))
+	var idx   := ((roundi(angle / (PI * 0.25)) % 8) + 8) % 8
+	var step  := steps[idx]
+
+	# Count how many steps fit before exceeding the target in either axis.
+	var n := 10000
+	if step.x != 0:
+		n = mini(n, abs(dir.x) / abs(step.x) + 1)
+	if step.y != 0:
+		n = mini(n, abs(dir.y) / abs(step.y) + 1)
+	n = maxi(1, n)
 
 	var anchors: Array[Vector2i] = []
-	for i in range(count):
+	for i in range(n):
 		anchors.append(origin + step * i)
 	return anchors
 
