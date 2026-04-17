@@ -209,9 +209,12 @@ func _on_path_updated(new_path: Array[Vector2i]) -> void:
 				or state == Grid.CellState.EXIT:
 			_spawn_path_marker(cell)
 
-	# Forward the new path to all active enemies so they reroute immediately.
+	# Give each enemy a fresh A* path from its current cell to the exit
+	# so every enemy takes the optimal route given the new grid layout.
 	for enemy in _active_enemies:
-		enemy.update_path(new_path)
+		var enemy_path := _pathfinder.find_path_from(enemy.get_current_cell())
+		if not enemy_path.is_empty():
+			enemy.update_path(enemy_path)
 
 
 # ---------------------------------------------------------------------------
@@ -303,7 +306,7 @@ func _update_grid_highlight() -> void:
 		_grid_highlight.mesh = null
 		return
 
-	const MAX_GLOW_DIST: int = 3
+	const MAX_GLOW_DIST: int = 2
 
 	var im := ImmediateMesh.new()
 	var hs := Grid.CELL_SIZE * 0.5
@@ -321,7 +324,7 @@ func _update_grid_highlight() -> void:
 				continue
 			if dist == 0 and _pressing:
 				continue
-			var alpha := 0.90 * pow(1.0 - float(dist) / float(MAX_GLOW_DIST + 1), 1.5)
+			var alpha := 0.90 * pow(1.0 - float(dist) / float(MAX_GLOW_DIST + 1), 2.5)
 			_draw_cell_glow(im, cell, hs, y, alpha)
 
 	im.surface_end()

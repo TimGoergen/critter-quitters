@@ -73,6 +73,13 @@ func get_current_path() -> Array[Vector2i]:
 	return _current_path.duplicate()
 
 
+## Finds the shortest path from start to the arena exit using the current grid.
+## Used by Arena to compute a fresh optimal path for each enemy after a reroute.
+## Returns an empty array if no valid path exists from start.
+func find_path_from(start: Vector2i) -> Array[Vector2i]:
+	return _find_path(start, GameState.exit_cell)
+
+
 ## Returns true if blocking all cells in the given array would leave at least
 ## one valid path from entrance to exit.
 ##

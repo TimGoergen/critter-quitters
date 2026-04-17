@@ -8,30 +8,14 @@
 ## Movement model:
 ##   The enemy tracks two cells at all times:
 ##     _current_cell — the last cell centre the enemy arrived at
-##     _target_cell  — the cell centre it is currently moving toward
+##     _target_cell  — the next cell centre it is moving toward
 ##
 ##   Movement is always a straight line between adjacent cell centres.
-##   A straight line between adjacent cells can never cross an obstacle
-##   (obstacles are full cells, and adjacent cell centres are separated
-##   by exactly one cell width). This makes obstacle traversal impossible
-##   by construction, regardless of how the path changes.
-##
-##   _history records every cell centre the enemy has arrived at, in order.
-##   It is the foundation of the backtracking reroute model.
 ##
 ## Rerouting model:
-##   When the path updates, two cases are possible:
-##
-##   1. _target_cell is still in the new path.
-##      Keep moving to _target_cell, then follow the new path from there.
-##      No interruption, no direction change mid-segment.
-##
-##   2. _target_cell was blocked (no longer in the new path).
-##      Walk backward through _history until the most recent cell that
-##      is also on the new path. Build a combined path:
-##        [_current_cell, prev_cell, ..., rejoin_cell, new_path_forward...]
-##      Every step in this combined path is adjacent-to-adjacent, so
-##      the enemy physically retraces its route rather than cutting across.
+##   Arena calls update_path() with a fresh A* result from _current_cell
+##   to the exit whenever the grid changes. The enemy redirects immediately
+##   to the new optimal path without backtracking.
 ##
 ## Usage: instantiate via Arena, then call initialize() before the node
 ## is added to the scene tree.
@@ -83,11 +67,6 @@ var _target_cell: Vector2i = Vector2i.ZERO
 var _path: Array[Vector2i] = []
 var _path_index: int = 0
 
-# Ordered list of every cell centre the enemy has arrived at.
-# Most recent entry is _current_cell. Used to construct backtrack routes
-# that step through previously visited (and therefore passable) cells.
-var _history: Array[Vector2i] = []
-
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -103,7 +82,6 @@ func initialize(initial_path: Array[Vector2i]) -> void:
 	_current_cell = _path[0]
 	_path_index   = 1
 	_target_cell  = _path[_path_index]
-	_history      = [_current_cell]
 
 	global_position   = _cell_to_world(_current_cell)
 	global_position.y = 0.25   # sit above the floor, same height as trap boxes
@@ -115,67 +93,23 @@ func initialize(initial_path: Array[Vector2i]) -> void:
 # Path updates
 # ---------------------------------------------------------------------------
 
-## Called by Arena whenever the Pathfinder recalculates the path.
-##
-## Case 1 — target still valid:
-##   Update the stored path and index. The enemy continues toward
-##   _target_cell without changing direction, then follows the new path.
-##
-## Case 2 — target was blocked:
-##   Search backward through _history for the most recent cell that
-##   appears on the new path (the "rejoin cell"). Build a combined path
-##   that backtracks step-by-step from _current_cell to that rejoin cell,
-##   then continues forward along the new path. Because every step in the
-##   backtrack portion was previously traversed, all steps are adjacent
-##   and no obstacle can be crossed.
+## Called by Arena whenever the grid changes.
+## new_path is a fresh A* result from _current_cell to the exit — Arena
+## computes it per-enemy so the path is always optimal from here.
+## new_path[0] == _current_cell; new_path[1] is the immediate next step.
 func update_path(new_path: Array[Vector2i]) -> void:
-	if new_path.is_empty():
+	if new_path.size() < 2:
 		_path = new_path
 		return
+	_path        = new_path
+	_path_index  = 1
+	_target_cell = new_path[1]
 
-	var target_index := new_path.find(_target_cell)
 
-	if target_index >= 0:
-		# Target is still on the new path — continue toward it, then follow
-		# the new path from that point onward.
-		_path       = new_path
-		_path_index = target_index
-		return
-
-	# Target was blocked. Find the most recent history cell that is also
-	# on the new path — this is where the backtrack route rejoins.
-	var rejoin_history_idx := -1
-	var rejoin_path_idx    := -1
-	for i in range(_history.size() - 1, -1, -1):
-		var idx := new_path.find(_history[i])
-		if idx >= 0:
-			rejoin_history_idx = i
-			rejoin_path_idx    = idx
-			break
-
-	if rejoin_history_idx < 0:
-		# No common cell found — shouldn't occur in normal play since the
-		# pathfinder always guarantees a valid path from entrance to exit.
-		_path = new_path
-		return
-
-	# Build a combined path:
-	#   backtrack: _history[size-1] → _history[size-2] → ... → _history[rejoin]
-	#   forward:   new_path[rejoin+1] → ... → exit
-	# All backtrack steps are between previously visited adjacent cells.
-	var combined: Array[Vector2i] = []
-	for i in range(_history.size() - 1, rejoin_history_idx - 1, -1):
-		combined.append(_history[i])
-	for i in range(rejoin_path_idx + 1, new_path.size()):
-		combined.append(new_path[i])
-
-	# combined[0] == _current_cell. The enemy first finishes returning to
-	# _current_cell (it is currently between _current_cell and the old
-	# blocked _target_cell), then steps backward through history until
-	# reaching the rejoin cell, then follows the new path forward.
-	_path        = combined
-	_path_index  = 0
-	_target_cell = combined[0]
+## Returns the last cell the enemy fully arrived at.
+## Arena reads this to compute the per-enemy reroute path.
+func get_current_cell() -> Vector2i:
+	return _current_cell
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +130,6 @@ func _process(delta: float) -> void:
 		# Arrived — snap to cell centre, advance to the next cell.
 		global_position = target_world
 		_current_cell   = _target_cell
-		_history.append(_current_cell)
 		_path_index    += 1
 
 		if _path_index >= _path.size():
