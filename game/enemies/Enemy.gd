@@ -161,13 +161,12 @@ func _cell_to_world(cell: Vector2i) -> Vector3:
 func _spawn_visual() -> void:
 	var mesh_instance := MeshInstance3D.new()
 
-	var box_mesh  := BoxMesh.new()
-	box_mesh.size  = Vector3(
-		Grid.CELL_SIZE * 1.8,
-		Grid.CELL_SIZE * 1.8,
-		Grid.CELL_SIZE * 1.8
-	)
-	mesh_instance.mesh = box_mesh
+	var radius       := Grid.CELL_SIZE * 0.675   # 1.8 * 0.75 / 2
+	var cylinder     := CylinderMesh.new()
+	cylinder.top_radius    = radius
+	cylinder.bottom_radius = radius
+	cylinder.height        = Grid.CELL_SIZE * 0.5
+	mesh_instance.mesh = cylinder
 
 	var material          := StandardMaterial3D.new()
 	material.albedo_color  = COLOR_ENEMY
