@@ -324,10 +324,10 @@ func _try_remove_trap(cell: Vector2i) -> void:
 func _on_path_updated(new_path: Array[Vector2i]) -> void:
 	_display_path = new_path
 	for enemy in _active_enemies:
-		var current := enemy.get_current_cell()
+		var current: Vector2i = enemy.get_current_cell()
 		# If the enemy is still in the outside approach cell, A* must start
 		# from the entrance (first in-bounds cell) to stay within the grid.
-		var from := current if _grid.is_in_bounds(current) else GameState.entrance_cell
+		var from: Vector2i = current if _grid.is_in_bounds(current) else GameState.entrance_cell
 		var grid_path := _pathfinder.find_path_from(from)
 		if grid_path.is_empty():
 			continue
