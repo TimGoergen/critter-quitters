@@ -18,6 +18,7 @@
 | v0.8 | Tech stack defined. Development path defined across 6 phases. Save file system added to Phase 4. |
 | v0.9 | Boss wave frequency confirmed: every 10 waves. Arena Evolution timing updated: occurs in the wave immediately following each boss wave. Store reroll cost confirmed: progressive linear, resets each visit (e.g. 5, 10, 15, 20...); exact base amount and increment TBD via playtesting. |
 | v0.10 | Meta-progression system added: Service Fees currency, The Truck hub, equipment and business upgrades, stats screen. Arena pool defined: 4 residential arenas (Kitchen, Backyard, Basement, Attic). All open design questions resolved or deferred. GDScript code standards documented in CLAUDE.md. |
+| v0.11 | Grid size updated to 30×30. Trap footprint updated to 2×2. Cursor/grid highlight updated: radial glow always visible on hover, not just during placement. GDD updated to match Phase 1 prototype implementation. |
 
 ---
 
@@ -109,7 +110,7 @@ Each run has one entrance and one exit, assigned to separate walls at run start.
 | :---- | :---- |
 | Entry points | One — assigned to a wall at run start |
 | Exit points | One — assigned to a different wall at run start |
-| Grid size | 14×14 (fixed) |
+| Grid size | 30×30 (fixed) |
 | Pathfinding | A\* real-time |
 | Arena selection | Random from pool at run start |
 | Starting obstacles | None — arena is empty at run start |
@@ -159,7 +160,7 @@ Fully evolved units can inflict damage-over-time (DoT) effects:
 
 **Evolved unit visuals:** As a trap evolves, its ASCII character representation grows more prominent — shifting from lowercase to uppercase, increasing in visual weight, or using a bolder character variant.
 
-**Footprint:** Most traps occupy a single 1×1 cell. Some traps occupy 3 or more contiguous cells in irregular shapes (L-shapes, T-shapes, etc.). Footprints are fixed and do not rotate — all traps operate in a full 360-degree arc.
+**Footprint:** Traps occupy a 2×2 cell footprint. Placement is anchored to the top-left cell of the footprint. Footprints are fixed and do not rotate — all traps operate in a full 360-degree arc.
 
 ### **The Snap Trap**
 
@@ -382,7 +383,7 @@ ASCII characters are rendered as flat planes (billboards) that always face the c
 
 **Color:** Colored ASCII — a constrained palette where each element category (pest type, trap type, terrain, projectile) has a consistent color identity. Background is dark. Grid lines are not rendered. The palette shifts subtly as waves progress, giving the run a sense of escalation without loud or saturated hues.
 
-**Cursor:** During placement, the cursor highlights the full grid cell under the player's finger/pointer as a single highlighted block. No visible grid otherwise.
+**Cursor:** A radial grid glow is always visible, centered on the hovered cell. The glow extends 3 cells in each direction from the cursor, with alpha falling off quadratically so cells farther away appear dimmer. No static grid lines are rendered — the glow is the only grid indicator.
 
 **HUD:** Simple geometric shapes — not ASCII. Clean, readable UI panels for Bug Bucks count, Infestation Level, wave info, and speed controls.
 
@@ -467,9 +468,9 @@ A trap must be upgraded 5 times (reaching 5 stars) before a variation becomes av
 | Resolved | Store: 3 tiered options per visit (trap upgrade, player upgrade, trap unlock); reroll for Bug Bucks |
 | Resolved | Infestation healing: store option (one-time reduction) and trap modifier (lifesteal-style per kill) |
 | Resolved | Pathfinding: minimum one valid path always enforced |
-| Resolved | Trap footprint: mostly 1×1; some use 3+ contiguous cells in irregular shapes |
+| Resolved | Trap footprint: 2×2, anchored at top-left cell |
 | Resolved | Sell value: 70% of buy price |
-| Resolved | Grid dimensions — 14×14 (fixed; subject to change via playtesting) |
+| Resolved | Grid dimensions — 30×30 (fixed; subject to change via playtesting) |
 | Resolved | Boss wave frequency — every 10 waves (waves 10, 20, 30, ...) |
 | Resolved | Store reroll cost — progressive linear per visit, resets each visit; base amount and increment TBD via playtesting |
 | Resolved | Trap shop UX — long-press on trap in selection screen shows a modal stat card; dismisses on release |

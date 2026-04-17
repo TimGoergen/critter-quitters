@@ -230,9 +230,9 @@ func _spawn_visual() -> void:
 
 	var box_mesh  := BoxMesh.new()
 	box_mesh.size  = Vector3(
-		Grid.CELL_SIZE * 0.5,
-		Grid.CELL_SIZE * 0.5,
-		Grid.CELL_SIZE * 0.5
+		Grid.CELL_SIZE * 1.8,
+		Grid.CELL_SIZE * 1.8,
+		Grid.CELL_SIZE * 1.8
 	)
 	mesh_instance.mesh = box_mesh
 

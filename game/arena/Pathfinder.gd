@@ -73,17 +73,16 @@ func get_current_path() -> Array[Vector2i]:
 	return _current_path.duplicate()
 
 
-## Returns true if placing a blocker at cell would leave at least one
-## valid path from entrance to exit.
+## Returns true if blocking all cells in the given array would leave at least
+## one valid path from entrance to exit.
 ##
 ## Call this before committing any trap or obstacle placement.
 ## Does not modify the grid — the check is purely hypothetical.
-func can_place_at(cell: Vector2i) -> bool:
-	var blockers: Array[Vector2i] = [cell]
+func can_place_at(cells: Array[Vector2i]) -> bool:
 	var path := _find_path(
 		GameState.entrance_cell,
 		GameState.exit_cell,
-		blockers
+		cells
 	)
 	return not path.is_empty()
 

@@ -33,6 +33,10 @@ const COLOR_ENTRANCE  := Color(0.20, 0.80, 0.20, 1.0)   # green
 const COLOR_EXIT      := Color(0.80, 0.20, 0.20, 1.0)   # red
 const COLOR_TRAP      := Color(0.40, 0.40, 0.80, 1.0)   # blue-grey box
 const COLOR_PATH      := Color(0.80, 0.70, 0.20, 0.5)   # yellow, semi-transparent
+const COLOR_GRID_GLOW := Color(0.65, 0.90, 1.0)         # cool blue-white for cursor glow
+
+## How many cells outward from the cursor the grid glow extends.
+const GRID_GLOW_RADIUS: int = 3
 
 
 # ---------------------------------------------------------------------------
@@ -50,9 +54,12 @@ const COLOR_PATH      := Color(0.80, 0.70, 0.20, 0.5)   # yellow, semi-transpare
 # Private state
 # ---------------------------------------------------------------------------
 
-# Keeps track of which MeshInstance3D represents each placed trap so we
-# can remove the visual when the trap is sold or destroyed by an obstacle.
-var _trap_nodes: Dictionary = {}          # Vector2i -> MeshInstance3D
+# Maps the anchor cell (top-left of the 2x2 footprint) to its visual node.
+var _trap_nodes: Dictionary = {}          # anchor Vector2i -> MeshInstance3D
+
+# Maps every cell in a trap's 2x2 footprint back to that trap's anchor cell.
+# Used to find and remove the whole trap when the player clicks any of its cells.
+var _trap_anchors: Dictionary = {}        # Vector2i -> anchor Vector2i
 
 # Path marker nodes spawned each time the path updates. Cleared and
 # rebuilt on every path_updated signal.
@@ -61,6 +68,10 @@ var _path_nodes: Array[MeshInstance3D] = []
 # All enemy nodes currently active on the arena.
 # Each enemy is forwarded path updates so it can reroute in real time.
 var _active_enemies: Array[Node3D] = []
+
+# Grid highlight — a single ImmediateMesh rebuilt each time the hover cell changes.
+var _grid_highlight: MeshInstance3D = null
+var _hover_cell: Vector2i = Vector2i(-1, -1)
 
 
 # ---------------------------------------------------------------------------
@@ -71,8 +82,8 @@ func _ready() -> void:
 	# Phase 1: entrance and exit are hardcoded for the prototype.
 	# In the full game, Arena receives these from the run manager after
 	# randomly selecting an arena from the pool.
-	var entrance := Vector2i(0, 6)    # left wall, row 6
-	var exit     := Vector2i(13, 7)   # right wall, row 7
+	var entrance := Vector2i(0, 14)    # left wall, row 14
+	var exit     := Vector2i(29, 15)  # right wall, row 15
 
 	_grid.setup_run(entrance, exit)
 	GameState.start_run(entrance, exit)
@@ -83,8 +94,9 @@ func _ready() -> void:
 	_spawn_flat_marker(entrance, COLOR_ENTRANCE)
 	_spawn_flat_marker(exit, COLOR_EXIT)
 
+	_setup_grid_highlight()
+
 	# Trigger the first path calculation now that entrance and exit are set.
-	# _on_path_updated will fire as a result, which spawns the first enemy.
 	_pathfinder.recalculate()
 
 
@@ -93,6 +105,13 @@ func _ready() -> void:
 # ---------------------------------------------------------------------------
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventMouseMotion:
+		var cell := _screen_to_grid(event.position)
+		if cell != _hover_cell:
+			_hover_cell = cell
+			_update_grid_highlight()
+		return
+
 	if not event is InputEventMouseButton or not event.pressed:
 		return
 
@@ -111,29 +130,38 @@ func _input(event: InputEvent) -> void:
 # Placement logic
 # ---------------------------------------------------------------------------
 
-func _try_place_trap(cell: Vector2i) -> void:
-	if not _grid.is_buildable(cell):
+func _try_place_trap(anchor: Vector2i) -> void:
+	var cells := _get_trap_cells(anchor)
+	if cells.is_empty():
 		return
 
-	if not _pathfinder.can_place_at(cell):
-		# This placement would block every path from entrance to exit.
-		# Silently reject for now — Phase 5 adds player-facing feedback.
-		print("Placement rejected: would block all paths at ", cell)
+	for cell in cells:
+		if not _grid.is_buildable(cell):
+			return
+
+	if not _pathfinder.can_place_at(cells):
+		print("Placement rejected: would block all paths at ", anchor)
 		return
 
-	_grid.place_trap(cell)
-	_spawn_trap_visual(cell)
+	for cell in cells:
+		_grid.place_trap(cell)
+		_trap_anchors[cell] = anchor
+
+	_spawn_trap_visual(anchor)
 
 
 func _try_remove_trap(cell: Vector2i) -> void:
-	if _grid.get_cell(cell) != Grid.CellState.TRAP:
+	if not _trap_anchors.has(cell):
 		return
 
-	_grid.remove_trap(cell)
+	var anchor: Vector2i = _trap_anchors[cell]
+	for c in _get_trap_cells(anchor):
+		_grid.remove_trap(c)
+		_trap_anchors.erase(c)
 
-	if _trap_nodes.has(cell):
-		_trap_nodes[cell].queue_free()
-		_trap_nodes.erase(cell)
+	if _trap_nodes.has(anchor):
+		_trap_nodes[anchor].queue_free()
+		_trap_nodes.erase(anchor)
 
 
 # ---------------------------------------------------------------------------
@@ -155,10 +183,6 @@ func _on_path_updated(new_path: Array[Vector2i]) -> void:
 	# Forward the new path to all active enemies so they reroute immediately.
 	for enemy in _active_enemies:
 		enemy.update_path(new_path)
-
-	# Phase 1: spawn one enemy if none are active, to keep the arena populated.
-	if _active_enemies.is_empty() and not new_path.is_empty():
-		_spawn_enemy(new_path)
 
 
 # ---------------------------------------------------------------------------
@@ -219,10 +243,65 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 	_active_enemies.erase(enemy)
 	# enemy.queue_free() is called inside Enemy.gd — no double-free needed.
 
-	# Phase 1: immediately respawn so the arena stays active for testing.
-	var current_path := _pathfinder.get_current_path()
-	if not current_path.is_empty():
-		_spawn_enemy(current_path)
+
+# ---------------------------------------------------------------------------
+# Grid highlight
+# ---------------------------------------------------------------------------
+
+## Creates the MeshInstance3D used for the cursor grid glow.
+## The material uses vertex colours so each line segment can have its own alpha.
+func _setup_grid_highlight() -> void:
+	_grid_highlight = MeshInstance3D.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.vertex_color_use_as_albedo = true
+	_grid_highlight.material_override = mat
+	add_child(_grid_highlight)
+
+
+## Rebuilds the grid glow mesh around the current hover cell.
+## Each cell within GRID_GLOW_RADIUS has its four edges drawn as line segments.
+## Alpha falls off quadratically so cells further away appear dimmer.
+func _update_grid_highlight() -> void:
+	if not _grid.is_in_bounds(_hover_cell):
+		_grid_highlight.mesh = null
+		return
+
+	var im  := ImmediateMesh.new()
+	var hs  := Grid.CELL_SIZE * 0.5
+	var y   := 0.08   # sit above path markers and floor markers
+
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+
+	for dr in range(-GRID_GLOW_RADIUS, GRID_GLOW_RADIUS + 1):
+		for dc in range(-GRID_GLOW_RADIUS, GRID_GLOW_RADIUS + 1):
+			var cell := Vector2i(_hover_cell.x + dc, _hover_cell.y + dr)
+			if not _grid.is_in_bounds(cell):
+				continue
+
+			var dist  := maxi(absi(dc), absi(dr))
+			var t     := float(dist) / float(GRID_GLOW_RADIUS + 1)
+			var alpha := pow(1.0 - t, 2.0)
+			var color := Color(COLOR_GRID_GLOW.r, COLOR_GRID_GLOW.g, COLOR_GRID_GLOW.b, alpha)
+
+			var c  := _cell_to_world(cell)
+			var tl := Vector3(c.x - hs, y, c.z - hs)
+			var tr := Vector3(c.x + hs, y, c.z - hs)
+			var bl := Vector3(c.x - hs, y, c.z + hs)
+			var br := Vector3(c.x + hs, y, c.z + hs)
+
+			im.surface_set_color(color); im.surface_add_vertex(tl)
+			im.surface_set_color(color); im.surface_add_vertex(tr)
+			im.surface_set_color(color); im.surface_add_vertex(tr)
+			im.surface_set_color(color); im.surface_add_vertex(br)
+			im.surface_set_color(color); im.surface_add_vertex(br)
+			im.surface_set_color(color); im.surface_add_vertex(bl)
+			im.surface_set_color(color); im.surface_add_vertex(bl)
+			im.surface_set_color(color); im.surface_add_vertex(tl)
+
+	im.surface_end()
+	_grid_highlight.mesh = im
 
 
 # ---------------------------------------------------------------------------
@@ -239,22 +318,37 @@ func _spawn_flat_marker(cell: Vector2i, color: Color) -> void:
 	add_child(marker)
 
 
-## Spawns a raised box to represent a placed trap.
-func _spawn_trap_visual(cell: Vector2i) -> void:
+## Spawns a raised box centred on the 2x2 footprint of the trap.
+func _spawn_trap_visual(anchor: Vector2i) -> void:
 	var trap_visual := _make_box_mesh_instance(
-		Vector3(Grid.CELL_SIZE * 0.8, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 0.8),
+		Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9),
 		COLOR_TRAP
 	)
-	# Raise the box so its base sits on y = 0 rather than centring on it.
-	trap_visual.position = _cell_to_world(cell) + Vector3(0.0, 0.25, 0.0)
+	# Centre of the 2x2 footprint sits half a cell right and down from the
+	# anchor cell centre. Raise by half the box height so it sits on y = 0.
+	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
+	trap_visual.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 	_trap_container.add_child(trap_visual)
-	_trap_nodes[cell] = trap_visual
+	_trap_nodes[anchor] = trap_visual
 
 
-## Spawns a thin flat square to indicate one cell on the current path.
+## Returns the four cells of a 2x2 trap footprint given its top-left anchor.
+## Returns an empty array if any cell in the footprint is out of bounds.
+func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
+	var cells: Array[Vector2i] = []
+	for dr in range(2):
+		for dc in range(2):
+			var c := Vector2i(anchor.x + dc, anchor.y + dr)
+			if not _grid.is_in_bounds(c):
+				return []
+			cells.append(c)
+	return cells
+
+
+## Spawns a flat square to indicate one cell on the current path.
 func _spawn_path_marker(cell: Vector2i) -> void:
 	var path_marker := _make_box_mesh_instance(
-		Vector3(Grid.CELL_SIZE * 0.55, 0.02, Grid.CELL_SIZE * 0.55),
+		Vector3(Grid.CELL_SIZE * 0.9, 0.05, Grid.CELL_SIZE * 0.9),
 		COLOR_PATH
 	)
 	path_marker.position = _cell_to_world(cell)

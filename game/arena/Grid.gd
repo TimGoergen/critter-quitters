@@ -20,7 +20,7 @@ extends Node
 
 ## The number of cells along each side of the square grid.
 ## Subject to change via playtesting — adjust here and everything scales.
-const GRID_SIZE: int = 14
+const GRID_SIZE: int = 30
 
 ## World-space size of one grid cell in metres.
 ## Changing this scales the entire arena uniformly.
