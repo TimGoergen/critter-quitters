@@ -67,6 +67,10 @@ var _path_nodes: Array[MeshInstance3D] = []
 # Each enemy is forwarded path updates so it can reroute in real time.
 var _active_enemies: Array[Node3D] = []
 
+# The path currently drawn as yellow markers. Updated on every grid change
+# and trimmed forward as the enemy advances through cells.
+var _display_path: Array[Vector2i] = []
+
 # Grid highlight — a single ImmediateMesh rebuilt each time the hover cell changes.
 var _grid_highlight: MeshInstance3D = null
 var _hover_cell: Vector2i = Vector2i(-1, -1)
@@ -198,18 +202,30 @@ func _try_remove_trap(cell: Vector2i) -> void:
 # ---------------------------------------------------------------------------
 
 func _on_path_updated(new_path: Array[Vector2i]) -> void:
-	# Compute a fresh optimal path for each enemy, then use that path for the
-	# yellow line so it always shows the enemy's actual route to the exit.
-	# Phase 1 has one enemy — falls back to entrance→exit if none are active.
-	var display_path := new_path
+	# Compute a fresh optimal path for each enemy and store it as the display path.
+	# Falls back to entrance→exit when no enemies are active.
+	_display_path = new_path
 	for enemy in _active_enemies:
 		var enemy_path := _pathfinder.find_path_from(enemy.get_current_cell())
 		if not enemy_path.is_empty():
 			enemy.update_path(enemy_path)
-			display_path = enemy_path
+			_display_path = enemy_path
+	_redraw_path_display()
 
+
+## Redraws the yellow path markers starting from the active enemy's current
+## target cell, so the line only appears ahead of the enemy.
+## Falls back to the full display path when no enemies are active.
+func _redraw_path_display() -> void:
 	_clear_path_visuals()
-	for cell in display_path:
+	var start_idx := 0
+	if not _active_enemies.is_empty():
+		var target := _active_enemies[0].get_target_cell()
+		var idx    := _display_path.find(target)
+		if idx >= 0:
+			start_idx = idx
+	for i in range(start_idx, _display_path.size()):
+		var cell  := _display_path[i]
 		var state := _grid.get_cell(cell)
 		if state == Grid.CellState.EMPTY \
 				or state == Grid.CellState.ENTRANCE \
@@ -266,6 +282,7 @@ func _spawn_enemy(path: Array[Vector2i]) -> void:
 	# _ready fires on the enemy node.
 	_active_enemies.append(enemy)
 	enemy.reached_exit.connect(_on_enemy_reached_exit.bind(enemy))
+	enemy.cell_advanced.connect(_redraw_path_display)
 
 	add_child(enemy)
 	enemy.initialize(path)

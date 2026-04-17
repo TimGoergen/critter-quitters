@@ -49,6 +49,10 @@ const ARRIVAL_THRESHOLD: float = 0.05
 ## Emitted when the enemy reaches the exit cell and is about to despawn.
 signal reached_exit
 
+## Emitted each time the enemy arrives at a new cell and advances its target.
+## Arena uses this to trim the path display so the line only shows ahead.
+signal cell_advanced
+
 
 # ---------------------------------------------------------------------------
 # Private state
@@ -113,9 +117,14 @@ func update_path(new_path: Array[Vector2i]) -> void:
 
 
 ## Returns the last cell the enemy fully arrived at.
-## Arena reads this to compute the per-enemy reroute path.
 func get_current_cell() -> Vector2i:
 	return _current_cell
+
+
+## Returns the cell the enemy is currently moving toward.
+## Arena uses this to know where the path display should begin.
+func get_target_cell() -> Vector2i:
+	return _target_cell
 
 
 # ---------------------------------------------------------------------------
@@ -144,6 +153,7 @@ func _process(delta: float) -> void:
 			return
 
 		_target_cell = _path[_path_index]
+		cell_advanced.emit()
 	else:
 		var move_amount := MOVE_SPEED * Grid.CELL_SIZE * delta
 		global_position += offset.normalized() * minf(move_amount, distance)
