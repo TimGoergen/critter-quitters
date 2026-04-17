@@ -134,6 +134,12 @@ func _input(event: InputEvent) -> void:
 				_update_preview_position(cell)
 		return
 
+	# Mobile: a second finger tap while multi-placing cancels the action.
+	if event is InputEventScreenTouch:
+		if event.pressed and event.index > 0 and _multi_placing:
+			_cancel_multi_placement()
+		return
+
 	if not event is InputEventMouseButton:
 		return
 
@@ -157,8 +163,11 @@ func _input(event: InputEvent) -> void:
 				else:
 					_finish_placement(cell)
 		MOUSE_BUTTON_RIGHT:
-			if event.pressed and _grid.is_in_bounds(cell):
-				_try_remove_trap(cell)
+			if event.pressed:
+				if _multi_placing:
+					_cancel_multi_placement()
+				elif _grid.is_in_bounds(cell):
+					_try_remove_trap(cell)
 
 
 # ---------------------------------------------------------------------------
@@ -218,6 +227,14 @@ func _finish_multi_placement() -> void:
 	_clear_multi_ghosts()
 	for anchor in _multi_anchors:
 		_try_place_trap(anchor)
+	_multi_anchors.clear()
+
+
+## Cancels multi-placement without committing any traps.
+## Triggered by right-click (desktop) or second-finger tap (mobile).
+func _cancel_multi_placement() -> void:
+	_multi_placing = false
+	_clear_multi_ghosts()
 	_multi_anchors.clear()
 
 
