@@ -22,6 +22,10 @@ extends Node
 ## Subject to change via playtesting — adjust here and everything scales.
 const GRID_SIZE: int = 14
 
+## World-space size of one grid cell in metres.
+## Changing this scales the entire arena uniformly.
+const CELL_SIZE: float = 1.0
+
 
 # ---------------------------------------------------------------------------
 # Cell state enum
