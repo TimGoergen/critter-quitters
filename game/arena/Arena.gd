@@ -610,20 +610,20 @@ func _spawn_arena_border() -> void:
 
 	# Top and bottom slabs span the full width including the corner cells.
 	var full_w := (Grid.GRID_SIZE + 2) * cs
-	_spawn_wall_slab(Vector3(0.0, 0.0, -half - cs * 0.5), Vector3(full_w, cs))
-	_spawn_wall_slab(Vector3(0.0, 0.0,  half + cs * 0.5), Vector3(full_w, cs))
+	_spawn_wall_slab(Vector3(0.0, 0.0, -half - cs * 0.5), Vector2(full_w, cs))
+	_spawn_wall_slab(Vector3(0.0, 0.0,  half + cs * 0.5), Vector2(full_w, cs))
 
 	# Left wall — two slabs that skip the entrance row.
 	var lup  := ent_top - (-half)
 	var lbot := half - ent_bot
-	if lup  > 0.0: _spawn_wall_slab(Vector3(-half - cs * 0.5, 0.0, -half + lup  * 0.5), Vector3(cs, lup))
-	if lbot > 0.0: _spawn_wall_slab(Vector3(-half - cs * 0.5, 0.0,  ent_bot + lbot * 0.5), Vector3(cs, lbot))
+	if lup  > 0.0: _spawn_wall_slab(Vector3(-half - cs * 0.5, 0.0, -half + lup  * 0.5), Vector2(cs, lup))
+	if lbot > 0.0: _spawn_wall_slab(Vector3(-half - cs * 0.5, 0.0,  ent_bot + lbot * 0.5), Vector2(cs, lbot))
 
 	# Right wall — two slabs that skip the exit row.
 	var rup  := ex_top - (-half)
 	var rbot := half - ex_bot
-	if rup  > 0.0: _spawn_wall_slab(Vector3( half + cs * 0.5, 0.0, -half + rup  * 0.5), Vector3(cs, rup))
-	if rbot > 0.0: _spawn_wall_slab(Vector3( half + cs * 0.5, 0.0,  ex_bot + rbot * 0.5), Vector3(cs, rbot))
+	if rup  > 0.0: _spawn_wall_slab(Vector3( half + cs * 0.5, 0.0, -half + rup  * 0.5), Vector2(cs, rup))
+	if rbot > 0.0: _spawn_wall_slab(Vector3( half + cs * 0.5, 0.0,  ex_bot + rbot * 0.5), Vector2(cs, rbot))
 
 
 ## Creates one flat wall segment. size.x = slab width (X axis), size.y = slab depth (Z axis).
