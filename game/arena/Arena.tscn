@@ -14,7 +14,7 @@ script = ExtResource("1")
 [node name="Camera3D" type="Camera3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0, 1, 0, -1, 0, 0, 15, 0)
 projection = 1
-size = 16.0
+size = 34.0
 current = true
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]

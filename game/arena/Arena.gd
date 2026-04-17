@@ -33,7 +33,8 @@ const COLOR_ENTRANCE  := Color(0.20, 0.80, 0.20, 1.0)   # green
 const COLOR_EXIT      := Color(0.80, 0.20, 0.20, 1.0)   # red
 const COLOR_TRAP      := Color(0.40, 0.40, 0.80, 1.0)   # blue-grey box
 const COLOR_PATH      := Color(0.80, 0.70, 0.20, 0.5)   # yellow, semi-transparent
-const COLOR_GRID_GLOW := Color(0.65, 0.90, 1.0)         # cool blue-white for cursor glow
+const COLOR_GRID_GLOW    := Color(0.65, 0.90, 1.0)       # cool blue-white for cursor glow
+const COLOR_ARENA_BORDER := Color(0.20, 0.85, 0.20, 1.0) # green perimeter line
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +97,7 @@ func _ready() -> void:
 	_spawn_flat_marker(exit, COLOR_EXIT)
 
 	_setup_grid_highlight()
+	_spawn_arena_border()
 
 	# Trigger the first path calculation now that entrance and exit are set.
 	_pathfinder.recalculate()
@@ -394,6 +396,37 @@ func _clear_preview() -> void:
 # ---------------------------------------------------------------------------
 # Visual helpers — Phase 1 placeholder geometry
 # ---------------------------------------------------------------------------
+
+## Draws a single green rectangle around the outer edge of the arena.
+## Sits at y = 0.06 — above flat cell markers, below the cursor glow.
+func _spawn_arena_border() -> void:
+	var half := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
+	var y    := 0.06
+
+	var im  := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	im.surface_set_color(COLOR_ARENA_BORDER)
+
+	var tl := Vector3(-half, y, -half)
+	var tr := Vector3( half, y, -half)
+	var bl := Vector3(-half, y,  half)
+	var br := Vector3( half, y,  half)
+
+	im.surface_add_vertex(tl); im.surface_add_vertex(tr)
+	im.surface_add_vertex(tr); im.surface_add_vertex(br)
+	im.surface_add_vertex(br); im.surface_add_vertex(bl)
+	im.surface_add_vertex(bl); im.surface_add_vertex(tl)
+
+	im.surface_end()
+
+	var border      := MeshInstance3D.new()
+	border.mesh      = im
+	var mat         := StandardMaterial3D.new()
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	border.material_override = mat
+	add_child(border)
+
 
 ## Spawns a thin flat square to mark the entrance or exit cell.
 func _spawn_flat_marker(cell: Vector2i, color: Color) -> void:
