@@ -106,8 +106,9 @@ func _ready() -> void:
 	var entrance := Vector2i(0, 14)    # left wall, row 14
 	var exit     := Vector2i(29, 15)  # right wall, row 15
 
-	_spawn_cell   = Vector2i(entrance.x - 1, entrance.y)
-	_despawn_cell = Vector2i(exit.x + 1,    exit.y)
+	# Offset by 2: index ±1 is inside the 1-cell-wide wall, index ±2 is outside it.
+	_spawn_cell   = Vector2i(entrance.x - 2, entrance.y)
+	_despawn_cell = Vector2i(exit.x + 2,    exit.y)
 
 	_grid.setup_run(entrance, exit)
 	GameState.start_run(entrance, exit)
@@ -332,10 +333,13 @@ func _on_path_updated(new_path: Array[Vector2i]) -> void:
 		if grid_path.is_empty():
 			continue
 		var full: Array[Vector2i] = []
+		var wall_out := Vector2i(_despawn_cell.x - 1, _despawn_cell.y)
 		if not _grid.is_in_bounds(current):
-			full.append(_spawn_cell)
-		full.append_array(grid_path)
-		full.append(_despawn_cell)
+			full = _build_full_path(grid_path)
+		else:
+			full.append_array(grid_path)
+			full.append(wall_out)
+			full.append(_despawn_cell)
 		enemy.update_path(full)
 		_display_path = grid_path
 	_redraw_path_display()
@@ -443,11 +447,15 @@ func _spawn_next_in_wave() -> void:
 		get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
 
 
-## Prepends the outside spawn cell and appends the outside despawn cell
-## so enemies walk through the arena wall gap rather than starting inside it.
+## Builds the full enemy path: outside spawn → wall gap → grid → wall gap → outside despawn.
+## The intermediate wall-gap cells (±1 from the outside cells) make the enemy
+## visibly pass through the opening rather than jumping over the wall.
 func _build_full_path(grid_path: Array[Vector2i]) -> Array[Vector2i]:
-	var full: Array[Vector2i] = [_spawn_cell]
+	var wall_in  := Vector2i(_spawn_cell.x + 1,   _spawn_cell.y)
+	var wall_out := Vector2i(_despawn_cell.x - 1, _despawn_cell.y)
+	var full: Array[Vector2i] = [_spawn_cell, wall_in]
 	full.append_array(grid_path)
+	full.append(wall_out)
 	full.append(_despawn_cell)
 	return full
 
