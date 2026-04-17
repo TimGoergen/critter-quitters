@@ -67,6 +67,11 @@ var _path_nodes: Array[MeshInstance3D] = []
 # Each enemy is forwarded path updates so it can reroute in real time.
 var _active_enemies: Array[Node3D] = []
 
+# Wave spawning — enemies launch one at a time with a small gap between them.
+const WAVE_SIZE: int = 3
+const SPAWN_INTERVAL: float = 1.2   # seconds between each enemy in the wave
+var _enemies_left_to_spawn: int = 0
+
 # The path currently drawn as yellow markers. Updated on every grid change
 # and trimmed forward as the enemy advances through cells.
 var _display_path: Array[Vector2i] = []
@@ -85,6 +90,10 @@ var _multi_origin: Vector2i = Vector2i(-1, -1)
 var _multi_anchors: Array[Vector2i] = []
 var _multi_ghosts: Array[MeshInstance3D] = []
 
+# One cell outside the left and right arena walls — enemies spawn and despawn here.
+var _spawn_cell: Vector2i = Vector2i.ZERO
+var _despawn_cell: Vector2i = Vector2i.ZERO
+
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -97,14 +106,19 @@ func _ready() -> void:
 	var entrance := Vector2i(0, 14)    # left wall, row 14
 	var exit     := Vector2i(29, 15)  # right wall, row 15
 
+	_spawn_cell   = Vector2i(entrance.x - 1, entrance.y)
+	_despawn_cell = Vector2i(exit.x + 1,    exit.y)
+
 	_grid.setup_run(entrance, exit)
 	GameState.start_run(entrance, exit)
 	_pathfinder.initialize(_grid)
 
 	_pathfinder.path_updated.connect(_on_path_updated)
 
-	_spawn_flat_marker(entrance, COLOR_ENTRANCE)
-	_spawn_flat_marker(exit, COLOR_EXIT)
+	# Markers sit one cell outside the arena wall so the entrance and exit
+	# are clearly visible beyond the border gap.
+	_spawn_flat_marker(_spawn_cell,   COLOR_ENTRANCE)
+	_spawn_flat_marker(_despawn_cell, COLOR_EXIT)
 
 	_setup_grid_highlight()
 	_spawn_arena_border()
@@ -112,10 +126,8 @@ func _ready() -> void:
 	# Trigger the first path calculation now that entrance and exit are set.
 	_pathfinder.recalculate()
 
-	# Phase 1: spawn one enemy immediately so the arena is populated on launch.
-	var initial_path := _pathfinder.get_current_path()
-	if not initial_path.is_empty():
-		_spawn_enemy(initial_path)
+	# Phase 1: launch the first wave immediately.
+	_start_wave()
 
 
 # ---------------------------------------------------------------------------
@@ -239,34 +251,28 @@ func _cancel_multi_placement() -> void:
 
 
 ## Returns a sequence of 2x2 trap anchor cells from origin toward target.
-## Direction is snapped to one of 8 discrete angles (every 45°). All step
-## vectors use 2-cell spacing so adjacent 2x2 footprints never overlap.
+##
+## Anchors are placed by stepping exactly 2 cells along the dominant axis
+## per trap, with the minor axis scaled proportionally. This guarantees
+## consecutive 2x2 footprints are always touching — no gaps can appear.
+## The line extends as far as the dominant-axis distance allows; the last
+## trap advances only when the cursor moves far enough to fit another trap.
 func _compute_multi_anchors(origin: Vector2i, target: Vector2i) -> Array[Vector2i]:
-	var dir := target - origin
-	if dir == Vector2i.ZERO:
+	var dir      := target - origin
+	var dominant := maxi(abs(dir.x), abs(dir.y))
+
+	if dominant == 0:
 		return [origin]
 
-	# Eight step vectors at 2-cell spacing, indexed by 45° angle sector.
-	# Steps are multiples of 2, keeping 2x2 footprints non-overlapping.
-	var steps: Array[Vector2i] = [
-		Vector2i( 2,  0), Vector2i( 2,  2), Vector2i( 0,  2), Vector2i(-2,  2),
-		Vector2i(-2,  0), Vector2i(-2, -2), Vector2i( 0, -2), Vector2i( 2, -2),
-	]
-	var angle := atan2(float(dir.y), float(dir.x))
-	var idx   := ((roundi(angle / (PI * 0.25)) % 8) + 8) % 8
-	var step  := steps[idx]
-
-	# Count how many steps fit before exceeding the target in either axis.
-	var n := 10000
-	if step.x != 0:
-		n = mini(n, abs(dir.x) / abs(step.x) + 1)
-	if step.y != 0:
-		n = mini(n, abs(dir.y) / abs(step.y) + 1)
-	n = maxi(1, n)
+	# One trap per 2-cell step in the dominant axis.
+	var n := dominant / 2 + 1
 
 	var anchors: Array[Vector2i] = []
 	for i in range(n):
-		anchors.append(origin + step * i)
+		# Step exactly 2*i in the dominant axis so spacing is always uniform.
+		var t   := float(i * 2) / float(dominant)
+		var pos := Vector2(origin) + Vector2(dir) * t
+		anchors.append(Vector2i(roundi(pos.x), roundi(pos.y)))
 	return anchors
 
 
@@ -316,14 +322,22 @@ func _try_remove_trap(cell: Vector2i) -> void:
 # ---------------------------------------------------------------------------
 
 func _on_path_updated(new_path: Array[Vector2i]) -> void:
-	# Compute a fresh optimal path for each enemy and store it as the display path.
-	# Falls back to entrance→exit when no enemies are active.
 	_display_path = new_path
 	for enemy in _active_enemies:
-		var enemy_path := _pathfinder.find_path_from(enemy.get_current_cell())
-		if not enemy_path.is_empty():
-			enemy.update_path(enemy_path)
-			_display_path = enemy_path
+		var current := enemy.get_current_cell()
+		# If the enemy is still in the outside approach cell, A* must start
+		# from the entrance (first in-bounds cell) to stay within the grid.
+		var from := current if _grid.is_in_bounds(current) else GameState.entrance_cell
+		var grid_path := _pathfinder.find_path_from(from)
+		if grid_path.is_empty():
+			continue
+		var full: Array[Vector2i] = []
+		if not _grid.is_in_bounds(current):
+			full.append(_spawn_cell)
+		full.append_array(grid_path)
+		full.append(_despawn_cell)
+		enemy.update_path(full)
+		_display_path = grid_path
 	_redraw_path_display()
 
 
@@ -406,10 +420,36 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 	_active_enemies.erase(enemy)
 	# enemy.queue_free() is called inside Enemy.gd — no double-free needed.
 
-	# Phase 1: immediately respawn so the arena stays populated for testing.
-	var current_path := _pathfinder.get_current_path()
-	if not current_path.is_empty():
-		_spawn_enemy(current_path)
+	# Phase 1: when the last enemy of the wave exits, start a new wave.
+	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
+		_start_wave()
+
+
+## Begins spawning WAVE_SIZE enemies, one every SPAWN_INTERVAL seconds.
+func _start_wave() -> void:
+	_enemies_left_to_spawn = WAVE_SIZE
+	_spawn_next_in_wave()
+
+
+## Spawns one enemy then schedules the next, until the wave is exhausted.
+func _spawn_next_in_wave() -> void:
+	if _enemies_left_to_spawn <= 0:
+		return
+	_enemies_left_to_spawn -= 1
+	var grid_path := _pathfinder.get_current_path()
+	if not grid_path.is_empty():
+		_spawn_enemy(_build_full_path(grid_path))
+	if _enemies_left_to_spawn > 0:
+		get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
+
+
+## Prepends the outside spawn cell and appends the outside despawn cell
+## so enemies walk through the arena wall gap rather than starting inside it.
+func _build_full_path(grid_path: Array[Vector2i]) -> Array[Vector2i]:
+	var full: Array[Vector2i] = [_spawn_cell]
+	full.append_array(grid_path)
+	full.append(_despawn_cell)
+	return full
 
 
 # ---------------------------------------------------------------------------
@@ -553,25 +593,37 @@ func _clear_preview() -> void:
 # Visual helpers — Phase 1 placeholder geometry
 # ---------------------------------------------------------------------------
 
-## Draws a single green rectangle around the outer edge of the arena.
-## Sits at y = 0.06 — above flat cell markers, below the cursor glow.
+## Draws the arena border with 1-cell gaps at the entrance (left wall) and
+## exit (right wall) so enemies can visibly walk through the openings.
 func _spawn_arena_border() -> void:
-	var half := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
-	var y    := 0.06
+	var half    := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
+	var y       := 0.06
 
-	var im  := ImmediateMesh.new()
+	# Z coordinates for the entrance gap on the left wall.
+	var ent_row := GameState.entrance_cell.y
+	var ent_top := ent_row * Grid.CELL_SIZE - half
+	var ent_bot := (ent_row + 1) * Grid.CELL_SIZE - half
+
+	# Z coordinates for the exit gap on the right wall.
+	var ex_row  := GameState.exit_cell.y
+	var ex_top  := ex_row * Grid.CELL_SIZE - half
+	var ex_bot  := (ex_row + 1) * Grid.CELL_SIZE - half
+
+	var im := ImmediateMesh.new()
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
 	im.surface_set_color(COLOR_ARENA_BORDER)
 
-	var tl := Vector3(-half, y, -half)
-	var tr := Vector3( half, y, -half)
-	var bl := Vector3(-half, y,  half)
-	var br := Vector3( half, y,  half)
+	# Top and bottom edges — full width, no gaps.
+	im.surface_add_vertex(Vector3(-half, y, -half)); im.surface_add_vertex(Vector3( half, y, -half))
+	im.surface_add_vertex(Vector3(-half, y,  half)); im.surface_add_vertex(Vector3( half, y,  half))
 
-	im.surface_add_vertex(tl); im.surface_add_vertex(tr)
-	im.surface_add_vertex(tr); im.surface_add_vertex(br)
-	im.surface_add_vertex(br); im.surface_add_vertex(bl)
-	im.surface_add_vertex(bl); im.surface_add_vertex(tl)
+	# Left wall — two segments that skip the entrance row.
+	im.surface_add_vertex(Vector3(-half, y, -half));   im.surface_add_vertex(Vector3(-half, y, ent_top))
+	im.surface_add_vertex(Vector3(-half, y, ent_bot)); im.surface_add_vertex(Vector3(-half, y,  half))
+
+	# Right wall — two segments that skip the exit row.
+	im.surface_add_vertex(Vector3(half, y, -half));  im.surface_add_vertex(Vector3(half, y, ex_top))
+	im.surface_add_vertex(Vector3(half, y, ex_bot)); im.surface_add_vertex(Vector3(half, y,  half))
 
 	im.surface_end()
 
