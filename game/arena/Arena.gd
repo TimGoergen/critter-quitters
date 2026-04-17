@@ -593,47 +593,48 @@ func _clear_preview() -> void:
 # Visual helpers — Phase 1 placeholder geometry
 # ---------------------------------------------------------------------------
 
-## Draws the arena border with 1-cell gaps at the entrance (left wall) and
-## exit (right wall) so enemies can visibly walk through the openings.
+## Draws the arena border as 1-cell-wide solid slabs surrounding the arena,
+## with gaps at the entrance (left wall) and exit (right wall).
+## Corner pieces are included in the top/bottom slabs so no seams appear.
 func _spawn_arena_border() -> void:
-	var half    := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
-	var y       := 0.06
+	var half := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
+	var cs   := Grid.CELL_SIZE
 
-	# Z coordinates for the entrance gap on the left wall.
 	var ent_row := GameState.entrance_cell.y
-	var ent_top := ent_row * Grid.CELL_SIZE - half
-	var ent_bot := (ent_row + 1) * Grid.CELL_SIZE - half
+	var ent_top := ent_row * cs - half
+	var ent_bot := (ent_row + 1) * cs - half
 
-	# Z coordinates for the exit gap on the right wall.
 	var ex_row  := GameState.exit_cell.y
-	var ex_top  := ex_row * Grid.CELL_SIZE - half
-	var ex_bot  := (ex_row + 1) * Grid.CELL_SIZE - half
+	var ex_top  := ex_row * cs - half
+	var ex_bot  := (ex_row + 1) * cs - half
 
-	var im := ImmediateMesh.new()
-	im.surface_begin(Mesh.PRIMITIVE_LINES)
-	im.surface_set_color(COLOR_ARENA_BORDER)
+	# Top and bottom slabs span the full width including the corner cells.
+	var full_w := (Grid.GRID_SIZE + 2) * cs
+	_spawn_wall_slab(Vector3(0.0, 0.0, -half - cs * 0.5), Vector3(full_w, cs))
+	_spawn_wall_slab(Vector3(0.0, 0.0,  half + cs * 0.5), Vector3(full_w, cs))
 
-	# Top and bottom edges — full width, no gaps.
-	im.surface_add_vertex(Vector3(-half, y, -half)); im.surface_add_vertex(Vector3( half, y, -half))
-	im.surface_add_vertex(Vector3(-half, y,  half)); im.surface_add_vertex(Vector3( half, y,  half))
+	# Left wall — two slabs that skip the entrance row.
+	var lup  := ent_top - (-half)
+	var lbot := half - ent_bot
+	if lup  > 0.0: _spawn_wall_slab(Vector3(-half - cs * 0.5, 0.0, -half + lup  * 0.5), Vector3(cs, lup))
+	if lbot > 0.0: _spawn_wall_slab(Vector3(-half - cs * 0.5, 0.0,  ent_bot + lbot * 0.5), Vector3(cs, lbot))
 
-	# Left wall — two segments that skip the entrance row.
-	im.surface_add_vertex(Vector3(-half, y, -half));   im.surface_add_vertex(Vector3(-half, y, ent_top))
-	im.surface_add_vertex(Vector3(-half, y, ent_bot)); im.surface_add_vertex(Vector3(-half, y,  half))
+	# Right wall — two slabs that skip the exit row.
+	var rup  := ex_top - (-half)
+	var rbot := half - ex_bot
+	if rup  > 0.0: _spawn_wall_slab(Vector3( half + cs * 0.5, 0.0, -half + rup  * 0.5), Vector3(cs, rup))
+	if rbot > 0.0: _spawn_wall_slab(Vector3( half + cs * 0.5, 0.0,  ex_bot + rbot * 0.5), Vector3(cs, rbot))
 
-	# Right wall — two segments that skip the exit row.
-	im.surface_add_vertex(Vector3(half, y, -half));  im.surface_add_vertex(Vector3(half, y, ex_top))
-	im.surface_add_vertex(Vector3(half, y, ex_bot)); im.surface_add_vertex(Vector3(half, y,  half))
 
-	im.surface_end()
-
-	var border      := MeshInstance3D.new()
-	border.mesh      = im
-	var mat         := StandardMaterial3D.new()
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.vertex_color_use_as_albedo = true
-	border.material_override = mat
-	add_child(border)
+## Creates one flat wall segment. size.x = slab width (X axis), size.y = slab depth (Z axis).
+## The slab sits flat on the floor with the same height as the floor markers.
+func _spawn_wall_slab(center: Vector3, size: Vector2) -> void:
+	var slab := _make_box_mesh_instance(
+		Vector3(size.x, 0.05, size.y),
+		COLOR_ARENA_BORDER
+	)
+	slab.position = center
+	add_child(slab)
 
 
 ## Spawns a thin flat square to mark the entrance or exit cell.
