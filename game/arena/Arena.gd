@@ -176,7 +176,7 @@ func _input(event: InputEvent) -> void:
 					_clear_preview()
 					if _grid.is_in_bounds(cell):
 						_start_multi_placement(cell)
-				elif not _multi_placing and _grid.is_in_bounds(cell):
+				elif not _multi_placing and _is_in_approach_zone(cell):
 					_start_placement(cell)
 			else:
 				if _multi_placing:
@@ -207,7 +207,7 @@ func _start_placement(anchor: Vector2i) -> void:
 func _finish_placement(cell: Vector2i) -> void:
 	_pressing = false
 	_clear_preview()
-	if _grid.is_in_bounds(cell):
+	if _is_in_approach_zone(cell):
 		_try_place_trap(cell)
 
 
@@ -293,6 +293,7 @@ func _clear_multi_ghosts() -> void:
 
 
 func _try_place_trap(anchor: Vector2i) -> void:
+	anchor = _clamp_to_anchor(anchor)
 	var cells := _get_trap_cells(anchor)
 	if cells.is_empty():
 		return
@@ -372,15 +373,14 @@ func _on_path_updated(new_path: Array[Vector2i]) -> void:
 		# If the enemy is still in the outside approach cell, A* must start
 		# from the entrance (first in-bounds cell) to stay within the grid.
 		var from: Vector2i = current if _grid.is_in_bounds(current) else GameState.entrance_cell
-		var target_exit   := _nearest_exit_cell(from.y)
-		var grid_path     := _pathfinder.find_path_from(from, target_exit)
+		var grid_path     := _find_shortest_exit_path(from)
 		if grid_path.is_empty():
 			continue
 		var full: Array[Vector2i] = []
 		if not _grid.is_in_bounds(current):
 			full = _build_full_path(grid_path, current.y)
 		else:
-			var exit_row := grid_path.back().y
+			var exit_row: int = grid_path.back().y
 			var wall_out := Vector2i(_despawn_cell.x - 1, exit_row)
 			var despawn  := Vector2i(_despawn_cell.x,     exit_row)
 			full.append_array(grid_path)
@@ -497,8 +497,7 @@ func _spawn_next_in_wave() -> void:
 
 	var spawn_row: int  = open_rows[randi() % open_rows.size()]
 	var spawn_grid      := Vector2i(GameState.entrance_cell.x, spawn_row)
-	var target_exit     := _nearest_exit_cell(spawn_row)
-	var grid_path       := _pathfinder.find_path_from(spawn_grid, target_exit)
+	var grid_path       := _find_shortest_exit_path(spawn_grid)
 	if grid_path.is_empty():
 		grid_path = _pathfinder.get_current_path()
 	if not grid_path.is_empty():
@@ -507,11 +506,19 @@ func _spawn_next_in_wave() -> void:
 		get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
 
 
-## Returns the exit cell (on the grid edge) whose row is nearest to from_row.
-## Clamps to the 3-cell exit gap so the result is always a valid exit opening.
-func _nearest_exit_cell(from_row: int) -> Vector2i:
-	var nearest_row := clampi(from_row, GameState.exit_cell.y - 1, GameState.exit_cell.y + 1)
-	return Vector2i(GameState.exit_cell.x, nearest_row)
+## Runs A* from start to each of the three exit-gap cells and returns
+## the shortest result. Returns empty if none of the three are reachable.
+func _find_shortest_exit_path(start: Vector2i) -> Array[Vector2i]:
+	var exit_x := GameState.exit_cell.x
+	var exit_y := GameState.exit_cell.y
+	var shortest: Array[Vector2i] = []
+	for row in [exit_y - 1, exit_y, exit_y + 1]:
+		var path := _pathfinder.find_path_from(start, Vector2i(exit_x, row))
+		if path.is_empty():
+			continue
+		if shortest.is_empty() or path.size() < shortest.size():
+			shortest = path
+	return shortest
 
 
 ## Builds the full enemy path: outside spawn → wall gap → grid → wall gap → outside despawn.
@@ -520,7 +527,7 @@ func _nearest_exit_cell(from_row: int) -> Vector2i:
 func _build_full_path(grid_path: Array[Vector2i], spawn_row: int) -> Array[Vector2i]:
 	var outside_spawn := Vector2i(_spawn_cell.x,     spawn_row)
 	var wall_in       := Vector2i(_spawn_cell.x + 1, spawn_row)
-	var exit_row      := grid_path.back().y
+	var exit_row: int = grid_path.back().y
 	var wall_out      := Vector2i(_despawn_cell.x - 1, exit_row)
 	var despawn       := Vector2i(_despawn_cell.x,     exit_row)
 	var full: Array[Vector2i] = [outside_spawn, wall_in]
@@ -546,12 +553,33 @@ func _setup_grid_highlight() -> void:
 	add_child(_grid_highlight)
 
 
+## Returns the anchor cell clamped so its 2x2 footprint stays fully in bounds.
+## Clicking on the last column or row would otherwise produce an OOB footprint.
+func _clamp_to_anchor(cell: Vector2i) -> Vector2i:
+	return Vector2i(
+		clampi(cell.x, 0, Grid.GRID_SIZE - 2),
+		clampi(cell.y, 0, Grid.GRID_SIZE - 2)
+	)
+
+
+## Returns true when a cell is inside the grid or in the left/right wall approach
+## strips (where enemies spawn and despawn). Clicks in these strips snap to the
+## nearest in-bounds anchor via _clamp_to_anchor, enabling placement in the
+## entrance and exit wall gaps from either side.
+func _is_in_approach_zone(cell: Vector2i) -> bool:
+	if cell.y < 0 or cell.y >= Grid.GRID_SIZE:
+		return false
+	if cell.x < _spawn_cell.x or cell.x > _despawn_cell.x:
+		return false
+	return true
+
+
 ## Rebuilds the grid glow mesh for the current hover cell.
 ## Each cell's alpha is derived from its Manhattan distance to the nearest
 ## cell in the 2x2 footprint — cells right against the trap are brightest,
 ## fading smoothly outward for up to MAX_GLOW_DIST cells.
 func _update_grid_highlight() -> void:
-	if not _grid.is_in_bounds(_hover_cell):
+	if not _is_in_approach_zone(_hover_cell):
 		_grid_highlight.mesh = null
 		return
 
@@ -563,6 +591,9 @@ func _update_grid_highlight() -> void:
 
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
 
+	# Entire glow follows _hover_cell so halo and perimeter move together.
+	# In-bounds check clips the halo at the grid edge; perimeter lines that
+	# extend into the wall are drawn in world space and fade behind geometry.
 	for dr in range(-MAX_GLOW_DIST, 2 + MAX_GLOW_DIST):
 		for dc in range(-MAX_GLOW_DIST, 2 + MAX_GLOW_DIST):
 			var cell := Vector2i(_hover_cell.x + dc, _hover_cell.y + dr)
@@ -571,13 +602,11 @@ func _update_grid_highlight() -> void:
 			var dist  := _dist_to_footprint(cell, _hover_cell)
 			if dist == 0 or dist > MAX_GLOW_DIST:
 				continue
-			var alpha := 0.80 * pow(1.0 - float(dist) / float(MAX_GLOW_DIST + 1), 2.5)
+			var alpha := 0.56 * pow(1.0 - float(dist) / float(MAX_GLOW_DIST + 1), 2.5)
 			_draw_cell_glow(im, cell, hs, y, alpha)
 
-	# Draw the 2x2 footprint as a single outer rectangle — no interior lines.
-	# Skip entirely while pressing; the ghost trap is already visible there.
 	if not _pressing:
-		_draw_2x2_perimeter(im, _hover_cell, hs, y, 0.80)
+		_draw_2x2_perimeter(im, _hover_cell, hs, y, 0.56)
 
 	im.surface_end()
 	_grid_highlight.mesh = im
@@ -592,23 +621,25 @@ func _dist_to_footprint(cell: Vector2i, anchor: Vector2i) -> int:
 	return dx + dy
 
 
-## Draws the outer perimeter of the 2x2 footprint as a single rectangle.
-## Anchored at the top-left cell; spans 2 cell widths in each direction.
+## Draws the outer perimeter of the 2x2 footprint as two concentric rectangles.
+## Godot 4 has no 3D line-width API; inner + outer rects simulate doubled width.
 func _draw_2x2_perimeter(im: ImmediateMesh, anchor: Vector2i, hs: float, y: float, alpha: float) -> void:
-	var color := Color(COLOR_GRID_GLOW.r, COLOR_GRID_GLOW.g, COLOR_GRID_GLOW.b, alpha)
-	var c  := _cell_to_world(anchor)
-	var tl := Vector3(c.x - hs,                    y, c.z - hs)
-	var tr := Vector3(c.x + hs + Grid.CELL_SIZE,    y, c.z - hs)
-	var bl := Vector3(c.x - hs,                    y, c.z + hs + Grid.CELL_SIZE)
-	var br := Vector3(c.x + hs + Grid.CELL_SIZE,    y, c.z + hs + Grid.CELL_SIZE)
-	im.surface_set_color(color); im.surface_add_vertex(tl)
-	im.surface_set_color(color); im.surface_add_vertex(tr)
-	im.surface_set_color(color); im.surface_add_vertex(tr)
-	im.surface_set_color(color); im.surface_add_vertex(br)
-	im.surface_set_color(color); im.surface_add_vertex(br)
-	im.surface_set_color(color); im.surface_add_vertex(bl)
-	im.surface_set_color(color); im.surface_add_vertex(bl)
-	im.surface_set_color(color); im.surface_add_vertex(tl)
+	var color   := Color(COLOR_GRID_GLOW.r, COLOR_GRID_GLOW.g, COLOR_GRID_GLOW.b, alpha)
+	var expand  := Grid.CELL_SIZE * 0.025
+	var c       := _cell_to_world(anchor)
+	for e: float in [-expand, expand]:
+		var tl := Vector3(c.x - hs - e,                  y, c.z - hs - e)
+		var tr := Vector3(c.x + hs + Grid.CELL_SIZE + e, y, c.z - hs - e)
+		var bl := Vector3(c.x - hs - e,                  y, c.z + hs + Grid.CELL_SIZE + e)
+		var br := Vector3(c.x + hs + Grid.CELL_SIZE + e, y, c.z + hs + Grid.CELL_SIZE + e)
+		im.surface_set_color(color); im.surface_add_vertex(tl)
+		im.surface_set_color(color); im.surface_add_vertex(tr)
+		im.surface_set_color(color); im.surface_add_vertex(tr)
+		im.surface_set_color(color); im.surface_add_vertex(br)
+		im.surface_set_color(color); im.surface_add_vertex(br)
+		im.surface_set_color(color); im.surface_add_vertex(bl)
+		im.surface_set_color(color); im.surface_add_vertex(bl)
+		im.surface_set_color(color); im.surface_add_vertex(tl)
 
 
 ## Draws the four border edges of a single cell as line segments into im.
@@ -637,6 +668,7 @@ func _draw_cell_glow(im: ImmediateMesh, cell: Vector2i, hs: float, y: float, alp
 ## position while dragging. Very low alpha keeps the path visible beneath.
 func _spawn_preview_trap(anchor: Vector2i) -> void:
 	_clear_preview()
+	anchor = _clamp_to_anchor(anchor)
 	var cells := _get_trap_cells(anchor)
 	if cells.is_empty():
 		return
@@ -653,6 +685,7 @@ func _spawn_preview_trap(anchor: Vector2i) -> void:
 func _update_preview_position(anchor: Vector2i) -> void:
 	if _preview_trap == null:
 		return
+	anchor = _clamp_to_anchor(anchor)
 	var cells := _get_trap_cells(anchor)
 	if cells.is_empty():
 		return
