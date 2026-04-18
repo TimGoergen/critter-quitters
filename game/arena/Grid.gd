@@ -107,9 +107,13 @@ func is_passable(cell: Vector2i) -> bool:
 
 
 ## Returns true if the player is allowed to place a trap on this cell.
-## Only EMPTY cells accept trap placement.
+## ENTRANCE and EXIT cells are buildable so traps can narrow the gap,
+## but Arena enforces that at least one opening row must remain clear.
 func is_buildable(cell: Vector2i) -> bool:
-	return get_cell(cell) == CellState.EMPTY
+	var state := get_cell(cell)
+	return state == CellState.EMPTY \
+		or state == CellState.ENTRANCE \
+		or state == CellState.EXIT
 
 
 # ---------------------------------------------------------------------------

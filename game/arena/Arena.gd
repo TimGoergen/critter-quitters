@@ -301,7 +301,7 @@ func _try_place_trap(anchor: Vector2i) -> void:
 		if not _grid.is_buildable(cell):
 			return
 
-	if not _pathfinder.can_place_at(cells):
+	if not _can_place_at(cells):
 		print("Placement rejected: would block all paths at ", anchor)
 		return
 
@@ -324,6 +324,41 @@ func _try_remove_trap(cell: Vector2i) -> void:
 	if _trap_nodes.has(anchor):
 		_trap_nodes[anchor].queue_free()
 		_trap_nodes.erase(anchor)
+
+
+## Returns true if the given cells can be trapped without sealing either gap.
+## Requires at least one entrance row and one exit row to remain passable,
+## and a path connecting them to still exist.
+func _can_place_at(cells: Array[Vector2i]) -> bool:
+	var ent_x := GameState.entrance_cell.x
+	var ex_x  := GameState.exit_cell.x
+
+	# Collect entrance and exit rows that would still be open after placement.
+	var open_ent: Array[Vector2i] = []
+	for row in _entrance_rows:
+		var c := Vector2i(ent_x, row)
+		if not (c in cells) and _grid.is_passable(c):
+			open_ent.append(c)
+
+	if open_ent.is_empty():
+		return false  # would seal the entire entrance gap
+
+	var ex_rows := [GameState.exit_cell.y - 1, GameState.exit_cell.y, GameState.exit_cell.y + 1]
+	var open_ex: Array[Vector2i] = []
+	for row in ex_rows:
+		var c := Vector2i(ex_x, row)
+		if not (c in cells) and _grid.is_passable(c):
+			open_ex.append(c)
+
+	if open_ex.is_empty():
+		return false  # would seal the entire exit gap
+
+	# At least one entrance→exit pair must still be reachable.
+	for ent in open_ent:
+		for ex in open_ex:
+			if _pathfinder.can_reach(ent, ex, cells):
+				return true
+	return false
 
 
 # ---------------------------------------------------------------------------
@@ -447,12 +482,20 @@ func _start_wave() -> void:
 
 
 ## Spawns one enemy then schedules the next, until the wave is exhausted.
-## Each enemy picks a random entrance row and routes to the nearest exit row.
+## Picks randomly from entrance rows that are currently open (not trapped).
 func _spawn_next_in_wave() -> void:
 	if _enemies_left_to_spawn <= 0:
 		return
 	_enemies_left_to_spawn -= 1
-	var spawn_row: int  = _entrance_rows[randi() % _entrance_rows.size()]
+
+	var open_rows: Array[int] = []
+	for row in _entrance_rows:
+		if _grid.is_passable(Vector2i(GameState.entrance_cell.x, row)):
+			open_rows.append(row)
+	if open_rows.is_empty():
+		open_rows = _entrance_rows  # fallback: should never happen if can_place_at is correct
+
+	var spawn_row: int  = open_rows[randi() % open_rows.size()]
 	var spawn_grid      := Vector2i(GameState.entrance_cell.x, spawn_row)
 	var target_exit     := _nearest_exit_cell(spawn_row)
 	var grid_path       := _pathfinder.find_path_from(spawn_grid, target_exit)

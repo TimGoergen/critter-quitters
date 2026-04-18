@@ -94,6 +94,12 @@ func can_place_at(cells: Array[Vector2i]) -> bool:
 	return not path.is_empty()
 
 
+## Returns true if a path exists from start to end with additional_blockers
+## treated as impassable. Used by Arena to test entrance/exit cell pairs.
+func can_reach(start: Vector2i, end: Vector2i, additional_blockers: Array[Vector2i] = []) -> bool:
+	return not _find_path(start, end, additional_blockers).is_empty()
+
+
 ## Forces an immediate path recalculation.
 ## Normally triggered automatically via cell_changed, but can be called
 ## directly after entrance/exit positions are assigned at run start.
