@@ -108,29 +108,44 @@ func _ready() -> void:
 	var entrance := Vector2i(0, 14)
 	var exit     := Vector2i(29, 15)
 
-	_spawn_cell   = Vector2i(entrance.x - 2, entrance.y)
-	_despawn_cell = Vector2i(exit.x + 2, exit.y)
+	_spawn_cell   = Vector2i(entrance.x - 1, entrance.y)
+	_despawn_cell = Vector2i(exit.x + 1, exit.y)
 
-	# Three rows the enemy may enter from; gap is centred on the canonical row.
-	for i in range(3):
-		_entrance_rows.append(entrance.y - 1 + i)   # [13, 14, 15]
+	# Five rows the enemy may enter from; gap is centred on the canonical row.
+	for i in range(5):
+		_entrance_rows.append(entrance.y - 2 + i)   # [12, 13, 14, 15, 16]
 
-	# Mark the centre entrance/exit cells first, then the two flanking cells.
+	# Mark the centre entrance/exit cells first, then the four flanking cells.
 	# Done before pathfinder.initialize() so cell_changed isn't connected yet
 	# and won't fire premature recalculations.
 	_grid.setup_run(entrance, exit)
+	_grid.set_cell(Vector2i(entrance.x, entrance.y - 2), Grid.CellState.ENTRANCE)
 	_grid.set_cell(Vector2i(entrance.x, entrance.y - 1), Grid.CellState.ENTRANCE)
 	_grid.set_cell(Vector2i(entrance.x, entrance.y + 1), Grid.CellState.ENTRANCE)
+	_grid.set_cell(Vector2i(entrance.x, entrance.y + 2), Grid.CellState.ENTRANCE)
+	_grid.set_cell(Vector2i(exit.x, exit.y - 2), Grid.CellState.EXIT)
 	_grid.set_cell(Vector2i(exit.x, exit.y - 1), Grid.CellState.EXIT)
 	_grid.set_cell(Vector2i(exit.x, exit.y + 1), Grid.CellState.EXIT)
+	_grid.set_cell(Vector2i(exit.x, exit.y + 2), Grid.CellState.EXIT)
+
+	# Mark all non-gap cells in the left and right border columns as WALL.
+	# The wall sits on the arena floor (columns 0 and 29); the gap rows are the
+	# only passable openings in those columns.
+	var ent_gap := [entrance.y - 2, entrance.y - 1, entrance.y, entrance.y + 1, entrance.y + 2]
+	var ex_gap  := [exit.y - 2, exit.y - 1, exit.y, exit.y + 1, exit.y + 2]
+	for row in range(Grid.GRID_SIZE):
+		if row not in ent_gap:
+			_grid.set_cell(Vector2i(entrance.x, row), Grid.CellState.WALL)
+		if row not in ex_gap:
+			_grid.set_cell(Vector2i(exit.x, row), Grid.CellState.WALL)
 
 	GameState.start_run(entrance, exit)
 	_pathfinder.initialize(_grid)
 	_pathfinder.path_updated.connect(_on_path_updated)
 
 	# Spawn one elongated marker covering all 3 rows for entrance and exit.
-	_spawn_zone_marker(_spawn_cell,   3, COLOR_ENTRANCE)
-	_spawn_zone_marker(_despawn_cell, 3, COLOR_EXIT)
+	_spawn_zone_marker(_spawn_cell,   5, COLOR_ENTRANCE)
+	_spawn_zone_marker(_despawn_cell, 5, COLOR_EXIT)
 
 	_setup_grid_highlight()
 	_spawn_arena_border()
@@ -342,7 +357,7 @@ func _can_place_at(cells: Array[Vector2i]) -> bool:
 	if open_ent.is_empty():
 		return false
 
-	var ex_rows := [GameState.exit_cell.y - 1, GameState.exit_cell.y, GameState.exit_cell.y + 1]
+	var ex_rows := [GameState.exit_cell.y - 2, GameState.exit_cell.y - 1, GameState.exit_cell.y, GameState.exit_cell.y + 1, GameState.exit_cell.y + 2]
 	var open_ex: Array[Vector2i] = []
 	for row in ex_rows:
 		var c := Vector2i(ex_x, row)
@@ -378,10 +393,8 @@ func _on_path_updated(new_path: Array[Vector2i]) -> void:
 			full = _build_full_path(grid_path, current.y)
 		else:
 			var exit_row: int = grid_path.back().y
-			var wall_out := Vector2i(_despawn_cell.x - 1, exit_row)
-			var despawn  := Vector2i(_despawn_cell.x,     exit_row)
+			var despawn  := Vector2i(_despawn_cell.x, exit_row)
 			full.append_array(grid_path)
-			full.append(wall_out)
 			full.append(despawn)
 		enemy.update_path(full)
 		_display_path = grid_path
@@ -509,7 +522,7 @@ func _find_shortest_exit_path(start: Vector2i) -> Array[Vector2i]:
 	var exit_x := GameState.exit_cell.x
 	var exit_y := GameState.exit_cell.y
 	var shortest: Array[Vector2i] = []
-	for row in [exit_y - 1, exit_y, exit_y + 1]:
+	for row in [exit_y - 2, exit_y - 1, exit_y, exit_y + 1, exit_y + 2]:
 		var path := _pathfinder.find_path_from(start, Vector2i(exit_x, row))
 		if path.is_empty():
 			continue
@@ -518,18 +531,16 @@ func _find_shortest_exit_path(start: Vector2i) -> Array[Vector2i]:
 	return shortest
 
 
-## Builds the full enemy path: outside spawn → wall gap → grid → wall gap → outside despawn.
+## Builds the full enemy path: outside spawn → grid (entrance gap first) → outside despawn.
 ## spawn_row selects which entrance row this enemy uses.
 ## The exit row is derived from the last cell of grid_path (the nearest exit opening).
+## The entrance and exit gap cells are part of the grid path, so no separate wall steps.
 func _build_full_path(grid_path: Array[Vector2i], spawn_row: int) -> Array[Vector2i]:
-	var outside_spawn := Vector2i(_spawn_cell.x,     spawn_row)
-	var wall_in       := Vector2i(_spawn_cell.x + 1, spawn_row)
+	var outside_spawn := Vector2i(_spawn_cell.x, spawn_row)
 	var exit_row: int = grid_path.back().y
-	var wall_out      := Vector2i(_despawn_cell.x - 1, exit_row)
-	var despawn       := Vector2i(_despawn_cell.x,     exit_row)
-	var full: Array[Vector2i] = [outside_spawn, wall_in]
+	var despawn       := Vector2i(_despawn_cell.x, exit_row)
+	var full: Array[Vector2i] = [outside_spawn]
 	full.append_array(grid_path)
-	full.append(wall_out)
 	full.append(despawn)
 	return full
 
@@ -595,7 +606,7 @@ func _update_grid_highlight() -> void:
 			break
 		for dc in range(2):
 			var s := _grid.get_cell(Vector2i(anchor.x + dc, anchor.y + dr))
-			if s == Grid.CellState.TRAP or s == Grid.CellState.OBSTACLE:
+			if s == Grid.CellState.TRAP or s == Grid.CellState.OBSTACLE or s == Grid.CellState.WALL:
 				blocked = true
 				break
 
@@ -725,13 +736,13 @@ func _spawn_arena_border() -> void:
 	var cs   := Grid.CELL_SIZE
 
 	# 3-cell gaps: one cell above and one cell below the canonical entrance/exit row.
-	var ent_top := (GameState.entrance_cell.y - 1) * cs - half
-	var ent_bot := (GameState.entrance_cell.y + 2) * cs - half
+	var ent_top := (GameState.entrance_cell.y - 2) * cs - half
+	var ent_bot := (GameState.entrance_cell.y + 3) * cs - half
 
-	var ex_top  := (GameState.exit_cell.y - 1) * cs - half
-	var ex_bot  := (GameState.exit_cell.y  + 2) * cs - half
+	var ex_top  := (GameState.exit_cell.y - 2) * cs - half
+	var ex_bot  := (GameState.exit_cell.y  + 3) * cs - half
 
-	var full_w := (Grid.GRID_SIZE + 2) * cs
+	var full_w := Grid.GRID_SIZE * cs
 
 	# --- Fill slabs (light gray) ---
 	_spawn_wall_slab(Vector3(0.0, 0.0, -half - cs * 0.5), Vector2(full_w, cs))
@@ -739,24 +750,24 @@ func _spawn_arena_border() -> void:
 
 	var lup  := ent_top - (-half)
 	var lbot := half - ent_bot
-	if lup  > 0.0: _spawn_wall_slab(Vector3(-half - cs * 0.5, 0.0, -half + lup  * 0.5), Vector2(cs, lup))
-	if lbot > 0.0: _spawn_wall_slab(Vector3(-half - cs * 0.5, 0.0,  ent_bot + lbot * 0.5), Vector2(cs, lbot))
+	if lup  > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0, -half + lup  * 0.5), Vector2(cs, lup))
+	if lbot > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0,  ent_bot + lbot * 0.5), Vector2(cs, lbot))
 
 	var rup  := ex_top - (-half)
 	var rbot := half - ex_bot
-	if rup  > 0.0: _spawn_wall_slab(Vector3( half + cs * 0.5, 0.0, -half + rup  * 0.5), Vector2(cs, rup))
-	if rbot > 0.0: _spawn_wall_slab(Vector3( half + cs * 0.5, 0.0,  ex_bot + rbot * 0.5), Vector2(cs, rbot))
+	if rup  > 0.0: _spawn_wall_slab(Vector3( half - cs * 0.5, 0.0, -half + rup  * 0.5), Vector2(cs, rup))
+	if rbot > 0.0: _spawn_wall_slab(Vector3( half - cs * 0.5, 0.0,  ex_bot + rbot * 0.5), Vector2(cs, rbot))
 
 	# --- Cell border lines (dark gray, one grid per wall cell) ---
 	var im := ImmediateMesh.new()
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
 
-	_draw_wall_cell_borders(im, -(half + cs), half + cs, -(half + cs), -half)
-	_draw_wall_cell_borders(im, -(half + cs), half + cs,  half,         half + cs)
-	if lup  > 0.0: _draw_wall_cell_borders(im, -(half + cs), -half, -half,   ent_top)
-	if lbot > 0.0: _draw_wall_cell_borders(im, -(half + cs), -half,  ent_bot, half)
-	if rup  > 0.0: _draw_wall_cell_borders(im,  half, half + cs, -half,   ex_top)
-	if rbot > 0.0: _draw_wall_cell_borders(im,  half, half + cs,  ex_bot,  half)
+	_draw_wall_cell_borders(im, -half, half, -(half + cs), -half)
+	_draw_wall_cell_borders(im, -half, half,  half,         half + cs)
+	if lup  > 0.0: _draw_wall_cell_borders(im, -half, -half + cs, -half,   ent_top)
+	if lbot > 0.0: _draw_wall_cell_borders(im, -half, -half + cs,  ent_bot, half)
+	if rup  > 0.0: _draw_wall_cell_borders(im,  half - cs, half, -half,   ex_top)
+	if rbot > 0.0: _draw_wall_cell_borders(im,  half - cs, half,  ex_bot,  half)
 
 	im.surface_end()
 

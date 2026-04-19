@@ -38,8 +38,9 @@ enum CellState {
 	EMPTY,     # Nothing here — passable by pests, available for trap placement
 	TRAP,      # Player-placed trap — impassable, can be sold or upgraded
 	OBSTACLE,  # Arena Evolution obstacle — impassable, cannot be removed by player
-	ENTRANCE,  # Pest entry point — passable, cannot be built on
-	EXIT,      # Pest destination — passable, cannot be built on
+	WALL,      # Permanent arena border wall — impassable, never buildable or removable
+	ENTRANCE,  # Pest entry point (gap in left wall) — passable, buildable with path check
+	EXIT,      # Pest destination (gap in right wall) — passable, buildable with path check
 }
 
 
