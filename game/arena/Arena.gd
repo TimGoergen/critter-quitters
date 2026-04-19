@@ -176,7 +176,7 @@ func _input(event: InputEvent) -> void:
 					_clear_preview()
 					if _grid.is_in_bounds(cell):
 						_start_multi_placement(cell)
-				elif not _multi_placing and _is_in_approach_zone(cell):
+				elif not _multi_placing and _is_in_arena(cell):
 					_start_placement(cell)
 			else:
 				if _multi_placing:
@@ -207,7 +207,7 @@ func _start_placement(anchor: Vector2i) -> void:
 func _finish_placement(cell: Vector2i) -> void:
 	_pressing = false
 	_clear_preview()
-	if _is_in_approach_zone(cell):
+	if _is_in_arena(cell):
 		_try_place_trap(cell)
 
 
@@ -303,7 +303,6 @@ func _try_place_trap(anchor: Vector2i) -> void:
 			return
 
 	if not _can_place_at(cells):
-		print("Placement rejected: would block all paths at ", anchor)
 		return
 
 	for cell in cells:
@@ -334,7 +333,6 @@ func _can_place_at(cells: Array[Vector2i]) -> bool:
 	var ent_x := GameState.entrance_cell.x
 	var ex_x  := GameState.exit_cell.x
 
-	# Collect entrance and exit rows that would still be open after placement.
 	var open_ent: Array[Vector2i] = []
 	for row in _entrance_rows:
 		var c := Vector2i(ent_x, row)
@@ -342,7 +340,7 @@ func _can_place_at(cells: Array[Vector2i]) -> bool:
 			open_ent.append(c)
 
 	if open_ent.is_empty():
-		return false  # would seal the entire entrance gap
+		return false
 
 	var ex_rows := [GameState.exit_cell.y - 1, GameState.exit_cell.y, GameState.exit_cell.y + 1]
 	var open_ex: Array[Vector2i] = []
@@ -352,9 +350,8 @@ func _can_place_at(cells: Array[Vector2i]) -> bool:
 			open_ex.append(c)
 
 	if open_ex.is_empty():
-		return false  # would seal the entire exit gap
+		return false
 
-	# At least one entrance→exit pair must still be reachable.
 	for ent in open_ent:
 		for ex in open_ex:
 			if _pathfinder.can_reach(ent, ex, cells):
@@ -562,51 +559,68 @@ func _clamp_to_anchor(cell: Vector2i) -> Vector2i:
 	)
 
 
-## Returns true when a cell is inside the grid or in the left/right wall approach
-## strips (where enemies spawn and despawn). Clicks in these strips snap to the
-## nearest in-bounds anchor via _clamp_to_anchor, enabling placement in the
-## entrance and exit wall gaps from either side.
-func _is_in_approach_zone(cell: Vector2i) -> bool:
-	if cell.y < 0 or cell.y >= Grid.GRID_SIZE:
-		return false
-	if cell.x < _spawn_cell.x or cell.x > _despawn_cell.x:
-		return false
-	return true
+
+
+## Returns true when a cell is within the arena, defined as the 30x30 floor
+## plus the 1-cell-wide wall border surrounding it (x: -1..30, y: -1..30).
+## Cells beyond that boundary are outside the arena entirely.
+func _is_in_arena(cell: Vector2i) -> bool:
+	return cell.x >= -1 and cell.x <= Grid.GRID_SIZE \
+		and cell.y >= -1 and cell.y <= Grid.GRID_SIZE
 
 
 ## Rebuilds the grid glow mesh for the current hover cell.
 ## Each cell's alpha is derived from its Manhattan distance to the nearest
 ## cell in the 2x2 footprint — cells right against the trap are brightest,
 ## fading smoothly outward for up to MAX_GLOW_DIST cells.
+##
+## The reticle always draws at the clamped anchor — the same position that
+## placement will use if the player clicks now — so the visual is always
+## consistent with what will happen.
+##
+## Visibility rules:
+##   Cursor outside the arena border (x/y beyond ±1 of grid edge) → hidden
+##   Footprint contains a TRAP or OBSTACLE                         → 20% opacity
+##   Footprint is clear (EMPTY / ENTRANCE / EXIT only)             → 100% opacity
 func _update_grid_highlight() -> void:
-	if not _is_in_approach_zone(_hover_cell):
+	if not _is_in_arena(_hover_cell):
 		_grid_highlight.mesh = null
 		return
 
+	var anchor := _clamp_to_anchor(_hover_cell)
+
+	var blocked := false
+	for dr in range(2):
+		if blocked:
+			break
+		for dc in range(2):
+			var s := _grid.get_cell(Vector2i(anchor.x + dc, anchor.y + dr))
+			if s == Grid.CellState.TRAP or s == Grid.CellState.OBSTACLE:
+				blocked = true
+				break
+
+	var opacity_scale := 0.2 if blocked else 1.0
 	const MAX_GLOW_DIST: int = 2
 
 	var im := ImmediateMesh.new()
 	var hs := Grid.CELL_SIZE * 0.5
-	var y  := 0.08   # sit above path markers and floor markers
+	var y  := 0.08
 
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
 
-	# Entire glow follows _hover_cell so halo and perimeter move together.
-	# In-bounds check clips the halo at the grid edge; perimeter lines that
-	# extend into the wall are drawn in world space and fade behind geometry.
 	for dr in range(-MAX_GLOW_DIST, 2 + MAX_GLOW_DIST):
 		for dc in range(-MAX_GLOW_DIST, 2 + MAX_GLOW_DIST):
-			var cell := Vector2i(_hover_cell.x + dc, _hover_cell.y + dr)
+			var cell := Vector2i(anchor.x + dc, anchor.y + dr)
 			if not _grid.is_in_bounds(cell):
 				continue
-			var dist  := _dist_to_footprint(cell, _hover_cell)
+			var dist := _dist_to_footprint(cell, anchor)
 			if dist == 0 or dist > MAX_GLOW_DIST:
 				continue
-			var alpha := 0.56 * pow(1.0 - float(dist) / float(MAX_GLOW_DIST + 1), 2.5)
+			var alpha := 0.56 * opacity_scale * pow(1.0 - float(dist) / float(MAX_GLOW_DIST + 1), 2.5)
 			_draw_cell_glow(im, cell, hs, y, alpha)
 
 	if not _pressing:
-		_draw_2x2_perimeter(im, _hover_cell, hs, y, 0.56)
+		_draw_2x2_perimeter(im, anchor, hs, y, 0.56 * opacity_scale)
 
 	im.surface_end()
 	_grid_highlight.mesh = im
