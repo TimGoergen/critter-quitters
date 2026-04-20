@@ -38,10 +38,10 @@ enum TrapType { SNAP_TRAP, ZAPPER, FOGGER, GLUE_BOARD }
 ##   cooldown — seconds between shots; 0.0 = passive (no shots fired)
 ##   color    — placeholder box colour (replaced by ASCII billboard in Phase 3)
 const STATS := {
-	TrapType.SNAP_TRAP:  { "damage": 2.25, "range": 5.6, "cooldown": 1.0, "cost": 10, "color": Color(0.40, 0.40, 0.80) },
-	TrapType.ZAPPER:     { "damage": 37.5, "range": 9.6, "cooldown": 2.5, "cost": 25, "color": Color(0.90, 0.85, 0.20) },
-	TrapType.FOGGER:     { "damage": 22.5, "range": 6.4, "cooldown": 2.0, "cost": 20, "color": Color(0.60, 0.90, 0.60) },
-	TrapType.GLUE_BOARD: { "damage": 0.0,  "range": 4.8, "cooldown": 0.0, "cost": 15, "color": Color(0.80, 0.70, 0.30) },
+	TrapType.SNAP_TRAP:  { "damage": 3.375, "range": 5.6, "cooldown": 1.0, "cost": 10, "color": Color(0.40, 0.40, 0.80) },
+	TrapType.ZAPPER:     { "damage": 56.25, "range": 9.6, "cooldown": 2.5, "cost": 25, "color": Color(0.90, 0.85, 0.20) },
+	TrapType.FOGGER:     { "damage": 33.75, "range": 6.4, "cooldown": 2.0, "cost": 20, "color": Color(0.60, 0.90, 0.60) },
+	TrapType.GLUE_BOARD: { "damage": 0.0,   "range": 4.8, "cooldown": 0.0, "cost": 15, "color": Color(0.80, 0.70, 0.30) },
 }
 
 
