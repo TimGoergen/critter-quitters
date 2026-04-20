@@ -140,13 +140,13 @@ var _hit_tween: Tween = null
 
 ## Positions the enemy at the entrance cell, applies type stats, and begins movement.
 ## Must be called by Arena after instantiation and before adding to the tree.
-func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType.ANT) -> void:
+func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType.ANT, wave: int = 1) -> void:
 	if initial_path.size() < 2:
 		return
 
 	var stats          = STATS[enemy_type]
 	_move_speed        = stats["speed"]
-	_max_hp            = stats["hp"]
+	_max_hp            = stats["hp"] * (1.0 + 0.02 * wave)
 	_current_hp        = _max_hp
 	_infestation_damage = stats["infestation"]
 	_bounty            = stats["bounty"]

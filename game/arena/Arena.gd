@@ -505,7 +505,7 @@ func _spawn_enemy(path: Array[Vector2i]) -> void:
 	enemy.cell_advanced.connect(_redraw_path_display)
 
 	add_child(enemy)
-	enemy.initialize(path, Enemy.EnemyType.ANT)
+	enemy.initialize(path, Enemy.EnemyType.ANT, GameState.current_wave)
 
 
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
