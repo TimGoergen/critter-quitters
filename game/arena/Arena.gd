@@ -26,9 +26,11 @@ extends Node3D
 
 # Explicit dependencies — preloading makes cross-script references visible
 # at the top of the file rather than relying on the global class registry.
-const Grid       = preload("res://arena/Grid.gd")
-const Pathfinder = preload("res://arena/Pathfinder.gd")
-const Enemy      = preload("res://enemies/Enemy.gd")
+const Grid        = preload("res://arena/Grid.gd")
+const Pathfinder  = preload("res://arena/Pathfinder.gd")
+const Enemy       = preload("res://enemies/Enemy.gd")
+const Trap        = preload("res://traps/Trap.gd")
+const Projectile  = preload("res://traps/Projectile.gd")
 
 
 # ---------------------------------------------------------------------------
@@ -76,8 +78,8 @@ var _path_nodes: Array[MeshInstance3D] = []
 var _active_enemies: Array[Node3D] = []
 
 # Wave spawning — enemies launch one at a time with a small gap between them.
-const WAVE_SIZE: int = 3
-const SPAWN_INTERVAL: float = 1.2   # seconds between each enemy in the wave
+const WAVE_SIZE: int = 10
+const SPAWN_INTERVAL: float = 0.6   # seconds between each enemy in the wave
 var _enemies_left_to_spawn: int = 0
 
 # The path currently drawn as yellow markers. Updated on every grid change
@@ -247,7 +249,8 @@ func _commit_drag_placement() -> void:
 		var cells := _get_trap_cells(anchor)
 		if _footprint_overlaps_enemy(cells):
 			break
-		_try_place_trap(anchor)
+		if not _try_place_trap(anchor):
+			break
 	_drag_anchors.clear()
 	_drag_origin = Vector2i(-1, -1)
 
@@ -308,24 +311,25 @@ func _clear_drag_ghosts() -> void:
 	_drag_ghosts.clear()
 
 
-func _try_place_trap(anchor: Vector2i) -> void:
+func _try_place_trap(anchor: Vector2i) -> bool:
 	anchor = _clamp_to_anchor(anchor)
 	var cells := _get_trap_cells(anchor)
 	if cells.is_empty():
-		return
+		return false
 
 	for cell in cells:
 		if not _grid.is_buildable(cell):
-			return
+			return false
 
 	if not _can_place_at(cells):
-		return
+		return false
 
 	for cell in cells:
 		_grid.place_trap(cell)
 		_trap_anchors[cell] = anchor
 
-	_spawn_trap_visual(anchor)
+	_spawn_trap(anchor)
+	return true
 
 
 func _try_remove_trap(cell: Vector2i) -> void:
@@ -467,21 +471,30 @@ func _cell_to_world(cell: Vector2i) -> Vector3:
 func _spawn_enemy(path: Array[Vector2i]) -> void:
 	var enemy: Node3D = Enemy.new()
 
-	# Register before adding to tree so the signal is connected before
+	# Register before adding to tree so signals are connected before
 	# _ready fires on the enemy node.
 	_active_enemies.append(enemy)
 	enemy.reached_exit.connect(_on_enemy_reached_exit.bind(enemy))
+	enemy.died.connect(_on_enemy_died.bind(enemy))
 	enemy.cell_advanced.connect(_redraw_path_display)
 
 	add_child(enemy)
-	enemy.initialize(path)
+	enemy.initialize(path, Enemy.EnemyType.ANT)
 
 
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
 	_active_enemies.erase(enemy)
 	# enemy.queue_free() is called inside Enemy.gd — no double-free needed.
 
-	# Phase 1: when the last enemy of the wave exits, start a new wave.
+	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
+		_start_wave()
+
+
+func _on_enemy_died(enemy: Node3D) -> void:
+	_active_enemies.erase(enemy)
+	# enemy.queue_free() is called inside Enemy._die() after the flash tween.
+	# TODO: award Bug Bucks here once the currency system exists.
+
 	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
 		_start_wave()
 
@@ -489,7 +502,7 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 ## Begins spawning WAVE_SIZE enemies, one every SPAWN_INTERVAL seconds.
 func _start_wave() -> void:
 	_enemies_left_to_spawn = WAVE_SIZE
-	_spawn_next_in_wave()
+	get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
 
 
 ## Spawns one enemy then schedules the next, until the wave is exhausted.
@@ -793,18 +806,22 @@ func _spawn_zone_marker(center_cell: Vector2i, rows: int, color: Color) -> void:
 	add_child(marker)
 
 
-## Spawns a raised box centred on the 2x2 footprint of the trap.
-func _spawn_trap_visual(anchor: Vector2i) -> void:
-	var trap_visual := _make_box_mesh_instance(
-		Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9),
-		COLOR_TRAP
-	)
-	# Centre of the 2x2 footprint sits half a cell right and down from the
-	# anchor cell centre. Raise by half the box height so it sits on y = 0.
+## Spawns a Trap node centred on the 2x2 footprint and wires it to the
+## active enemy list. The trap manages its own visual and combat logic.
+func _spawn_trap(anchor: Vector2i) -> void:
+	var trap := Trap.new()
 	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
-	trap_visual.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
-	_trap_container.add_child(trap_visual)
-	_trap_nodes[anchor] = trap_visual
+	trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
+	trap.fired.connect(_on_trap_fired)
+	_trap_container.add_child(trap)
+	trap.initialize(Trap.TrapType.SNAP_TRAP, _active_enemies)
+	_trap_nodes[anchor] = trap
+
+
+func _on_trap_fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float) -> void:
+	var proj := Projectile.new()
+	proj.initialize(from_pos, to_pos, target, damage)
+	add_child(proj)
 
 
 ## Returns the four cells of a 2x2 trap footprint given its top-left anchor.
