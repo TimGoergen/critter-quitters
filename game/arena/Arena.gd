@@ -80,8 +80,8 @@ var _path_marker_pool: Array[MeshInstance3D] = []
 var _active_enemies: Array[Node3D] = []
 
 # Wave spawning — enemies launch one at a time with a small gap between them.
-const WAVE_SIZE: int = 10
-const SPAWN_INTERVAL: float = 0.6      # seconds between each enemy in the wave
+const WAVE_SIZE: int = 25
+const SPAWN_INTERVAL: float = 0.3      # seconds between each enemy in the wave
 const WAVE_COUNTDOWN: int  = 2         # seconds of countdown before each wave
 
 var _enemies_left_to_spawn: int = 0
