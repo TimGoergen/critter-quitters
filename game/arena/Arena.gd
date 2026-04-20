@@ -816,9 +816,9 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	_trap_nodes[anchor] = trap
 
 
-func _on_trap_fired(from_pos: Vector3, to_pos: Vector3) -> void:
+func _on_trap_fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float) -> void:
 	var proj := Projectile.new()
-	proj.initialize(from_pos, to_pos)
+	proj.initialize(from_pos, to_pos, target, damage)
 	add_child(proj)
 
 

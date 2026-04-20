@@ -24,6 +24,8 @@ const COLOR_PROJECTILE := Color(1.0, 0.90, 0.25)   # bright yellow
 # ---------------------------------------------------------------------------
 
 var _target_pos: Vector3
+var _target: Node3D = null
+var _damage: float  = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -31,11 +33,15 @@ var _target_pos: Vector3
 # ---------------------------------------------------------------------------
 
 ## Positions the projectile at from_pos and sends it toward to_pos.
+## Applies damage to target on arrival rather than at fire time, so the
+## enemy's hit flash coincides with the visual impact.
 ## Must be called by Arena immediately after instantiation and before
 ## adding to the scene tree.
-func initialize(from_pos: Vector3, to_pos: Vector3) -> void:
+func initialize(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float) -> void:
 	position    = from_pos
 	_target_pos = Vector3(to_pos.x, from_pos.y, to_pos.z)   # travel flat on XZ plane
+	_target     = target
+	_damage     = damage
 	_spawn_visual()
 
 
@@ -47,6 +53,8 @@ func _process(delta: float) -> void:
 	var offset   := _target_pos - global_position
 	var distance := offset.length()
 	if distance < 0.05:
+		if is_instance_valid(_target):
+			_target.take_damage(_damage)
 		queue_free()
 		return
 	global_position += offset.normalized() * minf(TRAVEL_SPEED * delta, distance)
@@ -57,11 +65,11 @@ func _process(delta: float) -> void:
 # ---------------------------------------------------------------------------
 
 func _spawn_visual() -> void:
-	var mi     := MeshInstance3D.new()
-	var sphere := SphereMesh.new()
-	sphere.radius = 0.08
-	sphere.height = 0.16
-	mi.mesh    = sphere
+	var mi  := MeshInstance3D.new()
+	var box := BoxMesh.new()
+	# 3×5 px at ~30 px/cell ≈ 0.10 × 0.17 world units; thin in Y.
+	box.size = Vector3(0.10, 0.04, 0.17)
+	mi.mesh  = box
 
 	var mat           := StandardMaterial3D.new()
 	mat.albedo_color   = COLOR_PROJECTILE

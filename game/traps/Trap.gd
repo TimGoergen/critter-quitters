@@ -51,7 +51,9 @@ const STATS := {
 
 ## Emitted when the trap fires. Arena spawns a Projectile in response so
 ## the trap itself does not need a reference to the scene tree root.
-signal fired(from_pos: Vector3, to_pos: Vector3)
+## target and damage are forwarded to the Projectile so damage is applied
+## on impact rather than instantly at fire time.
+signal fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float)
 
 
 # ---------------------------------------------------------------------------
@@ -103,8 +105,7 @@ func _process(delta: float) -> void:
 	if target == null:
 		return
 
-	target.take_damage(_damage)
-	fired.emit(global_position, target.global_position)
+	fired.emit(global_position, target.global_position, target, _damage)
 	_cooldown_remaining = _cooldown
 
 
