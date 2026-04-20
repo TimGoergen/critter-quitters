@@ -80,9 +80,9 @@ var _path_marker_pool: Array[MeshInstance3D] = []
 var _active_enemies: Array[Node3D] = []
 
 # Wave spawning — enemies launch one at a time with a small gap between them.
-const WAVE_SIZE: int = 25
-const SPAWN_INTERVAL: float = 0.3      # seconds between each enemy in the wave
-const WAVE_COUNTDOWN: int  = 2         # seconds of countdown before each wave
+const WAVE_SIZE: int = 10
+const SPAWN_INTERVAL: float = 0.36     # seconds between each enemy in the wave
+const WAVE_COUNTDOWN: int  = 3         # seconds of countdown before each wave
 
 var _enemies_left_to_spawn: int = 0
 var _countdown_active: bool     = false  # true while between-wave countdown is ticking
@@ -150,6 +150,15 @@ func _ready() -> void:
 		if row not in ex_gap:
 			_grid.set_cell(Vector2i(exit.x, row), Grid.CellState.WALL)
 
+	# Mark the top and bottom border rows (0 and GRID_SIZE-1) as WALL for all
+	# interior columns. Geometry placed outside the grid at z = ±15.5 consistently
+	# failed to render regardless of mesh type, so walls are placed on the outermost
+	# grid rows instead — symmetric with the left/right approach using columns 0/29.
+	# Columns 0 and GRID_SIZE-1 are already WALL from the column loop above.
+	for col in range(1, Grid.GRID_SIZE - 1):
+		_grid.set_cell(Vector2i(col, 0),                   Grid.CellState.WALL)
+		_grid.set_cell(Vector2i(col, Grid.GRID_SIZE - 1),  Grid.CellState.WALL)
+
 	GameState.start_run(entrance, exit)
 	_pathfinder.initialize(_grid)
 	_pathfinder.path_updated.connect(_on_path_updated)
@@ -164,6 +173,7 @@ func _ready() -> void:
 
 	_pathfinder.recalculate()
 	add_child(HUD.new())
+	GameState.wave_skip_requested.connect(_on_wave_skip_requested)
 	_start_wave()
 
 
@@ -546,10 +556,14 @@ func _on_countdown_tick(seconds_remaining: int) -> void:
 		_launch_wave()
 
 
+func _handle_key(_keycode: int) -> void:
+	pass
+
+
 ## Skips any active countdown and starts the wave immediately.
-## Q key triggers this; a Bug Bucks bonus for early launch is TODO.
-func _handle_key(keycode: int) -> void:
-	if keycode == KEY_Q and _countdown_active:
+## Triggered by the "Send Wave Early" HUD button via GameState.wave_skip_requested.
+func _on_wave_skip_requested() -> void:
+	if _countdown_active:
 		_countdown_active = false
 		GameState.set_countdown(0)
 		_launch_wave()
@@ -773,45 +787,53 @@ func _draw_cell_glow(im: ImmediateMesh, cell: Vector2i, hs: float, y: float, alp
 # Visual helpers — Phase 1 placeholder geometry
 # ---------------------------------------------------------------------------
 
-## Draws the arena border as 1-cell-wide light gray slabs with a dark gray
-## 1px border around every individual cell, giving a stone-block appearance.
+## Draws the arena border as 1-cell-wide light gray slabs with dark gray cell
+## border lines, giving a stone-block appearance.
+##
+## All four walls sit on the outermost rows/columns of the 30×30 grid:
+##   Top/bottom — rows 0 and 29 (z = ±14.5)
+##   Left/right — columns 0 and 29 (x = ±14.5, with entrance/exit gaps)
+##
+## Placing geometry outside the grid boundary (z = ±15.5) consistently failed
+## to render regardless of mesh type across multiple attempts. Using the
+## outermost grid rows is symmetric with the column approach and renders reliably.
 func _spawn_arena_border() -> void:
 	var half := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
 	var cs   := Grid.CELL_SIZE
 
-	# 3-cell gaps: one cell above and one cell below the canonical entrance/exit row.
 	var ent_top := (GameState.entrance_cell.y - 2) * cs - half
 	var ent_bot := (GameState.entrance_cell.y + 3) * cs - half
-
 	var ex_top  := (GameState.exit_cell.y - 2) * cs - half
 	var ex_bot  := (GameState.exit_cell.y  + 3) * cs - half
 
-	var full_w := Grid.GRID_SIZE * cs
+	# --- Fill slabs ---
+	# Top row (row 0) and bottom row (row 29) — full grid width
+	var grid_w := Grid.GRID_SIZE * cs
+	_spawn_wall_slab(Vector3(0.0, 0.0, -half + cs * 0.5), Vector2(grid_w, cs))
+	_spawn_wall_slab(Vector3(0.0, 0.0,  half - cs * 0.5), Vector2(grid_w, cs))
 
-	# --- Fill slabs (light gray) ---
-	_spawn_wall_slab(Vector3(0.0, 0.0, -half - cs * 0.5), Vector2(full_w, cs))
-	_spawn_wall_slab(Vector3(0.0, 0.0,  half + cs * 0.5), Vector2(full_w, cs))
-
+	# Left column (column 0) above and below the entrance gap
 	var lup  := ent_top - (-half)
 	var lbot := half - ent_bot
 	if lup  > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0, -half + lup  * 0.5), Vector2(cs, lup))
 	if lbot > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0,  ent_bot + lbot * 0.5), Vector2(cs, lbot))
 
+	# Right column (column 29) above and below the exit gap
 	var rup  := ex_top - (-half)
 	var rbot := half - ex_bot
 	if rup  > 0.0: _spawn_wall_slab(Vector3( half - cs * 0.5, 0.0, -half + rup  * 0.5), Vector2(cs, rup))
 	if rbot > 0.0: _spawn_wall_slab(Vector3( half - cs * 0.5, 0.0,  ex_bot + rbot * 0.5), Vector2(cs, rbot))
 
-	# --- Cell border lines (dark gray, one grid per wall cell) ---
+	# --- Cell border lines for all wall cells ---
 	var im := ImmediateMesh.new()
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
 
-	_draw_wall_cell_borders(im, -half, half, -(half + cs), -half)
-	_draw_wall_cell_borders(im, -half, half,  half,         half + cs)
+	_draw_wall_cell_borders(im, -half, half,       -half,      -half + cs)  # top row
+	_draw_wall_cell_borders(im, -half, half,        half - cs,  half)       # bottom row
 	if lup  > 0.0: _draw_wall_cell_borders(im, -half, -half + cs, -half,   ent_top)
 	if lbot > 0.0: _draw_wall_cell_borders(im, -half, -half + cs,  ent_bot, half)
-	if rup  > 0.0: _draw_wall_cell_borders(im,  half - cs, half, -half,   ex_top)
-	if rbot > 0.0: _draw_wall_cell_borders(im,  half - cs, half,  ex_bot,  half)
+	if rup  > 0.0: _draw_wall_cell_borders(im,  half - cs, half,  -half,   ex_top)
+	if rbot > 0.0: _draw_wall_cell_borders(im,  half - cs, half,   ex_bot,  half)
 
 	im.surface_end()
 
@@ -845,14 +867,20 @@ func _draw_wall_cell_borders(
 		z += cs
 
 
-## Creates one flat wall fill slab.
+## Creates one flat wall fill slab using a PlaneMesh (single upward-facing face,
+## no depth) to guarantee the fill colour renders cleanly regardless of slab width.
 func _spawn_wall_slab(center: Vector3, size: Vector2) -> void:
-	var slab := _make_box_mesh_instance(
-		Vector3(size.x, 0.05, size.y),
-		COLOR_WALL_FILL
-	)
-	slab.position = center
-	add_child(slab)
+	var mi    := MeshInstance3D.new()
+	var plane := PlaneMesh.new()
+	plane.size = size
+	mi.mesh   = plane
+	var mat              := StandardMaterial3D.new()
+	mat.albedo_color      = COLOR_WALL_FILL
+	mat.shading_mode      = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency      = BaseMaterial3D.TRANSPARENCY_DISABLED
+	mi.material_override  = mat
+	mi.position           = Vector3(center.x, 0.025, center.z)
+	add_child(mi)
 
 
 ## Spawns a thin flat square to mark the entrance or exit cell.

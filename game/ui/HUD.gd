@@ -10,8 +10,7 @@ const COLOR_BAR_BG      := Color(0.15, 0.10, 0.10, 1.0)
 const COLOR_BAR_FILL    := Color(0.85, 0.22, 0.22, 1.0)
 const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM    := Color(0.60, 0.60, 0.65, 1.0)
-const COLOR_COUNTDOWN   := Color(1.00, 1.00, 1.00, 0.92)
-const COLOR_HINT        := Color(0.60, 0.60, 0.65, 0.80)
+const COLOR_COUNTDOWN   := Color(0.85, 0.85, 0.85, 0.92)
 const COLOR_INFESTED    := Color(0.85, 0.10, 0.10, 1.0)
 const COLOR_OVERLAY_BG  := Color(0.04, 0.02, 0.02, 0.82)
 
@@ -23,8 +22,9 @@ var _wave_label:        Label
 var _bucks_label:       Label
 var _infestation_fill:  ColorRect
 var _infestation_label: Label
-var _countdown_label:   Label
-var _hint_label:        Label
+var _countdown_wave_label:   Label
+var _countdown_number_label: Label
+var _send_wave_btn:     Button
 var _run_over_overlay:  Control
 
 
@@ -55,12 +55,17 @@ func _build_ui() -> void:
 	_wave_label = _make_label("WAVE 0", Vector2(MARGIN, 0.0), PANEL_H)
 	top_bg.add_child(_wave_label)
 
-	_bucks_label                    = _make_label("BB: 0", Vector2(0.0, 0.0), PANEL_H)
-	_bucks_label.anchor_left        = 1.0
-	_bucks_label.anchor_right       = 1.0
-	_bucks_label.offset_left        = -140.0
-	_bucks_label.offset_right       = -MARGIN
+	_bucks_label                      = _make_label("Bug Bucks: $0", Vector2(0.0, 0.0), PANEL_H)
+	_bucks_label.anchor_left          = 1.0
+	_bucks_label.anchor_right         = 1.0
+	_bucks_label.offset_left          = -290.0
+	_bucks_label.offset_right         = -MARGIN
 	_bucks_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_bucks_label.add_theme_font_size_override("font_size", 31)
+	_bucks_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
+	var bold_font := SystemFont.new()
+	bold_font.font_weight = 700
+	_bucks_label.add_theme_font_override("font", bold_font)
 	top_bg.add_child(_bucks_label)
 
 	# --- Bottom infestation bar ---
@@ -88,43 +93,67 @@ func _build_ui() -> void:
 	_infestation_fill          = ColorRect.new()
 	_infestation_fill.color    = COLOR_BAR_FILL
 	_infestation_fill.size.y   = BAR_H
-	_infestation_fill.position.y = MARGIN
+	_infestation_fill.position.y = 0
 	track.add_child(_infestation_fill)
 
-	_infestation_label                    = _make_label("0%", Vector2(0.0, 0.0), BAR_H + MARGIN * 2.0)
-	_infestation_label.anchor_left        = 1.0
-	_infestation_label.anchor_right       = 1.0
-	_infestation_label.offset_left        = -56.0
-	_infestation_label.offset_right       = -MARGIN
+	_infestation_label                      = _make_label("0%", Vector2(0.0, 0.0), BAR_H + MARGIN * 2.0)
+	_infestation_label.anchor_left          = 1.0
+	_infestation_label.anchor_right         = 1.0
+	_infestation_label.anchor_top           = 0.0
+	_infestation_label.anchor_bottom        = 1.0
+	_infestation_label.offset_left          = -56.0
+	_infestation_label.offset_right         = -MARGIN
+	_infestation_label.offset_top           = 0.0
+	_infestation_label.offset_bottom        = 0.0
 	_infestation_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_infestation_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_infestation_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 	bar_bg.add_child(_infestation_label)
 
 	# --- Countdown splash (upper-centre, hidden by default) ---
-	# Occupies the top 15-45% of the viewport so the Q hint below never overlaps.
-	_countdown_label = Label.new()
-	_countdown_label.anchor_right              = 1.0
-	_countdown_label.anchor_top               = 0.15
-	_countdown_label.anchor_bottom            = 0.45
-	_countdown_label.horizontal_alignment      = HORIZONTAL_ALIGNMENT_CENTER
-	_countdown_label.vertical_alignment        = VERTICAL_ALIGNMENT_CENTER
-	_countdown_label.add_theme_font_size_override("font_size", 64)
-	_countdown_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
-	_countdown_label.visible = false
-	add_child(_countdown_label)
+	# Band 0.15–0.30: "WAVE X" — bold, larger
+	_countdown_wave_label = Label.new()
+	_countdown_wave_label.anchor_right         = 1.0
+	_countdown_wave_label.anchor_top           = 0.15
+	_countdown_wave_label.anchor_bottom        = 0.30
+	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown_wave_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_countdown_wave_label.add_theme_font_size_override("font_size", 62)
+	_countdown_wave_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
+	var bold_countdown_font := SystemFont.new()
+	bold_countdown_font.font_weight = 700
+	_countdown_wave_label.add_theme_font_override("font", bold_countdown_font)
+	_countdown_wave_label.visible = false
+	add_child(_countdown_wave_label)
 
-	# Sits in its own band directly below the countdown label.
-	_hint_label = Label.new()
-	_hint_label.anchor_right              = 1.0
-	_hint_label.anchor_top               = 0.45
-	_hint_label.anchor_bottom            = 0.55
-	_hint_label.horizontal_alignment      = HORIZONTAL_ALIGNMENT_CENTER
-	_hint_label.vertical_alignment        = VERTICAL_ALIGNMENT_CENTER
-	_hint_label.add_theme_font_size_override("font_size", 16)
-	_hint_label.add_theme_color_override("font_color", COLOR_HINT)
-	_hint_label.text    = "press Q to start early"
-	_hint_label.visible = false
-	add_child(_hint_label)
+	# Band 0.30–0.45: countdown number — italic, smaller, darker
+	_countdown_number_label = Label.new()
+	_countdown_number_label.anchor_right         = 1.0
+	_countdown_number_label.anchor_top           = 0.30
+	_countdown_number_label.anchor_bottom        = 0.45
+	_countdown_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown_number_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_countdown_number_label.add_theme_font_size_override("font_size", 46)
+	_countdown_number_label.add_theme_color_override("font_color", Color(0.72, 0.72, 0.72, 0.92))
+	var italic_countdown_font := SystemFont.new()
+	italic_countdown_font.font_italic = true
+	_countdown_number_label.add_theme_font_override("font", italic_countdown_font)
+	_countdown_number_label.visible = false
+	add_child(_countdown_number_label)
+
+	# "Send Wave Early" button — anchored above the infestation bar, hidden during waves.
+	_send_wave_btn                = Button.new()
+	_send_wave_btn.text           = "Send Wave Early"
+	_send_wave_btn.anchor_left    = 0.3
+	_send_wave_btn.anchor_right   = 0.7
+	_send_wave_btn.anchor_top     = 1.0
+	_send_wave_btn.anchor_bottom  = 1.0
+	_send_wave_btn.offset_top     = -(BAR_H + MARGIN * 2.0 + MARGIN + 44.0)
+	_send_wave_btn.offset_bottom  = -(BAR_H + MARGIN * 2.0 + MARGIN)
+	_send_wave_btn.add_theme_font_size_override("font_size", 18)
+	_send_wave_btn.visible        = false
+	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
+	add_child(_send_wave_btn)
 
 	_build_run_over_overlay()
 
@@ -166,7 +195,7 @@ func _build_run_over_overlay() -> void:
 
 
 func _on_bucks_changed(amount: int) -> void:
-	_bucks_label.text = "BB: %d" % amount
+	_bucks_label.text = "Bug Bucks: $%d" % amount
 
 
 func _on_infestation_changed(level: float) -> void:
@@ -181,12 +210,19 @@ func _on_wave_changed(wave: int) -> void:
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 	if seconds_remaining > 0:
-		_countdown_label.text    = "WAVE %d\n%d" % [GameState.current_wave, seconds_remaining]
-		_countdown_label.visible = true
-		_hint_label.visible      = true
+		_countdown_wave_label.text    = "WAVE %d" % GameState.current_wave
+		_countdown_number_label.text  = "%d" % seconds_remaining
+		_countdown_wave_label.visible   = true
+		_countdown_number_label.visible = true
+		_send_wave_btn.visible          = true
 	else:
-		_countdown_label.visible = false
-		_hint_label.visible      = false
+		_countdown_wave_label.visible   = false
+		_countdown_number_label.visible = false
+		_send_wave_btn.visible          = false
+
+
+func _on_send_wave_pressed() -> void:
+	GameState.wave_skip_requested.emit()
 
 
 func _on_run_ended() -> void:

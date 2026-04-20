@@ -54,6 +54,9 @@ signal wave_changed(new_wave: int)
 ## seconds_remaining == 0 means the countdown ended (wave is launching).
 signal wave_countdown_changed(seconds_remaining: int)
 
+## Emitted when the player requests to skip the countdown and launch the next wave immediately.
+signal wave_skip_requested
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -65,7 +68,7 @@ signal wave_countdown_changed(seconds_remaining: int)
 ## Starting currency given to the player at the beginning of every run.
 ## Increased by business upgrades purchased with Service Fees.
 ## TODO: tune via playtesting; increase via meta upgrades
-const STARTING_BUG_BUCKS: int = 50
+const STARTING_BUG_BUCKS: int = 100
 
 ## Total infestation points that fill the bar to 1.0.
 ## TODO: tune via playtesting

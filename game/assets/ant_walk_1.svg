@@ -1,18 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <!-- Group A (L-front, R-mid, L-back) forward; Group B (R-front, L-mid, R-back) back -->
-  <line x1="53" y1="50" x2="28" y2="28" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <line x1="52" y1="57" x2="26" y2="67" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <line x1="53" y1="64" x2="28" y2="66" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <line x1="75" y1="50" x2="100" y2="48" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <line x1="76" y1="57" x2="102" y2="47" stroke="white" stroke-width="3" stroke-linecap="round"/>
-  <line x1="75" y1="64" x2="100" y2="86" stroke="white" stroke-width="3" stroke-linecap="round"/>
+  <path d="M 56 54 Q 40 39 28 28" stroke="white" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 55 59 Q 38 64 26 67" stroke="white" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 56 66 Q 40 66 28 66" stroke="white" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 72 54 Q 87 51 100 48" stroke="white" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 73 59 Q 89 53 102 47" stroke="white" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 72 66 Q 87 77 100 86" stroke="white" stroke-width="3.5" stroke-linecap="round" fill="none"/>
 
-  <line x1="58" y1="27" x2="42" y2="10" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-  <line x1="70" y1="27" x2="86" y2="10" stroke="white" stroke-width="2.5" stroke-linecap="round"/>
-  <circle cx="41" cy="10" r="3.5" fill="white"/>
-  <circle cx="87" cy="10" r="3.5" fill="white"/>
+  <!-- Antennae -->
+  <path d="M 57 23 Q 46 12 37 7" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M 71 23 Q 82 12 91 7" stroke="white" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <circle cx="37" cy="7" r="5" fill="white"/>
+  <circle cx="91" cy="7" r="5" fill="white"/>
 
-  <ellipse cx="64" cy="90" rx="18" ry="23" fill="white"/>
-  <ellipse cx="64" cy="57" rx="11" ry="10" fill="white"/>
-  <circle cx="64" cy="34" r="10" fill="white"/>
+  <!-- Abdomen -->
+  <ellipse cx="64" cy="92" rx="22" ry="25" fill="white"/>
+
+  <!-- Thorax -->
+  <ellipse cx="64" cy="59" rx="9" ry="8" fill="white"/>
+
+  <!-- Head -->
+  <circle cx="64" cy="35" r="15" fill="white"/>
+
+  <!-- Eyes -->
+  <circle cx="58" cy="33" r="4" fill="#111111"/>
+  <circle cx="70" cy="33" r="4" fill="#111111"/>
+  <circle cx="57" cy="32" r="1.5" fill="white"/>
+  <circle cx="69" cy="32" r="1.5" fill="white"/>
 </svg>

@@ -2,28 +2,35 @@
   <!-- Background -->
   <rect width="128" height="128" rx="18" fill="#1a1a2e"/>
 
-  <!-- Legs (behind body) -->
-  <!-- Left front, mid, back -->
-  <line x1="53" y1="50" x2="28" y2="38" stroke="#c07840" stroke-width="3" stroke-linecap="round"/>
-  <line x1="52" y1="57" x2="26" y2="57" stroke="#c07840" stroke-width="3" stroke-linecap="round"/>
-  <line x1="53" y1="64" x2="28" y2="76" stroke="#c07840" stroke-width="3" stroke-linecap="round"/>
-  <!-- Right front, mid, back -->
-  <line x1="75" y1="50" x2="100" y2="38" stroke="#c07840" stroke-width="3" stroke-linecap="round"/>
-  <line x1="76" y1="57" x2="102" y2="57" stroke="#c07840" stroke-width="3" stroke-linecap="round"/>
-  <line x1="75" y1="64" x2="100" y2="76" stroke="#c07840" stroke-width="3" stroke-linecap="round"/>
+  <!-- Legs -->
+  <path d="M 56 54 Q 39 43 26 36" stroke="#c07840" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 55 59 Q 37 57 24 57" stroke="#c07840" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 56 66 Q 39 75 26 80" stroke="#c07840" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 72 54 Q 89 43 102 36" stroke="#c07840" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 73 59 Q 91 57 104 57" stroke="#c07840" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 72 66 Q 89 75 102 80" stroke="#c07840" stroke-width="3.5" stroke-linecap="round" fill="none"/>
 
   <!-- Antennae -->
-  <line x1="58" y1="27" x2="42" y2="10" stroke="#c07840" stroke-width="2.5" stroke-linecap="round"/>
-  <line x1="70" y1="27" x2="86" y2="10" stroke="#c07840" stroke-width="2.5" stroke-linecap="round"/>
-  <circle cx="41" cy="10" r="3.5" fill="#c07840"/>
-  <circle cx="87" cy="10" r="3.5" fill="#c07840"/>
+  <path d="M 57 23 Q 46 12 37 7" stroke="#c07840" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M 71 23 Q 82 12 91 7" stroke="#c07840" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <circle cx="37" cy="7" r="5" fill="#c07840"/>
+  <circle cx="91" cy="7" r="5" fill="#c07840"/>
 
-  <!-- Abdomen (large, bottom) -->
-  <ellipse cx="64" cy="90" rx="18" ry="23" fill="#c07840"/>
+  <!-- Abdomen -->
+  <ellipse cx="64" cy="92" rx="22" ry="25" fill="#c07840"/>
+  <ellipse cx="60" cy="82" rx="8" ry="6" fill="white" opacity="0.2"/>
 
-  <!-- Thorax (middle) — narrow gap above abdomen creates waist -->
-  <ellipse cx="64" cy="57" rx="11" ry="10" fill="#c07840"/>
+  <!-- Thorax -->
+  <ellipse cx="64" cy="59" rx="9" ry="8" fill="#c07840"/>
+  <ellipse cx="62" cy="55" rx="3" ry="2.5" fill="white" opacity="0.2"/>
 
-  <!-- Head (top) — narrow gap above thorax -->
-  <circle cx="64" cy="34" r="10" fill="#c07840"/>
+  <!-- Head -->
+  <circle cx="64" cy="35" r="15" fill="#c07840"/>
+  <ellipse cx="61" cy="28" rx="5" ry="4" fill="white" opacity="0.2"/>
+
+  <!-- Eyes -->
+  <circle cx="58" cy="33" r="4" fill="#1a1a2e"/>
+  <circle cx="70" cy="33" r="4" fill="#1a1a2e"/>
+  <circle cx="57" cy="32" r="1.5" fill="white" opacity="0.6"/>
+  <circle cx="69" cy="32" r="1.5" fill="white" opacity="0.6"/>
 </svg>
