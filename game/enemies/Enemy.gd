@@ -113,6 +113,12 @@ var _infestation_damage: int = 0
 # Set to true when _die() is called; stops movement and prevents re-entry.
 var _is_dead: bool = false
 
+# Base color for this enemy type — stored so the hit flash can return to it.
+var _base_color: Color = Color.WHITE
+
+# Tracks the active hit-flash tween so a second hit cancels the first.
+var _hit_tween: Tween = null
+
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -138,7 +144,8 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 	global_position   = _cell_to_world(_current_cell)
 	global_position.y = 0.25
 
-	_spawn_visual(stats["color"])
+	_base_color = stats["color"]
+	_spawn_visual(_base_color)
 
 
 # ---------------------------------------------------------------------------
@@ -153,6 +160,21 @@ func take_damage(amount: float) -> void:
 	_current_hp = maxf(_current_hp - amount, 0.0)
 	if _current_hp == 0.0:
 		_die()
+	else:
+		_flash_hit()
+
+
+## Briefly flashes the enemy white then returns to its base color.
+## Cancels any in-progress flash so rapid hits don't stack.
+func _flash_hit() -> void:
+	if _visual == null:
+		return
+	if _hit_tween != null:
+		_hit_tween.kill()
+	var mat: StandardMaterial3D = _visual.material_override
+	_hit_tween = create_tween()
+	_hit_tween.tween_property(mat, "albedo_color", Color.WHITE, 0.04)
+	_hit_tween.tween_property(mat, "albedo_color", _base_color, 0.08)
 
 
 ## Returns current HP as a fraction of max HP (0.0–1.0).
