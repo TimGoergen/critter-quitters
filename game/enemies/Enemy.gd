@@ -1,9 +1,5 @@
 ## Enemy.gd
-## A basic pest that follows the calculated path from entrance to exit.
-##
-## Phase 1 placeholder — a coloured moving cylinder with no HP, damage, or
-## pest type. The sole purpose here is to prove that path-following and
-## real-time rerouting work correctly before the rest of the game is built.
+## A pest that follows the calculated path from entrance to exit.
 ##
 ## Movement model:
 ##   The enemy tracks two cells at all times:
@@ -20,8 +16,11 @@
 ## Waddle model:
 ##   The visual mesh is translated perpendicular to the direction of travel
 ##   using a sin() oscillation, producing a visible side-to-side sway.
-##   WADDLE_SPEED and WADDLE_OFFSET are per-type constants so different
-##   enemies can have distinct movement personalities.
+##
+## HP and death:
+##   take_damage() reduces current HP. On reaching zero, _die() plays a
+##   brief white flash and then frees the node. Movement stops immediately
+##   on death so the tween plays in place.
 ##
 ## Usage: instantiate via Arena, then call initialize() before the node
 ## is added to the scene tree.
@@ -32,27 +31,41 @@ const Grid = preload("res://arena/Grid.gd")
 
 
 # ---------------------------------------------------------------------------
-# Constants
+# Enemy type
 # ---------------------------------------------------------------------------
 
-## World units per second. One cell = one Grid.CELL_SIZE world unit,
-## so this is effectively cells-per-second at the default cell size.
-## TODO: replace with per-pest-type speed values once the enemy roster exists
-const MOVE_SPEED: float = 3.0
+enum EnemyType { ANT, CRICKET, BEETLE, COCKROACH, RAT }
 
-## Colour of the placeholder cylinder. Replaced by ASCII billboard in Phase 3.
-const COLOR_ENEMY := Color(0.85, 0.35, 0.15, 1.0)   # orange
+## Per-type stat table. All numeric values are placeholders — tuned via playtesting.
+##   hp            — starting (and maximum) hit points
+##   speed         — movement speed in cells per second
+##   infestation   — Infestation Level increase when this pest reaches the exit
+##   color         — placeholder cylinder colour (replaced by ASCII billboard in Phase 3)
+const STATS := {
+	EnemyType.ANT:       { "hp": 10,  "speed": 3.0, "infestation": 1,  "color": Color(0.85, 0.35, 0.15) },
+	EnemyType.CRICKET:   { "hp":  8,  "speed": 5.0, "infestation": 1,  "color": Color(0.50, 0.80, 0.20) },
+	EnemyType.BEETLE:    { "hp": 40,  "speed": 1.5, "infestation": 3,  "color": Color(0.20, 0.40, 0.80) },
+	EnemyType.COCKROACH: { "hp": 80,  "speed": 1.0, "infestation": 5,  "color": Color(0.55, 0.30, 0.10) },
+	EnemyType.RAT:       { "hp": 200, "speed": 0.7, "infestation": 10, "color": Color(0.70, 0.65, 0.60) },
+}
+
+
+# ---------------------------------------------------------------------------
+# Constants
+# ---------------------------------------------------------------------------
 
 ## Waddle oscillation rate in radians/second.
 const WADDLE_SPEED: float = 12.0
 
-## Lateral sway distance in world units — how far from centre the enemy moves
-## side to side.
+## Lateral sway distance in world units.
 const WADDLE_OFFSET: float = 0.03
 
 ## How close (in world units) the enemy must be to a cell centre before
 ## it is considered to have arrived and advances to the next cell.
 const ARRIVAL_THRESHOLD: float = 0.05
+
+## Duration of the death flash in seconds.
+const DEATH_FLASH_DURATION: float = 0.12
 
 
 # ---------------------------------------------------------------------------
@@ -61,6 +74,10 @@ const ARRIVAL_THRESHOLD: float = 0.05
 
 ## Emitted when the enemy reaches the exit cell and is about to despawn.
 signal reached_exit
+
+## Emitted when the enemy's HP reaches zero. Arena connects this to award
+## Bug Bucks and remove the enemy from the active list.
+signal died
 
 ## Emitted each time the enemy arrives at a new cell and advances its target.
 ## Arena uses this to trim the path display so the line only shows ahead.
@@ -72,12 +89,9 @@ signal cell_advanced
 # ---------------------------------------------------------------------------
 
 # The last cell centre the enemy fully arrived at.
-# Always a passable cell. Used as the starting point for backtrack paths.
 var _current_cell: Vector2i = Vector2i.ZERO
 
 # The cell centre the enemy is currently moving toward.
-# Always adjacent to _current_cell, so the movement segment never
-# crosses an obstacle cell.
 var _target_cell: Vector2i = Vector2i.ZERO
 
 # The current path and the index of _target_cell within it.
@@ -90,16 +104,31 @@ var _visual: MeshInstance3D = null
 # Accumulated time driving the waddle oscillation.
 var _waddle_time: float = 0.0
 
+# Per-instance stats set from STATS at initialize() time.
+var _move_speed: float = 0.0
+var _max_hp: float = 0.0
+var _current_hp: float = 0.0
+var _infestation_damage: int = 0
+
+# Set to true when _die() is called; stops movement and prevents re-entry.
+var _is_dead: bool = false
+
 
 # ---------------------------------------------------------------------------
 # Setup
 # ---------------------------------------------------------------------------
 
-## Positions the enemy at the entrance cell and begins movement.
+## Positions the enemy at the entrance cell, applies type stats, and begins movement.
 ## Must be called by Arena after instantiation and before adding to the tree.
-func initialize(initial_path: Array[Vector2i]) -> void:
+func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType.ANT) -> void:
 	if initial_path.size() < 2:
 		return
+
+	var stats          = STATS[enemy_type]
+	_move_speed        = stats["speed"]
+	_max_hp            = stats["hp"]
+	_current_hp        = _max_hp
+	_infestation_damage = stats["infestation"]
 
 	_path         = initial_path
 	_current_cell = _path[0]
@@ -107,9 +136,33 @@ func initialize(initial_path: Array[Vector2i]) -> void:
 	_target_cell  = _path[_path_index]
 
 	global_position   = _cell_to_world(_current_cell)
-	global_position.y = 0.25   # sit above the floor, same height as trap boxes
+	global_position.y = 0.25
 
-	_spawn_visual()
+	_spawn_visual(stats["color"])
+
+
+# ---------------------------------------------------------------------------
+# Combat
+# ---------------------------------------------------------------------------
+
+## Reduces HP by amount. Triggers death if HP reaches zero.
+## Has no effect if the enemy is already dead.
+func take_damage(amount: float) -> void:
+	if _is_dead:
+		return
+	_current_hp = maxf(_current_hp - amount, 0.0)
+	if _current_hp == 0.0:
+		_die()
+
+
+## Returns current HP as a fraction of max HP (0.0–1.0).
+func get_hp_fraction() -> float:
+	return _current_hp / _max_hp if _max_hp > 0.0 else 0.0
+
+
+## Returns the Infestation Level damage this pest deals on exit.
+func get_infestation_damage() -> int:
+	return _infestation_damage
 
 
 # ---------------------------------------------------------------------------
@@ -117,18 +170,15 @@ func initialize(initial_path: Array[Vector2i]) -> void:
 # ---------------------------------------------------------------------------
 
 ## Called by Arena whenever the grid changes.
-## new_path is a fresh A* result from _current_cell to the exit — Arena
-## computes it per-enemy so the path is always optimal from here.
-## new_path[0] == _current_cell; new_path[1] is the immediate next step.
 func update_path(new_path: Array[Vector2i]) -> void:
+	if _is_dead:
+		return
 	if new_path.size() < 2:
 		_path = new_path
 		return
 	_path = new_path
 	var target_idx := new_path.find(_target_cell)
 	if target_idx > 0:
-		# Already heading toward a cell on the new path — finish the segment
-		# without interruption rather than snapping to a new direction mid-cell.
 		_path_index = target_idx
 	else:
 		_path_index  = 1
@@ -141,7 +191,6 @@ func get_current_cell() -> Vector2i:
 
 
 ## Returns the cell the enemy is currently moving toward.
-## Arena uses this to know where the path display should begin.
 func get_target_cell() -> Vector2i:
 	return _target_cell
 
@@ -151,17 +200,16 @@ func get_target_cell() -> Vector2i:
 # ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
-	if _path.is_empty() or _path_index >= _path.size():
+	if _is_dead or _path.is_empty() or _path_index >= _path.size():
 		return
 
 	var target_world   := _cell_to_world(_target_cell)
-	target_world.y      = global_position.y   # move only on the XZ plane
+	target_world.y      = global_position.y
 
 	var offset   := target_world - global_position
 	var distance := offset.length()
 
 	if distance <= ARRIVAL_THRESHOLD:
-		# Arrived — snap to cell centre, advance to the next cell.
 		global_position = target_world
 		_current_cell   = _target_cell
 		_path_index    += 1
@@ -174,13 +222,9 @@ func _process(delta: float) -> void:
 		_target_cell = _path[_path_index]
 		cell_advanced.emit()
 	else:
-		var move_amount := MOVE_SPEED * Grid.CELL_SIZE * delta
+		var move_amount := _move_speed * Grid.CELL_SIZE * delta
 		global_position += offset.normalized() * minf(move_amount, distance)
 
-	# Waddle — translate the visual mesh perpendicular to the direction of travel
-	# so the enemy visibly sways side to side as it walks.
-	#   moving along world-X → sway on the Z axis
-	#   moving along world-Z → sway on the X axis
 	if _visual != null:
 		_waddle_time += delta
 		var sway       := sin(_waddle_time * WADDLE_SPEED) * WADDLE_OFFSET
@@ -197,6 +241,21 @@ func _process(delta: float) -> void:
 # Private helpers
 # ---------------------------------------------------------------------------
 
+## Kills the enemy: stops movement, emits died, plays a white flash, then frees.
+func _die() -> void:
+	_is_dead = true
+	died.emit()
+
+	if _visual == null:
+		queue_free()
+		return
+
+	var mat: StandardMaterial3D = _visual.material_override
+	var tween := create_tween()
+	tween.tween_property(mat, "albedo_color", Color.WHITE, DEATH_FLASH_DURATION)
+	tween.tween_callback(queue_free)
+
+
 ## Converts a grid coordinate to its world-space centre at y = 0.
 ## Mirrors the same function in Arena.gd — shared once a utility exists.
 func _cell_to_world(cell: Vector2i) -> Vector3:
@@ -206,12 +265,12 @@ func _cell_to_world(cell: Vector2i) -> Vector3:
 	return Vector3(x, 0.0, z)
 
 
-## Creates the Phase 1 placeholder visual as a child MeshInstance3D.
+## Creates the placeholder visual as a child MeshInstance3D.
 ## Replaced by an ASCII billboard node in Phase 3.
-func _spawn_visual() -> void:
+func _spawn_visual(color: Color) -> void:
 	var mesh_instance := MeshInstance3D.new()
 
-	var radius       := Grid.CELL_SIZE * 0.675   # 1.8 * 0.75 / 2
+	var radius       := Grid.CELL_SIZE * 0.675
 	var cylinder     := CylinderMesh.new()
 	cylinder.top_radius    = radius
 	cylinder.bottom_radius = radius
@@ -219,7 +278,7 @@ func _spawn_visual() -> void:
 	mesh_instance.mesh = cylinder
 
 	var material          := StandardMaterial3D.new()
-	material.albedo_color  = COLOR_ENEMY
+	material.albedo_color  = color
 	material.shading_mode  = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mesh_instance.material_override = material
 

@@ -467,21 +467,30 @@ func _cell_to_world(cell: Vector2i) -> Vector3:
 func _spawn_enemy(path: Array[Vector2i]) -> void:
 	var enemy: Node3D = Enemy.new()
 
-	# Register before adding to tree so the signal is connected before
+	# Register before adding to tree so signals are connected before
 	# _ready fires on the enemy node.
 	_active_enemies.append(enemy)
 	enemy.reached_exit.connect(_on_enemy_reached_exit.bind(enemy))
+	enemy.died.connect(_on_enemy_died.bind(enemy))
 	enemy.cell_advanced.connect(_redraw_path_display)
 
 	add_child(enemy)
-	enemy.initialize(path)
+	enemy.initialize(path, Enemy.EnemyType.ANT)
 
 
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
 	_active_enemies.erase(enemy)
 	# enemy.queue_free() is called inside Enemy.gd — no double-free needed.
 
-	# Phase 1: when the last enemy of the wave exits, start a new wave.
+	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
+		_start_wave()
+
+
+func _on_enemy_died(enemy: Node3D) -> void:
+	_active_enemies.erase(enemy)
+	# enemy.queue_free() is called inside Enemy._die() after the flash tween.
+	# TODO: award Bug Bucks here once the currency system exists.
+
 	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
 		_start_wave()
 
