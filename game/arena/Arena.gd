@@ -78,8 +78,8 @@ var _path_nodes: Array[MeshInstance3D] = []
 var _active_enemies: Array[Node3D] = []
 
 # Wave spawning — enemies launch one at a time with a small gap between them.
-const WAVE_SIZE: int = 3
-const SPAWN_INTERVAL: float = 1.2   # seconds between each enemy in the wave
+const WAVE_SIZE: int = 10
+const SPAWN_INTERVAL: float = 0.6   # seconds between each enemy in the wave
 var _enemies_left_to_spawn: int = 0
 
 # The path currently drawn as yellow markers. Updated on every grid change
@@ -249,7 +249,8 @@ func _commit_drag_placement() -> void:
 		var cells := _get_trap_cells(anchor)
 		if _footprint_overlaps_enemy(cells):
 			break
-		_try_place_trap(anchor)
+		if not _try_place_trap(anchor):
+			break
 	_drag_anchors.clear()
 	_drag_origin = Vector2i(-1, -1)
 
@@ -310,24 +311,25 @@ func _clear_drag_ghosts() -> void:
 	_drag_ghosts.clear()
 
 
-func _try_place_trap(anchor: Vector2i) -> void:
+func _try_place_trap(anchor: Vector2i) -> bool:
 	anchor = _clamp_to_anchor(anchor)
 	var cells := _get_trap_cells(anchor)
 	if cells.is_empty():
-		return
+		return false
 
 	for cell in cells:
 		if not _grid.is_buildable(cell):
-			return
+			return false
 
 	if not _can_place_at(cells):
-		return
+		return false
 
 	for cell in cells:
 		_grid.place_trap(cell)
 		_trap_anchors[cell] = anchor
 
 	_spawn_trap(anchor)
+	return true
 
 
 func _try_remove_trap(cell: Vector2i) -> void:
@@ -500,7 +502,7 @@ func _on_enemy_died(enemy: Node3D) -> void:
 ## Begins spawning WAVE_SIZE enemies, one every SPAWN_INTERVAL seconds.
 func _start_wave() -> void:
 	_enemies_left_to_spawn = WAVE_SIZE
-	_spawn_next_in_wave()
+	get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
 
 
 ## Spawns one enemy then schedules the next, until the wave is exhausted.

@@ -7,6 +7,7 @@
 
 extends Node3D
 
+const Grid = preload("res://arena/Grid.gd")
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -67,8 +68,9 @@ func _process(delta: float) -> void:
 func _spawn_visual() -> void:
 	var mi  := MeshInstance3D.new()
 	var box := BoxMesh.new()
-	# 3×5 px at ~30 px/cell ≈ 0.10 × 0.17 world units; thin in Y.
-	box.size = Vector3(0.10, 0.04, 0.17)
+	# 10% of the enemy cylinder: diameter = CELL_SIZE * 1.35, height = CELL_SIZE * 0.5
+	var s   := Grid.CELL_SIZE * 0.1
+	box.size = Vector3(s * 1.35, s * 0.5, s * 1.35)
 	mi.mesh  = box
 
 	var mat           := StandardMaterial3D.new()
