@@ -41,6 +41,7 @@ signal path_updated(new_path: Array[Vector2i])
 
 var _grid: Grid = null
 var _current_path: Array[Vector2i] = []
+var _recalc_pending: bool = false
 
 # The four orthogonal directions used when evaluating neighbors.
 const DIRECTIONS: Array[Vector2i] = [
@@ -120,6 +121,13 @@ func recalculate() -> void:
 # ---------------------------------------------------------------------------
 
 func _on_cell_changed(_cell: Vector2i, _new_state: Grid.CellState) -> void:
+	if not _recalc_pending:
+		_recalc_pending = true
+		call_deferred("_deferred_recalculate")
+
+
+func _deferred_recalculate() -> void:
+	_recalc_pending = false
 	recalculate()
 
 

@@ -69,9 +69,10 @@ var _trap_nodes: Dictionary = {}          # anchor Vector2i -> MeshInstance3D
 # Used to find and remove the whole trap when the player clicks any of its cells.
 var _trap_anchors: Dictionary = {}        # Vector2i -> anchor Vector2i
 
-# Path marker nodes spawned each time the path updates. Cleared and
-# rebuilt on every path_updated signal.
-var _path_nodes: Array[MeshInstance3D] = []
+# Pre-created path marker nodes. Repositioned and shown/hidden on each
+# path update rather than freed and re-created.
+const PATH_MARKER_POOL_SIZE: int = 128
+var _path_marker_pool: Array[MeshInstance3D] = []
 
 # All enemy nodes currently active on the arena.
 # Each enemy is forwarded path updates so it can reroute in real time.
@@ -154,6 +155,7 @@ func _ready() -> void:
 	_spawn_zone_marker(_despawn_cell, 5, COLOR_EXIT)
 
 	_setup_grid_highlight()
+	_init_path_marker_pool()
 	_spawn_arena_border()
 
 	_pathfinder.recalculate()
@@ -385,12 +387,16 @@ func _can_place_at(cells: Array[Vector2i]) -> bool:
 
 func _on_path_updated(new_path: Array[Vector2i]) -> void:
 	_display_path = new_path
+	if new_path.is_empty():
+		_redraw_path_display()
+		return
+	var best_exit: Vector2i = new_path.back()
 	for enemy in _active_enemies:
 		var current: Vector2i = enemy.get_current_cell()
 		# If the enemy is still in the outside approach cell, A* must start
 		# from the entrance (first in-bounds cell) to stay within the grid.
 		var from: Vector2i = current if _grid.is_in_bounds(current) else GameState.entrance_cell
-		var grid_path     := _find_shortest_exit_path(from)
+		var grid_path := _pathfinder.find_path_from(from, best_exit)
 		if grid_path.is_empty():
 			continue
 		var full: Array[Vector2i] = []
@@ -410,20 +416,26 @@ func _on_path_updated(new_path: Array[Vector2i]) -> void:
 ## target cell, so the line only appears ahead of the enemy.
 ## Falls back to the full display path when no enemies are active.
 func _redraw_path_display() -> void:
-	_clear_path_visuals()
 	var start_idx := 0
 	if not _active_enemies.is_empty():
 		var target: Vector2i = _active_enemies[0].get_target_cell()
 		var idx    := _display_path.find(target)
 		if idx >= 0:
 			start_idx = idx
+	var pool_idx := 0
 	for i in range(start_idx, _display_path.size()):
 		var cell  := _display_path[i]
 		var state := _grid.get_cell(cell)
 		if state == Grid.CellState.EMPTY \
 				or state == Grid.CellState.ENTRANCE \
 				or state == Grid.CellState.EXIT:
-			_spawn_path_marker(cell)
+			if pool_idx < PATH_MARKER_POOL_SIZE:
+				var marker := _path_marker_pool[pool_idx]
+				marker.position = _cell_to_world(cell)
+				marker.visible = true
+				pool_idx += 1
+	for i in range(pool_idx, PATH_MARKER_POOL_SIZE):
+		_path_marker_pool[i].visible = false
 
 
 # ---------------------------------------------------------------------------
@@ -562,6 +574,20 @@ func _build_full_path(grid_path: Array[Vector2i], spawn_row: int) -> Array[Vecto
 # ---------------------------------------------------------------------------
 # Grid highlight
 # ---------------------------------------------------------------------------
+
+## Pre-creates PATH_MARKER_POOL_SIZE path marker nodes, all hidden.
+## _redraw_path_display repositions and shows/hides them in place of
+## freeing and re-creating nodes on every update.
+func _init_path_marker_pool() -> void:
+	for i in range(PATH_MARKER_POOL_SIZE):
+		var marker := _make_box_mesh_instance(
+			Vector3(Grid.CELL_SIZE * 0.9, 0.05, Grid.CELL_SIZE * 0.9),
+			COLOR_PATH
+		)
+		marker.visible = false
+		_path_visual.add_child(marker)
+		_path_marker_pool.append(marker)
+
 
 ## Creates the MeshInstance3D used for the cursor grid glow.
 ## The material uses vertex colours so each line segment can have its own alpha.
@@ -835,24 +861,6 @@ func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
 				return []
 			cells.append(c)
 	return cells
-
-
-## Spawns a flat square to indicate one cell on the current path.
-func _spawn_path_marker(cell: Vector2i) -> void:
-	var path_marker := _make_box_mesh_instance(
-		Vector3(Grid.CELL_SIZE * 0.9, 0.05, Grid.CELL_SIZE * 0.9),
-		COLOR_PATH
-	)
-	path_marker.position = _cell_to_world(cell)
-	_path_visual.add_child(path_marker)
-	_path_nodes.append(path_marker)
-
-
-## Frees all path marker nodes from the previous path calculation.
-func _clear_path_visuals() -> void:
-	for node in _path_nodes:
-		node.queue_free()
-	_path_nodes.clear()
 
 
 ## Creates a MeshInstance3D with a BoxMesh of the given size and colour.
