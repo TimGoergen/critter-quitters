@@ -93,10 +93,12 @@ func _build_ui() -> void:
 	_infestation_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 	bar_bg.add_child(_infestation_label)
 
-	# --- Countdown splash (centred, hidden by default) ---
+	# --- Countdown splash (upper-centre, hidden by default) ---
+	# Occupies the top 15-45% of the viewport so the Q hint below never overlaps.
 	_countdown_label = Label.new()
 	_countdown_label.anchor_right              = 1.0
-	_countdown_label.anchor_bottom             = 1.0
+	_countdown_label.anchor_top               = 0.15
+	_countdown_label.anchor_bottom            = 0.45
 	_countdown_label.horizontal_alignment      = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_label.vertical_alignment        = VERTICAL_ALIGNMENT_CENTER
 	_countdown_label.add_theme_font_size_override("font_size", 64)
@@ -104,10 +106,11 @@ func _build_ui() -> void:
 	_countdown_label.visible = false
 	add_child(_countdown_label)
 
+	# Sits in its own band directly below the countdown label.
 	_hint_label = Label.new()
 	_hint_label.anchor_right              = 1.0
-	_hint_label.anchor_bottom             = 1.0
-	_hint_label.offset_top                = 60.0
+	_hint_label.anchor_top               = 0.45
+	_hint_label.anchor_bottom            = 0.55
 	_hint_label.horizontal_alignment      = HORIZONTAL_ALIGNMENT_CENTER
 	_hint_label.vertical_alignment        = VERTICAL_ALIGNMENT_CENTER
 	_hint_label.add_theme_font_size_override("font_size", 16)

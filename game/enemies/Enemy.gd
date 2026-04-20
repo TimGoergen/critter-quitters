@@ -49,11 +49,11 @@ enum EnemyType { ANT, CRICKET, BEETLE, COCKROACH, RAT }
 ##   infestation   — Infestation Level increase when this pest reaches the exit
 ##   color         — placeholder cylinder colour (replaced by ASCII billboard in Phase 3)
 const STATS := {
-	EnemyType.ANT:       { "hp": 10,  "speed": 3.0, "infestation": 1,  "bounty": 5,  "color": Color(0.85, 0.35, 0.15) },
-	EnemyType.CRICKET:   { "hp":  8,  "speed": 5.0, "infestation": 1,  "bounty": 5,  "color": Color(0.50, 0.80, 0.20) },
-	EnemyType.BEETLE:    { "hp": 40,  "speed": 1.5, "infestation": 3,  "bounty": 5,  "color": Color(0.20, 0.40, 0.80) },
-	EnemyType.COCKROACH: { "hp": 80,  "speed": 1.0, "infestation": 5,  "bounty": 5,  "color": Color(0.55, 0.30, 0.10) },
-	EnemyType.RAT:       { "hp": 200, "speed": 0.7, "infestation": 10, "bounty": 5,  "color": Color(0.70, 0.65, 0.60) },
+	EnemyType.ANT:       { "hp": 10,  "speed": 3.0, "infestation": 1,  "bounty": 2,  "color": Color(0.85, 0.35, 0.15) },
+	EnemyType.CRICKET:   { "hp":  8,  "speed": 5.0, "infestation": 1,  "bounty": 2,  "color": Color(0.50, 0.80, 0.20) },
+	EnemyType.BEETLE:    { "hp": 40,  "speed": 1.5, "infestation": 3,  "bounty": 2,  "color": Color(0.20, 0.40, 0.80) },
+	EnemyType.COCKROACH: { "hp": 80,  "speed": 1.0, "infestation": 5,  "bounty": 2,  "color": Color(0.55, 0.30, 0.10) },
+	EnemyType.RAT:       { "hp": 200, "speed": 0.7, "infestation": 10, "bounty": 2,  "color": Color(0.70, 0.65, 0.60) },
 }
 
 
