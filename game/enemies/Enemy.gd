@@ -29,6 +29,13 @@ extends Node3D
 
 const Grid = preload("res://arena/Grid.gd")
 
+const ANT_FRAMES: Array[Texture2D] = [
+	preload("res://assets/ant_walk_1.svg"),
+	preload("res://assets/ant_walk_2.svg"),
+	preload("res://assets/ant_walk_3.svg"),
+	preload("res://assets/ant_walk_4.svg"),
+]
+
 
 # ---------------------------------------------------------------------------
 # Enemy type
@@ -55,7 +62,7 @@ const STATS := {
 # ---------------------------------------------------------------------------
 
 ## Waddle oscillation rate in radians/second.
-const WADDLE_SPEED: float = 12.0
+const WADDLE_SPEED: float = 24.0
 
 ## Lateral sway distance in world units.
 const WADDLE_OFFSET: float = 0.03
@@ -112,6 +119,12 @@ var _infestation_damage: int = 0
 
 # Set to true when _die() is called; stops movement and prevents re-entry.
 var _is_dead: bool = false
+
+# Accumulated walk time used to index into ANT_FRAMES.
+var _walk_time: float = 0.0
+
+# Stored so _process can swap the walk frame without rebuilding the material.
+var _visual_material: StandardMaterial3D = null
 
 # Base color for this enemy type — stored so the hit flash can return to it.
 var _base_color: Color = Color.WHITE
@@ -263,6 +276,9 @@ func _process(delta: float) -> void:
 		else:
 			_visual.position.z = 0.0
 			_visual.position.x = sway
+		_visual.basis = _facing_basis(travel_dir)
+		_walk_time += delta
+		_visual_material.albedo_texture = ANT_FRAMES[int(_walk_time * _move_speed * 3.0) % ANT_FRAMES.size()]
 
 
 # ---------------------------------------------------------------------------
@@ -284,6 +300,15 @@ func _die() -> void:
 	tween.tween_callback(queue_free)
 
 
+## Returns a Basis that orients the ant quad flat on the XZ plane (normal = +Y,
+## visible from the top-down camera) with the ant's head pointing in dir.
+func _facing_basis(dir: Vector2i) -> Basis:
+	if dir == Vector2i.ZERO:
+		return Basis.IDENTITY
+	var forward := Vector3(float(dir.x), 0.0, float(dir.y)).normalized()
+	return Basis(forward.cross(Vector3.UP), forward, Vector3.UP)
+
+
 ## Converts a grid coordinate to its world-space centre at y = 0.
 ## Mirrors the same function in Arena.gd — shared once a utility exists.
 func _cell_to_world(cell: Vector2i) -> Vector3:
@@ -293,22 +318,27 @@ func _cell_to_world(cell: Vector2i) -> Vector3:
 	return Vector3(x, 0.0, z)
 
 
-## Creates the placeholder visual as a child MeshInstance3D.
+## Creates the enemy visual as a billboard quad using the ant sprite.
+## The color is darkened so enemies read as distinct from the bright icon.
 ## Replaced by an ASCII billboard node in Phase 3.
 func _spawn_visual(color: Color) -> void:
 	var mesh_instance := MeshInstance3D.new()
 
-	var radius       := Grid.CELL_SIZE * 0.675
-	var cylinder     := CylinderMesh.new()
-	cylinder.top_radius    = radius
-	cylinder.bottom_radius = radius
-	cylinder.height        = Grid.CELL_SIZE * 0.5
-	mesh_instance.mesh = cylinder
+	var quad  := QuadMesh.new()
+	quad.size  = Vector2(Grid.CELL_SIZE * 2.1, Grid.CELL_SIZE * 2.1)
+	mesh_instance.mesh = quad
 
-	var material          := StandardMaterial3D.new()
-	material.albedo_color  = color
-	material.shading_mode  = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var dark_color := Color(color.r * 0.85, color.g * 0.85, color.b * 0.85, 1.0)
+	_base_color     = dark_color
+
+	var material                  := StandardMaterial3D.new()
+	material.albedo_color          = dark_color
+	material.albedo_texture        = ANT_FRAMES[0]
+	material.shading_mode          = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency          = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mesh_instance.material_override = material
+	_visual_material               = material
+	mesh_instance.basis            = _facing_basis(_target_cell - _current_cell)
 
 	_visual = mesh_instance
 	add_child(mesh_instance)

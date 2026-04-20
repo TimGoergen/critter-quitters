@@ -1,4 +1,29 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128">
-  <rect width="128" height="128" fill="#1a1a2e"/>
-  <text x="64" y="80" font-size="72" text-anchor="middle" fill="#a8d8a8" font-family="monospace">@</text>
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Background -->
+  <rect width="128" height="128" rx="18" fill="#1a1a2e"/>
+
+  <!-- Legs (behind body) -->
+  <!-- Left front, mid, back -->
+  <line x1="53" y1="50" x2="28" y2="38" stroke="#c07840" stroke-width="3" stroke-linecap="round"/>
+  <line x1="52" y1="57" x2="26" y2="57" stroke="#c07840" stroke-width="3" stroke-linecap="round"/>
+  <line x1="53" y1="64" x2="28" y2="76" stroke="#c07840" stroke-width="3" stroke-linecap="round"/>
+  <!-- Right front, mid, back -->
+  <line x1="75" y1="50" x2="100" y2="38" stroke="#c07840" stroke-width="3" stroke-linecap="round"/>
+  <line x1="76" y1="57" x2="102" y2="57" stroke="#c07840" stroke-width="3" stroke-linecap="round"/>
+  <line x1="75" y1="64" x2="100" y2="76" stroke="#c07840" stroke-width="3" stroke-linecap="round"/>
+
+  <!-- Antennae -->
+  <line x1="58" y1="27" x2="42" y2="10" stroke="#c07840" stroke-width="2.5" stroke-linecap="round"/>
+  <line x1="70" y1="27" x2="86" y2="10" stroke="#c07840" stroke-width="2.5" stroke-linecap="round"/>
+  <circle cx="41" cy="10" r="3.5" fill="#c07840"/>
+  <circle cx="87" cy="10" r="3.5" fill="#c07840"/>
+
+  <!-- Abdomen (large, bottom) -->
+  <ellipse cx="64" cy="90" rx="18" ry="23" fill="#c07840"/>
+
+  <!-- Thorax (middle) — narrow gap above abdomen creates waist -->
+  <ellipse cx="64" cy="57" rx="11" ry="10" fill="#c07840"/>
+
+  <!-- Head (top) — narrow gap above thorax -->
+  <circle cx="64" cy="34" r="10" fill="#c07840"/>
 </svg>
