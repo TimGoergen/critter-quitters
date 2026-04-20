@@ -106,6 +106,7 @@ func _spawn_impact_effect(killed: bool) -> void:
 	var spark_size := Grid.CELL_SIZE * 0.18 if killed else Grid.CELL_SIZE * 0.45
 	spark_mesh.size = Vector3(spark_size, spark_size * 0.5, spark_size)
 
+
 	var spark_mat           := StandardMaterial3D.new()
 	spark_mat.albedo_color   = COLOR_IMPACT
 	spark_mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED

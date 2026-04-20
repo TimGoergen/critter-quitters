@@ -4,7 +4,7 @@ A mobile tower defense game built on the open maze-building mechanic pioneered b
 
 **Platform:** Mobile (iOS / Android) / Web  
 **Engine:** Godot 4 · GDScript · Mobile renderer  
-**Status:** Phase 1 prototype (core mechanic)
+**Status:** Phase 2 complete (combat loop)
 
 ---
 
@@ -94,8 +94,8 @@ game/
 
 | Phase | Focus | Status |
 |---|---|---|
-| 1 | Core mechanic prototype — grid, A\*, pathfinding, placeholder enemies | **In progress** |
-| 2 | Combat loop — HP, damage, Bug Bucks, Infestation Level | Upcoming |
+| 1 | Core mechanic prototype — grid, A\*, pathfinding, placeholder enemies | **Complete** |
+| 2 | Combat loop — HP, damage, Bug Bucks, Infestation Level, run-over state | **Complete** |
 | 3 | ASCII aesthetic — 3D billboards, physical movement, palette | Upcoming |
 | 4 | Full game loop — all traps/enemies, waves, store, Arena Evolution | Upcoming |
 | 4b | Meta progression — Service Fees, The Truck, upgrade trees | Upcoming |

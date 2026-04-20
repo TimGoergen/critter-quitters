@@ -1,6 +1,6 @@
 # **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.12 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
+**Version:** Draft v0.13 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
 
 ---
 
@@ -523,7 +523,7 @@ The following mechanics were identified during design but deferred to a later pa
 
 Development is phased to front-load the highest technical risk. The pathfinding system is the core mechanic and must be proven before other systems are built on top of it.
 
-### **Phase 1 — Core Mechanic Prototype**
+### **Phase 1 — Core Mechanic Prototype** ✓ Complete
 - Godot project setup and GitHub repository
 - Grid system
 - A\* pathfinding with real-time recalculation on trap placement and removal
@@ -533,11 +533,12 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: prove the maze-building mechanic works and feels right*
 
-### **Phase 2 — Combat Loop**
+### **Phase 2 — Combat Loop** ✓ Complete
 - Trap targeting and projectile visuals
 - Enemy HP, damage, and death
 - Bug Bucks earned on kill
 - Infestation Level fills when pests reach the exit
+- Run-over state — "INFESTED!" overlay with Restart on Infestation Level reaching 100%
 - Single wave type, single enemy type
 
 *Goal: first playable loop*

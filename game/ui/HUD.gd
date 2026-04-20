@@ -1,6 +1,6 @@
 ## HUD.gd
 ## Minimal in-run overlay: Bug Bucks counter, wave number, Infestation bar,
-## and between-wave countdown splash.
+## between-wave countdown splash, and run-over screen.
 ## Built procedurally — no scene file required.
 
 extends CanvasLayer
@@ -12,6 +12,8 @@ const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM    := Color(0.60, 0.60, 0.65, 1.0)
 const COLOR_COUNTDOWN   := Color(1.00, 1.00, 1.00, 0.92)
 const COLOR_HINT        := Color(0.60, 0.60, 0.65, 0.80)
+const COLOR_INFESTED    := Color(0.85, 0.10, 0.10, 1.0)
+const COLOR_OVERLAY_BG  := Color(0.04, 0.02, 0.02, 0.82)
 
 const PANEL_H: float = 40.0
 const BAR_H:   float = 14.0
@@ -23,14 +25,19 @@ var _infestation_fill:  ColorRect
 var _infestation_label: Label
 var _countdown_label:   Label
 var _hint_label:        Label
+var _run_over_overlay:  Control
 
 
 func _ready() -> void:
+	# Allow the HUD layer itself to process input while the tree is paused,
+	# so the run-over overlay's Restart button remains clickable.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_ui()
 	GameState.bug_bucks_changed.connect(_on_bucks_changed)
 	GameState.infestation_changed.connect(_on_infestation_changed)
 	GameState.wave_changed.connect(_on_wave_changed)
 	GameState.wave_countdown_changed.connect(_on_wave_countdown_changed)
+	GameState.run_ended.connect(_on_run_ended)
 	_on_bucks_changed(GameState.bug_bucks)
 	_on_infestation_changed(GameState.infestation_level)
 	_on_wave_changed(GameState.current_wave)
@@ -119,6 +126,44 @@ func _build_ui() -> void:
 	_hint_label.visible = false
 	add_child(_hint_label)
 
+	_build_run_over_overlay()
+
+
+func _build_run_over_overlay() -> void:
+	# Full-screen container. Stays responsive while the tree is paused.
+	_run_over_overlay = Control.new()
+	_run_over_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_run_over_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
+	_run_over_overlay.visible      = false
+	add_child(_run_over_overlay)
+
+	var bg := ColorRect.new()
+	bg.color = COLOR_OVERLAY_BG
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_run_over_overlay.add_child(bg)
+
+	var infested_label := Label.new()
+	infested_label.text                  = "INFESTED!"
+	infested_label.anchor_right          = 1.0
+	infested_label.anchor_top            = 0.30
+	infested_label.anchor_bottom         = 0.55
+	infested_label.horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
+	infested_label.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+	infested_label.add_theme_font_size_override("font_size", 96)
+	infested_label.add_theme_color_override("font_color", COLOR_INFESTED)
+	_run_over_overlay.add_child(infested_label)
+
+	var btn := Button.new()
+	btn.text                 = "Restart"
+	btn.anchor_left          = 0.35
+	btn.anchor_right         = 0.65
+	btn.anchor_top           = 0.62
+	btn.anchor_bottom        = 0.75
+	btn.add_theme_font_size_override("font_size", 28)
+	btn.process_mode         = Node.PROCESS_MODE_ALWAYS
+	btn.pressed.connect(_on_restart_pressed)
+	_run_over_overlay.add_child(btn)
+
 
 func _on_bucks_changed(amount: int) -> void:
 	_bucks_label.text = "BB: %d" % amount
@@ -142,6 +187,16 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 	else:
 		_countdown_label.visible = false
 		_hint_label.visible      = false
+
+
+func _on_run_ended() -> void:
+	_run_over_overlay.visible = true
+	get_tree().paused = true
+
+
+func _on_restart_pressed() -> void:
+	get_tree().paused = false
+	get_tree().reload_current_scene()
 
 
 func _make_label(text: String, pos: Vector2, container_h: float) -> Label:
