@@ -217,6 +217,12 @@ func get_target_cell() -> Vector2i:
 	return _target_cell
 
 
+## Returns how far along the path this enemy is.
+## Higher index = closer to the exit. Used by traps to rank targets.
+func get_path_index() -> int:
+	return _path_index
+
+
 # ---------------------------------------------------------------------------
 # Movement
 # ---------------------------------------------------------------------------

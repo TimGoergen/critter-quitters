@@ -26,9 +26,11 @@ extends Node3D
 
 # Explicit dependencies — preloading makes cross-script references visible
 # at the top of the file rather than relying on the global class registry.
-const Grid       = preload("res://arena/Grid.gd")
-const Pathfinder = preload("res://arena/Pathfinder.gd")
-const Enemy      = preload("res://enemies/Enemy.gd")
+const Grid        = preload("res://arena/Grid.gd")
+const Pathfinder  = preload("res://arena/Pathfinder.gd")
+const Enemy       = preload("res://enemies/Enemy.gd")
+const Trap        = preload("res://traps/Trap.gd")
+const Projectile  = preload("res://traps/Projectile.gd")
 
 
 # ---------------------------------------------------------------------------
@@ -325,7 +327,7 @@ func _try_place_trap(anchor: Vector2i) -> void:
 		_grid.place_trap(cell)
 		_trap_anchors[cell] = anchor
 
-	_spawn_trap_visual(anchor)
+	_spawn_trap(anchor)
 
 
 func _try_remove_trap(cell: Vector2i) -> void:
@@ -802,18 +804,22 @@ func _spawn_zone_marker(center_cell: Vector2i, rows: int, color: Color) -> void:
 	add_child(marker)
 
 
-## Spawns a raised box centred on the 2x2 footprint of the trap.
-func _spawn_trap_visual(anchor: Vector2i) -> void:
-	var trap_visual := _make_box_mesh_instance(
-		Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9),
-		COLOR_TRAP
-	)
-	# Centre of the 2x2 footprint sits half a cell right and down from the
-	# anchor cell centre. Raise by half the box height so it sits on y = 0.
+## Spawns a Trap node centred on the 2x2 footprint and wires it to the
+## active enemy list. The trap manages its own visual and combat logic.
+func _spawn_trap(anchor: Vector2i) -> void:
+	var trap := Trap.new()
 	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
-	trap_visual.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
-	_trap_container.add_child(trap_visual)
-	_trap_nodes[anchor] = trap_visual
+	trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
+	trap.fired.connect(_on_trap_fired)
+	_trap_container.add_child(trap)
+	trap.initialize(Trap.TrapType.SNAP_TRAP, _active_enemies)
+	_trap_nodes[anchor] = trap
+
+
+func _on_trap_fired(from_pos: Vector3, to_pos: Vector3) -> void:
+	var proj := Projectile.new()
+	proj.initialize(from_pos, to_pos)
+	add_child(proj)
 
 
 ## Returns the four cells of a 2x2 trap footprint given its top-left anchor.
