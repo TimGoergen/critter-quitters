@@ -38,10 +38,10 @@ enum TrapType { SNAP_TRAP, ZAPPER, FOGGER, GLUE_BOARD }
 ##   cooldown — seconds between shots; 0.0 = passive (no shots fired)
 ##   color    — placeholder box colour (replaced by ASCII billboard in Phase 3)
 const STATS := {
-	TrapType.SNAP_TRAP:  { "damage": 1.5,  "range": 3.5, "cooldown": 1.0, "color": Color(0.40, 0.40, 0.80) },
-	TrapType.ZAPPER:     { "damage": 25.0, "range": 6.0, "cooldown": 2.5, "color": Color(0.90, 0.85, 0.20) },
-	TrapType.FOGGER:     { "damage": 15.0, "range": 4.0, "cooldown": 2.0, "color": Color(0.60, 0.90, 0.60) },
-	TrapType.GLUE_BOARD: { "damage": 0.0,  "range": 3.0, "cooldown": 0.0, "color": Color(0.80, 0.70, 0.30) },
+	TrapType.SNAP_TRAP:  { "damage": 3.375, "range": 5.6, "cooldown": 1.0, "cost": 10, "color": Color(0.40, 0.40, 0.80) },
+	TrapType.ZAPPER:     { "damage": 56.25, "range": 9.6, "cooldown": 2.5, "cost": 25, "color": Color(0.90, 0.85, 0.20) },
+	TrapType.FOGGER:     { "damage": 33.75, "range": 6.4, "cooldown": 2.0, "cost": 20, "color": Color(0.60, 0.90, 0.60) },
+	TrapType.GLUE_BOARD: { "damage": 0.0,   "range": 4.8, "cooldown": 0.0, "cost": 15, "color": Color(0.80, 0.70, 0.30) },
 }
 
 
@@ -65,6 +65,7 @@ var _damage: float       = 0.0
 var _range: float        = 0.0
 var _cooldown: float     = 0.0
 var _cooldown_remaining: float = 0.0
+var _cost: int           = 0
 
 # Direct reference to Arena._active_enemies. GDScript arrays are reference
 # types, so this always reflects the live list without any extra bookkeeping.
@@ -85,6 +86,7 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	_damage    = stats["damage"]
 	_range     = stats["range"]
 	_cooldown  = stats["cooldown"]
+	_cost      = stats["cost"]
 
 	_spawn_visual(stats["color"])
 
@@ -163,6 +165,11 @@ func _xz_distance(world_pos: Vector3) -> float:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+## Returns the Bug Bucks cost to place this trap.
+func get_cost() -> int:
+	return _cost
+
 
 ## Creates the placeholder visual as a child MeshInstance3D.
 ## Replaced by an ASCII billboard node in Phase 3.

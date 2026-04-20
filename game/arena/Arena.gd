@@ -31,6 +31,7 @@ const Pathfinder  = preload("res://arena/Pathfinder.gd")
 const Enemy       = preload("res://enemies/Enemy.gd")
 const Trap        = preload("res://traps/Trap.gd")
 const Projectile  = preload("res://traps/Projectile.gd")
+const HUD         = preload("res://ui/HUD.gd")
 
 
 # ---------------------------------------------------------------------------
@@ -79,9 +80,12 @@ var _path_marker_pool: Array[MeshInstance3D] = []
 var _active_enemies: Array[Node3D] = []
 
 # Wave spawning — enemies launch one at a time with a small gap between them.
-const WAVE_SIZE: int = 10
-const SPAWN_INTERVAL: float = 0.6   # seconds between each enemy in the wave
+const WAVE_SIZE: int = 25
+const SPAWN_INTERVAL: float = 0.3      # seconds between each enemy in the wave
+const WAVE_COUNTDOWN: int  = 2         # seconds of countdown before each wave
+
 var _enemies_left_to_spawn: int = 0
+var _countdown_active: bool     = false  # true while between-wave countdown is ticking
 
 # The path currently drawn as yellow markers. Updated on every grid change
 # and trimmed forward as the enemy advances through cells.
@@ -159,6 +163,7 @@ func _ready() -> void:
 	_spawn_arena_border()
 
 	_pathfinder.recalculate()
+	add_child(HUD.new())
 	_start_wave()
 
 
@@ -180,6 +185,11 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		if event.pressed and event.index > 0 and _pressing:
 			_cancel_drag_placement()
+		return
+
+	if event is InputEventKey:
+		if event.pressed and not event.echo:
+			_handle_key(event.keycode)
 		return
 
 	if not event is InputEventMouseButton:
@@ -269,10 +279,9 @@ func _cancel_drag_placement() -> void:
 	_drag_origin = Vector2i(-1, -1)
 
 
-## Returns true if the player can afford one more trap.
-## Phase 1 stub — always returns true until the currency system exists.
+## Returns true if the player can afford one more Snap Trap.
 func _can_afford_trap() -> bool:
-	return true   # TODO: check GameState.bug_bucks >= trap_cost
+	return GameState.bug_bucks >= Trap.STATS[Trap.TrapType.SNAP_TRAP]["cost"]
 
 
 ## Returns true if any active enemy's current or target cell falls inside
@@ -342,13 +351,15 @@ func _try_remove_trap(cell: Vector2i) -> void:
 		return
 
 	var anchor: Vector2i = _trap_anchors[cell]
+
+	if _trap_nodes.has(anchor):
+		GameState.add_bug_bucks(int(_trap_nodes[anchor].get_cost() * 0.7))
+		_trap_nodes[anchor].queue_free()
+		_trap_nodes.erase(anchor)
+
 	for c in _get_trap_cells(anchor):
 		_grid.remove_trap(c)
 		_trap_anchors.erase(c)
-
-	if _trap_nodes.has(anchor):
-		_trap_nodes[anchor].queue_free()
-		_trap_nodes.erase(anchor)
 
 
 ## Returns true if the given cells can be trapped without sealing either gap.
@@ -498,6 +509,7 @@ func _spawn_enemy(path: Array[Vector2i]) -> void:
 
 
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
+	GameState.add_infestation(enemy.get_infestation_damage())
 	_active_enemies.erase(enemy)
 	# enemy.queue_free() is called inside Enemy.gd — no double-free needed.
 
@@ -506,16 +518,45 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 
 
 func _on_enemy_died(enemy: Node3D) -> void:
+	GameState.add_bug_bucks(enemy.get_bounty())
 	_active_enemies.erase(enemy)
 	# enemy.queue_free() is called inside Enemy._die() after the flash tween.
-	# TODO: award Bug Bucks here once the currency system exists.
 
 	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
 		_start_wave()
 
 
-## Begins spawning WAVE_SIZE enemies, one every SPAWN_INTERVAL seconds.
+## Increments the wave counter and begins the between-wave countdown.
 func _start_wave() -> void:
+	GameState.current_wave += 1
+	_countdown_active = true
+	GameState.set_countdown(WAVE_COUNTDOWN)
+	get_tree().create_timer(1.0).timeout.connect(_on_countdown_tick.bind(WAVE_COUNTDOWN - 1))
+
+
+## Called once per second during the countdown. Fires the wave when it reaches 0.
+func _on_countdown_tick(seconds_remaining: int) -> void:
+	if not _countdown_active:
+		return
+	GameState.set_countdown(seconds_remaining)
+	if seconds_remaining > 0:
+		get_tree().create_timer(1.0).timeout.connect(_on_countdown_tick.bind(seconds_remaining - 1))
+	else:
+		_countdown_active = false
+		_launch_wave()
+
+
+## Skips any active countdown and starts the wave immediately.
+## Q key triggers this; a Bug Bucks bonus for early launch is TODO.
+func _handle_key(keycode: int) -> void:
+	if keycode == KEY_Q and _countdown_active:
+		_countdown_active = false
+		GameState.set_countdown(0)
+		_launch_wave()
+
+
+## Begins spawning WAVE_SIZE enemies, one every SPAWN_INTERVAL seconds.
+func _launch_wave() -> void:
 	_enemies_left_to_spawn = WAVE_SIZE
 	get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
 
@@ -844,6 +885,7 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	trap.fired.connect(_on_trap_fired)
 	_trap_container.add_child(trap)
 	trap.initialize(Trap.TrapType.SNAP_TRAP, _active_enemies)
+	GameState.spend_bug_bucks(trap.get_cost())
 	_trap_nodes[anchor] = trap
 
 

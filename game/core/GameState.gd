@@ -41,6 +41,19 @@ signal run_started
 ## Emitted once when a run ends, before transitioning back to the hub.
 signal run_ended
 
+## Emitted whenever bug_bucks changes. HUD connects here to stay current.
+signal bug_bucks_changed(new_amount: int)
+
+## Emitted whenever infestation_level changes. HUD connects here to stay current.
+signal infestation_changed(new_level: float)
+
+## Emitted when current_wave changes.
+signal wave_changed(new_wave: int)
+
+## Emitted each second during the between-wave countdown.
+## seconds_remaining == 0 means the countdown ended (wave is launching).
+signal wave_countdown_changed(seconds_remaining: int)
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -54,13 +67,16 @@ signal run_ended
 ## TODO: tune via playtesting; increase via meta upgrades
 const STARTING_BUG_BUCKS: int = 50
 
+## Total infestation points that fill the bar to 1.0.
+## TODO: tune via playtesting
+const INFESTATION_MAX: int = 20
+
 
 # ---------------------------------------------------------------------------
 # Run state
 #
 # These values are reset at the start of each run by start_run().
-# Read them freely; mutate them only through the methods below or through
-# the systems that own each value (e.g. economy system owns bug_bucks).
+# Read them freely; mutate them only through the methods below.
 # ---------------------------------------------------------------------------
 
 ## Current phase of the game. Setting this property emits phase_changed.
@@ -71,7 +87,10 @@ var current_phase: Phase = Phase.HUB:
 
 ## The wave the player is currently on. Starts at 0; incremented to 1
 ## when the first wave begins.
-var current_wave: int = 0
+var current_wave: int = 0:
+	set(value):
+		current_wave = value
+		wave_changed.emit(value)
 
 ## The player's current in-run currency. Earned by killing pests;
 ## spent on traps, upgrades, and store rerolls.
@@ -107,6 +126,8 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 	infestation_level = 0.0
 	current_phase = Phase.PLACING
 	run_started.emit()
+	bug_bucks_changed.emit(bug_bucks)
+	infestation_changed.emit(infestation_level)
 
 
 ## Ends the current run and returns the game to the hub.
@@ -114,3 +135,33 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 func end_run() -> void:
 	current_phase = Phase.RUN_OVER
 	run_ended.emit()
+
+
+## Adds amount to bug_bucks and notifies listeners.
+func add_bug_bucks(amount: int) -> void:
+	bug_bucks += amount
+	bug_bucks_changed.emit(bug_bucks)
+
+
+## Deducts amount from bug_bucks if affordable. Returns true on success.
+func spend_bug_bucks(amount: int) -> bool:
+	if bug_bucks < amount:
+		return false
+	bug_bucks -= amount
+	bug_bucks_changed.emit(bug_bucks)
+	return true
+
+
+## Broadcasts the current countdown value to HUD and other listeners.
+## Called once per second by Arena during the between-wave countdown.
+func set_countdown(seconds: int) -> void:
+	wave_countdown_changed.emit(seconds)
+
+
+## Increases infestation_level by points / INFESTATION_MAX.
+## Calls end_run() if the level reaches 1.0.
+func add_infestation(points: int) -> void:
+	infestation_level = minf(infestation_level + float(points) / float(INFESTATION_MAX), 1.0)
+	infestation_changed.emit(infestation_level)
+	if infestation_level >= 1.0:
+		end_run()
