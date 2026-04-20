@@ -1,7 +1,7 @@
 ## Enemy.gd
 ## A basic pest that follows the calculated path from entrance to exit.
 ##
-## Phase 1 placeholder — a coloured moving box with no HP, damage, or
+## Phase 1 placeholder — a coloured moving cylinder with no HP, damage, or
 ## pest type. The sole purpose here is to prove that path-following and
 ## real-time rerouting work correctly before the rest of the game is built.
 ##
@@ -16,6 +16,12 @@
 ##   Arena calls update_path() with a fresh A* result from _current_cell
 ##   to the exit whenever the grid changes. The enemy redirects immediately
 ##   to the new optimal path without backtracking.
+##
+## Waddle model:
+##   The visual mesh is translated perpendicular to the direction of travel
+##   using a sin() oscillation, producing a visible side-to-side sway.
+##   WADDLE_SPEED and WADDLE_OFFSET are per-type constants so different
+##   enemies can have distinct movement personalities.
 ##
 ## Usage: instantiate via Arena, then call initialize() before the node
 ## is added to the scene tree.
@@ -34,8 +40,15 @@ const Grid = preload("res://arena/Grid.gd")
 ## TODO: replace with per-pest-type speed values once the enemy roster exists
 const MOVE_SPEED: float = 3.0
 
-## Colour of the placeholder box. Replaced by ASCII billboard in Phase 3.
+## Colour of the placeholder cylinder. Replaced by ASCII billboard in Phase 3.
 const COLOR_ENEMY := Color(0.85, 0.35, 0.15, 1.0)   # orange
+
+## Waddle oscillation rate in radians/second.
+const WADDLE_SPEED: float = 12.0
+
+## Lateral sway distance in world units — how far from centre the enemy moves
+## side to side.
+const WADDLE_OFFSET: float = 0.03
 
 ## How close (in world units) the enemy must be to a cell centre before
 ## it is considered to have arrived and advances to the next cell.
@@ -70,6 +83,12 @@ var _target_cell: Vector2i = Vector2i.ZERO
 # The current path and the index of _target_cell within it.
 var _path: Array[Vector2i] = []
 var _path_index: int = 0
+
+# Reference to the visual mesh so _process can apply the waddle each frame.
+var _visual: MeshInstance3D = null
+
+# Accumulated time driving the waddle oscillation.
+var _waddle_time: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -158,6 +177,21 @@ func _process(delta: float) -> void:
 		var move_amount := MOVE_SPEED * Grid.CELL_SIZE * delta
 		global_position += offset.normalized() * minf(move_amount, distance)
 
+	# Waddle — translate the visual mesh perpendicular to the direction of travel
+	# so the enemy visibly sways side to side as it walks.
+	#   moving along world-X → sway on the Z axis
+	#   moving along world-Z → sway on the X axis
+	if _visual != null:
+		_waddle_time += delta
+		var sway       := sin(_waddle_time * WADDLE_SPEED) * WADDLE_OFFSET
+		var travel_dir := _target_cell - _current_cell
+		if travel_dir.x != 0:
+			_visual.position.x = 0.0
+			_visual.position.z = sway
+		else:
+			_visual.position.z = 0.0
+			_visual.position.x = sway
+
 
 # ---------------------------------------------------------------------------
 # Private helpers
@@ -189,4 +223,5 @@ func _spawn_visual() -> void:
 	material.shading_mode  = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mesh_instance.material_override = material
 
+	_visual = mesh_instance
 	add_child(mesh_instance)

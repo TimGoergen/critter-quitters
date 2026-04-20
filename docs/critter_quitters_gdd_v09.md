@@ -1,6 +1,6 @@
 # **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.9 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
+**Version:** Draft v0.12 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
 
 ---
 
@@ -19,6 +19,7 @@
 | v0.9 | Boss wave frequency confirmed: every 10 waves. Arena Evolution timing updated: occurs in the wave immediately following each boss wave. Store reroll cost confirmed: progressive linear, resets each visit (e.g. 5, 10, 15, 20...); exact base amount and increment TBD via playtesting. |
 | v0.10 | Meta-progression system added: Service Fees currency, The Truck hub, equipment and business upgrades, stats screen. Arena pool defined: 4 residential arenas (Kitchen, Backyard, Basement, Attic). All open design questions resolved or deferred. GDScript code standards documented in CLAUDE.md. |
 | v0.11 | Grid size updated to 30×30. Trap footprint updated to 2×2. Cursor/grid highlight updated: radial glow always visible on hover, not just during placement. GDD updated to match Phase 1 prototype implementation. |
+| v0.12 | Arena wall model clarified: border walls occupy the leftmost and rightmost columns of the arena floor as blocked cells; they are not a separate outer ring. The entrance and exit gaps are simply the unblocked rows in those columns. Entrance and exit gap width increased from 3 rows to 5 rows. Trap placement is permitted in gap cells subject to the pathfinding validity check (at least one gap row must remain passable). |
 
 ---
 
@@ -106,10 +107,13 @@ The arena is flat, open, and grid-based to support touch placement on mobile. Gr
 
 Each run has one entrance and one exit, assigned to separate walls at run start. They are not necessarily on opposite walls. Enemies always enter from the entrance and always target the exit.
 
+The border walls are represented as blocked cells occupying the leftmost and rightmost columns of the 30×30 grid. The entrance and exit are gaps in those columns — 5 consecutive unblocked rows centered on the assigned entrance/exit row. The player may place traps in gap cells as long as at least one gap row remains passable and a valid path to the exit still exists.
+
 | Attribute | Value |
 | :---- | :---- |
 | Entry points | One — assigned to a wall at run start |
 | Exit points | One — assigned to a different wall at run start |
+| Gap width | 5 rows (entrance and exit) |
 | Grid size | 30×30 (fixed) |
 | Pathfinding | A\* real-time |
 | Arena selection | Random from pool at run start |
@@ -210,7 +214,7 @@ Medium range circle, passive and continuous. Any pest inside the circle has the 
 
 **Blocking terrain** — Environmental obstacles that act as physical barriers. Cannot be placed on by traps; cannot be crossed by pests. Purely physical — no damage effects. See Section 6a.
 
-**Pathfinding validity** — At least one valid path from entrance to exit must always exist. If placing a trap or barrier would eliminate all valid paths, the placement is rejected. This applies to both player-placed traps and arena evolution obstacles.
+**Pathfinding validity** — At least one valid path from entrance to exit must always exist, and at least one row in each gap must remain unblocked. If placing a trap or barrier would violate either constraint, the placement is rejected. This applies to both player-placed traps and arena evolution obstacles.
 
 ---
 

@@ -8,7 +8,14 @@
 ##   - Spawn and remove placeholder visual nodes for traps and the path
 ##
 ## For Phase 1 all visuals are coloured boxes — final ASCII billboard
-## rendering is Phase 3 work. Right-click removes a placed trap.
+## rendering is Phase 3 work.
+##
+## Placement model:
+##   Press and drag draws a line of ghost traps from the press origin to the
+##   cursor. Release commits them in order from origin to end; traps that
+##   cannot be afforded are skipped (cost validation is a stub until the
+##   currency system exists). Right-click cancels the drag without placing.
+##   Right-click outside a drag removes the trap under the cursor.
 ##
 ## Coordinate conventions:
 ##   Grid  — Vector2i(col, row), origin top-left, col = X, row = Z
@@ -81,15 +88,12 @@ var _display_path: Array[Vector2i] = []
 var _grid_highlight: MeshInstance3D = null
 var _hover_cell: Vector2i = Vector2i(-1, -1)
 
-# Single-placement drag state — press starts a drag, release commits.
+# Drag placement state — press starts, drag extends a line of ghost traps,
+# release commits them in order; right-click cancels without placing.
 var _pressing: bool = false
-var _preview_trap: MeshInstance3D = null
-
-# Multi-placement state — activated by double-click, drag draws a line of ghosts.
-var _multi_placing: bool = false
-var _multi_origin: Vector2i = Vector2i(-1, -1)
-var _multi_anchors: Array[Vector2i] = []
-var _multi_ghosts: Array[MeshInstance3D] = []
+var _drag_origin: Vector2i = Vector2i(-1, -1)
+var _drag_anchors: Array[Vector2i] = []
+var _drag_ghosts: Array[MeshInstance3D] = []
 
 # Outside-wall reference positions (x only matters; y is chosen per enemy).
 var _spawn_cell: Vector2i = Vector2i.ZERO    # centre spawn cell (used for x and gap centre)
@@ -164,16 +168,14 @@ func _input(event: InputEvent) -> void:
 		if cell != _hover_cell:
 			_hover_cell = cell
 			_update_grid_highlight()
-			if _multi_placing:
-				_update_multi_ghosts(cell)
-			elif _pressing:
-				_update_preview_position(cell)
+			if _pressing:
+				_update_drag_ghosts(cell)
 		return
 
-	# Mobile: a second finger tap while multi-placing cancels the action.
+	# Mobile: a second finger tap while dragging cancels the placement.
 	if event is InputEventScreenTouch:
-		if event.pressed and event.index > 0 and _multi_placing:
-			_cancel_multi_placement()
+		if event.pressed and event.index > 0 and _pressing:
+			_cancel_drag_placement()
 		return
 
 	if not event is InputEventMouseButton:
@@ -184,66 +186,43 @@ func _input(event: InputEvent) -> void:
 	match event.button_index:
 		MOUSE_BUTTON_LEFT:
 			if event.pressed:
-				if event.double_click:
-					# Double-click cancels any single-press in progress and
-					# enters multi-placement mode.
-					_pressing = false
-					_clear_preview()
-					if _grid.is_in_bounds(cell):
-						_start_multi_placement(cell)
-				elif not _multi_placing and _is_in_arena(cell):
-					_start_placement(cell)
+				if _is_in_arena(cell):
+					_start_drag_placement(cell)
 			else:
-				if _multi_placing:
-					_finish_multi_placement()
-				else:
-					_finish_placement(cell)
+				if _pressing:
+					_commit_drag_placement()
 		MOUSE_BUTTON_RIGHT:
 			if event.pressed:
-				if _multi_placing:
-					_cancel_multi_placement()
-				elif _grid.is_in_bounds(cell):
-					_try_remove_trap(cell)
+				_cancel_drag_placement()
 
 
 # ---------------------------------------------------------------------------
-# Placement logic
+# Drag placement
 # ---------------------------------------------------------------------------
 
-## Called on mouse/finger down. Spawns an invisible ghost showing where the
-## trap will land. The player can drag before releasing to reposition it.
-func _start_placement(anchor: Vector2i) -> void:
-	_pressing = true
-	_spawn_preview_trap(anchor)
+## Called on press. Records the origin and immediately shows the first ghost.
+func _start_drag_placement(cell: Vector2i) -> void:
+	_pressing    = true
+	_drag_origin = _clamp_to_anchor(cell)
+	_update_drag_ghosts(cell)
 
 
-## Called on mouse/finger up. Commits the trap at the current hover cell
-## and removes the ghost regardless of whether placement succeeds.
-func _finish_placement(cell: Vector2i) -> void:
-	_pressing = false
-	_clear_preview()
-	if _is_in_arena(cell):
-		_try_place_trap(cell)
-
-
-# ---------------------------------------------------------------------------
-# Multi-placement
-# ---------------------------------------------------------------------------
-
-## Enters multi-placement mode at the double-clicked anchor cell.
-func _start_multi_placement(anchor: Vector2i) -> void:
-	_multi_placing = true
-	_multi_origin  = anchor
-	_update_multi_ghosts(anchor)
-
-
-## Rebuilds the line of ghost traps from origin to target.
-## Ghosts step every 2 cells along the dominant axis.
-func _update_multi_ghosts(target: Vector2i) -> void:
-	_clear_multi_ghosts()
-	_multi_anchors = _compute_multi_anchors(_multi_origin, target)
-	for anchor in _multi_anchors:
-		if _get_trap_cells(anchor).is_empty():
+## Rebuilds the ghost line from origin to the current cursor cell.
+## Only cells that are individually buildable get a ghost — ghosts at
+## positions blocked by existing traps or walls are silently skipped.
+func _update_drag_ghosts(target: Vector2i) -> void:
+	_clear_drag_ghosts()
+	_drag_anchors = _compute_drag_anchors(_drag_origin, _clamp_to_anchor(target))
+	for anchor in _drag_anchors:
+		var cells := _get_trap_cells(anchor)
+		if cells.is_empty():
+			continue
+		var buildable := true
+		for cell in cells:
+			if not _grid.is_buildable(cell):
+				buildable = false
+				break
+		if not buildable:
 			continue
 		var ghost  := _make_box_mesh_instance(
 			Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9),
@@ -252,59 +231,81 @@ func _update_multi_ghosts(target: Vector2i) -> void:
 		var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 		ghost.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 		add_child(ghost)
-		_multi_ghosts.append(ghost)
+		_drag_ghosts.append(ghost)
 
 
-## On release, commits all anchors in order from origin to target.
-## Phase 1: no currency — places every valid trap.
-## When currency is added: stop once Bug Bucks are exhausted.
-func _finish_multi_placement() -> void:
-	_multi_placing = false
-	_clear_multi_ghosts()
-	for anchor in _multi_anchors:
+## On release, commits anchors in order from origin to end.
+## Stops at the first anchor that cannot be afforded or whose footprint
+## overlaps an active enemy — that anchor and all after it are skipped.
+## TODO: wire _can_afford_trap() to the currency system once it exists.
+func _commit_drag_placement() -> void:
+	_pressing = false
+	_clear_drag_ghosts()
+	for anchor in _drag_anchors:
+		if not _can_afford_trap():
+			break
+		var cells := _get_trap_cells(anchor)
+		if _footprint_overlaps_enemy(cells):
+			break
 		_try_place_trap(anchor)
-	_multi_anchors.clear()
+	_drag_anchors.clear()
+	_drag_origin = Vector2i(-1, -1)
 
 
-## Cancels multi-placement without committing any traps.
+## Cancels the drag without placing any traps.
 ## Triggered by right-click (desktop) or second-finger tap (mobile).
-func _cancel_multi_placement() -> void:
-	_multi_placing = false
-	_clear_multi_ghosts()
-	_multi_anchors.clear()
+func _cancel_drag_placement() -> void:
+	_pressing = false
+	_clear_drag_ghosts()
+	_drag_anchors.clear()
+	_drag_origin = Vector2i(-1, -1)
+
+
+## Returns true if the player can afford one more trap.
+## Phase 1 stub — always returns true until the currency system exists.
+func _can_afford_trap() -> bool:
+	return true   # TODO: check GameState.bug_bucks >= trap_cost
+
+
+## Returns true if any active enemy's current or target cell falls inside
+## the given footprint. Used to prevent placing a trap on top of a moving enemy.
+func _footprint_overlaps_enemy(cells: Array[Vector2i]) -> bool:
+	for enemy in _active_enemies:
+		if enemy.get_current_cell() in cells:
+			return true
+		if enemy.get_target_cell() in cells:
+			return true
+	return false
 
 
 ## Returns a sequence of 2x2 trap anchor cells from origin toward target.
 ##
-## Anchors are placed by stepping exactly 2 cells along the dominant axis
-## per trap, with the minor axis scaled proportionally. This guarantees
-## consecutive 2x2 footprints are always touching — no gaps can appear.
-## The line extends as far as the dominant-axis distance allows; the last
-## trap advances only when the cursor moves far enough to fit another trap.
-func _compute_multi_anchors(origin: Vector2i, target: Vector2i) -> Array[Vector2i]:
+## Anchors step exactly 2 cells along the dominant axis per trap, with
+## the minor axis scaled proportionally. This keeps consecutive 2x2
+## footprints touching with no gaps. The last trap advances only once the
+## cursor is far enough to fit another full footprint.
+func _compute_drag_anchors(origin: Vector2i, target: Vector2i) -> Array[Vector2i]:
 	var dir      := target - origin
 	var dominant := maxi(abs(dir.x), abs(dir.y))
 
 	if dominant == 0:
 		return [origin]
 
-	# One trap per 2-cell step in the dominant axis.
 	var n := dominant / 2 + 1
 
 	var anchors: Array[Vector2i] = []
 	for i in range(n):
-		# Step exactly 2*i in the dominant axis so spacing is always uniform.
 		var t   := float(i * 2) / float(dominant)
 		var pos := Vector2(origin) + Vector2(dir) * t
 		anchors.append(Vector2i(roundi(pos.x), roundi(pos.y)))
 	return anchors
 
 
-## Frees all ghost nodes from the current multi-placement line.
-func _clear_multi_ghosts() -> void:
-	for ghost in _multi_ghosts:
+## Frees all ghost nodes from the current drag line.
+func _clear_drag_ghosts() -> void:
+	for ghost in _drag_ghosts:
 		ghost.queue_free()
-	_multi_ghosts.clear()
+	_drag_ghosts.clear()
 
 
 func _try_place_trap(anchor: Vector2i) -> void:
@@ -683,46 +684,6 @@ func _draw_cell_glow(im: ImmediateMesh, cell: Vector2i, hs: float, y: float, alp
 	im.surface_set_color(color); im.surface_add_vertex(bl)
 	im.surface_set_color(color); im.surface_add_vertex(bl)
 	im.surface_set_color(color); im.surface_add_vertex(tl)
-
-
-# ---------------------------------------------------------------------------
-# Placement preview
-# ---------------------------------------------------------------------------
-
-## Spawns a nearly transparent ghost trap so the player can see placement
-## position while dragging. Very low alpha keeps the path visible beneath.
-func _spawn_preview_trap(anchor: Vector2i) -> void:
-	_clear_preview()
-	anchor = _clamp_to_anchor(anchor)
-	var cells := _get_trap_cells(anchor)
-	if cells.is_empty():
-		return
-	_preview_trap = _make_box_mesh_instance(
-		Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9),
-		Color(COLOR_TRAP.r, COLOR_TRAP.g, COLOR_TRAP.b, 0.50)
-	)
-	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
-	_preview_trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
-	add_child(_preview_trap)
-
-
-## Moves the ghost trap to a new anchor position while the player is dragging.
-func _update_preview_position(anchor: Vector2i) -> void:
-	if _preview_trap == null:
-		return
-	anchor = _clamp_to_anchor(anchor)
-	var cells := _get_trap_cells(anchor)
-	if cells.is_empty():
-		return
-	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
-	_preview_trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
-
-
-## Removes the ghost trap node.
-func _clear_preview() -> void:
-	if _preview_trap != null:
-		_preview_trap.queue_free()
-		_preview_trap = null
 
 
 # ---------------------------------------------------------------------------
