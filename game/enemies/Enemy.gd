@@ -49,11 +49,11 @@ enum EnemyType { ANT, CRICKET, BEETLE, COCKROACH, RAT }
 ##   infestation   — Infestation Level increase when this pest reaches the exit
 ##   color         — placeholder cylinder colour (replaced by ASCII billboard in Phase 3)
 const STATS := {
-	EnemyType.ANT:       { "hp": 10,  "speed": 3.0, "infestation": 1,  "color": Color(0.85, 0.35, 0.15) },
-	EnemyType.CRICKET:   { "hp":  8,  "speed": 5.0, "infestation": 1,  "color": Color(0.50, 0.80, 0.20) },
-	EnemyType.BEETLE:    { "hp": 40,  "speed": 1.5, "infestation": 3,  "color": Color(0.20, 0.40, 0.80) },
-	EnemyType.COCKROACH: { "hp": 80,  "speed": 1.0, "infestation": 5,  "color": Color(0.55, 0.30, 0.10) },
-	EnemyType.RAT:       { "hp": 200, "speed": 0.7, "infestation": 10, "color": Color(0.70, 0.65, 0.60) },
+	EnemyType.ANT:       { "hp": 10,  "speed": 3.0, "infestation": 1,  "bounty": 1,  "color": Color(0.85, 0.35, 0.15) },
+	EnemyType.CRICKET:   { "hp":  8,  "speed": 5.0, "infestation": 1,  "bounty": 2,  "color": Color(0.50, 0.80, 0.20) },
+	EnemyType.BEETLE:    { "hp": 40,  "speed": 1.5, "infestation": 3,  "bounty": 5,  "color": Color(0.20, 0.40, 0.80) },
+	EnemyType.COCKROACH: { "hp": 80,  "speed": 1.0, "infestation": 5,  "bounty": 10, "color": Color(0.55, 0.30, 0.10) },
+	EnemyType.RAT:       { "hp": 200, "speed": 0.7, "infestation": 10, "bounty": 25, "color": Color(0.70, 0.65, 0.60) },
 }
 
 
@@ -119,6 +119,7 @@ var _infestation_damage: int = 0
 
 # Set to true when _die() is called; stops movement and prevents re-entry.
 var _is_dead: bool = false
+var _bounty: int = 0
 
 # Accumulated walk time used to index into ANT_FRAMES.
 var _walk_time: float = 0.0
@@ -148,6 +149,7 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 	_max_hp            = stats["hp"]
 	_current_hp        = _max_hp
 	_infestation_damage = stats["infestation"]
+	_bounty            = stats["bounty"]
 
 	_path         = initial_path
 	_current_cell = _path[0]
@@ -198,6 +200,11 @@ func get_hp_fraction() -> float:
 ## Returns the Infestation Level damage this pest deals on exit.
 func get_infestation_damage() -> int:
 	return _infestation_damage
+
+
+## Returns the Bug Bucks awarded to the player for killing this pest.
+func get_bounty() -> int:
+	return _bounty
 
 
 # ---------------------------------------------------------------------------

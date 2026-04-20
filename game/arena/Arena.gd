@@ -31,6 +31,7 @@ const Pathfinder  = preload("res://arena/Pathfinder.gd")
 const Enemy       = preload("res://enemies/Enemy.gd")
 const Trap        = preload("res://traps/Trap.gd")
 const Projectile  = preload("res://traps/Projectile.gd")
+const HUD         = preload("res://ui/HUD.gd")
 
 
 # ---------------------------------------------------------------------------
@@ -159,6 +160,7 @@ func _ready() -> void:
 	_spawn_arena_border()
 
 	_pathfinder.recalculate()
+	add_child(HUD.new())
 	_start_wave()
 
 
@@ -269,10 +271,9 @@ func _cancel_drag_placement() -> void:
 	_drag_origin = Vector2i(-1, -1)
 
 
-## Returns true if the player can afford one more trap.
-## Phase 1 stub — always returns true until the currency system exists.
+## Returns true if the player can afford one more Snap Trap.
 func _can_afford_trap() -> bool:
-	return true   # TODO: check GameState.bug_bucks >= trap_cost
+	return GameState.bug_bucks >= Trap.STATS[Trap.TrapType.SNAP_TRAP]["cost"]
 
 
 ## Returns true if any active enemy's current or target cell falls inside
@@ -342,13 +343,15 @@ func _try_remove_trap(cell: Vector2i) -> void:
 		return
 
 	var anchor: Vector2i = _trap_anchors[cell]
+
+	if _trap_nodes.has(anchor):
+		GameState.add_bug_bucks(int(_trap_nodes[anchor].get_cost() * 0.7))
+		_trap_nodes[anchor].queue_free()
+		_trap_nodes.erase(anchor)
+
 	for c in _get_trap_cells(anchor):
 		_grid.remove_trap(c)
 		_trap_anchors.erase(c)
-
-	if _trap_nodes.has(anchor):
-		_trap_nodes[anchor].queue_free()
-		_trap_nodes.erase(anchor)
 
 
 ## Returns true if the given cells can be trapped without sealing either gap.
@@ -498,6 +501,7 @@ func _spawn_enemy(path: Array[Vector2i]) -> void:
 
 
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
+	GameState.add_infestation(enemy.get_infestation_damage())
 	_active_enemies.erase(enemy)
 	# enemy.queue_free() is called inside Enemy.gd — no double-free needed.
 
@@ -506,9 +510,9 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 
 
 func _on_enemy_died(enemy: Node3D) -> void:
+	GameState.add_bug_bucks(enemy.get_bounty())
 	_active_enemies.erase(enemy)
 	# enemy.queue_free() is called inside Enemy._die() after the flash tween.
-	# TODO: award Bug Bucks here once the currency system exists.
 
 	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
 		_start_wave()
@@ -844,6 +848,7 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	trap.fired.connect(_on_trap_fired)
 	_trap_container.add_child(trap)
 	trap.initialize(Trap.TrapType.SNAP_TRAP, _active_enemies)
+	GameState.spend_bug_bucks(trap.get_cost())
 	_trap_nodes[anchor] = trap
 
 

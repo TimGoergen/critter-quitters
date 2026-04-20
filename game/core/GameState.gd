@@ -41,6 +41,12 @@ signal run_started
 ## Emitted once when a run ends, before transitioning back to the hub.
 signal run_ended
 
+## Emitted whenever bug_bucks changes. HUD connects here to stay current.
+signal bug_bucks_changed(new_amount: int)
+
+## Emitted whenever infestation_level changes. HUD connects here to stay current.
+signal infestation_changed(new_level: float)
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -54,13 +60,16 @@ signal run_ended
 ## TODO: tune via playtesting; increase via meta upgrades
 const STARTING_BUG_BUCKS: int = 50
 
+## Total infestation points that fill the bar to 1.0.
+## TODO: tune via playtesting
+const INFESTATION_MAX: int = 20
+
 
 # ---------------------------------------------------------------------------
 # Run state
 #
 # These values are reset at the start of each run by start_run().
-# Read them freely; mutate them only through the methods below or through
-# the systems that own each value (e.g. economy system owns bug_bucks).
+# Read them freely; mutate them only through the methods below.
 # ---------------------------------------------------------------------------
 
 ## Current phase of the game. Setting this property emits phase_changed.
@@ -107,6 +116,8 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 	infestation_level = 0.0
 	current_phase = Phase.PLACING
 	run_started.emit()
+	bug_bucks_changed.emit(bug_bucks)
+	infestation_changed.emit(infestation_level)
 
 
 ## Ends the current run and returns the game to the hub.
@@ -114,3 +125,27 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 func end_run() -> void:
 	current_phase = Phase.RUN_OVER
 	run_ended.emit()
+
+
+## Adds amount to bug_bucks and notifies listeners.
+func add_bug_bucks(amount: int) -> void:
+	bug_bucks += amount
+	bug_bucks_changed.emit(bug_bucks)
+
+
+## Deducts amount from bug_bucks if affordable. Returns true on success.
+func spend_bug_bucks(amount: int) -> bool:
+	if bug_bucks < amount:
+		return false
+	bug_bucks -= amount
+	bug_bucks_changed.emit(bug_bucks)
+	return true
+
+
+## Increases infestation_level by points / INFESTATION_MAX.
+## Calls end_run() if the level reaches 1.0.
+func add_infestation(points: int) -> void:
+	infestation_level = minf(infestation_level + float(points) / float(INFESTATION_MAX), 1.0)
+	infestation_changed.emit(infestation_level)
+	if infestation_level >= 1.0:
+		end_run()
