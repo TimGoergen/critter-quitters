@@ -47,6 +47,13 @@ signal bug_bucks_changed(new_amount: int)
 ## Emitted whenever infestation_level changes. HUD connects here to stay current.
 signal infestation_changed(new_level: float)
 
+## Emitted when current_wave changes.
+signal wave_changed(new_wave: int)
+
+## Emitted each second during the between-wave countdown.
+## seconds_remaining == 0 means the countdown ended (wave is launching).
+signal wave_countdown_changed(seconds_remaining: int)
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -80,7 +87,10 @@ var current_phase: Phase = Phase.HUB:
 
 ## The wave the player is currently on. Starts at 0; incremented to 1
 ## when the first wave begins.
-var current_wave: int = 0
+var current_wave: int = 0:
+	set(value):
+		current_wave = value
+		wave_changed.emit(value)
 
 ## The player's current in-run currency. Earned by killing pests;
 ## spent on traps, upgrades, and store rerolls.
@@ -140,6 +150,12 @@ func spend_bug_bucks(amount: int) -> bool:
 	bug_bucks -= amount
 	bug_bucks_changed.emit(bug_bucks)
 	return true
+
+
+## Broadcasts the current countdown value to HUD and other listeners.
+## Called once per second by Arena during the between-wave countdown.
+func set_countdown(seconds: int) -> void:
+	wave_countdown_changed.emit(seconds)
 
 
 ## Increases infestation_level by points / INFESTATION_MAX.

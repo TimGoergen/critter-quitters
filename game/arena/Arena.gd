@@ -81,8 +81,11 @@ var _active_enemies: Array[Node3D] = []
 
 # Wave spawning — enemies launch one at a time with a small gap between them.
 const WAVE_SIZE: int = 10
-const SPAWN_INTERVAL: float = 0.6   # seconds between each enemy in the wave
+const SPAWN_INTERVAL: float = 0.6      # seconds between each enemy in the wave
+const WAVE_COUNTDOWN: int  = 2         # seconds of countdown before each wave
+
 var _enemies_left_to_spawn: int = 0
+var _countdown_active: bool     = false  # true while between-wave countdown is ticking
 
 # The path currently drawn as yellow markers. Updated on every grid change
 # and trimmed forward as the enemy advances through cells.
@@ -182,6 +185,11 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventScreenTouch:
 		if event.pressed and event.index > 0 and _pressing:
 			_cancel_drag_placement()
+		return
+
+	if event is InputEventKey:
+		if event.pressed and not event.echo:
+			_handle_key(event.keycode)
 		return
 
 	if not event is InputEventMouseButton:
@@ -518,8 +526,37 @@ func _on_enemy_died(enemy: Node3D) -> void:
 		_start_wave()
 
 
-## Begins spawning WAVE_SIZE enemies, one every SPAWN_INTERVAL seconds.
+## Increments the wave counter and begins the between-wave countdown.
 func _start_wave() -> void:
+	GameState.current_wave += 1
+	_countdown_active = true
+	GameState.set_countdown(WAVE_COUNTDOWN)
+	get_tree().create_timer(1.0).timeout.connect(_on_countdown_tick.bind(WAVE_COUNTDOWN - 1))
+
+
+## Called once per second during the countdown. Fires the wave when it reaches 0.
+func _on_countdown_tick(seconds_remaining: int) -> void:
+	if not _countdown_active:
+		return
+	GameState.set_countdown(seconds_remaining)
+	if seconds_remaining > 0:
+		get_tree().create_timer(1.0).timeout.connect(_on_countdown_tick.bind(seconds_remaining - 1))
+	else:
+		_countdown_active = false
+		_launch_wave()
+
+
+## Skips any active countdown and starts the wave immediately.
+## Q key triggers this; a Bug Bucks bonus for early launch is TODO.
+func _handle_key(keycode: int) -> void:
+	if keycode == KEY_Q and _countdown_active:
+		_countdown_active = false
+		GameState.set_countdown(0)
+		_launch_wave()
+
+
+## Begins spawning WAVE_SIZE enemies, one every SPAWN_INTERVAL seconds.
+func _launch_wave() -> void:
 	_enemies_left_to_spawn = WAVE_SIZE
 	get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
 
