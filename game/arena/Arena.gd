@@ -197,7 +197,10 @@ func _input(event: InputEvent) -> void:
 					_commit_drag_placement()
 		MOUSE_BUTTON_RIGHT:
 			if event.pressed:
-				_cancel_drag_placement()
+				if _pressing:
+					_cancel_drag_placement()
+				else:
+					_try_remove_trap(cell)
 
 
 # ---------------------------------------------------------------------------
