@@ -812,17 +812,18 @@ func _spawn_arena_border() -> void:
 	_spawn_wall_slab(Vector3(0.0, 0.0, -half + cs * 0.5), Vector2(grid_w, cs))
 	_spawn_wall_slab(Vector3(0.0, 0.0,  half - cs * 0.5), Vector2(grid_w, cs))
 
-	# Left column (column 0) above and below the entrance gap
-	var lup  := ent_top - (-half)
-	var lbot := half - ent_bot
-	if lup  > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0, -half + lup  * 0.5), Vector2(cs, lup))
-	if lbot > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0,  ent_bot + lbot * 0.5), Vector2(cs, lbot))
+	# Left column (column 0) above and below the entrance gap.
+	# Heights exclude rows 0 and 29, which belong exclusively to the top/bottom slabs.
+	var lup  := ent_top - (-half + cs)
+	var lbot := (half - cs) - ent_bot
+	if lup  > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0, (-half + cs) + lup  * 0.5), Vector2(cs, lup))
+	if lbot > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0,  ent_bot      + lbot * 0.5), Vector2(cs, lbot))
 
-	# Right column (column 29) above and below the exit gap
-	var rup  := ex_top - (-half)
-	var rbot := half - ex_bot
-	if rup  > 0.0: _spawn_wall_slab(Vector3( half - cs * 0.5, 0.0, -half + rup  * 0.5), Vector2(cs, rup))
-	if rbot > 0.0: _spawn_wall_slab(Vector3( half - cs * 0.5, 0.0,  ex_bot + rbot * 0.5), Vector2(cs, rbot))
+	# Right column (column 29) above and below the exit gap.
+	var rup  := ex_top - (-half + cs)
+	var rbot := (half - cs) - ex_bot
+	if rup  > 0.0: _spawn_wall_slab(Vector3( half - cs * 0.5, 0.0, (-half + cs) + rup  * 0.5), Vector2(cs, rup))
+	if rbot > 0.0: _spawn_wall_slab(Vector3( half - cs * 0.5, 0.0,  ex_bot      + rbot * 0.5), Vector2(cs, rbot))
 
 	# --- Cell border lines for all wall cells ---
 	var im := ImmediateMesh.new()
@@ -830,10 +831,10 @@ func _spawn_arena_border() -> void:
 
 	_draw_wall_cell_borders(im, -half, half,       -half,      -half + cs)  # top row
 	_draw_wall_cell_borders(im, -half, half,        half - cs,  half)       # bottom row
-	if lup  > 0.0: _draw_wall_cell_borders(im, -half, -half + cs, -half,   ent_top)
-	if lbot > 0.0: _draw_wall_cell_borders(im, -half, -half + cs,  ent_bot, half)
-	if rup  > 0.0: _draw_wall_cell_borders(im,  half - cs, half,  -half,   ex_top)
-	if rbot > 0.0: _draw_wall_cell_borders(im,  half - cs, half,   ex_bot,  half)
+	if lup  > 0.0: _draw_wall_cell_borders(im, -half, -half + cs, -half + cs, ent_top)
+	if lbot > 0.0: _draw_wall_cell_borders(im, -half, -half + cs,  ent_bot,   half - cs)
+	if rup  > 0.0: _draw_wall_cell_borders(im,  half - cs, half,  -half + cs, ex_top)
+	if rbot > 0.0: _draw_wall_cell_borders(im,  half - cs, half,   ex_bot,    half - cs)
 
 	im.surface_end()
 

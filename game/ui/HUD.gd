@@ -14,7 +14,7 @@ const COLOR_COUNTDOWN   := Color(0.85, 0.85, 0.85, 0.92)
 const COLOR_INFESTED    := Color(0.85, 0.10, 0.10, 1.0)
 const COLOR_OVERLAY_BG  := Color(0.04, 0.02, 0.02, 0.82)
 
-const PANEL_H: float = 80.0
+const PANEL_H: float = 44.0
 const BAR_H:   float = 14.0
 const MARGIN:  float = 12.0
 
@@ -54,13 +54,19 @@ func _build_ui() -> void:
 	top_bg.offset_bottom = PANEL_H
 	add_child(top_bg)
 
-	_wave_label = _make_label("WAVE 0", Vector2(MARGIN, 0.0), PANEL_H)
-	_wave_label.position.y = (PANEL_H - 64.0) * 0.5  # centre the 64 px glyph in the taller panel
+	# Wave label floats at the top-left, outside the panel, so the panel background
+	# doesn't need to be tall enough to contain a 64 px glyph — which would push it
+	# down far enough to cover the arena's top wall row.
+	_wave_label             = Label.new()
+	_wave_label.text        = "WAVE 0"
+	_wave_label.offset_left = MARGIN
+	_wave_label.offset_top  = 4.0
+	_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_wave_label.add_theme_font_size_override("font_size", 64)
 	var bold_wave_font := SystemFont.new()
 	bold_wave_font.font_weight = 700
 	_wave_label.add_theme_font_override("font", bold_wave_font)
-	top_bg.add_child(_wave_label)
+	add_child(_wave_label)
 
 	_bucks_label                      = _make_label("Bug Bucks: $0", Vector2(0.0, 0.0), PANEL_H)
 	_bucks_label.anchor_left          = 1.0
