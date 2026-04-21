@@ -1,6 +1,6 @@
 # **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.13 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
+**Version:** Draft v0.14 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
 
 ---
 
@@ -20,6 +20,8 @@
 | v0.10 | Meta-progression system added: Service Fees currency, The Truck hub, equipment and business upgrades, stats screen. Arena pool defined: 4 residential arenas (Kitchen, Backyard, Basement, Attic). All open design questions resolved or deferred. GDScript code standards documented in CLAUDE.md. |
 | v0.11 | Grid size updated to 30×30. Trap footprint updated to 2×2. Cursor/grid highlight updated: radial glow always visible on hover, not just during placement. GDD updated to match Phase 1 prototype implementation. |
 | v0.12 | Arena wall model clarified: border walls occupy the leftmost and rightmost columns of the arena floor as blocked cells; they are not a separate outer ring. The entrance and exit gaps are simply the unblocked rows in those columns. Entrance and exit gap width increased from 3 rows to 5 rows. Trap placement is permitted in gap cells subject to the pathfinding validity check (at least one gap row must remain passable). |
+| v0.13 | (unchanged) |
+| v0.14 | Aesthetic direction fully revised. ASCII character rendering removed. Enemies and traps are now illustrated 2D sprites (Sprite3D in 3D world space), art style targeting modern CGI children's shows (rounded shapes, soft shading, slightly saturated palette). Traps are playful and cartoonish with thematic detail. Projectiles and hit effects remain 3D shapes and particles. Background system redesigned: procedurally generated, animated, arena-themed, with repeated environmental shapes; evolves slowly with each wave. Enemy animation defined: thematically appropriate walk/waddle with side-to-side movement plus hit reaction. Engine stays 3D (Godot 4, Mobile renderer) to preserve existing particle effects. |
 
 ---
 
@@ -377,27 +379,33 @@ Specific upgrade trees and costs are TBD via playtesting.
 
 ## **9. Aesthetic Direction**
 
-The game is intentionally graphically minimal. Game elements — traps, pests, terrain, projectiles — are represented by ASCII characters rendered as physical 3D objects. Characters are not flat sprites; they exist in three-dimensional space and move with physical weight and smoothness. A pest crossing the arena tilts into turns, bobs as it moves, and reacts physically when hit.
+The game targets a modern CGI children's show aesthetic — clean rounded shapes, soft shading implying volume, slightly saturated but not garish colors, and exaggerated but immediately readable silhouettes. Reference points: Bluey, Paw Patrol, early Pixar shorts.
 
-ASCII characters are rendered as flat planes (billboards) that always face the camera. They move smoothly through 3D space — tilting, rotating, and reacting physically — while remaining fully readable as characters from the top-down view.
+**Enemies and traps** are illustrated 2D images generated using AI image generation tools, then imported as `Sprite3D` nodes in the 3D scene. They exist in 3D world space and move through it, but remain flat planes that always face the camera. The player reads the game as top-down 2D; the 3D engine handles depth, particles, and lighting.
+
+**Trap visuals** are playful and cartoonish with enough detail to read thematically. Each trap should visually resemble what it does: a Snap Trap looks like an oversized spring-loaded mousetrap; a Zapper looks like a chunky cartoon bug zapper; a Fogger looks like a chunky spray canister. Trap style contrasts with enemies — mechanical and equipment-like vs. organic and creature-like.
+
+**Enemy animation:** Each enemy type has a thematically appropriate walk or waddle cycle with visible side-to-side movement. Enemies also play a hit reaction animation when struck. Animation is sprite-based (frame sequences or shader-driven on the Sprite3D).
 
 **Death animation:** On death, a unit flashes briefly and disappears. No ragdoll or debris.
 
-**Idle animation:** Player-placed traps may rotate slowly or pulse while idle. Exact behavior defined per trap type during implementation.
+**Trap idle animation:** Traps may rotate slowly or pulse while idle. Exact behavior defined per trap type during implementation.
 
-**Color:** Colored ASCII — a constrained palette where each element category (pest type, trap type, terrain, projectile) has a consistent color identity. Background is dark. Grid lines are not rendered. The palette shifts subtly as waves progress, giving the run a sense of escalation without loud or saturated hues.
+**Projectiles and effects:** Retained as 3D geometric shapes and GPU particles. These are not replaced with sprites — keeping them 3D preserves flexibility for future visual complexity.
+
+**Background:** The background is a procedurally generated animated environment that suggests the arena's setting (Kitchen, Backyard, Basement, Attic). It uses repeated themed shapes and designs to imply objects in the environment without being a hand-authored illustration. The background evolves slowly with each new wave — shifting, adding, or changing elements to reinforce a sense of progression. Background position relative to the play grid (beneath, surrounding, or both) is TBD during implementation.
 
 **Cursor:** A radial grid glow is always visible, centered on the hovered cell. The glow extends 3 cells in each direction from the cursor, with alpha falling off quadratically so cells farther away appear dimmer. No static grid lines are rendered — the glow is the only grid indicator.
 
-**HUD:** Simple geometric shapes — not ASCII. Clean, readable UI panels for Bug Bucks count, Infestation Level, wave info, and speed controls.
+**HUD:** Simple geometric shapes. Clean, readable UI panels for Bug Bucks count, Infestation Level, wave info, and speed controls.
 
 **Camera:** Fixed top-down orthographic. Grid aligns cleanly to screen space; touch targeting is unambiguous.
 
-**Font:** JetBrains Mono.
-
-**Key aesthetic tags:** ASCII-as-physical-objects, colored, dark background, 3D smooth movement, minimal HUD.
+**Color:** A constrained palette where each element category (pest type, trap type, terrain, projectile) has a consistent color identity. The palette shifts subtly as waves progress, giving the run a sense of escalation without loud or saturated hues.
 
 **Audio:** Understated and quirky. Light enough to stay out of the way of gameplay, but with enough personality to reinforce the pest control theme. Tone sits between ambient/minimal and playfully odd. Licensed vs. original score TBD.
+
+**Key aesthetic tags:** CGI-cartoon illustrated sprites, soft shading, slightly saturated palette, 3D particle effects, procedural animated background, minimal HUD.
 
 ---
 
@@ -543,11 +551,12 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: first playable loop*
 
-### **Phase 3 — ASCII Aesthetic**
-- 3D billboard rendering for ASCII characters
-- Physical movement — tilt, bob, hit reaction
-- Fixed orthographic camera
-- Death animation
+### **Phase 3 — Visual Style**
+- Sprite3D setup for enemies and traps (illustrated 2D images in 3D world space)
+- Enemy walk/waddle animation system with side-to-side movement
+- Enemy hit reaction animation
+- Death animation — brief flash, then disappear
+- Procedural animated background system, arena-themed, wave-evolving
 - Basic per-element color palette
 
 *Goal: looks and feels like the game*

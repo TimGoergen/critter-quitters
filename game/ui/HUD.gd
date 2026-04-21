@@ -18,7 +18,7 @@ const PANEL_H: float = 44.0
 const BAR_H:   float = 14.0
 const MARGIN:  float = 12.0
 
-var _wave_label:        Label
+var _wave_label:        RichTextLabel
 var _bucks_label:       Label
 var _infestation_fill:  ColorRect
 var _infestation_label: Label
@@ -54,18 +54,23 @@ func _build_ui() -> void:
 	top_bg.offset_bottom = PANEL_H
 	add_child(top_bg)
 
-	# Wave label floats at the top-left, outside the panel, so the panel background
-	# doesn't need to be tall enough to contain a 64 px glyph — which would push it
-	# down far enough to cover the arena's top wall row.
-	_wave_label             = Label.new()
-	_wave_label.text        = "WAVE 0"
-	_wave_label.offset_left = MARGIN
-	_wave_label.offset_top  = 4.0
-	_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
-	_wave_label.add_theme_font_size_override("font_size", 64)
+	# Wave display floats at the top-left outside the panel (same reason as before).
+	# RichTextLabel mixes font sizes in one node and baseline-aligns runs automatically,
+	# so "WAVE" (small) and the numeral (large) share a common bottom edge without
+	# any manual positioning.
 	var bold_wave_font := SystemFont.new()
 	bold_wave_font.font_weight = 700
-	_wave_label.add_theme_font_override("font", bold_wave_font)
+
+	_wave_label                  = RichTextLabel.new()
+	_wave_label.bbcode_enabled   = true
+	_wave_label.fit_content      = true
+	_wave_label.scroll_active    = false
+	_wave_label.autowrap_mode    = TextServer.AUTOWRAP_OFF
+	_wave_label.custom_minimum_size = Vector2(260, 80)
+	_wave_label.offset_left      = MARGIN
+	_wave_label.offset_top       = 4.0
+	_wave_label.add_theme_font_override("normal_font", bold_wave_font)
+	_wave_label.add_theme_color_override("default_color", COLOR_TEXT)
 	add_child(_wave_label)
 
 	_bucks_label                      = _make_label("Bug Bucks: $0", Vector2(0.0, 0.0), PANEL_H)
@@ -216,7 +221,7 @@ func _on_infestation_changed(level: float) -> void:
 
 
 func _on_wave_changed(wave: int) -> void:
-	_wave_label.text = "WAVE %d" % wave
+	_wave_label.text = "[font_size=38]WAVE [/font_size][font_size=64]%d[/font_size]" % wave
 
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
