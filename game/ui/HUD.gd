@@ -14,7 +14,7 @@ const COLOR_COUNTDOWN   := Color(0.85, 0.85, 0.85, 0.92)
 const COLOR_INFESTED    := Color(0.85, 0.10, 0.10, 1.0)
 const COLOR_OVERLAY_BG  := Color(0.04, 0.02, 0.02, 0.82)
 
-const PANEL_H: float = 40.0
+const PANEL_H: float = 80.0
 const BAR_H:   float = 14.0
 const MARGIN:  float = 12.0
 
@@ -26,6 +26,8 @@ var _countdown_wave_label:   Label
 var _countdown_number_label: Label
 var _send_wave_btn:     Button
 var _run_over_overlay:  Control
+
+var _blink_time: float = 0.0
 
 
 func _ready() -> void:
@@ -53,6 +55,11 @@ func _build_ui() -> void:
 	add_child(top_bg)
 
 	_wave_label = _make_label("WAVE 0", Vector2(MARGIN, 0.0), PANEL_H)
+	_wave_label.position.y = (PANEL_H - 64.0) * 0.5  # centre the 64 px glyph in the taller panel
+	_wave_label.add_theme_font_size_override("font_size", 64)
+	var bold_wave_font := SystemFont.new()
+	bold_wave_font.font_weight = 700
+	_wave_label.add_theme_font_override("font", bold_wave_font)
 	top_bg.add_child(_wave_label)
 
 	_bucks_label                      = _make_label("Bug Bucks: $0", Vector2(0.0, 0.0), PANEL_H)
@@ -141,15 +148,13 @@ func _build_ui() -> void:
 	_countdown_number_label.visible = false
 	add_child(_countdown_number_label)
 
-	# "Send Wave Early" button — anchored above the infestation bar, hidden during waves.
+	# "Send Wave Early" button — bottom-centre of the screen, hidden during waves.
 	_send_wave_btn                = Button.new()
 	_send_wave_btn.text           = "Send Wave Early"
-	_send_wave_btn.anchor_left    = 0.3
-	_send_wave_btn.anchor_right   = 0.7
-	_send_wave_btn.anchor_top     = 1.0
-	_send_wave_btn.anchor_bottom  = 1.0
-	_send_wave_btn.offset_top     = -(BAR_H + MARGIN * 2.0 + MARGIN + 44.0)
-	_send_wave_btn.offset_bottom  = -(BAR_H + MARGIN * 2.0 + MARGIN)
+	_send_wave_btn.anchor_left    = 0.30
+	_send_wave_btn.anchor_right   = 0.70
+	_send_wave_btn.anchor_top     = 0.80
+	_send_wave_btn.anchor_bottom  = 0.90
 	_send_wave_btn.add_theme_font_size_override("font_size", 18)
 	_send_wave_btn.visible        = false
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
@@ -184,10 +189,10 @@ func _build_run_over_overlay() -> void:
 
 	var btn := Button.new()
 	btn.text                 = "Restart"
-	btn.anchor_left          = 0.35
-	btn.anchor_right         = 0.65
-	btn.anchor_top           = 0.62
-	btn.anchor_bottom        = 0.75
+	btn.anchor_left          = 0.30
+	btn.anchor_right         = 0.70
+	btn.anchor_top           = 0.80
+	btn.anchor_bottom        = 0.90
 	btn.add_theme_font_size_override("font_size", 28)
 	btn.process_mode         = Node.PROCESS_MODE_ALWAYS
 	btn.pressed.connect(_on_restart_pressed)
@@ -210,8 +215,8 @@ func _on_wave_changed(wave: int) -> void:
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 	if seconds_remaining > 0:
-		_countdown_wave_label.text    = "WAVE %d" % GameState.current_wave
-		_countdown_number_label.text  = "%d" % seconds_remaining
+		_countdown_wave_label.text    = "Incoming!"
+		_countdown_number_label.text  = "%d..." % seconds_remaining
 		_countdown_wave_label.visible   = true
 		_countdown_number_label.visible = true
 		_send_wave_btn.visible          = true
@@ -219,6 +224,17 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 		_countdown_wave_label.visible   = false
 		_countdown_number_label.visible = false
 		_send_wave_btn.visible          = false
+		_blink_time = 0.0
+		_countdown_number_label.modulate.a = 1.0
+
+
+func _process(delta: float) -> void:
+	if not _countdown_number_label.visible:
+		return
+	_blink_time += delta
+	# 2 full on-off cycles per second: period = 1/2 s, on for the first half of each cycle.
+	var on: bool = fmod(_blink_time, 1.0 / 2.0) < (1.0 / 4.0)
+	_countdown_number_label.modulate.a = 1.0 if on else 0.0
 
 
 func _on_send_wave_pressed() -> void:
