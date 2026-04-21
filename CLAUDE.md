@@ -170,6 +170,28 @@ Before considering any implementation complete, verify:
 
 ---
 
+## Work Process
+
+These rules govern how Claude approaches work on this project in every session.
+
+**GDD maintenance** — The GDD (`docs/critter_quitters_gdd_v09.md`) is a live document.
+Update it whenever work changes, adds, or removes a design decision, mechanic, or system.
+Do not wait to be asked — keep it current as implementation evolves.
+
+**Feature branches** — All work must be done on a feature branch, never directly on `main`.
+At the start of every session, check the active branch. If the working branch is `main`,
+stop and ask which feature branch to use or create before writing any code.
+
+**Game balance** — For any numeric value that affects gameplay (damage, speed, cost, cooldowns,
+wave sizes, infestation amounts, etc.), propose a specific value with a brief rationale.
+Respect any existing playtesting notes — if a proposed value conflicts with a recorded
+playtesting observation, flag the conflict and ask before proceeding.
+
+**Scope** — Before expanding work beyond the stated task (touching additional files, refactoring
+adjacent code, adding unrequested features), flag what you noticed and ask whether to include it.
+
+---
+
 ## Folder-Level CLAUDE.md Files
 
 Subsystem folders may contain their own `CLAUDE.md` with rules specific to that

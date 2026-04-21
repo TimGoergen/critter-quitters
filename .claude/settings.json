@@ -1,0 +1,26 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git *)",
+      "Read(D:\\Claude\\Critter Quitters\\*)",
+      "Edit(D:\\Claude\\Critter Quitters\\*)",
+      "Write(D:\\Claude\\Critter Quitters\\*)"
+    ],
+    "additionalDirectories": [
+      "D:\\Claude\\Critter Quitters"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"D:/Claude/Critter Quitters/.claude/commit_reminder.sh\"",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
