@@ -38,6 +38,10 @@ const HUD         = preload("res://ui/HUD.gd")
 # Constants
 # ---------------------------------------------------------------------------
 
+# Set to true to render the yellow path line during play. Off by default —
+# the path visualisation is a debug aid; it clutters the arena during normal play.
+const SHOW_PATH_LINE: bool = false
+
 # HUD strip heights in screen pixels — keep in sync with PANEL_H and
 # (BAR_H + MARGIN * 2) in HUD.gd so the camera size calculation stays accurate.
 const HUD_TOP_PX: float = 44.0
@@ -448,7 +452,13 @@ func _on_path_updated(new_path: Array[Vector2i]) -> void:
 ## Redraws the yellow path markers starting from the active enemy's current
 ## target cell, so the line only appears ahead of the enemy.
 ## Falls back to the full display path when no enemies are active.
+## Does nothing when SHOW_PATH_LINE is false — all markers stay hidden.
 func _redraw_path_display() -> void:
+	if not SHOW_PATH_LINE:
+		for marker in _path_marker_pool:
+			marker.visible = false
+		return
+
 	var start_idx := 0
 	if not _active_enemies.is_empty():
 		var target: Vector2i = _active_enemies[0].get_target_cell()
