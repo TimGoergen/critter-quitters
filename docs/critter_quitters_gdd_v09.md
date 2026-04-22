@@ -22,6 +22,7 @@
 | v0.12 | Arena wall model clarified: border walls occupy the leftmost and rightmost columns of the arena floor as blocked cells; they are not a separate outer ring. The entrance and exit gaps are simply the unblocked rows in those columns. Entrance and exit gap width increased from 3 rows to 5 rows. Trap placement is permitted in gap cells subject to the pathfinding validity check (at least one gap row must remain passable). |
 | v0.13 | (unchanged) |
 | v0.14 | Aesthetic direction fully revised. ASCII character rendering removed. Enemies and traps are now illustrated 2D sprites (Sprite3D in 3D world space), art style targeting modern CGI children's shows (rounded shapes, soft shading, slightly saturated palette). Traps are playful and cartoonish with thematic detail. Projectiles and hit effects remain 3D shapes and particles. Background system redesigned: procedurally generated, animated, arena-themed, with repeated environmental shapes; evolves slowly with each wave. Enemy animation defined: thematically appropriate walk/waddle with side-to-side movement plus hit reaction. Engine stays 3D (Godot 4, Mobile renderer) to preserve existing particle effects. |
+| v0.15 | Between-wave upgrade store removed entirely. Direct per-trap upgrade system introduced: each placed trap has a star level (0–5) and a tier (0+). Tapping a placed trap opens an upgrade panel offering three stat choices (Damage, Range, Fire Rate). Reaching star 5 enables a tier-up that resets the star and offers dramatic variation options. Upgrade and tier-up cost formulas defined. |
 
 ---
 
@@ -148,9 +149,19 @@ Each trap is a tool in an exterminator's kit. Names below are working titles —
 
 **Availability:** Not all traps are available at run start. The player selects 2 of 3 randomly offered traps before wave 1. Remaining traps may be unlocked through the store.
 
-**Upgrade system:** Each trap can be upgraded up to 5 times, tracked by a star rating (1–5). Each upgrade improves a core metric (damage, trigger rate, range, or other stats). After 5 upgrades, a variation becomes available — evolving the trap into a more advanced unit with expanded abilities.
+**Upgrade system:** Traps are upgraded directly through the trap context panel. Each placed trap has a **star level** (0–5) and a **tier** (starting at 0). Both values are tracked per trap instance — two traps of the same type can be independently upgraded.
 
-Fully evolved units can inflict damage-over-time (DoT) effects:
+**Normal upgrade (star 0–4):** The player is presented with three choices — Damage, Range, or Fire Rate. The chosen stat improves and the star level advances by one. All three options share the same Bug Bucks cost.
+
+**Upgrade cost:** `tier × buy_cost + target_star × buy_cost × 0.8`
+*(target_star is the star level being purchased, i.e. current star + 1)*
+
+**Tier-up (star 5):** When a trap reaches star 5, the next upgrade is a tier-up. Three dramatic variation options replace the standard three — each option drastically alters one characteristic of the trap. On purchase, the tier increments and the star resets to 0.
+
+**Tier-up cost:** `(current_tier × buy_cost + 6 × buy_cost × 0.8) × 1.2`
+*(calculated as though reaching star 6, with a 1.2× premium on tier transitions)*
+
+Tier 1+ traps can inflict damage-over-time (DoT) effects:
 
 | DoT Type | Behavior |
 | :---- | :---- |
@@ -164,7 +175,7 @@ Fully evolved units can inflict damage-over-time (DoT) effects:
 
 **Infestation modifier:** Certain traps or trap upgrades carry an infestation-reducing modifier. Kills made by these traps reduce the Infestation Level by a small amount per kill — a lifesteal-style mechanic that rewards strategic placement and active killing.
 
-**Evolved unit visuals:** As a trap evolves, its ASCII character representation grows more prominent — shifting from lowercase to uppercase, increasing in visual weight, or using a bolder character variant.
+**Evolved unit visuals:** As a trap tiers up, its sprite evolves to reflect the chosen variation — a more aggressive or specialised visual treatment. Exact per-variation visuals are defined in Phase 5.
 
 **Footprint:** Traps occupy a 2×2 cell footprint. Placement is anchored to the top-left cell of the footprint. Footprints are fixed and do not rotate — all traps operate in a full 360-degree arc.
 
@@ -293,27 +304,17 @@ Boss waves occur every 10 waves (waves 10, 20, 30, ...). The wave immediately fo
 - Total escort count is half what a standard wave would contain at the same complexity
 - The Rat's HP equals 60% of the total combined HP of all enemies in an equivalent standard wave — it scales automatically with difficulty
 
-**The Store**
+**Direct Trap Upgrades**
 
-After each wave, the player visits the store. There is no timer — the player may take as long as needed.
+There is no between-wave store. Traps are upgraded directly by tapping a placed trap at any time — during a wave or between waves — as Bug Bucks become available from kills.
 
-The store presents 3 randomly selected upgrade options. Each option belongs to one of three categories:
+Tapping a placed trap opens the upgrade panel for that specific trap instance. The panel displays the trap's current damage, range, fire rate, star level, and tier, then presents three upgrade options. The player selects one; that stat improves, the star level advances, and the cost is deducted from Bug Bucks.
 
-| Category | Effect |
-| :---- | :---- |
-| Trap upgrade | Permanent stat improvement for a specific trap type (damage, range, trigger rate, etc.) |
-| Player upgrade | Permanent stat improvement across all trap types, or other global benefit |
-| Trap unlock | Makes a previously unavailable trap type purchasable for the rest of the run |
-
-Upgrades have tiers. Higher-tier upgrades are more powerful, cost more Bug Bucks, and have a lower probability of appearing. The player may:
-
-- **Purchase** any of the 3 options by spending Bug Bucks — applies immediately
-- **Reroll** — spend Bug Bucks to replace all 3 options with a new random selection. Reroll cost is progressive and linear, resetting each store visit — the first reroll costs a base amount, each subsequent reroll within the same visit costs one increment more (e.g. 5, 10, 15, 20...). Exact base amount and increment TBD via playtesting.
-- **Skip** — proceed to the next wave countdown without purchasing
+See Section 4 for the full upgrade cost formula, tier-up rules, and stat increment details.
 
 **Starting trap selection**
 
-At run start, before wave 1, 3 trap types are randomly selected and presented to the player. The player chooses 2. The chosen traps are immediately available for purchase and placement. The unchosen trap types may be unlocked later through the store.
+At run start, before wave 1, 3 trap types are randomly selected and presented to the player. The player chooses 2. The chosen traps are immediately available for purchase and placement. Trap unlock mechanic TBD.
 
 **High score**
 
@@ -441,24 +442,19 @@ Additional considerations:
 * HUD elements must remain fixed on screen outside the scrollable arena viewport
 * Pinch-to-zoom (optional) — allows strategic overview; minimum zoom must keep cells tappable
 
-**Trap shop UX**
-
-Long-pressing a trap in the selection screen opens a modal stat card. The card is visible for the duration of the press and dismisses automatically on release. This does not enter placement mode.
-
 **Placed trap interaction**
 
-When the player taps an already-placed trap, a context panel appears showing:
+When the player taps an already-placed trap, an upgrade panel appears showing:
 
-- Trap type name
-- Trap type description
-- Damage
-- Damage type
-- Range
-- Upgrade star rating (1–5 stars) — tracks how many times this trap has been upgraded
+- Trap type name and current tier
+- Star level (0–5, displayed as filled/empty stars)
+- Current damage, range, and fire rate
+- Upgrade cost in Bug Bucks
+- Three upgrade buttons (Damage, Range, Fire Rate) — each shows the current value and the value after that upgrade, so the choice is informed
 
-Additionally, the trap's range circle is always rendered on the arena when the trap is selected, overlaid on the grid.
+At star 5, the three buttons are replaced by three tier-up variation options. These offer dramatic stat changes and advance the trap to the next tier with the star resetting to 0.
 
-A trap must be upgraded 5 times (reaching 5 stars) before a variation becomes available.
+The panel is dismissed by tapping the close button or tapping an empty arena cell.
 
 ---
 
@@ -477,7 +473,7 @@ A trap must be upgraded 5 times (reaching 5 stars) before a variation becomes av
 | Resolved | Boss wave structure: Rat leads, escorts follow; escort count = half standard wave; Rat HP = 60% of standard wave total HP |
 | Resolved | Arena Evolution: every 10 waves, small chance of 1–few obstacles added; overwrites traps with no refund |
 | Resolved | Starting trap selection: 3 offered, player picks 2; remaining unlockable in store |
-| Resolved | Store: 3 tiered options per visit (trap upgrade, player upgrade, trap unlock); reroll for Bug Bucks |
+| Resolved | Upgrade system: direct per-trap upgrades via tap; star level 0–5, tier 0+; cost formula defined; tier-up at star 5 |
 | Resolved | Infestation healing: store option (one-time reduction) and trap modifier (lifesteal-style per kill) |
 | Resolved | Pathfinding: minimum one valid path always enforced |
 | Resolved | Trap footprint: 2×2, anchored at top-left cell |
@@ -486,13 +482,13 @@ A trap must be upgraded 5 times (reaching 5 stars) before a variation becomes av
 | Resolved | Boss wave frequency — every 10 waves (waves 10, 20, 30, ...) |
 | Resolved | Store reroll cost — progressive linear per visit, resets each visit; base amount and increment TBD via playtesting |
 | Resolved | Trap shop UX — long-press on trap in selection screen shows a modal stat card; dismisses on release |
-| Resolved | Placed trap interaction — context panel shows trap type, description, damage, damage type, range, and upgrade star rating (1–5); variation unlocks after 5 upgrades |
+| Resolved | Placed trap interaction — upgrade panel shows trap type, tier, star level (0–5), damage, range, fire rate, upgrade cost, and three upgrade buttons; tier-up options appear at star 5 |
 | Resolved | Blocking terrain name — location-specific per arena (Appliances, Yard Clutter, Storage, Clutter) |
 | Resolved | Blocking terrain spawn rules — 15% chance 1 spawns, 10% chance 2, 5% chance 3; independent 3% chance 1 existing obstacle removed |
 | Resolved | Trap names — Snap Trap, Zapper, Fogger, Glue Board (final) |
 | Resolved | Audio — tone is understated and quirky; light enough to not distract, with enough personality to reinforce the pest control theme |
 | Resolved | Fogger AoE radius — equals the Fogger's range circle; no separate value needed |
-| Deferred | All numeric values (Infestation Level threshold, Bug Bucks rewards per pest type, wave clear bonus, early wave trigger bonus, reroll cost base and increment, high score formula) — to be determined via playtesting |
+| Deferred | All numeric values (Infestation Level threshold, Bug Bucks rewards per pest type, wave clear bonus, early wave trigger bonus, upgrade stat increment amounts, high score formula) — to be determined via playtesting |
 
 ---
 
