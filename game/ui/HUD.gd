@@ -14,11 +14,18 @@ const COLOR_COUNTDOWN   := Color(0.85, 0.85, 0.85, 0.92)
 const COLOR_INFESTED    := Color(0.85, 0.10, 0.10, 1.0)
 const COLOR_OVERLAY_BG  := Color(0.04, 0.02, 0.02, 0.82)
 
+# Button style: base gray is the panel bg (~0.10); 20% lighter puts the fill at ~0.30.
+# The border is light gray to make the button stand out against the dark overlay.
+const COLOR_BTN_NORMAL  := Color(0.30, 0.30, 0.30, 1.0)
+const COLOR_BTN_HOVER   := Color(0.38, 0.38, 0.38, 1.0)
+const COLOR_BTN_PRESSED := Color(0.22, 0.22, 0.22, 1.0)
+const COLOR_BTN_BORDER  := Color(0.68, 0.68, 0.68, 1.0)
+
 const PANEL_H: float = 44.0
 const BAR_H:   float = 14.0
 const MARGIN:  float = 12.0
 
-var _wave_label:        Label
+var _wave_label:        RichTextLabel
 var _bucks_label:       Label
 var _infestation_fill:  ColorRect
 var _infestation_label: Label
@@ -54,18 +61,23 @@ func _build_ui() -> void:
 	top_bg.offset_bottom = PANEL_H
 	add_child(top_bg)
 
-	# Wave label floats at the top-left, outside the panel, so the panel background
-	# doesn't need to be tall enough to contain a 64 px glyph — which would push it
-	# down far enough to cover the arena's top wall row.
-	_wave_label             = Label.new()
-	_wave_label.text        = "WAVE 0"
-	_wave_label.offset_left = MARGIN
-	_wave_label.offset_top  = 4.0
-	_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
-	_wave_label.add_theme_font_size_override("font_size", 64)
+	# Wave display floats at the top-left outside the panel (same reason as before).
+	# RichTextLabel mixes font sizes in one node and baseline-aligns runs automatically,
+	# so "WAVE" (small) and the numeral (large) share a common bottom edge without
+	# any manual positioning.
 	var bold_wave_font := SystemFont.new()
 	bold_wave_font.font_weight = 700
-	_wave_label.add_theme_font_override("font", bold_wave_font)
+
+	_wave_label                  = RichTextLabel.new()
+	_wave_label.bbcode_enabled   = true
+	_wave_label.fit_content      = true
+	_wave_label.scroll_active    = false
+	_wave_label.autowrap_mode    = TextServer.AUTOWRAP_OFF
+	_wave_label.custom_minimum_size = Vector2(260, 80)
+	_wave_label.offset_left      = MARGIN
+	_wave_label.offset_top       = 4.0
+	_wave_label.add_theme_font_override("normal_font", bold_wave_font)
+	_wave_label.add_theme_color_override("default_color", COLOR_TEXT)
 	add_child(_wave_label)
 
 	_bucks_label                      = _make_label("Bug Bucks: $0", Vector2(0.0, 0.0), PANEL_H)
@@ -154,15 +166,17 @@ func _build_ui() -> void:
 	_countdown_number_label.visible = false
 	add_child(_countdown_number_label)
 
-	# "Send Wave Early" button — bottom-centre of the screen, hidden during waves.
+	# "Send Wave Early" button — centred in the lower half of the screen (midpoint at y=0.75),
+	# hidden during waves.
 	_send_wave_btn                = Button.new()
 	_send_wave_btn.text           = "Send Wave Early"
 	_send_wave_btn.anchor_left    = 0.30
 	_send_wave_btn.anchor_right   = 0.70
-	_send_wave_btn.anchor_top     = 0.80
-	_send_wave_btn.anchor_bottom  = 0.90
+	_send_wave_btn.anchor_top     = 0.70
+	_send_wave_btn.anchor_bottom  = 0.80
 	_send_wave_btn.add_theme_font_size_override("font_size", 18)
 	_send_wave_btn.visible        = false
+	_apply_button_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	add_child(_send_wave_btn)
 
@@ -197,10 +211,11 @@ func _build_run_over_overlay() -> void:
 	btn.text                 = "Restart"
 	btn.anchor_left          = 0.30
 	btn.anchor_right         = 0.70
-	btn.anchor_top           = 0.80
-	btn.anchor_bottom        = 0.90
+	btn.anchor_top           = 0.70
+	btn.anchor_bottom        = 0.80
 	btn.add_theme_font_size_override("font_size", 28)
 	btn.process_mode         = Node.PROCESS_MODE_ALWAYS
+	_apply_button_style(btn)
 	btn.pressed.connect(_on_restart_pressed)
 	_run_over_overlay.add_child(btn)
 
@@ -216,7 +231,7 @@ func _on_infestation_changed(level: float) -> void:
 
 
 func _on_wave_changed(wave: int) -> void:
-	_wave_label.text = "WAVE %d" % wave
+	_wave_label.text = "[font_size=38]WAVE [/font_size][font_size=64]%d[/font_size]" % wave
 
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
@@ -255,6 +270,21 @@ func _on_run_ended() -> void:
 func _on_restart_pressed() -> void:
 	get_tree().paused = false
 	get_tree().reload_current_scene()
+
+
+func _apply_button_style(btn: Button) -> void:
+	for state in [["normal", COLOR_BTN_NORMAL], ["hover", COLOR_BTN_HOVER], ["pressed", COLOR_BTN_PRESSED]]:
+		var box := StyleBoxFlat.new()
+		box.bg_color           = state[1]
+		box.border_color       = COLOR_BTN_BORDER
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(5)
+		box.content_margin_left   = 12.0
+		box.content_margin_right  = 12.0
+		box.content_margin_top    = 6.0
+		box.content_margin_bottom = 6.0
+		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_color_override("font_color", COLOR_TEXT)
 
 
 func _make_label(text: String, pos: Vector2, container_h: float) -> Label:
