@@ -43,9 +43,9 @@ const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
 # the path visualisation is a debug aid; it clutters the arena during normal play.
 const SHOW_PATH_LINE: bool = false
 
-# HUD strip heights in screen pixels — keep in sync with PANEL_H and
-# (BAR_H + MARGIN * 2) in HUD.gd so the camera size calculation stays accurate.
-const HUD_TOP_PX: float = 44.0
+# HUD strip heights in screen pixels — keep in sync with PANEL_H + SELECTOR_H
+# (top stats bar + trap selector strip) and (BAR_H + MARGIN * 2) in HUD.gd.
+const HUD_TOP_PX: float = 84.0   # 44 stats panel + 40 trap selector strip
 const HUD_BOT_PX: float = 38.0
 
 # Phase 1 placeholder colours. These are replaced by ASCII billboards in Phase 3.
@@ -274,9 +274,10 @@ func _update_drag_ghosts(target: Vector2i) -> void:
 				break
 		if not buildable:
 			continue
+		var trap_color := Trap.STATS[GameState.selected_trap_type]["color"] as Color
 		var ghost  := _make_box_mesh_instance(
 			Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9),
-			Color(COLOR_TRAP.r, COLOR_TRAP.g, COLOR_TRAP.b, 0.50)
+			Color(trap_color.r, trap_color.g, trap_color.b, 0.50)
 		)
 		var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 		ghost.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
@@ -312,9 +313,9 @@ func _cancel_drag_placement() -> void:
 	_drag_origin = Vector2i(-1, -1)
 
 
-## Returns true if the player can afford one more Snap Trap.
+## Returns true if the player can afford one more trap of the currently selected type.
 func _can_afford_trap() -> bool:
-	return GameState.bug_bucks >= Trap.STATS[Trap.TrapType.SNAP_TRAP]["cost"]
+	return GameState.bug_bucks >= Trap.STATS[GameState.selected_trap_type]["cost"]
 
 
 ## Returns true if any active enemy's current or target cell falls inside
@@ -966,7 +967,7 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 	trap.fired.connect(_on_trap_fired)
 	_trap_container.add_child(trap)
-	trap.initialize(Trap.TrapType.SNAP_TRAP, _active_enemies)
+	trap.initialize(GameState.selected_trap_type as Trap.TrapType, _active_enemies)
 	GameState.spend_bug_bucks(trap.get_cost())
 	_trap_nodes[anchor] = trap
 

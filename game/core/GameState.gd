@@ -57,6 +57,11 @@ signal wave_countdown_changed(seconds_remaining: int)
 ## Emitted when the player requests to skip the countdown and launch the next wave immediately.
 signal wave_skip_requested
 
+## Emitted when the player picks a different trap type to place.
+## type is an int matching the Trap.TrapType enum — stored as int here to
+## avoid importing Trap.gd into GameState and creating a circular dependency.
+signal trap_type_selected(type: int)
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -111,6 +116,11 @@ var entrance_cell: Vector2i = Vector2i.ZERO
 ## Set at run start; does not change during the run.
 var exit_cell: Vector2i = Vector2i.ZERO
 
+## Which trap type the player currently has selected for placement.
+## 0 = SNAP_TRAP, 1 = ZAPPER, 2 = FOGGER, 3 = GLUE_BOARD (Trap.TrapType enum order).
+## All types are always available — Bug Bucks cost is the only gate.
+var selected_trap_type: int = 0
+
 
 # ---------------------------------------------------------------------------
 # Public methods
@@ -127,6 +137,7 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 	current_wave = 0
 	bug_bucks = STARTING_BUG_BUCKS
 	infestation_level = 0.0
+	selected_trap_type = 0
 	current_phase = Phase.PLACING
 	run_started.emit()
 	bug_bucks_changed.emit(bug_bucks)
@@ -153,6 +164,13 @@ func spend_bug_bucks(amount: int) -> bool:
 	bug_bucks -= amount
 	bug_bucks_changed.emit(bug_bucks)
 	return true
+
+
+## Sets the active trap type and notifies listeners.
+## type must be a valid Trap.TrapType int value.
+func select_trap_type(type: int) -> void:
+	selected_trap_type = type
+	trap_type_selected.emit(type)
 
 
 ## Broadcasts the current countdown value to HUD and other listeners.
