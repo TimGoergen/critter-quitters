@@ -38,6 +38,11 @@ const HUD         = preload("res://ui/HUD.gd")
 # Constants
 # ---------------------------------------------------------------------------
 
+# HUD strip heights in screen pixels — keep in sync with PANEL_H and
+# (BAR_H + MARGIN * 2) in HUD.gd so the camera size calculation stays accurate.
+const HUD_TOP_PX: float = 44.0
+const HUD_BOT_PX: float = 38.0
+
 # Phase 1 placeholder colours. These are replaced by ASCII billboards in Phase 3.
 const COLOR_ENTRANCE  := Color(0.20, 0.80, 0.20, 1.0)   # green
 const COLOR_EXIT      := Color(0.80, 0.20, 0.20, 1.0)   # red
@@ -116,34 +121,32 @@ var _entrance_rows: Array[int] = []
 
 func _ready() -> void:
 	# Phase 1: entrance and exit are hardcoded for the prototype.
-	var entrance := Vector2i(0, 14)
-	var exit     := Vector2i(29, 15)
+	# Grid is 31×31 (odd) so row 15 is the exact vertical centre — both gaps
+	# land there, spanning rows 14–16 (3 rows each).
+	var entrance := Vector2i(0, 15)
+	var exit     := Vector2i(30, 15)
 
 	_spawn_cell   = Vector2i(entrance.x - 1, entrance.y)
 	_despawn_cell = Vector2i(exit.x + 1, exit.y)
 
-	# Five rows the enemy may enter from; gap is centred on the canonical row.
-	for i in range(5):
-		_entrance_rows.append(entrance.y - 2 + i)   # [12, 13, 14, 15, 16]
+	# Three rows the enemy may enter from; gap is centred on the canonical row.
+	for i in range(3):
+		_entrance_rows.append(entrance.y - 1 + i)   # [14, 15, 16]
 
-	# Mark the centre entrance/exit cells first, then the four flanking cells.
+	# Mark the centre entrance/exit cells first, then the one flanking cell on each side.
 	# Done before pathfinder.initialize() so cell_changed isn't connected yet
 	# and won't fire premature recalculations.
 	_grid.setup_run(entrance, exit)
-	_grid.set_cell(Vector2i(entrance.x, entrance.y - 2), Grid.CellState.ENTRANCE)
 	_grid.set_cell(Vector2i(entrance.x, entrance.y - 1), Grid.CellState.ENTRANCE)
 	_grid.set_cell(Vector2i(entrance.x, entrance.y + 1), Grid.CellState.ENTRANCE)
-	_grid.set_cell(Vector2i(entrance.x, entrance.y + 2), Grid.CellState.ENTRANCE)
-	_grid.set_cell(Vector2i(exit.x, exit.y - 2), Grid.CellState.EXIT)
 	_grid.set_cell(Vector2i(exit.x, exit.y - 1), Grid.CellState.EXIT)
 	_grid.set_cell(Vector2i(exit.x, exit.y + 1), Grid.CellState.EXIT)
-	_grid.set_cell(Vector2i(exit.x, exit.y + 2), Grid.CellState.EXIT)
 
 	# Mark all non-gap cells in the left and right border columns as WALL.
-	# The wall sits on the arena floor (columns 0 and 29); the gap rows are the
+	# The wall sits on the arena floor (columns 0 and 30); the gap rows are the
 	# only passable openings in those columns.
-	var ent_gap := [entrance.y - 2, entrance.y - 1, entrance.y, entrance.y + 1, entrance.y + 2]
-	var ex_gap  := [exit.y - 2, exit.y - 1, exit.y, exit.y + 1, exit.y + 2]
+	var ent_gap := [entrance.y - 1, entrance.y, entrance.y + 1]
+	var ex_gap  := [exit.y - 1, exit.y, exit.y + 1]
 	for row in range(Grid.GRID_SIZE):
 		if row not in ent_gap:
 			_grid.set_cell(Vector2i(entrance.x, row), Grid.CellState.WALL)
@@ -153,7 +156,7 @@ func _ready() -> void:
 	# Mark the top and bottom border rows (0 and GRID_SIZE-1) as WALL for all
 	# interior columns. Geometry placed outside the grid at z = ±15.5 consistently
 	# failed to render regardless of mesh type, so walls are placed on the outermost
-	# grid rows instead — symmetric with the left/right approach using columns 0/29.
+	# grid rows instead — symmetric with the left/right approach using columns 0/30.
 	# Columns 0 and GRID_SIZE-1 are already WALL from the column loop above.
 	for col in range(1, Grid.GRID_SIZE - 1):
 		_grid.set_cell(Vector2i(col, 0),                   Grid.CellState.WALL)
@@ -164,8 +167,8 @@ func _ready() -> void:
 	_pathfinder.path_updated.connect(_on_path_updated)
 
 	# Spawn one elongated marker covering all 3 rows for entrance and exit.
-	_spawn_zone_marker(_spawn_cell,   5, COLOR_ENTRANCE)
-	_spawn_zone_marker(_despawn_cell, 5, COLOR_EXIT)
+	_spawn_zone_marker(_spawn_cell,   3, COLOR_ENTRANCE)
+	_spawn_zone_marker(_despawn_cell, 3, COLOR_EXIT)
 
 	_setup_grid_highlight()
 	_init_path_marker_pool()
@@ -174,6 +177,12 @@ func _ready() -> void:
 	_pathfinder.recalculate()
 	add_child(HUD.new())
 	GameState.wave_skip_requested.connect(_on_wave_skip_requested)
+
+	# Size the camera to fit the arena inside the non-HUD portion of the screen,
+	# and re-fit whenever the window is resized.
+	_fit_camera_to_grid()
+	get_viewport().size_changed.connect(_fit_camera_to_grid)
+
 	_start_wave()
 
 
@@ -388,7 +397,7 @@ func _can_place_at(cells: Array[Vector2i]) -> bool:
 	if open_ent.is_empty():
 		return false
 
-	var ex_rows := [GameState.exit_cell.y - 2, GameState.exit_cell.y - 1, GameState.exit_cell.y, GameState.exit_cell.y + 1, GameState.exit_cell.y + 2]
+	var ex_rows := [GameState.exit_cell.y - 1, GameState.exit_cell.y, GameState.exit_cell.y + 1]
 	var open_ex: Array[Vector2i] = []
 	for row in ex_rows:
 		var c := Vector2i(ex_x, row)
@@ -606,7 +615,7 @@ func _find_shortest_exit_path(start: Vector2i) -> Array[Vector2i]:
 	var exit_x := GameState.exit_cell.x
 	var exit_y := GameState.exit_cell.y
 	var shortest: Array[Vector2i] = []
-	for row in [exit_y - 2, exit_y - 1, exit_y, exit_y + 1, exit_y + 2]:
+	for row in [exit_y - 1, exit_y, exit_y + 1]:
 		var path := _pathfinder.find_path_from(start, Vector2i(exit_x, row))
 		if path.is_empty():
 			continue
@@ -670,8 +679,8 @@ func _clamp_to_anchor(cell: Vector2i) -> Vector2i:
 
 
 
-## Returns true when a cell is within the arena, defined as the 30x30 floor
-## plus the 1-cell-wide wall border surrounding it (x: -1..30, y: -1..30).
+## Returns true when a cell is within the arena, defined as the 31x31 floor
+## plus the 1-cell-wide wall border surrounding it (x: -1..31, y: -1..31).
 ## Cells beyond that boundary are outside the arena entirely.
 func _is_in_arena(cell: Vector2i) -> bool:
 	return cell.x >= -1 and cell.x <= Grid.GRID_SIZE \
@@ -790,9 +799,9 @@ func _draw_cell_glow(im: ImmediateMesh, cell: Vector2i, hs: float, y: float, alp
 ## Draws the arena border as 1-cell-wide light gray slabs with dark gray cell
 ## border lines, giving a stone-block appearance.
 ##
-## All four walls sit on the outermost rows/columns of the 30×30 grid:
-##   Top/bottom — rows 0 and 29 (z = ±14.5)
-##   Left/right — columns 0 and 29 (x = ±14.5, with entrance/exit gaps)
+## All four walls sit on the outermost rows/columns of the 31×31 grid:
+##   Top/bottom — rows 0 and 30 (z = ±15.0)
+##   Left/right — columns 0 and 30 (x = ±15.0, with entrance/exit gaps)
 ##
 ## Placing geometry outside the grid boundary (z = ±15.5) consistently failed
 ## to render regardless of mesh type across multiple attempts. Using the
@@ -801,25 +810,25 @@ func _spawn_arena_border() -> void:
 	var half := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
 	var cs   := Grid.CELL_SIZE
 
-	var ent_top := (GameState.entrance_cell.y - 2) * cs - half
-	var ent_bot := (GameState.entrance_cell.y + 3) * cs - half
-	var ex_top  := (GameState.exit_cell.y - 2) * cs - half
-	var ex_bot  := (GameState.exit_cell.y  + 3) * cs - half
+	var ent_top := (GameState.entrance_cell.y - 1) * cs - half
+	var ent_bot := (GameState.entrance_cell.y + 2) * cs - half
+	var ex_top  := (GameState.exit_cell.y - 1) * cs - half
+	var ex_bot  := (GameState.exit_cell.y  + 2) * cs - half
 
 	# --- Fill slabs ---
-	# Top row (row 0) and bottom row (row 29) — full grid width
+	# Top row (row 0) and bottom row (row 30) — full grid width
 	var grid_w := Grid.GRID_SIZE * cs
 	_spawn_wall_slab(Vector3(0.0, 0.0, -half + cs * 0.5), Vector2(grid_w, cs))
 	_spawn_wall_slab(Vector3(0.0, 0.0,  half - cs * 0.5), Vector2(grid_w, cs))
 
 	# Left column (column 0) above and below the entrance gap.
-	# Heights exclude rows 0 and 29, which belong exclusively to the top/bottom slabs.
+	# Heights exclude rows 0 and 30, which belong exclusively to the top/bottom slabs.
 	var lup  := ent_top - (-half + cs)
 	var lbot := (half - cs) - ent_bot
 	if lup  > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0, (-half + cs) + lup  * 0.5), Vector2(cs, lup))
 	if lbot > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0,  ent_bot      + lbot * 0.5), Vector2(cs, lbot))
 
-	# Right column (column 29) above and below the exit gap.
+	# Right column (column 30) above and below the exit gap.
 	var rup  := ex_top - (-half + cs)
 	var rbot := (half - cs) - ex_bot
 	if rup  > 0.0: _spawn_wall_slab(Vector3( half - cs * 0.5, 0.0, (-half + cs) + rup  * 0.5), Vector2(cs, rup))
@@ -935,6 +944,23 @@ func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
 				return []
 			cells.append(c)
 	return cells
+
+
+## Adjusts the orthographic camera size so the full arena fits within the
+## portion of the screen not covered by the HUD strips.
+##
+## With KEEP_HEIGHT (Godot default), camera.size = total vertical world coverage.
+## The HUD panels consume HUD_TOP_PX + HUD_BOT_PX pixels, so the remaining
+## usable_px pixels must contain the entire arena height in world units.
+## Scaling size = arena_h * (screen_h / usable_px) achieves this exactly.
+func _fit_camera_to_grid() -> void:
+	var screen_h := get_viewport().get_visible_rect().size.y
+	var usable   := screen_h - HUD_TOP_PX - HUD_BOT_PX
+	if usable <= 0.0:
+		return
+	var arena_h := Grid.GRID_SIZE * Grid.CELL_SIZE
+	var margin  := 2.0   # 1 world unit of clear space above and below the arena
+	_camera.size = (arena_h + margin) * (screen_h / usable)
 
 
 ## Creates a MeshInstance3D with a BoxMesh of the given size and colour.
