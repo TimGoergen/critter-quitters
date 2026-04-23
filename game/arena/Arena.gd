@@ -44,10 +44,11 @@ const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
 # the path visualisation is a debug aid; it clutters the arena during normal play.
 const SHOW_PATH_LINE: bool = false
 
-# HUD strip heights in screen pixels — keep in sync with PANEL_H + SELECTOR_H
-# (top stats bar + trap selector strip) and (BAR_H + MARGIN * 2) in HUD.gd.
-const HUD_TOP_PX: float = 84.0   # 44 stats panel + 40 trap selector strip
-const HUD_BOT_PX: float = 38.0
+# Fixed HUD heights in screen pixels — must match the corresponding constants in HUD.gd.
+# The trap selector is no longer part of the top strip; it lives in a right-side panel
+# (landscape) or a bottom strip (portrait), so HUD_TOP_PX is now just the stats bar.
+const HUD_TOP_PX: float = 44.0   # top stats bar only (HUD.PANEL_H)
+const HUD_BOT_PX: float = 38.0   # infestation bar (HUD.BAR_H + HUD.MARGIN * 2)
 
 # Phase 1 placeholder colours. These are replaced by ASCII billboards in Phase 3.
 const COLOR_ENTRANCE  := Color(0.20, 0.80, 0.20, 1.0)   # green
@@ -1016,21 +1017,56 @@ func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
 	return cells
 
 
-## Adjusts the orthographic camera size so the full arena fits within the
-## portion of the screen not covered by the HUD strips.
+## Sizes and centres the orthographic camera so the arena fills the usable
+## screen area — the portion not covered by HUD panels or the trap selector.
 ##
-## With KEEP_HEIGHT (Godot default), camera.size = total vertical world coverage.
-## The HUD panels consume HUD_TOP_PX + HUD_BOT_PX pixels, so the remaining
-## usable_px pixels must contain the entire arena height in world units.
-## Scaling size = arena_h * (screen_h / usable_px) achieves this exactly.
+## Layout depends on orientation:
+##   Landscape — selector is a right-side panel (HUD.SELECTOR_PANEL_W wide);
+##               usable area is left of that panel, between top and bottom bars.
+##   Portrait  — selector is a bottom strip (HUD.SELECTOR_STRIP_H tall);
+##               usable area is the full width, above the selector and bottom bar.
+##
+## With KEEP_HEIGHT (Godot default), camera.size is the total world height
+## covered by the full viewport. We inflate it until the arena fits in both
+## the vertical and horizontal extents of the usable area, then apply
+## h_offset / v_offset to shift the camera's aim to the centre of that area.
+##
+## Offset derivation (positive h_offset → world origin shifts LEFT on screen):
+##   h_offset = (right_px / 2) × world_per_px
+##   v_offset = ((top_px - bot_px) / 2) × world_per_px
+##
+## v_offset sign convention for this top-down camera (local Y = world −Z):
+##   positive → aim shifts toward world −Z → origin appears lower on screen.
 func _fit_camera_to_grid() -> void:
-	var screen_h := get_viewport().get_visible_rect().size.y
-	var usable   := screen_h - HUD_TOP_PX - HUD_BOT_PX
-	if usable <= 0.0:
+	var vp       := get_viewport().get_visible_rect().size
+	var scr_w    := vp.x
+	var scr_h    := vp.y
+	var landscape := scr_w >= scr_h
+
+	var right_px   := HUD.SELECTOR_PANEL_W if landscape else 0.0
+	var bot_add_px := HUD.SELECTOR_STRIP_H if not landscape else 0.0
+
+	var usable_h := scr_h - HUD_TOP_PX - HUD_BOT_PX - bot_add_px
+	var usable_w := scr_w - right_px
+	if usable_h <= 0.0 or usable_w <= 0.0:
 		return
-	var arena_h := Grid.GRID_SIZE * Grid.CELL_SIZE
-	var margin  := 2.0   # 1 world unit of clear space above and below the arena
-	_camera.size = (arena_h + margin) * (screen_h / usable)
+
+	var arena_world := Grid.GRID_SIZE * Grid.CELL_SIZE + 2.0  # +2 = 1-unit margin each side
+
+	# With KEEP_HEIGHT, horizontal world coverage = size × (scr_w / scr_h).
+	# For the arena to fit in usable_w pixels: size × (usable_w / scr_h) ≥ arena_world
+	# → size ≥ arena_world × (scr_h / usable_w).
+	var size_for_height := arena_world * scr_h / usable_h
+	var size_for_width  := arena_world * scr_h / usable_w
+	_camera.size = maxf(size_for_height, size_for_width)
+
+	var world_per_px := _camera.size / scr_h
+
+	# Shift aim so the arena appears centred in the usable area, not screen centre.
+	_camera.h_offset = (right_px / 2.0) * world_per_px
+	var top_total := float(HUD_TOP_PX)
+	var bot_total := HUD_BOT_PX + bot_add_px
+	_camera.v_offset = ((top_total - bot_total) / 2.0) * world_per_px
 
 
 ## Creates a MeshInstance3D with a BoxMesh of the given size and colour.
