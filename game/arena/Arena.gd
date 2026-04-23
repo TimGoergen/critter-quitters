@@ -95,7 +95,7 @@ var _active_enemies: Array[Node3D] = []
 const WAVE_SIZE: int = 10   # default; overridden at runtime by the debug start dialog
 var _wave_size: int = WAVE_SIZE
 const SPAWN_INTERVAL: float = 0.36     # seconds between each enemy in the wave
-const WAVE_COUNTDOWN: int  = 3         # seconds of countdown before each wave
+const WAVE_COUNTDOWN: int  = 5         # seconds of countdown before each wave
 
 var _enemies_left_to_spawn: int = 0
 var _countdown_active: bool     = false  # true while between-wave countdown is ticking
