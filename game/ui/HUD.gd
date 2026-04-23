@@ -320,7 +320,7 @@ func _on_viewport_resized() -> void:
 		_selector_root.queue_free()
 	_selector_root = null
 	_build_trap_selector()
-	# _build_trap_selector already calls _update_bucks_right_margin.
+	# _build_trap_selector already calls _update_bucks_right_margin and _update_arena_ui_centering.
 
 
 func _build_trap_selector() -> void:
@@ -330,6 +330,7 @@ func _build_trap_selector() -> void:
 	else:
 		_build_selector_portrait()
 	_update_bucks_right_margin()
+	_update_arena_ui_centering()
 
 
 # In landscape the Bug Bucks label must stop before the selector panel begins,
@@ -338,11 +339,35 @@ func _update_bucks_right_margin() -> void:
 	_bucks_label.offset_right = -(SELECTOR_PANEL_W + MARGIN) if _is_landscape() else -MARGIN
 
 
+# Shifts the countdown labels and "Send Wave Early" button so they are centred
+# over the arena rather than the full screen. In landscape the arena occupies
+# only the left (screen_w - SELECTOR_PANEL_W) pixels, so all centred elements
+# must treat that narrower region as their horizontal extent.
+func _update_arena_ui_centering() -> void:
+	var scr_w := get_viewport().get_visible_rect().size.x
+	# arena_right_frac: what fraction of screen width the arena occupies (0–1).
+	var arena_right_frac := (scr_w - SELECTOR_PANEL_W) / scr_w if _is_landscape() else 1.0
+
+	# Countdown labels: set anchor_right so the label spans only the arena's width.
+	# horizontal_alignment = CENTER still centres the text within that span.
+	_countdown_wave_label.anchor_right   = arena_right_frac
+	_countdown_number_label.anchor_right = arena_right_frac
+
+	# "Send Wave Early" button: keep it at 30–70% of the arena width, not screen width.
+	_send_wave_btn.anchor_left  = arena_right_frac * 0.30
+	_send_wave_btn.anchor_right = arena_right_frac * 0.70
+
+
 ## Landscape: buttons in a vertical panel pinned to the right edge of the screen.
-## The panel runs from below the top stats bar to just above the infestation bar,
-## so it does not overlap either fixed element.
+## A 10% gap is added at the top and bottom of the available space (between the
+## stats bar and the infestation bar), so the panel is ~20% shorter than the
+## available height and sits clearly separate from the Bug Bucks display.
 func _build_selector_landscape() -> void:
 	var bar_h_total := BAR_H + MARGIN * 2.0
+	var scr_h       := get_viewport().get_visible_rect().size.y
+	var available   := scr_h - PANEL_H - bar_h_total
+	# 10% gap each side → panel is 80% of available height, vertically centred.
+	var gap_v       := roundf(available * 0.10)
 
 	var bg := ColorRect.new()
 	bg.color         = COLOR_PANEL_BG
@@ -352,8 +377,8 @@ func _build_selector_landscape() -> void:
 	bg.anchor_bottom = 1.0
 	bg.offset_left   = -SELECTOR_PANEL_W
 	bg.offset_right  = 0.0
-	bg.offset_top    = PANEL_H
-	bg.offset_bottom = -bar_h_total
+	bg.offset_top    = PANEL_H + gap_v
+	bg.offset_bottom = -bar_h_total - gap_v
 	add_child(bg)
 	_selector_root = bg
 
