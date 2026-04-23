@@ -44,10 +44,11 @@ const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
 # the path visualisation is a debug aid; it clutters the arena during normal play.
 const SHOW_PATH_LINE: bool = false
 
-# HUD strip heights in screen pixels — keep in sync with PANEL_H + SELECTOR_H
-# (top stats bar + trap selector strip) and (BAR_H + MARGIN * 2) in HUD.gd.
-const HUD_TOP_PX: float = 84.0   # 44 stats panel + 40 trap selector strip
-const HUD_BOT_PX: float = 38.0
+# Fixed HUD heights in screen pixels — must match the corresponding constants in HUD.gd.
+# The trap selector is no longer part of the top strip; it lives in a right-side panel
+# (landscape) or a bottom strip (portrait), so HUD_TOP_PX is now just the stats bar.
+const HUD_TOP_PX: float = 44.0   # top stats bar only (HUD.PANEL_H)
+const HUD_BOT_PX: float = 38.0   # infestation bar (HUD.BAR_H + HUD.MARGIN * 2)
 
 # Phase 1 placeholder colours. These are replaced by ASCII billboards in Phase 3.
 const COLOR_ENTRANCE  := Color(0.20, 0.80, 0.20, 1.0)   # green
@@ -57,6 +58,7 @@ const COLOR_PATH      := Color(0.80, 0.70, 0.20, 0.5)   # yellow, semi-transpare
 const COLOR_GRID_GLOW    := Color(0.65, 0.90, 1.0)       # cool blue-white for cursor glow
 const COLOR_WALL_FILL    := Color(0.72, 0.72, 0.72, 1.0) # light gray wall fill
 const COLOR_WALL_BORDER  := Color(0.25, 0.25, 0.25, 1.0) # dark gray cell border lines
+const COLOR_TRAP_SELECTED := Color(0.90, 0.70, 0.10, 1.0) # gold outline on selected trap
 
 
 # ---------------------------------------------------------------------------
@@ -94,7 +96,7 @@ var _active_enemies: Array[Node3D] = []
 const WAVE_SIZE: int = 10   # default; overridden at runtime by the debug start dialog
 var _wave_size: int = WAVE_SIZE
 const SPAWN_INTERVAL: float = 0.36     # seconds between each enemy in the wave
-const WAVE_COUNTDOWN: int  = 3         # seconds of countdown before each wave
+const WAVE_COUNTDOWN: int  = 5         # seconds of countdown before each wave
 
 var _enemies_left_to_spawn: int = 0
 var _countdown_active: bool     = false  # true while between-wave countdown is ticking
@@ -106,6 +108,10 @@ var _display_path: Array[Vector2i] = []
 # Grid highlight — a single ImmediateMesh rebuilt each time the hover cell changes.
 var _grid_highlight: MeshInstance3D = null
 var _hover_cell: Vector2i = Vector2i(-1, -1)
+
+# Gold perimeter drawn around the 2×2 footprint of the currently open upgrade panel.
+# Separate node from _grid_highlight so cursor movement does not clear it.
+var _selected_trap_outline: MeshInstance3D = null
 
 # The currently open upgrade panel, or null if none is open.
 # Only one panel is open at a time — opening a new one closes the previous.
@@ -185,6 +191,7 @@ func _ready() -> void:
 	_spawn_zone_marker(_despawn_cell, 3, COLOR_EXIT)
 
 	_setup_grid_highlight()
+	_setup_selected_trap_outline()
 	_init_path_marker_pool()
 	_spawn_arena_border()
 
@@ -416,6 +423,7 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 	add_child(panel)
 	panel.initialize(_trap_nodes[anchor])
 	_upgrade_panel = panel
+	_show_selected_trap_outline(anchor)
 	get_tree().paused = true
 	_panel_paused = true
 
@@ -425,6 +433,7 @@ func _close_upgrade_panel() -> void:
 	if _upgrade_panel != null and is_instance_valid(_upgrade_panel):
 		_upgrade_panel.queue_free()
 	_upgrade_panel = null
+	_hide_selected_trap_outline()
 	if _panel_paused:
 		get_tree().paused = false
 		_panel_paused = false
@@ -432,6 +441,7 @@ func _close_upgrade_panel() -> void:
 
 func _on_upgrade_panel_closed() -> void:
 	_upgrade_panel = null
+	_hide_selected_trap_outline()
 	if _panel_paused:
 		get_tree().paused = false
 		_panel_paused = false
@@ -726,6 +736,49 @@ func _init_path_marker_pool() -> void:
 		_path_marker_pool.append(marker)
 
 
+## Creates the MeshInstance3D used for the selected-trap gold outline.
+## The mesh is rebuilt each time a panel opens and cleared when it closes.
+func _setup_selected_trap_outline() -> void:
+	_selected_trap_outline = MeshInstance3D.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.vertex_color_use_as_albedo = true
+	_selected_trap_outline.material_override = mat
+	add_child(_selected_trap_outline)
+
+
+## Draws a gold perimeter around the 2×2 footprint of the trap at anchor.
+## Three concentric rectangles simulate line thickness (Godot 4 has no 3D line width).
+func _show_selected_trap_outline(anchor: Vector2i) -> void:
+	var im  := ImmediateMesh.new()
+	var hs  := Grid.CELL_SIZE * 0.5
+	var y   := 0.12   # slightly above the cursor glow layer (0.08)
+	var c   := _cell_to_world(anchor)
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	for e: float in [-Grid.CELL_SIZE * 0.03, 0.0, Grid.CELL_SIZE * 0.03]:
+		var tl := Vector3(c.x - hs - e,                  y, c.z - hs - e)
+		var tr := Vector3(c.x + hs + Grid.CELL_SIZE + e, y, c.z - hs - e)
+		var bl := Vector3(c.x - hs - e,                  y, c.z + hs + Grid.CELL_SIZE + e)
+		var br := Vector3(c.x + hs + Grid.CELL_SIZE + e, y, c.z + hs + Grid.CELL_SIZE + e)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(tl)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(tr)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(tr)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(br)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(br)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(bl)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(bl)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(tl)
+	im.surface_end()
+	_selected_trap_outline.mesh = im
+
+
+## Clears the selected-trap outline by removing its mesh.
+func _hide_selected_trap_outline() -> void:
+	if _selected_trap_outline != null:
+		_selected_trap_outline.mesh = null
+
+
 ## Creates the MeshInstance3D used for the cursor grid glow.
 ## The material uses vertex colours so each line segment can have its own alpha.
 func _setup_grid_highlight() -> void:
@@ -1016,21 +1069,56 @@ func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
 	return cells
 
 
-## Adjusts the orthographic camera size so the full arena fits within the
-## portion of the screen not covered by the HUD strips.
+## Sizes and centres the orthographic camera so the arena fills the usable
+## screen area — the portion not covered by HUD panels or the trap selector.
 ##
-## With KEEP_HEIGHT (Godot default), camera.size = total vertical world coverage.
-## The HUD panels consume HUD_TOP_PX + HUD_BOT_PX pixels, so the remaining
-## usable_px pixels must contain the entire arena height in world units.
-## Scaling size = arena_h * (screen_h / usable_px) achieves this exactly.
+## Layout depends on orientation:
+##   Landscape — selector is a right-side panel (HUD.SELECTOR_PANEL_W wide);
+##               usable area is left of that panel, between top and bottom bars.
+##   Portrait  — selector is a bottom strip (HUD.SELECTOR_STRIP_H tall);
+##               usable area is the full width, above the selector and bottom bar.
+##
+## With KEEP_HEIGHT (Godot default), camera.size is the total world height
+## covered by the full viewport. We inflate it until the arena fits in both
+## the vertical and horizontal extents of the usable area, then apply
+## h_offset / v_offset to shift the camera's aim to the centre of that area.
+##
+## Offset derivation (positive h_offset → world origin shifts LEFT on screen):
+##   h_offset = (right_px / 2) × world_per_px
+##   v_offset = ((top_px - bot_px) / 2) × world_per_px
+##
+## v_offset sign convention for this top-down camera (local Y = world −Z):
+##   positive → aim shifts toward world −Z → origin appears lower on screen.
 func _fit_camera_to_grid() -> void:
-	var screen_h := get_viewport().get_visible_rect().size.y
-	var usable   := screen_h - HUD_TOP_PX - HUD_BOT_PX
-	if usable <= 0.0:
+	var vp       := get_viewport().get_visible_rect().size
+	var scr_w    := vp.x
+	var scr_h    := vp.y
+	var landscape := scr_w >= scr_h
+
+	var right_px   := HUD.SELECTOR_PANEL_W if landscape else 0.0
+	var bot_add_px := HUD.SELECTOR_STRIP_H if not landscape else 0.0
+
+	var usable_h := scr_h - HUD_TOP_PX - HUD_BOT_PX - bot_add_px
+	var usable_w := scr_w - right_px
+	if usable_h <= 0.0 or usable_w <= 0.0:
 		return
-	var arena_h := Grid.GRID_SIZE * Grid.CELL_SIZE
-	var margin  := 2.0   # 1 world unit of clear space above and below the arena
-	_camera.size = (arena_h + margin) * (screen_h / usable)
+
+	var arena_world := Grid.GRID_SIZE * Grid.CELL_SIZE + 2.0  # +2 = 1-unit margin each side
+
+	# With KEEP_HEIGHT, horizontal world coverage = size × (scr_w / scr_h).
+	# For the arena to fit in usable_w pixels: size × (usable_w / scr_h) ≥ arena_world
+	# → size ≥ arena_world × (scr_h / usable_w).
+	var size_for_height := arena_world * scr_h / usable_h
+	var size_for_width  := arena_world * scr_h / usable_w
+	_camera.size = maxf(size_for_height, size_for_width)
+
+	var world_per_px := _camera.size / scr_h
+
+	# Shift aim so the arena appears centred in the usable area, not screen centre.
+	_camera.h_offset = (right_px / 2.0) * world_per_px
+	var top_total := float(HUD_TOP_PX)
+	var bot_total := HUD_BOT_PX + bot_add_px
+	_camera.v_offset = ((top_total - bot_total) / 2.0) * world_per_px
 
 
 ## Creates a MeshInstance3D with a BoxMesh of the given size and colour.

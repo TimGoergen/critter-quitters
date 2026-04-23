@@ -2,6 +2,10 @@
 ## Minimal in-run overlay: Bug Bucks counter, wave number, Infestation bar,
 ## between-wave countdown splash, run-over screen, and trap type selector.
 ## Built procedurally — no scene file required.
+##
+## The trap selector repositions itself based on screen orientation:
+##   Landscape — right-side panel, buttons stacked vertically
+##   Portrait  — horizontal strip above the infestation bar at the bottom
 
 extends CanvasLayer
 
@@ -24,7 +28,6 @@ const COLOR_BTN_HOVER   := Color(0.38, 0.38, 0.38, 1.0)
 const COLOR_BTN_PRESSED := Color(0.22, 0.22, 0.22, 1.0)
 const COLOR_BTN_BORDER  := Color(0.68, 0.68, 0.68, 1.0)
 
-# Trap selector strip — sits immediately below the top stats panel.
 # Selected button gets a green-tinted background and brighter border.
 # Cost label is gold when affordable, red when not.
 const COLOR_SEL_BG       := Color(0.14, 0.22, 0.14, 1.0)
@@ -33,10 +36,18 @@ const COLOR_SEL_BORDER   := Color(0.45, 0.80, 0.45, 1.0)
 const COLOR_COST_OK      := Color(0.80, 0.60, 0.10, 1.0)
 const COLOR_COST_NO      := Color(0.70, 0.25, 0.20, 1.0)
 
-const PANEL_H:    float = 44.0
-const SELECTOR_H: float = 40.0
-const BAR_H:      float = 14.0
-const MARGIN:     float = 12.0
+const PANEL_H:          float = 44.0   # top stats bar height
+const BAR_H:            float = 14.0   # infestation bar fill height
+const MARGIN:           float = 12.0   # infestation bar padding
+
+# Trap selector layout — read by Arena.gd to compute usable arena area.
+# SELECTOR_PANEL_W is the right-panel width in landscape.
+# SELECTOR_STRIP_H is the bottom strip height in portrait.
+const SELECTOR_PANEL_W: float = 160.0
+const SELECTOR_STRIP_H: float = 40.0
+
+# Height of each button in the landscape vertical panel.
+const SELECTOR_BTN_H:   float = 64.0
 
 var _wave_label:        RichTextLabel
 var _bucks_label:       Label
@@ -48,8 +59,10 @@ var _send_wave_btn:     Button
 var _run_over_overlay:  Control
 
 var _selector_buttons: Array[Button] = []
-
-var _blink_time: float = 0.0
+# Root node of the current selector layout — freed and rebuilt on orientation change.
+var _selector_root: Control = null
+# Tracks the orientation at last build so we only rebuild when it flips.
+var _selector_is_landscape: bool = true
 
 
 func _ready() -> void:
@@ -66,6 +79,7 @@ func _ready() -> void:
 	_on_bucks_changed(GameState.bug_bucks)
 	_on_infestation_changed(GameState.infestation_level)
 	_on_wave_changed(GameState.current_wave)
+	get_viewport().size_changed.connect(_on_viewport_resized)
 
 
 func _build_ui() -> void:
@@ -261,6 +275,8 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 		_countdown_number_label.modulate.a = 1.0
 
 
+var _blink_time: float = 0.0
+
 func _process(delta: float) -> void:
 	if not _countdown_number_label.visible:
 		return
@@ -284,17 +300,138 @@ func _on_restart_pressed() -> void:
 	get_tree().reload_current_scene()
 
 
+# ---------------------------------------------------------------------------
+# Trap selector
+# ---------------------------------------------------------------------------
+
+func _is_landscape() -> bool:
+	var vp := get_viewport().get_visible_rect().size
+	return vp.x >= vp.y
+
+
+## Rebuilds the selector panel when the screen flips between landscape and portrait.
+func _on_viewport_resized() -> void:
+	var landscape := _is_landscape()
+	if landscape == _selector_is_landscape:
+		return
+	# Orientation changed — free the old layout and build the new one.
+	_selector_buttons.clear()
+	if _selector_root != null and is_instance_valid(_selector_root):
+		_selector_root.queue_free()
+	_selector_root = null
+	_build_trap_selector()
+	# _build_trap_selector already calls _update_bucks_right_margin and _update_arena_ui_centering.
+
+
 func _build_trap_selector() -> void:
-	# Horizontal strip directly below the top stats panel.
+	_selector_is_landscape = _is_landscape()
+	if _selector_is_landscape:
+		_build_selector_landscape()
+	else:
+		_build_selector_portrait()
+	_update_bucks_right_margin()
+	_update_arena_ui_centering()
+
+
+# In landscape the Bug Bucks label must stop before the selector panel begins,
+# so the text does not crowd against or flow under the panel's left edge.
+func _update_bucks_right_margin() -> void:
+	_bucks_label.offset_right = -(SELECTOR_PANEL_W + MARGIN) if _is_landscape() else -MARGIN
+
+
+# Shifts the countdown labels and "Send Wave Early" button so they are centred
+# over the arena rather than the full screen. In landscape the arena occupies
+# only the left (screen_w - SELECTOR_PANEL_W) pixels, so all centred elements
+# must treat that narrower region as their horizontal extent.
+func _update_arena_ui_centering() -> void:
+	var scr_w := get_viewport().get_visible_rect().size.x
+	# arena_right_frac: what fraction of screen width the arena occupies (0–1).
+	var arena_right_frac := (scr_w - SELECTOR_PANEL_W) / scr_w if _is_landscape() else 1.0
+
+	# Countdown labels: set anchor_right so the label spans only the arena's width.
+	# horizontal_alignment = CENTER still centres the text within that span.
+	_countdown_wave_label.anchor_right   = arena_right_frac
+	_countdown_number_label.anchor_right = arena_right_frac
+
+	# "Send Wave Early" button: keep it at 30–70% of the arena width, not screen width.
+	_send_wave_btn.anchor_left  = arena_right_frac * 0.30
+	_send_wave_btn.anchor_right = arena_right_frac * 0.70
+
+
+## Landscape: buttons in a vertical panel pinned to the right edge of the screen.
+## A 10% gap is added at the top and bottom of the available space (between the
+## stats bar and the infestation bar), so the panel is ~20% shorter than the
+## available height and sits clearly separate from the Bug Bucks display.
+func _build_selector_landscape() -> void:
+	var bar_h_total := BAR_H + MARGIN * 2.0
+	var scr_h       := get_viewport().get_visible_rect().size.y
+	var available   := scr_h - PANEL_H - bar_h_total
+	# 10% gap each side → panel is 80% of available height, vertically centred.
+	var gap_v       := roundf(available * 0.10)
+
 	var bg := ColorRect.new()
 	bg.color         = COLOR_PANEL_BG
+	bg.anchor_left   = 1.0
 	bg.anchor_right  = 1.0
-	bg.offset_top    = PANEL_H
-	bg.offset_bottom = PANEL_H + SELECTOR_H
+	bg.anchor_top    = 0.0
+	bg.anchor_bottom = 1.0
+	bg.offset_left   = -SELECTOR_PANEL_W
+	bg.offset_right  = 0.0
+	bg.offset_top    = PANEL_H + gap_v
+	bg.offset_bottom = -bar_h_total - gap_v
 	add_child(bg)
+	_selector_root = bg
 
-	# MarginContainer → HBoxContainer so the four buttons share space equally
-	# and reflow automatically if the window is resized.
+	# Thin left border to separate the panel from the arena.
+	var border := ColorRect.new()
+	border.color         = Color(0.25, 0.25, 0.35, 1.0)
+	border.anchor_top    = 0.0
+	border.anchor_bottom = 1.0
+	border.offset_right  = 2.0
+	bg.add_child(border)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left",   8)
+	margin.add_theme_constant_override("margin_right",  8)
+	margin.add_theme_constant_override("margin_top",    8)
+	margin.add_theme_constant_override("margin_bottom", 8)
+	bg.add_child(margin)
+
+	# VBoxContainer centred so the button group sits in the middle of the panel.
+	var col := VBoxContainer.new()
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.add_theme_constant_override("separation", 6)
+	margin.add_child(col)
+
+	for i in range(4):
+		var btn := Button.new()
+		btn.custom_minimum_size = Vector2(0.0, SELECTOR_BTN_H)
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.add_theme_font_size_override("font_size", 13)
+		btn.add_theme_font_override("font", UIFonts.primary())
+		btn.text = _selector_label(i)
+		btn.pressed.connect(GameState.select_trap_type.bind(i))
+		_style_selector_button(btn, i == GameState.selected_trap_type, _can_afford(i))
+		col.add_child(btn)
+		_selector_buttons.append(btn)
+
+
+## Portrait: buttons in a horizontal strip above the infestation bar at the bottom.
+func _build_selector_portrait() -> void:
+	var bar_h_total := BAR_H + MARGIN * 2.0
+
+	var bg := ColorRect.new()
+	bg.color         = COLOR_PANEL_BG
+	bg.anchor_left   = 0.0
+	bg.anchor_right  = 1.0
+	bg.anchor_top    = 1.0
+	bg.anchor_bottom = 1.0
+	bg.offset_top    = -(bar_h_total + SELECTOR_STRIP_H)
+	bg.offset_bottom = -bar_h_total
+	add_child(bg)
+	_selector_root = bg
+
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left",   6)
@@ -313,7 +450,6 @@ func _build_trap_selector() -> void:
 		btn.add_theme_font_size_override("font_size", 13)
 		btn.add_theme_font_override("font", UIFonts.primary())
 		btn.text = _selector_label(i)
-		# bind(i) passes i as the argument when the pressed signal fires.
 		btn.pressed.connect(GameState.select_trap_type.bind(i))
 		_style_selector_button(btn, i == GameState.selected_trap_type, _can_afford(i))
 		row.add_child(btn)
