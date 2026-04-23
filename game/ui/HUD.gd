@@ -5,7 +5,8 @@
 
 extends CanvasLayer
 
-const Trap = preload("res://traps/Trap.gd")
+const Trap     = preload("res://traps/Trap.gd")
+const UIFonts  = preload("res://ui/UIFonts.gd")
 
 const COLOR_PANEL_BG    := Color(0.08, 0.08, 0.13, 0.88)
 const COLOR_BAR_BG      := Color(0.15, 0.10, 0.10, 1.0)
@@ -76,13 +77,9 @@ func _build_ui() -> void:
 	top_bg.offset_bottom = PANEL_H
 	add_child(top_bg)
 
-	# Wave display floats at the top-left outside the panel (same reason as before).
-	# RichTextLabel mixes font sizes in one node and baseline-aligns runs automatically,
-	# so "WAVE" (small) and the numeral (large) share a common bottom edge without
-	# any manual positioning.
-	var bold_wave_font := SystemFont.new()
-	bold_wave_font.font_weight = 700
-
+	# Wave display: RichTextLabel mixes font sizes in one node and baseline-aligns
+	# runs automatically, so "WAVE" (small) and the numeral (large) share a common
+	# bottom edge without any manual positioning.
 	_wave_label                  = RichTextLabel.new()
 	_wave_label.bbcode_enabled   = true
 	_wave_label.fit_content      = true
@@ -91,7 +88,7 @@ func _build_ui() -> void:
 	_wave_label.custom_minimum_size = Vector2(260, 80)
 	_wave_label.offset_left      = MARGIN
 	_wave_label.offset_top       = 4.0
-	_wave_label.add_theme_font_override("normal_font", bold_wave_font)
+	_wave_label.add_theme_font_override("normal_font", UIFonts.header())
 	_wave_label.add_theme_color_override("default_color", COLOR_TEXT)
 	add_child(_wave_label)
 
@@ -103,9 +100,7 @@ func _build_ui() -> void:
 	_bucks_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_bucks_label.add_theme_font_size_override("font_size", 31)
 	_bucks_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
-	var bold_font := SystemFont.new()
-	bold_font.font_weight = 700
-	_bucks_label.add_theme_font_override("font", bold_font)
+	_bucks_label.add_theme_font_override("font", UIFonts.primary_bold())
 	top_bg.add_child(_bucks_label)
 
 	# --- Bottom infestation bar ---
@@ -119,6 +114,7 @@ func _build_ui() -> void:
 
 	var bar_label := _make_label("INFESTATION", Vector2(MARGIN, 0.0), BAR_H + MARGIN * 2.0)
 	bar_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	bar_label.add_theme_font_override("font", UIFonts.primary())
 	bar_bg.add_child(bar_label)
 
 	var track := ColorRect.new()
@@ -160,13 +156,11 @@ func _build_ui() -> void:
 	_countdown_wave_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_countdown_wave_label.add_theme_font_size_override("font_size", 62)
 	_countdown_wave_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
-	var bold_countdown_font := SystemFont.new()
-	bold_countdown_font.font_weight = 700
-	_countdown_wave_label.add_theme_font_override("font", bold_countdown_font)
+	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
 	_countdown_wave_label.visible = false
 	add_child(_countdown_wave_label)
 
-	# Band 0.30–0.45: countdown number — italic, smaller, darker
+	# Band 0.30–0.45: countdown number
 	_countdown_number_label = Label.new()
 	_countdown_number_label.anchor_right         = 1.0
 	_countdown_number_label.anchor_top           = 0.30
@@ -175,9 +169,7 @@ func _build_ui() -> void:
 	_countdown_number_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_countdown_number_label.add_theme_font_size_override("font_size", 46)
 	_countdown_number_label.add_theme_color_override("font_color", Color(0.72, 0.72, 0.72, 0.92))
-	var italic_countdown_font := SystemFont.new()
-	italic_countdown_font.font_italic = true
-	_countdown_number_label.add_theme_font_override("font", italic_countdown_font)
+	_countdown_number_label.add_theme_font_override("font", UIFonts.header())
 	_countdown_number_label.visible = false
 	add_child(_countdown_number_label)
 
@@ -190,6 +182,7 @@ func _build_ui() -> void:
 	_send_wave_btn.anchor_top     = 0.70
 	_send_wave_btn.anchor_bottom  = 0.80
 	_send_wave_btn.add_theme_font_size_override("font_size", 18)
+	_send_wave_btn.add_theme_font_override("font", UIFonts.primary())
 	_send_wave_btn.visible        = false
 	_apply_button_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
@@ -221,6 +214,7 @@ func _build_run_over_overlay() -> void:
 	infested_label.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 	infested_label.add_theme_font_size_override("font_size", 96)
 	infested_label.add_theme_color_override("font_color", COLOR_INFESTED)
+	infested_label.add_theme_font_override("font", UIFonts.header())
 	_run_over_overlay.add_child(infested_label)
 
 	var btn := Button.new()
@@ -230,6 +224,7 @@ func _build_run_over_overlay() -> void:
 	btn.anchor_top           = 0.70
 	btn.anchor_bottom        = 0.80
 	btn.add_theme_font_size_override("font_size", 28)
+	btn.add_theme_font_override("font", UIFonts.primary())
 	btn.process_mode         = Node.PROCESS_MODE_ALWAYS
 	_apply_button_style(btn)
 	btn.pressed.connect(_on_restart_pressed)
@@ -316,6 +311,7 @@ func _build_trap_selector() -> void:
 		var btn := Button.new()
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.add_theme_font_size_override("font_size", 13)
+		btn.add_theme_font_override("font", UIFonts.primary())
 		btn.text = _selector_label(i)
 		# bind(i) passes i as the argument when the pressed signal fires.
 		btn.pressed.connect(GameState.select_trap_type.bind(i))

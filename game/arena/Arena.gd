@@ -33,6 +33,7 @@ const Trap              = preload("res://traps/Trap.gd")
 const Projectile        = preload("res://traps/Projectile.gd")
 const HUD               = preload("res://ui/HUD.gd")
 const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
+const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +91,8 @@ var _path_marker_pool: Array[MeshInstance3D] = []
 var _active_enemies: Array[Node3D] = []
 
 # Wave spawning — enemies launch one at a time with a small gap between them.
-const WAVE_SIZE: int = 10
+const WAVE_SIZE: int = 10   # default; overridden at runtime by the debug start dialog
+var _wave_size: int = WAVE_SIZE
 const SPAWN_INTERVAL: float = 0.36     # seconds between each enemy in the wave
 const WAVE_COUNTDOWN: int  = 3         # seconds of countdown before each wave
 
@@ -108,6 +110,9 @@ var _hover_cell: Vector2i = Vector2i(-1, -1)
 # The currently open upgrade panel, or null if none is open.
 # Only one panel is open at a time — opening a new one closes the previous.
 var _upgrade_panel: Node = null
+
+# True while the panel is the reason the tree is paused, so close knows to unpause.
+var _panel_paused: bool = false
 
 # Drag placement state — press starts, drag extends a line of ghost traps,
 # release commits them in order; right-click cancels without placing.
@@ -186,20 +191,24 @@ func _ready() -> void:
 	_pathfinder.recalculate()
 	add_child(HUD.new())
 	GameState.wave_skip_requested.connect(_on_wave_skip_requested)
+	GameState.run_ended.connect(_close_upgrade_panel)
 
 	# Size the camera to fit the arena inside the non-HUD portion of the screen,
 	# and re-fit whenever the window is resized.
 	_fit_camera_to_grid()
 	get_viewport().size_changed.connect(_fit_camera_to_grid)
 
-	_start_wave()
+	# Show the playtest setup dialog before starting the first wave.
+	var dialog := DebugStartDialog.new()
+	dialog.confirmed.connect(_on_debug_confirmed)
+	add_child(dialog)
 
 
 # ---------------------------------------------------------------------------
 # Input
 # ---------------------------------------------------------------------------
 
-func _input(event: InputEvent) -> void:
+func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		var cell := _screen_to_grid(event.position)
 		if cell != _hover_cell:
@@ -407,17 +416,25 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 	add_child(panel)
 	panel.initialize(_trap_nodes[anchor])
 	_upgrade_panel = panel
+	get_tree().paused = true
+	_panel_paused = true
 
 
-## Closes and frees the upgrade panel if one is open.
+## Closes and frees the upgrade panel if one is open, then unpauses if we paused.
 func _close_upgrade_panel() -> void:
 	if _upgrade_panel != null and is_instance_valid(_upgrade_panel):
 		_upgrade_panel.queue_free()
 	_upgrade_panel = null
+	if _panel_paused:
+		get_tree().paused = false
+		_panel_paused = false
 
 
 func _on_upgrade_panel_closed() -> void:
 	_upgrade_panel = null
+	if _panel_paused:
+		get_tree().paused = false
+		_panel_paused = false
 
 
 ## Returns true if the given cells can be trapped without sealing either gap.
@@ -614,6 +631,14 @@ func _handle_key(_keycode: int) -> void:
 	pass
 
 
+## Receives the confirmed playtest values from DebugStartDialog and starts the run.
+func _on_debug_confirmed(bug_bucks: int, wave_size: int) -> void:
+	_wave_size = wave_size
+	GameState.bug_bucks = bug_bucks
+	GameState.bug_bucks_changed.emit(bug_bucks)
+	_start_wave()
+
+
 ## Skips any active countdown and starts the wave immediately.
 ## Triggered by the "Send Wave Early" HUD button via GameState.wave_skip_requested.
 func _on_wave_skip_requested() -> void:
@@ -625,7 +650,7 @@ func _on_wave_skip_requested() -> void:
 
 ## Begins spawning WAVE_SIZE enemies, one every SPAWN_INTERVAL seconds.
 func _launch_wave() -> void:
-	_enemies_left_to_spawn = WAVE_SIZE
+	_enemies_left_to_spawn = _wave_size
 	get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
 
 
