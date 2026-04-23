@@ -157,10 +157,10 @@ func _refresh() -> void:
 		_on_close()
 		return
 
-	var star      := _trap.get_star()
-	var tier      := _trap.get_tier()
-	var cost      := _trap.get_upgrade_cost()
-	var affordable := GameState.bug_bucks >= cost
+	var star: int      = _trap.get_star()
+	var tier: int      = _trap.get_tier()
+	var cost: int      = _trap.get_upgrade_cost()
+	var affordable: bool = GameState.bug_bucks >= cost
 
 	_lbl_title.text = "%s  —  Tier %d" % [_trap.get_type_name(), tier]
 	_lbl_stars.text = "★".repeat(star) + "☆".repeat(5 - star)
