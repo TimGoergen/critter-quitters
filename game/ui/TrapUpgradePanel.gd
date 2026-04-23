@@ -31,6 +31,7 @@ const COLOR_BTN_HOVER   := Color(0.10, 0.32, 0.32, 1.0)
 const COLOR_BTN_PRESSED := Color(0.03, 0.15, 0.15, 1.0)
 const COLOR_BTN_BORDER  := Color(0.20, 0.55, 0.55, 1.0)
 const COLOR_BTN_MAX     := Color(0.08, 0.18, 0.18, 1.0)   # dimmed when maxed
+const COLOR_STARS       := Color(0.85, 0.72, 0.10, 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -42,9 +43,12 @@ var _trap:       Node      = null
 var _border:     ColorRect = null
 var _bg:         ColorRect = null
 var _lbl_title:  Label     = null
-var _lbl_damage: Label     = null
-var _lbl_range:  Label     = null
-var _lbl_rate:   Label     = null
+var _lbl_damage:       Label = null
+var _lbl_damage_stars: Label = null
+var _lbl_range:        Label = null
+var _lbl_range_stars:  Label = null
+var _lbl_rate:         Label = null
+var _lbl_rate_stars:   Label = null
 var _btn_a:      Button    = null   # Damage
 var _btn_b:      Button    = null   # Range
 var _btn_c:      Button    = null   # Fire Rate
@@ -112,9 +116,28 @@ func _build_ui() -> void:
 	y += 28.0
 
 	# --- Current stats ---
-	_lbl_damage = _add_stat_label(y); y += 18.0
-	_lbl_range  = _add_stat_label(y); y += 18.0
-	_lbl_rate   = _add_stat_label(y); y += 18.0
+	# Each row is an HBoxContainer: value label expands to fill, stars label
+	# is right-aligned — this keeps the three star columns vertically aligned.
+	var dmg_row := _add_stat_row(y)
+	_lbl_damage       = _make_stat_value_label()
+	_lbl_damage_stars = _make_stat_stars_label()
+	dmg_row.add_child(_lbl_damage)
+	dmg_row.add_child(_lbl_damage_stars)
+	y += 18.0
+
+	var rng_row := _add_stat_row(y)
+	_lbl_range       = _make_stat_value_label()
+	_lbl_range_stars = _make_stat_stars_label()
+	rng_row.add_child(_lbl_range)
+	rng_row.add_child(_lbl_range_stars)
+	y += 18.0
+
+	var rate_row := _add_stat_row(y)
+	_lbl_rate       = _make_stat_value_label()
+	_lbl_rate_stars = _make_stat_stars_label()
+	rate_row.add_child(_lbl_rate)
+	rate_row.add_child(_lbl_rate_stars)
+	y += 18.0
 
 	# --- Horizontal divider ---
 	_add_divider(y)
@@ -141,13 +164,18 @@ func _refresh() -> void:
 		return
 
 	_lbl_title.text  = _trap.get_type_name()
-	_lbl_damage.text = "Damage:    %.1f  %s" % [_trap.get_damage(),        _stars(_trap.get_damage_level())]
-	_lbl_range.text  = "Range:     %.1f  %s" % [_trap.get_range_radius(),  _stars(_trap.get_range_level())]
+
+	_lbl_damage.text       = "Damage:    %.1f" % _trap.get_damage()
+	_lbl_damage_stars.text = _stars(_trap.get_damage_level())
+	_lbl_range.text        = "Range:     %.1f" % _trap.get_range_radius()
+	_lbl_range_stars.text  = _stars(_trap.get_range_level())
 
 	if _trap.is_passive():
-		_lbl_rate.text = "Fire Rate: passive"
+		_lbl_rate.text       = "Fire Rate: passive"
+		_lbl_rate_stars.text = ""
 	else:
-		_lbl_rate.text = "Fire Rate: %.2f /s  %s" % [_trap.get_shots_per_sec(), _stars(_trap.get_rate_level())]
+		_lbl_rate.text       = "Fire Rate: %.2f /s" % _trap.get_shots_per_sec()
+		_lbl_rate_stars.text = _stars(_trap.get_rate_level())
 
 	_refresh_button(
 		_btn_a,
@@ -229,12 +257,24 @@ func _on_bug_bucks_changed(_amount: int) -> void:
 # UI helpers
 # ---------------------------------------------------------------------------
 
-func _add_stat_label(y: float) -> Label:
-	var lbl      := Label.new()
-	lbl.position  = Vector2(PADDING, y)
+func _add_stat_row(y: float) -> HBoxContainer:
+	var row := HBoxContainer.new()
+	row.position            = Vector2(PADDING, y)
+	row.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, 16.0)
+	_bg.add_child(row)
+	return row
+
+func _make_stat_value_label() -> Label:
+	var lbl := Label.new()
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.add_theme_font_size_override("font_size", 13)
 	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
-	_bg.add_child(lbl)
+	return lbl
+
+func _make_stat_stars_label() -> Label:
+	var lbl := Label.new()
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", COLOR_STARS)
 	return lbl
 
 
