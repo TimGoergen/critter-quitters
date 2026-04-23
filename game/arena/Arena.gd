@@ -58,6 +58,7 @@ const COLOR_PATH      := Color(0.80, 0.70, 0.20, 0.5)   # yellow, semi-transpare
 const COLOR_GRID_GLOW    := Color(0.65, 0.90, 1.0)       # cool blue-white for cursor glow
 const COLOR_WALL_FILL    := Color(0.72, 0.72, 0.72, 1.0) # light gray wall fill
 const COLOR_WALL_BORDER  := Color(0.25, 0.25, 0.25, 1.0) # dark gray cell border lines
+const COLOR_TRAP_SELECTED := Color(0.90, 0.70, 0.10, 1.0) # gold outline on selected trap
 
 
 # ---------------------------------------------------------------------------
@@ -107,6 +108,10 @@ var _display_path: Array[Vector2i] = []
 # Grid highlight — a single ImmediateMesh rebuilt each time the hover cell changes.
 var _grid_highlight: MeshInstance3D = null
 var _hover_cell: Vector2i = Vector2i(-1, -1)
+
+# Gold perimeter drawn around the 2×2 footprint of the currently open upgrade panel.
+# Separate node from _grid_highlight so cursor movement does not clear it.
+var _selected_trap_outline: MeshInstance3D = null
 
 # The currently open upgrade panel, or null if none is open.
 # Only one panel is open at a time — opening a new one closes the previous.
@@ -186,6 +191,7 @@ func _ready() -> void:
 	_spawn_zone_marker(_despawn_cell, 3, COLOR_EXIT)
 
 	_setup_grid_highlight()
+	_setup_selected_trap_outline()
 	_init_path_marker_pool()
 	_spawn_arena_border()
 
@@ -417,6 +423,7 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 	add_child(panel)
 	panel.initialize(_trap_nodes[anchor])
 	_upgrade_panel = panel
+	_show_selected_trap_outline(anchor)
 	get_tree().paused = true
 	_panel_paused = true
 
@@ -426,6 +433,7 @@ func _close_upgrade_panel() -> void:
 	if _upgrade_panel != null and is_instance_valid(_upgrade_panel):
 		_upgrade_panel.queue_free()
 	_upgrade_panel = null
+	_hide_selected_trap_outline()
 	if _panel_paused:
 		get_tree().paused = false
 		_panel_paused = false
@@ -433,6 +441,7 @@ func _close_upgrade_panel() -> void:
 
 func _on_upgrade_panel_closed() -> void:
 	_upgrade_panel = null
+	_hide_selected_trap_outline()
 	if _panel_paused:
 		get_tree().paused = false
 		_panel_paused = false
@@ -725,6 +734,49 @@ func _init_path_marker_pool() -> void:
 		marker.visible = false
 		_path_visual.add_child(marker)
 		_path_marker_pool.append(marker)
+
+
+## Creates the MeshInstance3D used for the selected-trap gold outline.
+## The mesh is rebuilt each time a panel opens and cleared when it closes.
+func _setup_selected_trap_outline() -> void:
+	_selected_trap_outline = MeshInstance3D.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.vertex_color_use_as_albedo = true
+	_selected_trap_outline.material_override = mat
+	add_child(_selected_trap_outline)
+
+
+## Draws a gold perimeter around the 2×2 footprint of the trap at anchor.
+## Three concentric rectangles simulate line thickness (Godot 4 has no 3D line width).
+func _show_selected_trap_outline(anchor: Vector2i) -> void:
+	var im  := ImmediateMesh.new()
+	var hs  := Grid.CELL_SIZE * 0.5
+	var y   := 0.12   # slightly above the cursor glow layer (0.08)
+	var c   := _cell_to_world(anchor)
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	for e: float in [-Grid.CELL_SIZE * 0.03, 0.0, Grid.CELL_SIZE * 0.03]:
+		var tl := Vector3(c.x - hs - e,                  y, c.z - hs - e)
+		var tr := Vector3(c.x + hs + Grid.CELL_SIZE + e, y, c.z - hs - e)
+		var bl := Vector3(c.x - hs - e,                  y, c.z + hs + Grid.CELL_SIZE + e)
+		var br := Vector3(c.x + hs + Grid.CELL_SIZE + e, y, c.z + hs + Grid.CELL_SIZE + e)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(tl)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(tr)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(tr)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(br)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(br)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(bl)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(bl)
+		im.surface_set_color(COLOR_TRAP_SELECTED); im.surface_add_vertex(tl)
+	im.surface_end()
+	_selected_trap_outline.mesh = im
+
+
+## Clears the selected-trap outline by removing its mesh.
+func _hide_selected_trap_outline() -> void:
+	if _selected_trap_outline != null:
+		_selected_trap_outline.mesh = null
 
 
 ## Creates the MeshInstance3D used for the cursor grid glow.
