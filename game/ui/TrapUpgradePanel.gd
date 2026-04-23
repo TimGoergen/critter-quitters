@@ -141,13 +141,13 @@ func _refresh() -> void:
 		return
 
 	_lbl_title.text  = _trap.get_type_name()
-	_lbl_damage.text = "Damage:    %.1f" % _trap.get_damage()
-	_lbl_range.text  = "Range:     %.1f" % _trap.get_range_radius()
+	_lbl_damage.text = "Damage:    %.1f  %s" % [_trap.get_damage(),        _stars(_trap.get_damage_level())]
+	_lbl_range.text  = "Range:     %.1f  %s" % [_trap.get_range_radius(),  _stars(_trap.get_range_level())]
 
 	if _trap.is_passive():
 		_lbl_rate.text = "Fire Rate: passive"
 	else:
-		_lbl_rate.text = "Fire Rate: %.2f /s" % _trap.get_shots_per_sec()
+		_lbl_rate.text = "Fire Rate: %.2f /s  %s" % [_trap.get_shots_per_sec(), _stars(_trap.get_rate_level())]
 
 	_refresh_button(
 		_btn_a,
@@ -246,6 +246,11 @@ func _add_upgrade_button(y: float) -> Button:
 	_apply_button_style(btn, false)
 	_bg.add_child(btn)
 	return btn
+
+
+## Returns filled/empty star characters for the given upgrade level out of 3.
+func _stars(level: int) -> String:
+	return "★".repeat(level) + "☆".repeat(3 - level)
 
 
 func _add_divider(y: float) -> void:
