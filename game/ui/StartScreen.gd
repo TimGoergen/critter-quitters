@@ -79,7 +79,7 @@ func _build_ui() -> void:
 	start_btn.pressed.connect(_on_start_pressed)
 	add_child(start_btn)
 
-	var quit_btn := _make_button("But Out")
+	var quit_btn := _make_button("Bug Out")
 	quit_btn.anchor_left   = 0.52
 	quit_btn.anchor_right  = 0.75
 	quit_btn.anchor_top    = 0.68
