@@ -33,6 +33,7 @@ const Trap              = preload("res://traps/Trap.gd")
 const Projectile        = preload("res://traps/Projectile.gd")
 const HUD               = preload("res://ui/HUD.gd")
 const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
+const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
 
 
 # ---------------------------------------------------------------------------
@@ -90,7 +91,8 @@ var _path_marker_pool: Array[MeshInstance3D] = []
 var _active_enemies: Array[Node3D] = []
 
 # Wave spawning — enemies launch one at a time with a small gap between them.
-const WAVE_SIZE: int = 10
+const WAVE_SIZE: int = 10   # default; overridden at runtime by the debug start dialog
+var _wave_size: int = WAVE_SIZE
 const SPAWN_INTERVAL: float = 0.36     # seconds between each enemy in the wave
 const WAVE_COUNTDOWN: int  = 3         # seconds of countdown before each wave
 
@@ -196,7 +198,10 @@ func _ready() -> void:
 	_fit_camera_to_grid()
 	get_viewport().size_changed.connect(_fit_camera_to_grid)
 
-	_start_wave()
+	# Show the playtest setup dialog before starting the first wave.
+	var dialog := DebugStartDialog.new()
+	dialog.confirmed.connect(_on_debug_confirmed)
+	add_child(dialog)
 
 
 # ---------------------------------------------------------------------------
@@ -626,6 +631,14 @@ func _handle_key(_keycode: int) -> void:
 	pass
 
 
+## Receives the confirmed playtest values from DebugStartDialog and starts the run.
+func _on_debug_confirmed(bug_bucks: int, wave_size: int) -> void:
+	_wave_size = wave_size
+	GameState.bug_bucks = bug_bucks
+	GameState.bug_bucks_changed.emit(bug_bucks)
+	_start_wave()
+
+
 ## Skips any active countdown and starts the wave immediately.
 ## Triggered by the "Send Wave Early" HUD button via GameState.wave_skip_requested.
 func _on_wave_skip_requested() -> void:
@@ -637,7 +650,7 @@ func _on_wave_skip_requested() -> void:
 
 ## Begins spawning WAVE_SIZE enemies, one every SPAWN_INTERVAL seconds.
 func _launch_wave() -> void:
-	_enemies_left_to_spawn = WAVE_SIZE
+	_enemies_left_to_spawn = _wave_size
 	get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
 
 
