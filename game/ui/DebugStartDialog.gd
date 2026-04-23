@@ -30,6 +30,7 @@ const COLOR_FIELD_BG    := Color(0.02, 0.18, 0.18, 1.0)
 const COLOR_FIELD_BORDER := Color(0.20, 0.55, 0.55, 1.0)
 
 const UIFonts = preload("res://ui/UIFonts.gd")
+const HUD     = preload("res://ui/HUD.gd")
 
 var _field_bucks: LineEdit = null
 var _field_waves: LineEdit = null
@@ -43,7 +44,10 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	var vp := get_viewport().get_visible_rect().size
-	var px := (vp.x - PANEL_W) * 0.5
+	# In landscape the arena occupies only the left portion of the screen.
+	# Centre the dialog within that region rather than the full viewport width.
+	var arena_w := vp.x - HUD.SELECTOR_PANEL_W if vp.x >= vp.y else vp.x
+	var px := (arena_w - PANEL_W) * 0.5
 	var py := (vp.y - PANEL_H) * 0.5
 
 	# Store the full panel rect (including border) for outside-click detection.
