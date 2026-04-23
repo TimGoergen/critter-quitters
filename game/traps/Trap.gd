@@ -98,6 +98,9 @@ var _damage_level: int = 0
 var _range_level:  int = 0
 var _rate_level:   int = 0   # always stays 0 for passive traps
 
+# Set to true once the full-upgrade bonus has been applied, so it only fires once.
+var _bonus_applied: bool = false
+
 # Base stats stored at initialize time so each upgrade step is a consistent
 # fraction of the original value regardless of how many upgrades have been applied.
 var _base_damage:   float = 0.0
@@ -185,12 +188,14 @@ func get_shots_per_sec_after_upgrade() -> float:
 func apply_damage_upgrade() -> void:
 	_damage += _base_damage * UPGRADE_DAMAGE_FACTOR
 	_damage_level += 1
+	_check_full_upgrade_bonus()
 	stats_changed.emit()
 
 ## Increases range by 10% of base. Only call when not maxed.
 func apply_range_upgrade() -> void:
 	_range += _base_range * UPGRADE_RANGE_FACTOR
 	_range_level += 1
+	_check_full_upgrade_bonus()
 	stats_changed.emit()
 
 ## Reduces cooldown by 8% of base (faster shots). Only call when not maxed.
@@ -198,6 +203,7 @@ func apply_range_upgrade() -> void:
 func apply_fire_rate_upgrade() -> void:
 	_cooldown = maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
 	_rate_level += 1
+	_check_full_upgrade_bonus()
 	stats_changed.emit()
 
 
@@ -222,6 +228,14 @@ func is_range_maxed() -> bool:
 
 func is_rate_maxed() -> bool:
 	return _rate_level >= MAX_UPGRADE_LEVEL
+
+## True when every upgradeable stat is at MAX_UPGRADE_LEVEL.
+## Passive traps (no fire rate) are fully upgraded after 6 total upgrades;
+## active traps require all 9.
+func is_fully_upgraded() -> bool:
+	if _base_cooldown == 0.0:
+		return is_damage_maxed() and is_range_maxed()
+	return is_damage_maxed() and is_range_maxed() and is_rate_maxed()
 
 func get_damage() -> float:
 	return _damage
@@ -324,6 +338,19 @@ func _xz_distance(world_pos: Vector3) -> float:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+## Called after each upgrade. If all stats are now maxed and the bonus has not
+## yet been applied, boosts every stat by 10% as a reward for full investment.
+## Fire rate boost reduces cooldown so shots-per-second increases by ~11%.
+func _check_full_upgrade_bonus() -> void:
+	if _bonus_applied or not is_fully_upgraded():
+		return
+	_damage  *= 1.1
+	_range   *= 1.1
+	if _base_cooldown > 0.0:
+		_cooldown = maxf(_cooldown / 1.1, 0.1)
+	_bonus_applied = true
+
 
 ## Creates the placeholder visual as a child MeshInstance3D.
 ## Replaced by a sprite node in Phase 3.
