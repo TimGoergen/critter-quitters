@@ -144,7 +144,7 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		if not _panel_rect.has_point(event.position):
 			get_viewport().set_input_as_handled()
-			queue_free()
+			_on_start_pressed()
 
 
 func _on_start_pressed() -> void:
