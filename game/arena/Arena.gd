@@ -26,21 +26,26 @@ extends Node3D
 
 # Explicit dependencies — preloading makes cross-script references visible
 # at the top of the file rather than relying on the global class registry.
-const Grid        = preload("res://arena/Grid.gd")
-const Pathfinder  = preload("res://arena/Pathfinder.gd")
-const Enemy       = preload("res://enemies/Enemy.gd")
-const Trap        = preload("res://traps/Trap.gd")
-const Projectile  = preload("res://traps/Projectile.gd")
-const HUD         = preload("res://ui/HUD.gd")
+const Grid              = preload("res://arena/Grid.gd")
+const Pathfinder        = preload("res://arena/Pathfinder.gd")
+const Enemy             = preload("res://enemies/Enemy.gd")
+const Trap              = preload("res://traps/Trap.gd")
+const Projectile        = preload("res://traps/Projectile.gd")
+const HUD               = preload("res://ui/HUD.gd")
+const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
 
 
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-# HUD strip heights in screen pixels — keep in sync with PANEL_H and
-# (BAR_H + MARGIN * 2) in HUD.gd so the camera size calculation stays accurate.
-const HUD_TOP_PX: float = 44.0
+# Set to true to render the yellow path line during play. Off by default —
+# the path visualisation is a debug aid; it clutters the arena during normal play.
+const SHOW_PATH_LINE: bool = false
+
+# HUD strip heights in screen pixels — keep in sync with PANEL_H + SELECTOR_H
+# (top stats bar + trap selector strip) and (BAR_H + MARGIN * 2) in HUD.gd.
+const HUD_TOP_PX: float = 84.0   # 44 stats panel + 40 trap selector strip
 const HUD_BOT_PX: float = 38.0
 
 # Phase 1 placeholder colours. These are replaced by ASCII billboards in Phase 3.
@@ -99,6 +104,10 @@ var _display_path: Array[Vector2i] = []
 # Grid highlight — a single ImmediateMesh rebuilt each time the hover cell changes.
 var _grid_highlight: MeshInstance3D = null
 var _hover_cell: Vector2i = Vector2i(-1, -1)
+
+# The currently open upgrade panel, or null if none is open.
+# Only one panel is open at a time — opening a new one closes the previous.
+var _upgrade_panel: Node = null
 
 # Drag placement state — press starts, drag extends a line of ghost traps,
 # release commits them in order; right-click cancels without placing.
@@ -220,7 +229,12 @@ func _input(event: InputEvent) -> void:
 		MOUSE_BUTTON_LEFT:
 			if event.pressed:
 				if _is_in_arena(cell):
-					_start_drag_placement(cell)
+					if _trap_anchors.has(cell):
+						# Tapping a placed trap opens the upgrade panel for it.
+						_open_upgrade_panel(_trap_anchors[cell])
+					else:
+						_close_upgrade_panel()
+						_start_drag_placement(cell)
 			else:
 				if _pressing:
 					_commit_drag_placement()
@@ -260,9 +274,10 @@ func _update_drag_ghosts(target: Vector2i) -> void:
 				break
 		if not buildable:
 			continue
+		var trap_color := Trap.STATS[GameState.selected_trap_type]["color"] as Color
 		var ghost  := _make_box_mesh_instance(
 			Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9),
-			Color(COLOR_TRAP.r, COLOR_TRAP.g, COLOR_TRAP.b, 0.50)
+			Color(trap_color.r, trap_color.g, trap_color.b, 0.50)
 		)
 		var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 		ghost.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
@@ -298,9 +313,9 @@ func _cancel_drag_placement() -> void:
 	_drag_origin = Vector2i(-1, -1)
 
 
-## Returns true if the player can afford one more Snap Trap.
+## Returns true if the player can afford one more trap of the currently selected type.
 func _can_afford_trap() -> bool:
-	return GameState.bug_bucks >= Trap.STATS[Trap.TrapType.SNAP_TRAP]["cost"]
+	return GameState.bug_bucks >= Trap.STATS[GameState.selected_trap_type]["cost"]
 
 
 ## Returns true if any active enemy's current or target cell falls inside
@@ -368,6 +383,7 @@ func _try_place_trap(anchor: Vector2i) -> bool:
 func _try_remove_trap(cell: Vector2i) -> void:
 	if not _trap_anchors.has(cell):
 		return
+	_close_upgrade_panel()
 
 	var anchor: Vector2i = _trap_anchors[cell]
 
@@ -379,6 +395,29 @@ func _try_remove_trap(cell: Vector2i) -> void:
 	for c in _get_trap_cells(anchor):
 		_grid.remove_trap(c)
 		_trap_anchors.erase(c)
+
+
+## Opens the upgrade panel for the trap at anchor, closing any existing panel first.
+func _open_upgrade_panel(anchor: Vector2i) -> void:
+	_close_upgrade_panel()
+	if not _trap_nodes.has(anchor):
+		return
+	var panel := TrapUpgradePanel.new()
+	panel.closed.connect(_on_upgrade_panel_closed)
+	add_child(panel)
+	panel.initialize(_trap_nodes[anchor])
+	_upgrade_panel = panel
+
+
+## Closes and frees the upgrade panel if one is open.
+func _close_upgrade_panel() -> void:
+	if _upgrade_panel != null and is_instance_valid(_upgrade_panel):
+		_upgrade_panel.queue_free()
+	_upgrade_panel = null
+
+
+func _on_upgrade_panel_closed() -> void:
+	_upgrade_panel = null
 
 
 ## Returns true if the given cells can be trapped without sealing either gap.
@@ -448,7 +487,13 @@ func _on_path_updated(new_path: Array[Vector2i]) -> void:
 ## Redraws the yellow path markers starting from the active enemy's current
 ## target cell, so the line only appears ahead of the enemy.
 ## Falls back to the full display path when no enemies are active.
+## Does nothing when SHOW_PATH_LINE is false — all markers stay hidden.
 func _redraw_path_display() -> void:
+	if not SHOW_PATH_LINE:
+		for marker in _path_marker_pool:
+			marker.visible = false
+		return
+
 	var start_idx := 0
 	if not _active_enemies.is_empty():
 		var target: Vector2i = _active_enemies[0].get_target_cell()
@@ -922,7 +967,7 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 	trap.fired.connect(_on_trap_fired)
 	_trap_container.add_child(trap)
-	trap.initialize(Trap.TrapType.SNAP_TRAP, _active_enemies)
+	trap.initialize(GameState.selected_trap_type as Trap.TrapType, _active_enemies)
 	GameState.spend_bug_bucks(trap.get_cost())
 	_trap_nodes[anchor] = trap
 

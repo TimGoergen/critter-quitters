@@ -1,9 +1,11 @@
 ## HUD.gd
 ## Minimal in-run overlay: Bug Bucks counter, wave number, Infestation bar,
-## between-wave countdown splash, and run-over screen.
+## between-wave countdown splash, run-over screen, and trap type selector.
 ## Built procedurally — no scene file required.
 
 extends CanvasLayer
+
+const Trap = preload("res://traps/Trap.gd")
 
 const COLOR_PANEL_BG    := Color(0.08, 0.08, 0.13, 0.88)
 const COLOR_BAR_BG      := Color(0.15, 0.10, 0.10, 1.0)
@@ -21,9 +23,19 @@ const COLOR_BTN_HOVER   := Color(0.38, 0.38, 0.38, 1.0)
 const COLOR_BTN_PRESSED := Color(0.22, 0.22, 0.22, 1.0)
 const COLOR_BTN_BORDER  := Color(0.68, 0.68, 0.68, 1.0)
 
-const PANEL_H: float = 44.0
-const BAR_H:   float = 14.0
-const MARGIN:  float = 12.0
+# Trap selector strip — sits immediately below the top stats panel.
+# Selected button gets a green-tinted background and brighter border.
+# Cost label is gold when affordable, red when not.
+const COLOR_SEL_BG       := Color(0.14, 0.22, 0.14, 1.0)
+const COLOR_SEL_BG_HOVER := Color(0.20, 0.30, 0.20, 1.0)
+const COLOR_SEL_BORDER   := Color(0.45, 0.80, 0.45, 1.0)
+const COLOR_COST_OK      := Color(0.80, 0.60, 0.10, 1.0)
+const COLOR_COST_NO      := Color(0.70, 0.25, 0.20, 1.0)
+
+const PANEL_H:    float = 44.0
+const SELECTOR_H: float = 40.0
+const BAR_H:      float = 14.0
+const MARGIN:     float = 12.0
 
 var _wave_label:        RichTextLabel
 var _bucks_label:       Label
@@ -33,6 +45,8 @@ var _countdown_wave_label:   Label
 var _countdown_number_label: Label
 var _send_wave_btn:     Button
 var _run_over_overlay:  Control
+
+var _selector_buttons: Array[Button] = []
 
 var _blink_time: float = 0.0
 
@@ -47,6 +61,7 @@ func _ready() -> void:
 	GameState.wave_changed.connect(_on_wave_changed)
 	GameState.wave_countdown_changed.connect(_on_wave_countdown_changed)
 	GameState.run_ended.connect(_on_run_ended)
+	GameState.trap_type_selected.connect(_on_trap_type_selected)
 	_on_bucks_changed(GameState.bug_bucks)
 	_on_infestation_changed(GameState.infestation_level)
 	_on_wave_changed(GameState.current_wave)
@@ -180,6 +195,7 @@ func _build_ui() -> void:
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	add_child(_send_wave_btn)
 
+	_build_trap_selector()
 	_build_run_over_overlay()
 
 
@@ -222,6 +238,7 @@ func _build_run_over_overlay() -> void:
 
 func _on_bucks_changed(amount: int) -> void:
 	_bucks_label.text = "Bug Bucks: $%d" % amount
+	_refresh_trap_selector()
 
 
 func _on_infestation_changed(level: float) -> void:
@@ -270,6 +287,94 @@ func _on_run_ended() -> void:
 func _on_restart_pressed() -> void:
 	get_tree().paused = false
 	get_tree().reload_current_scene()
+
+
+func _build_trap_selector() -> void:
+	# Horizontal strip directly below the top stats panel.
+	var bg := ColorRect.new()
+	bg.color         = COLOR_PANEL_BG
+	bg.anchor_right  = 1.0
+	bg.offset_top    = PANEL_H
+	bg.offset_bottom = PANEL_H + SELECTOR_H
+	add_child(bg)
+
+	# MarginContainer → HBoxContainer so the four buttons share space equally
+	# and reflow automatically if the window is resized.
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left",   6)
+	margin.add_theme_constant_override("margin_right",  6)
+	margin.add_theme_constant_override("margin_top",    5)
+	margin.add_theme_constant_override("margin_bottom", 5)
+	bg.add_child(margin)
+
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	margin.add_child(row)
+
+	for i in range(4):
+		var btn := Button.new()
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.add_theme_font_size_override("font_size", 13)
+		btn.text = _selector_label(i)
+		# bind(i) passes i as the argument when the pressed signal fires.
+		btn.pressed.connect(GameState.select_trap_type.bind(i))
+		_style_selector_button(btn, i == GameState.selected_trap_type, _can_afford(i))
+		row.add_child(btn)
+		_selector_buttons.append(btn)
+
+
+func _refresh_trap_selector() -> void:
+	for i in range(_selector_buttons.size()):
+		_style_selector_button(
+			_selector_buttons[i],
+			i == GameState.selected_trap_type,
+			_can_afford(i)
+		)
+
+
+func _on_trap_type_selected(_type: int) -> void:
+	_refresh_trap_selector()
+
+
+# Returns the display text for one trap selector button.
+func _selector_label(type: int) -> String:
+	var cost: int = Trap.STATS[type]["cost"]
+	match type:
+		0: return "Snap Trap  $%d" % cost
+		1: return "Zapper  $%d"    % cost
+		2: return "Fogger  $%d"    % cost
+		3: return "Glue Board  $%d" % cost
+	return "???"
+
+
+# Returns true if the player can currently afford the given trap type.
+func _can_afford(type: int) -> bool:
+	return GameState.bug_bucks >= Trap.STATS[type]["cost"]
+
+
+# Applies the correct visual style to a selector button based on its
+# selected state and whether the player can afford it.
+func _style_selector_button(btn: Button, selected: bool, affordable: bool) -> void:
+	var bg_normal := COLOR_SEL_BG     if selected else COLOR_BTN_NORMAL
+	var bg_hover  := COLOR_SEL_BG_HOVER if selected else COLOR_BTN_HOVER
+	var bg_press  := COLOR_BTN_PRESSED
+	var border    := COLOR_SEL_BORDER if selected else COLOR_BTN_BORDER
+	var bwidth    := 2                if selected else 1
+
+	for pair: Array in [["normal", bg_normal], ["hover", bg_hover], ["pressed", bg_press]]:
+		var box := StyleBoxFlat.new()
+		box.bg_color     = pair[1]
+		box.border_color = border
+		box.set_border_width_all(bwidth)
+		box.set_corner_radius_all(4)
+		box.content_margin_left   = 8.0
+		box.content_margin_right  = 8.0
+		box.content_margin_top    = 3.0
+		box.content_margin_bottom = 3.0
+		btn.add_theme_stylebox_override(pair[0], box)
+
+	btn.add_theme_color_override("font_color", COLOR_COST_OK if affordable else COLOR_COST_NO)
 
 
 func _apply_button_style(btn: Button) -> void:

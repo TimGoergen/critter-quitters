@@ -146,7 +146,8 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 
 	var stats          = STATS[enemy_type]
 	_move_speed        = stats["speed"]
-	_max_hp            = stats["hp"] * (1.0 + 0.02 * wave)
+	# Compound 7% per wave — doubles every ~10 waves, matching the boss cycle cadence.
+	_max_hp            = stats["hp"] * pow(1.07, wave)
 	_current_hp        = _max_hp
 	_infestation_damage = stats["infestation"]
 	_bounty            = stats["bounty"]
