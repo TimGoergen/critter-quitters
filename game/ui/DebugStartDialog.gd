@@ -33,6 +33,7 @@ const UIFonts = preload("res://ui/UIFonts.gd")
 
 var _field_bucks: LineEdit = null
 var _field_waves: LineEdit = null
+var _panel_rect:  Rect2    = Rect2()
 
 
 func _ready() -> void:
@@ -44,6 +45,9 @@ func _build_ui() -> void:
 	var vp := get_viewport().get_visible_rect().size
 	var px := (vp.x - PANEL_W) * 0.5
 	var py := (vp.y - PANEL_H) * 0.5
+
+	# Store the full panel rect (including border) for outside-click detection.
+	_panel_rect = Rect2(Vector2(px - 2.0, py - 2.0), Vector2(PANEL_W + 4.0, PANEL_H + 4.0))
 
 	# Outline border
 	var border       := ColorRect.new()
@@ -134,6 +138,13 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 	row.add_child(field)
 
 	return field
+
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		if not _panel_rect.has_point(event.position):
+			get_viewport().set_input_as_handled()
+			queue_free()
 
 
 func _on_start_pressed() -> void:

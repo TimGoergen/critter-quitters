@@ -208,7 +208,7 @@ func _ready() -> void:
 # Input
 # ---------------------------------------------------------------------------
 
-func _input(event: InputEvent) -> void:
+func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
 		var cell := _screen_to_grid(event.position)
 		if cell != _hover_cell:

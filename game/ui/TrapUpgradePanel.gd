@@ -40,7 +40,8 @@ const UIFonts = preload("res://ui/UIFonts.gd")
 # State
 # ---------------------------------------------------------------------------
 
-var _trap:       Node      = null
+var _trap:        Node      = null
+var _panel_rect:  Rect2    = Rect2()
 
 var _border:     ColorRect = null
 var _bg:         ColorRect = null
@@ -79,6 +80,9 @@ func _build_ui() -> void:
 	var vp := get_viewport().get_visible_rect().size
 	var px := (vp.x - PANEL_W) * 0.5
 	var py := vp.y - PANEL_H - HUD_BOT - 10.0
+
+	# Store the full panel rect (including border) for outside-click detection.
+	_panel_rect = Rect2(Vector2(px - BORDER_W, py - BORDER_W), Vector2(PANEL_W + BORDER_W * 2.0, PANEL_H + BORDER_W * 2.0))
 
 	# Outline border — rendered behind the background rect.
 	_border          = ColorRect.new()
@@ -220,6 +224,13 @@ func _refresh_button(btn: Button, maxed: bool, cost: int, label: String) -> void
 # ---------------------------------------------------------------------------
 # Button handlers
 # ---------------------------------------------------------------------------
+
+func _input(event: InputEvent) -> void:
+	if event is InputEventMouseButton and event.pressed:
+		if not _panel_rect.has_point(event.position):
+			get_viewport().set_input_as_handled()
+			_on_close()
+
 
 func _on_btn_a() -> void:
 	if _trap.is_damage_maxed():
