@@ -33,6 +33,8 @@ const COLOR_BTN_BORDER  := Color(0.20, 0.55, 0.55, 1.0)
 const COLOR_BTN_MAX     := Color(0.08, 0.18, 0.18, 1.0)   # dimmed when maxed
 const COLOR_STARS       := Color(0.85, 0.72, 0.10, 1.0)
 
+const UIFonts = preload("res://ui/UIFonts.gd")
+
 
 # ---------------------------------------------------------------------------
 # State
@@ -105,6 +107,7 @@ func _build_ui() -> void:
 	_lbl_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_lbl_title.add_theme_font_size_override("font_size", 15)
 	_lbl_title.add_theme_color_override("font_color", COLOR_TEXT)
+	_lbl_title.add_theme_font_override("font", UIFonts.flavor())
 	header.add_child(_lbl_title)
 
 	var btn_close := Button.new()
@@ -269,12 +272,14 @@ func _make_stat_value_label() -> Label:
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.add_theme_font_size_override("font_size", 13)
 	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	lbl.add_theme_font_override("font", UIFonts.primary())
 	return lbl
 
 func _make_stat_stars_label() -> Label:
 	var lbl := Label.new()
 	lbl.add_theme_font_size_override("font_size", 13)
 	lbl.add_theme_color_override("font_color", COLOR_STARS)
+	lbl.add_theme_font_override("font", UIFonts.primary())
 	return lbl
 
 
@@ -283,6 +288,7 @@ func _add_upgrade_button(y: float) -> Button:
 	btn.position           = Vector2(PADDING, y)
 	btn.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, BTN_H)
 	btn.add_theme_font_size_override("font_size", 13)
+	btn.add_theme_font_override("font", UIFonts.primary())
 	_apply_button_style(btn, false)
 	_bg.add_child(btn)
 	return btn

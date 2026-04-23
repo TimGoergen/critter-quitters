@@ -29,6 +29,8 @@ const COLOR_BTN_BORDER  := Color(0.20, 0.55, 0.55, 1.0)
 const COLOR_FIELD_BG    := Color(0.02, 0.18, 0.18, 1.0)
 const COLOR_FIELD_BORDER := Color(0.20, 0.55, 0.55, 1.0)
 
+const UIFonts = preload("res://ui/UIFonts.gd")
+
 var _field_bucks: LineEdit = null
 var _field_waves: LineEdit = null
 
@@ -66,6 +68,7 @@ func _build_ui() -> void:
 	lbl_title.position = Vector2(PADDING, y)
 	lbl_title.add_theme_font_size_override("font_size", 16)
 	lbl_title.add_theme_color_override("font_color", COLOR_TEXT)
+	lbl_title.add_theme_font_override("font", UIFonts.flavor())
 	bg.add_child(lbl_title)
 	y += 28.0
 
@@ -99,6 +102,7 @@ func _build_ui() -> void:
 	btn.position           = Vector2(PADDING, y)
 	btn.custom_minimum_size = Vector2(inner_w, 32.0)
 	btn.add_theme_font_size_override("font_size", 15)
+	btn.add_theme_font_override("font", UIFonts.primary())
 	btn.pressed.connect(_on_start_pressed)
 	_style_button(btn)
 	bg.add_child(btn)
@@ -116,6 +120,7 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.add_theme_font_size_override("font_size", 13)
 	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	lbl.add_theme_font_override("font", UIFonts.primary())
 	lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(lbl)
 
@@ -124,6 +129,7 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 	field.custom_minimum_size   = Vector2(72.0, 28.0)
 	field.alignment             = HORIZONTAL_ALIGNMENT_CENTER
 	field.add_theme_font_size_override("font_size", 13)
+	field.add_theme_font_override("font", UIFonts.primary())
 	_style_field(field)
 	row.add_child(field)
 
