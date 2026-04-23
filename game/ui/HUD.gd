@@ -320,6 +320,7 @@ func _on_viewport_resized() -> void:
 		_selector_root.queue_free()
 	_selector_root = null
 	_build_trap_selector()
+	# _build_trap_selector already calls _update_bucks_right_margin.
 
 
 func _build_trap_selector() -> void:
@@ -328,6 +329,13 @@ func _build_trap_selector() -> void:
 		_build_selector_landscape()
 	else:
 		_build_selector_portrait()
+	_update_bucks_right_margin()
+
+
+# In landscape the Bug Bucks label must stop before the selector panel begins,
+# so the text does not crowd against or flow under the panel's left edge.
+func _update_bucks_right_margin() -> void:
+	_bucks_label.offset_right = -(SELECTOR_PANEL_W + MARGIN) if _is_landscape() else -MARGIN
 
 
 ## Landscape: buttons in a vertical panel pinned to the right edge of the screen.
@@ -365,9 +373,9 @@ func _build_selector_landscape() -> void:
 	margin.add_theme_constant_override("margin_bottom", 8)
 	bg.add_child(margin)
 
-	# VBoxContainer top-aligned so buttons group at the top of the panel.
+	# VBoxContainer centred so the button group sits in the middle of the panel.
 	var col := VBoxContainer.new()
-	col.alignment = BoxContainer.ALIGNMENT_BEGIN
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
 	col.add_theme_constant_override("separation", 6)
 	margin.add_child(col)
 
