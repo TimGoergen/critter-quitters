@@ -1,19 +1,11 @@
 ## TrapUpgradePanel.gd
 ## Appears when the player taps a placed trap. Shows current stats and
-## presents upgrade choices. Removed by calling close() or clicking [X].
+## presents one upgrade button per stat (Damage, Range, Fire Rate).
 ##
-## Normal state (star 0–4):
-##   Three buttons — Damage, Range, Fire Rate — each showing the current
-##   value and the value after that upgrade, so the choice is informed.
-##   All three options share the same Bug Bucks cost.
-##
-## Tier-up state (star 5):
-##   Three dramatic variation buttons replace the standard three. Variation
-##   content is placeholder (TODO) until Phase 5 defines per-trap variations.
-##   All three tier-up options share the same (higher) Bug Bucks cost.
-##
-## The panel reconnects when GameState.bug_bucks changes so button
-## affordability stays current while kills are earned during a wave.
+## Each stat upgrades independently up to Trap.MAX_UPGRADE_LEVEL (3) times.
+## The cost for the next upgrade of each stat is shown on its button.
+## A button shows "MAX" and is disabled when that stat is fully upgraded.
+## A button is also disabled when the player cannot afford it.
 ##
 ## process_mode is ALWAYS so the panel stays interactive while the game
 ## tree is paused (which Arena does while this panel is open).
@@ -23,7 +15,7 @@ extends CanvasLayer
 signal closed
 
 const PANEL_W:  float = 340.0
-const PANEL_H:  float = 252.0
+const PANEL_H:  float = 208.0
 const PADDING:  float = 10.0
 const BTN_H:    float = 28.0
 const BORDER_W: float = 2.0
@@ -34,13 +26,11 @@ const COLOR_OUTLINE    := Color(0.02, 0.15, 0.18, 1.0)
 const COLOR_DIVIDER    := Color(0.15, 0.45, 0.45, 1.0)
 const COLOR_TEXT       := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM   := Color(0.65, 0.80, 0.80, 1.0)
-const COLOR_COST_OK    := Color(0.80, 0.60, 0.10, 1.0)
-const COLOR_COST_NO    := Color(0.70, 0.25, 0.20, 1.0)
-const COLOR_STARS_FULL := Color(0.85, 0.72, 0.10, 1.0)
 const COLOR_BTN_NORMAL  := Color(0.06, 0.22, 0.22, 1.0)
 const COLOR_BTN_HOVER   := Color(0.10, 0.32, 0.32, 1.0)
 const COLOR_BTN_PRESSED := Color(0.03, 0.15, 0.15, 1.0)
 const COLOR_BTN_BORDER  := Color(0.20, 0.55, 0.55, 1.0)
+const COLOR_BTN_MAX     := Color(0.08, 0.18, 0.18, 1.0)   # dimmed when maxed
 
 
 # ---------------------------------------------------------------------------
@@ -52,14 +42,12 @@ var _trap:       Node      = null
 var _border:     ColorRect = null
 var _bg:         ColorRect = null
 var _lbl_title:  Label     = null
-var _lbl_stars:  Label     = null
 var _lbl_damage: Label     = null
 var _lbl_range:  Label     = null
 var _lbl_rate:   Label     = null
-var _lbl_cost:   Label     = null
-var _btn_a:      Button    = null
-var _btn_b:      Button    = null
-var _btn_c:      Button    = null
+var _btn_a:      Button    = null   # Damage
+var _btn_b:      Button    = null   # Range
+var _btn_c:      Button    = null   # Fire Rate
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +91,7 @@ func _build_ui() -> void:
 	var inner_w := PANEL_W - PADDING * 2.0
 	var y       := PADDING
 
-	# --- Header: trap name + tier | close button ---
+	# --- Header: trap name | close button ---
 	var header := HBoxContainer.new()
 	header.position            = Vector2(PADDING, y)
 	header.custom_minimum_size = Vector2(inner_w, 22.0)
@@ -118,35 +106,15 @@ func _build_ui() -> void:
 	var btn_close := Button.new()
 	btn_close.text    = "X"
 	btn_close.pressed.connect(_on_close)
-	_apply_button_style(btn_close)
+	_apply_button_style(btn_close, false)
 	header.add_child(btn_close)
 
 	y += 28.0
 
-	# --- Stars ---
-	_lbl_stars          = Label.new()
-	_lbl_stars.position = Vector2(PADDING, y)
-	_lbl_stars.add_theme_font_size_override("font_size", 16)
-	_lbl_stars.add_theme_color_override("font_color", COLOR_STARS_FULL)
-	_bg.add_child(_lbl_stars)
-
-	y += 23.0
-
-	# --- Horizontal divider ---
-	_add_divider(y)
-	y += 7.0
-
 	# --- Current stats ---
 	_lbl_damage = _add_stat_label(y); y += 18.0
 	_lbl_range  = _add_stat_label(y); y += 18.0
-	_lbl_rate   = _add_stat_label(y); y += 22.0
-
-	# --- Upgrade cost ---
-	_lbl_cost          = Label.new()
-	_lbl_cost.position = Vector2(PADDING, y)
-	_lbl_cost.add_theme_font_size_override("font_size", 13)
-	_bg.add_child(_lbl_cost)
-	y += 20.0
+	_lbl_rate   = _add_stat_label(y); y += 18.0
 
 	# --- Horizontal divider ---
 	_add_divider(y)
@@ -172,48 +140,50 @@ func _refresh() -> void:
 		_on_close()
 		return
 
-	var star: int        = _trap.get_star()
-	var tier: int        = _trap.get_tier()
-	var cost: int        = _trap.get_upgrade_cost()
-	var affordable: bool = GameState.bug_bucks >= cost
+	_lbl_title.text  = _trap.get_type_name()
+	_lbl_damage.text = "Damage:    %.1f" % _trap.get_damage()
+	_lbl_range.text  = "Range:     %.1f" % _trap.get_range_radius()
 
-	_lbl_title.text = "%s  —  Tier %d" % [_trap.get_type_name(), tier]
-	_lbl_stars.text = "★".repeat(star) + "☆".repeat(5 - star)
-
-	_lbl_damage.text = "Damage:     %.1f" % _trap.get_damage()
-	_lbl_range.text  = "Range:      %.1f" % _trap.get_range_radius()
-
-	if not _trap.is_passive():
-		_lbl_rate.text    = "Fire Rate:  %.2f /s" % _trap.get_shots_per_sec()
-		_lbl_rate.visible = true
+	if _trap.is_passive():
+		_lbl_rate.text = "Fire Rate: passive"
 	else:
-		_lbl_rate.text    = "Fire Rate:  passive"
-		_lbl_rate.visible = true
+		_lbl_rate.text = "Fire Rate: %.2f /s" % _trap.get_shots_per_sec()
 
-	_lbl_cost.text = "%d Bug Bucks" % cost
-	_lbl_cost.add_theme_color_override("font_color", COLOR_COST_OK if affordable else COLOR_COST_NO)
+	_refresh_button(
+		_btn_a,
+		_trap.is_damage_maxed(),
+		_trap.get_damage_upgrade_cost(),
+		"Damage   %.1f → %.1f" % [_trap.get_damage(), _trap.get_damage_after_upgrade()]
+	)
+	_refresh_button(
+		_btn_b,
+		_trap.is_range_maxed(),
+		_trap.get_range_upgrade_cost(),
+		"Range    %.1f → %.1f" % [_trap.get_range_radius(), _trap.get_range_after_upgrade()]
+	)
 
-	if star < 5:
-		# Normal upgrade options — show current and post-upgrade values.
-		_btn_a.text = "Damage      %.1f  →  %.1f" % [_trap.get_damage(), _trap.get_damage_after_upgrade()]
-		_btn_b.text = "Range       %.1f  →  %.1f" % [_trap.get_range_radius(), _trap.get_range_after_upgrade()]
-
-		if not _trap.is_passive():
-			_btn_c.text    = "Fire Rate   %.2f  →  %.2f /s" % [_trap.get_shots_per_sec(), _trap.get_shots_per_sec_after_upgrade()]
-			_btn_c.visible = true
-		else:
-			_btn_c.visible = false
+	if _trap.is_passive():
+		_btn_c.visible = false
 	else:
-		# Star 5 — tier-up variation options.
-		# Variation names and effects are defined in Phase 5.
-		_btn_a.text    = "Variation A  —  [TODO]"
-		_btn_b.text    = "Variation B  —  [TODO]"
-		_btn_c.text    = "Variation C  —  [TODO]"
 		_btn_c.visible = true
+		_refresh_button(
+			_btn_c,
+			_trap.is_rate_maxed(),
+			_trap.get_rate_upgrade_cost(),
+			"Fire Rate  %.2f → %.2f /s" % [_trap.get_shots_per_sec(), _trap.get_shots_per_sec_after_upgrade()]
+		)
 
-	_btn_a.disabled = not affordable
-	_btn_b.disabled = not affordable
-	_btn_c.disabled = not affordable
+
+## Updates one upgrade button: sets text, cost suffix, disabled state, and dim style.
+func _refresh_button(btn: Button, maxed: bool, cost: int, label: String) -> void:
+	if maxed:
+		btn.text     = label.split("  ")[0] + "   MAX"
+		btn.disabled = true
+		_apply_button_style(btn, true)
+	else:
+		btn.text     = "%s   $%d" % [label, cost]
+		btn.disabled = GameState.bug_bucks < cost
+		_apply_button_style(btn, false)
 
 
 # ---------------------------------------------------------------------------
@@ -221,30 +191,27 @@ func _refresh() -> void:
 # ---------------------------------------------------------------------------
 
 func _on_btn_a() -> void:
-	if not GameState.spend_bug_bucks(_trap.get_upgrade_cost()):
+	if _trap.is_damage_maxed():
 		return
-	if _trap.get_star() < 5:
-		_trap.apply_damage_upgrade()
-	else:
-		_trap.apply_tier_up(0)
+	if not GameState.spend_bug_bucks(_trap.get_damage_upgrade_cost()):
+		return
+	_trap.apply_damage_upgrade()
 
 
 func _on_btn_b() -> void:
-	if not GameState.spend_bug_bucks(_trap.get_upgrade_cost()):
+	if _trap.is_range_maxed():
 		return
-	if _trap.get_star() < 5:
-		_trap.apply_range_upgrade()
-	else:
-		_trap.apply_tier_up(1)
+	if not GameState.spend_bug_bucks(_trap.get_range_upgrade_cost()):
+		return
+	_trap.apply_range_upgrade()
 
 
 func _on_btn_c() -> void:
-	if not GameState.spend_bug_bucks(_trap.get_upgrade_cost()):
+	if _trap.is_rate_maxed() or _trap.is_passive():
 		return
-	if _trap.get_star() < 5:
-		_trap.apply_fire_rate_upgrade()
-	else:
-		_trap.apply_tier_up(2)
+	if not GameState.spend_bug_bucks(_trap.get_rate_upgrade_cost()):
+		return
+	_trap.apply_fire_rate_upgrade()
 
 
 func _on_close() -> void:
@@ -276,7 +243,7 @@ func _add_upgrade_button(y: float) -> Button:
 	btn.position           = Vector2(PADDING, y)
 	btn.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, BTN_H)
 	btn.add_theme_font_size_override("font_size", 13)
-	_apply_button_style(btn)
+	_apply_button_style(btn, false)
 	_bg.add_child(btn)
 	return btn
 
@@ -289,8 +256,13 @@ func _add_divider(y: float) -> void:
 	_bg.add_child(line)
 
 
-func _apply_button_style(btn: Button) -> void:
-	for state: Array in [["normal", COLOR_BTN_NORMAL], ["hover", COLOR_BTN_HOVER], ["pressed", COLOR_BTN_PRESSED]]:
+## Applies the correct button style. maxed=true uses a dimmer palette to signal
+## the stat is fully upgraded rather than just unaffordable.
+func _apply_button_style(btn: Button, maxed: bool) -> void:
+	var normal  := COLOR_BTN_MAX    if maxed else COLOR_BTN_NORMAL
+	var hover   := COLOR_BTN_MAX    if maxed else COLOR_BTN_HOVER
+	var pressed := COLOR_BTN_MAX    if maxed else COLOR_BTN_PRESSED
+	for state: Array in [["normal", normal], ["hover", hover], ["pressed", pressed]]:
 		var box := StyleBoxFlat.new()
 		box.bg_color           = state[1]
 		box.border_color       = COLOR_BTN_BORDER

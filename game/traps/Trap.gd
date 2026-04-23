@@ -18,11 +18,9 @@
 ##   fire time and does nothing on arrival.
 ##
 ## Upgrade model:
-##   Each trap instance tracks a star level (0–5) and a tier (0+). On each
-##   upgrade the player chooses Damage, Range, or Fire Rate; that stat
-##   improves and the star level advances by one. At star 5 the next
-##   purchase is a tier-up: the tier increases, the star resets to 0, and
-##   a dramatic variation is applied (placeholder until Phase 5).
+##   Each trap instance tracks three independent upgrade levels — one per
+##   stat (Damage, Range, Fire Rate). Each stat can be upgraded up to
+##   MAX_UPGRADE_LEVEL (3) times. Costs per level are defined in UPGRADE_COSTS.
 ##
 ## Usage: instantiate via Arena, call initialize(), set position, then
 ## add to the scene tree.
@@ -52,10 +50,23 @@ const STATS := {
 	TrapType.GLUE_BOARD: { "damage": 0.0,   "range": 4.8, "cooldown": 0.0, "cost": 35, "color": Color(0.80, 0.70, 0.30) },
 }
 
-## Fraction of the base stat added per normal upgrade. Marked as tuning values.
-const UPGRADE_DAMAGE_FACTOR:    float = 0.25  # +25% of base damage per star
-const UPGRADE_RANGE_FACTOR:     float = 0.10  # +10% of base range per star
-const UPGRADE_FIRE_RATE_FACTOR: float = 0.08  # −8% of base cooldown per star (faster shots)
+## Each stat can be upgraded this many times independently.
+const MAX_UPGRADE_LEVEL: int = 3
+
+## Stat increment per upgrade level, as a fraction of the base value.
+const UPGRADE_DAMAGE_FACTOR:    float = 0.25  # +25% of base damage per level
+const UPGRADE_RANGE_FACTOR:     float = 0.10  # +10% of base range per level
+const UPGRADE_FIRE_RATE_FACTOR: float = 0.08  # −8% of base cooldown per level (faster shots)
+
+## Bug Bucks cost for each upgrade level per trap type.
+## Index 0 = first upgrade, 1 = second, 2 = third.
+## All values are tuning placeholders — finalize via playtesting.
+const UPGRADE_COSTS := {
+	TrapType.SNAP_TRAP:  [20, 30, 50],
+	TrapType.ZAPPER:     [50, 75, 120],
+	TrapType.FOGGER:     [40, 60, 100],
+	TrapType.GLUE_BOARD: [30, 45, 70],
+}
 
 
 # ---------------------------------------------------------------------------
@@ -82,9 +93,10 @@ var _cooldown: float           = 0.0
 var _cooldown_remaining: float = 0.0
 var _cost:     int             = 0
 
-# Upgrade state.
-var _tier: int = 0   # increments each time the trap tiers up
-var _star: int = 0   # 0–5; resets to 0 on tier-up
+# Upgrade state — each stat tracks its own level independently (0–MAX_UPGRADE_LEVEL).
+var _damage_level: int = 0
+var _range_level:  int = 0
+var _rate_level:   int = 0   # always stays 0 for passive traps
 
 # Base stats stored at initialize time so each upgrade step is a consistent
 # fraction of the original value regardless of how many upgrades have been applied.
@@ -126,14 +138,21 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 # Upgrade — cost
 # ---------------------------------------------------------------------------
 
-## Cost in Bug Bucks to perform the next upgrade on this trap.
-## Normal upgrades (star 0–4) use the target star level in the formula.
-## Tier-up (star 5) is calculated as though the target star were 6,
-## then multiplied by 1.2 to reflect the premium on tier transitions.
-func get_upgrade_cost() -> int:
-	if _star < 5:
-		return int(_tier * _cost + (_star + 1) * _cost * 0.8)
-	return int((_tier * _cost + 6.0 * _cost * 0.8) * 1.2)
+## Bug Bucks cost for the next upgrade to each stat. Returns 0 when already maxed.
+func get_damage_upgrade_cost() -> int:
+	if _damage_level >= MAX_UPGRADE_LEVEL:
+		return 0
+	return UPGRADE_COSTS[_trap_type][_damage_level]
+
+func get_range_upgrade_cost() -> int:
+	if _range_level >= MAX_UPGRADE_LEVEL:
+		return 0
+	return UPGRADE_COSTS[_trap_type][_range_level]
+
+func get_rate_upgrade_cost() -> int:
+	if _rate_level >= MAX_UPGRADE_LEVEL or _base_cooldown == 0.0:
+		return 0
+	return UPGRADE_COSTS[_trap_type][_rate_level]
 
 
 # ---------------------------------------------------------------------------
@@ -162,32 +181,23 @@ func get_shots_per_sec_after_upgrade() -> float:
 # Upgrade — apply
 # ---------------------------------------------------------------------------
 
-## Increases damage by 25% of base and advances the star level.
-## Only call when star < 5.
+## Increases damage by 25% of base. Only call when not maxed.
 func apply_damage_upgrade() -> void:
 	_damage += _base_damage * UPGRADE_DAMAGE_FACTOR
-	_advance_star()
+	_damage_level += 1
+	stats_changed.emit()
 
-## Increases range by 10% of base and advances the star level.
-## Only call when star < 5.
+## Increases range by 10% of base. Only call when not maxed.
 func apply_range_upgrade() -> void:
 	_range += _base_range * UPGRADE_RANGE_FACTOR
-	_advance_star()
+	_range_level += 1
+	stats_changed.emit()
 
-## Reduces cooldown by 8% of base (faster shots) and advances the star level.
+## Reduces cooldown by 8% of base (faster shots). Only call when not maxed.
 ## Cooldown is clamped to 0.1 s minimum to prevent instant-fire edge cases.
-## Only call when star < 5.
 func apply_fire_rate_upgrade() -> void:
 	_cooldown = maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
-	_advance_star()
-
-## Applies a tier-up: increments the tier and resets the star to 0.
-## variation is 0, 1, or 2 — which dramatic option the player chose.
-## Variation-specific stat changes are TODO until Phase 5 defines them per trap type.
-func apply_tier_up(variation: int) -> void:
-	_tier += 1
-	_star  = 0
-	# TODO Phase 5: apply dramatic stat change based on variation index.
+	_rate_level += 1
 	stats_changed.emit()
 
 
@@ -195,11 +205,23 @@ func apply_tier_up(variation: int) -> void:
 # Upgrade — accessors
 # ---------------------------------------------------------------------------
 
-func get_tier() -> int:
-	return _tier
+func get_damage_level() -> int:
+	return _damage_level
 
-func get_star() -> int:
-	return _star
+func get_range_level() -> int:
+	return _range_level
+
+func get_rate_level() -> int:
+	return _rate_level
+
+func is_damage_maxed() -> bool:
+	return _damage_level >= MAX_UPGRADE_LEVEL
+
+func is_range_maxed() -> bool:
+	return _range_level >= MAX_UPGRADE_LEVEL
+
+func is_rate_maxed() -> bool:
+	return _rate_level >= MAX_UPGRADE_LEVEL
 
 func get_damage() -> float:
 	return _damage
@@ -302,12 +324,6 @@ func _xz_distance(world_pos: Vector3) -> float:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
-
-## Advances the star level by one (capped at 5) and notifies listeners.
-func _advance_star() -> void:
-	_star = mini(_star + 1, 5)
-	stats_changed.emit()
-
 
 ## Creates the placeholder visual as a child MeshInstance3D.
 ## Replaced by a sprite node in Phase 3.
