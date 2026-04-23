@@ -14,7 +14,7 @@ extends CanvasLayer
 
 signal closed
 
-const PANEL_W:  float = 340.0
+const PANEL_W:  float = 272.0
 const PANEL_H:  float = 208.0
 const PADDING:  float = 10.0
 const BTN_H:    float = 28.0
@@ -22,7 +22,7 @@ const BORDER_W: float = 2.0
 const HUD_BOT:  float = 38.0   # keep in sync with HUD.gd bottom bar height
 
 const COLOR_BG         := Color(0.04, 0.28, 0.28, 0.90)
-const COLOR_OUTLINE    := Color(0.02, 0.15, 0.18, 1.0)
+const COLOR_OUTLINE    := Color(0.20, 0.55, 0.55, 1.0)
 const COLOR_DIVIDER    := Color(0.15, 0.45, 0.45, 1.0)
 const COLOR_TEXT       := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM   := Color(0.65, 0.80, 0.80, 1.0)
