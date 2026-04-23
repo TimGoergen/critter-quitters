@@ -109,6 +109,9 @@ var _hover_cell: Vector2i = Vector2i(-1, -1)
 # Only one panel is open at a time — opening a new one closes the previous.
 var _upgrade_panel: Node = null
 
+# True while the panel is the reason the tree is paused, so close knows to unpause.
+var _panel_paused: bool = false
+
 # Drag placement state — press starts, drag extends a line of ghost traps,
 # release commits them in order; right-click cancels without placing.
 var _pressing: bool = false
@@ -186,6 +189,7 @@ func _ready() -> void:
 	_pathfinder.recalculate()
 	add_child(HUD.new())
 	GameState.wave_skip_requested.connect(_on_wave_skip_requested)
+	GameState.run_ended.connect(_close_upgrade_panel)
 
 	# Size the camera to fit the arena inside the non-HUD portion of the screen,
 	# and re-fit whenever the window is resized.
@@ -407,17 +411,25 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 	add_child(panel)
 	panel.initialize(_trap_nodes[anchor])
 	_upgrade_panel = panel
+	get_tree().paused = true
+	_panel_paused = true
 
 
-## Closes and frees the upgrade panel if one is open.
+## Closes and frees the upgrade panel if one is open, then unpauses if we paused.
 func _close_upgrade_panel() -> void:
 	if _upgrade_panel != null and is_instance_valid(_upgrade_panel):
 		_upgrade_panel.queue_free()
 	_upgrade_panel = null
+	if _panel_paused:
+		get_tree().paused = false
+		_panel_paused = false
 
 
 func _on_upgrade_panel_closed() -> void:
 	_upgrade_panel = null
+	if _panel_paused:
+		get_tree().paused = false
+		_panel_paused = false
 
 
 ## Returns true if the given cells can be trapped without sealing either gap.

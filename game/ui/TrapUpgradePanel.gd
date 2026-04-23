@@ -14,36 +14,42 @@
 ##
 ## The panel reconnects when GameState.bug_bucks changes so button
 ## affordability stays current while kills are earned during a wave.
+##
+## process_mode is ALWAYS so the panel stays interactive while the game
+## tree is paused (which Arena does while this panel is open).
 
 extends CanvasLayer
 
 signal closed
 
-const PANEL_W:   float = 450.0
-const PANEL_H:   float = 310.0
-const PADDING:   float = 14.0
-const BTN_H:     float = 38.0
-const HUD_BOT:   float = 38.0   # keep in sync with HUD.gd bottom bar height
+const PANEL_W:  float = 340.0
+const PANEL_H:  float = 252.0
+const PADDING:  float = 10.0
+const BTN_H:    float = 28.0
+const BORDER_W: float = 2.0
+const HUD_BOT:  float = 38.0   # keep in sync with HUD.gd bottom bar height
 
-const COLOR_BG         := Color(0.08, 0.08, 0.13, 0.94)
-const COLOR_DIVIDER    := Color(0.25, 0.25, 0.30, 1.0)
+const COLOR_BG         := Color(0.04, 0.28, 0.28, 0.90)
+const COLOR_OUTLINE    := Color(0.02, 0.15, 0.18, 1.0)
+const COLOR_DIVIDER    := Color(0.15, 0.45, 0.45, 1.0)
 const COLOR_TEXT       := Color(0.90, 0.90, 0.90, 1.0)
-const COLOR_TEXT_DIM   := Color(0.60, 0.60, 0.65, 1.0)
+const COLOR_TEXT_DIM   := Color(0.65, 0.80, 0.80, 1.0)
 const COLOR_COST_OK    := Color(0.80, 0.60, 0.10, 1.0)
 const COLOR_COST_NO    := Color(0.70, 0.25, 0.20, 1.0)
 const COLOR_STARS_FULL := Color(0.85, 0.72, 0.10, 1.0)
-const COLOR_BTN_NORMAL  := Color(0.28, 0.28, 0.35, 1.0)
-const COLOR_BTN_HOVER   := Color(0.36, 0.36, 0.44, 1.0)
-const COLOR_BTN_PRESSED := Color(0.20, 0.20, 0.26, 1.0)
-const COLOR_BTN_BORDER  := Color(0.55, 0.55, 0.65, 1.0)
+const COLOR_BTN_NORMAL  := Color(0.06, 0.22, 0.22, 1.0)
+const COLOR_BTN_HOVER   := Color(0.10, 0.32, 0.32, 1.0)
+const COLOR_BTN_PRESSED := Color(0.03, 0.15, 0.15, 1.0)
+const COLOR_BTN_BORDER  := Color(0.20, 0.55, 0.55, 1.0)
 
 
 # ---------------------------------------------------------------------------
 # State
 # ---------------------------------------------------------------------------
 
-var _trap:       Node  = null
+var _trap:       Node      = null
 
+var _border:     ColorRect = null
 var _bg:         ColorRect = null
 var _lbl_title:  Label     = null
 var _lbl_stars:  Label     = null
@@ -65,6 +71,8 @@ func initialize(trap: Node) -> void:
 	_trap = trap
 	_trap.stats_changed.connect(_refresh)
 	GameState.bug_bucks_changed.connect(_on_bug_bucks_changed)
+	# Stay interactive while Arena pauses the tree.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 	_build_ui()
 	_refresh()
 
@@ -74,9 +82,16 @@ func initialize(trap: Node) -> void:
 # ---------------------------------------------------------------------------
 
 func _build_ui() -> void:
-	var vp   := get_viewport().get_visible_rect().size
-	var px   := (vp.x - PANEL_W) * 0.5
-	var py   := vp.y - PANEL_H - HUD_BOT - 10.0
+	var vp := get_viewport().get_visible_rect().size
+	var px := (vp.x - PANEL_W) * 0.5
+	var py := vp.y - PANEL_H - HUD_BOT - 10.0
+
+	# Outline border — rendered behind the background rect.
+	_border          = ColorRect.new()
+	_border.color    = COLOR_OUTLINE
+	_border.position = Vector2(px - BORDER_W, py - BORDER_W)
+	_border.size     = Vector2(PANEL_W + BORDER_W * 2.0, PANEL_H + BORDER_W * 2.0)
+	add_child(_border)
 
 	# Background panel
 	_bg          = ColorRect.new()
@@ -90,13 +105,13 @@ func _build_ui() -> void:
 
 	# --- Header: trap name + tier | close button ---
 	var header := HBoxContainer.new()
-	header.position           = Vector2(PADDING, y)
-	header.custom_minimum_size = Vector2(inner_w, 28.0)
+	header.position            = Vector2(PADDING, y)
+	header.custom_minimum_size = Vector2(inner_w, 22.0)
 	_bg.add_child(header)
 
 	_lbl_title = Label.new()
 	_lbl_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_lbl_title.add_theme_font_size_override("font_size", 18)
+	_lbl_title.add_theme_font_size_override("font_size", 15)
 	_lbl_title.add_theme_color_override("font_color", COLOR_TEXT)
 	header.add_child(_lbl_title)
 
@@ -106,36 +121,36 @@ func _build_ui() -> void:
 	_apply_button_style(btn_close)
 	header.add_child(btn_close)
 
-	y += 34.0
+	y += 28.0
 
 	# --- Stars ---
 	_lbl_stars          = Label.new()
 	_lbl_stars.position = Vector2(PADDING, y)
-	_lbl_stars.add_theme_font_size_override("font_size", 20)
+	_lbl_stars.add_theme_font_size_override("font_size", 16)
 	_lbl_stars.add_theme_color_override("font_color", COLOR_STARS_FULL)
 	_bg.add_child(_lbl_stars)
 
-	y += 30.0
+	y += 23.0
 
 	# --- Horizontal divider ---
 	_add_divider(y)
-	y += 10.0
+	y += 7.0
 
 	# --- Current stats ---
-	_lbl_damage = _add_stat_label(y); y += 22.0
-	_lbl_range  = _add_stat_label(y); y += 22.0
-	_lbl_rate   = _add_stat_label(y); y += 28.0
+	_lbl_damage = _add_stat_label(y); y += 18.0
+	_lbl_range  = _add_stat_label(y); y += 18.0
+	_lbl_rate   = _add_stat_label(y); y += 22.0
 
 	# --- Upgrade cost ---
 	_lbl_cost          = Label.new()
 	_lbl_cost.position = Vector2(PADDING, y)
-	_lbl_cost.add_theme_font_size_override("font_size", 15)
+	_lbl_cost.add_theme_font_size_override("font_size", 13)
 	_bg.add_child(_lbl_cost)
-	y += 26.0
+	y += 20.0
 
 	# --- Horizontal divider ---
 	_add_divider(y)
-	y += 10.0
+	y += 7.0
 
 	# --- Upgrade buttons ---
 	_btn_a = _add_upgrade_button(y); y += BTN_H + 4.0
@@ -157,9 +172,9 @@ func _refresh() -> void:
 		_on_close()
 		return
 
-	var star: int      = _trap.get_star()
-	var tier: int      = _trap.get_tier()
-	var cost: int      = _trap.get_upgrade_cost()
+	var star: int        = _trap.get_star()
+	var tier: int        = _trap.get_tier()
+	var cost: int        = _trap.get_upgrade_cost()
 	var affordable: bool = GameState.bug_bucks >= cost
 
 	_lbl_title.text = "%s  —  Tier %d" % [_trap.get_type_name(), tier]
@@ -248,9 +263,9 @@ func _on_bug_bucks_changed(_amount: int) -> void:
 # ---------------------------------------------------------------------------
 
 func _add_stat_label(y: float) -> Label:
-	var lbl          := Label.new()
-	lbl.position      = Vector2(PADDING, y)
-	lbl.add_theme_font_size_override("font_size", 14)
+	var lbl      := Label.new()
+	lbl.position  = Vector2(PADDING, y)
+	lbl.add_theme_font_size_override("font_size", 13)
 	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 	_bg.add_child(lbl)
 	return lbl
@@ -260,17 +275,17 @@ func _add_upgrade_button(y: float) -> Button:
 	var btn               := Button.new()
 	btn.position           = Vector2(PADDING, y)
 	btn.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, BTN_H)
-	btn.add_theme_font_size_override("font_size", 14)
+	btn.add_theme_font_size_override("font_size", 13)
 	_apply_button_style(btn)
 	_bg.add_child(btn)
 	return btn
 
 
 func _add_divider(y: float) -> void:
-	var line       := ColorRect.new()
-	line.color      = COLOR_DIVIDER
-	line.position   = Vector2(PADDING, y)
-	line.size       = Vector2(PANEL_W - PADDING * 2.0, 1.0)
+	var line     := ColorRect.new()
+	line.color    = COLOR_DIVIDER
+	line.position = Vector2(PADDING, y)
+	line.size     = Vector2(PANEL_W - PADDING * 2.0, 1.0)
 	_bg.add_child(line)
 
 
@@ -281,9 +296,9 @@ func _apply_button_style(btn: Button) -> void:
 		box.border_color       = COLOR_BTN_BORDER
 		box.set_border_width_all(2)
 		box.set_corner_radius_all(4)
-		box.content_margin_left   = 10.0
-		box.content_margin_right  = 10.0
-		box.content_margin_top    = 4.0
-		box.content_margin_bottom = 4.0
+		box.content_margin_left   = 8.0
+		box.content_margin_right  = 8.0
+		box.content_margin_top    = 3.0
+		box.content_margin_bottom = 3.0
 		btn.add_theme_stylebox_override(state[0], box)
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
