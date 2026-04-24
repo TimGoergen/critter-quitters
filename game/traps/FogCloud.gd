@@ -18,7 +18,7 @@ const Grid = preload("res://arena/Grid.gd")
 const EXPAND_SPEED: float = 4.44
 
 const CLOUD_LIFETIME: float = 0.90
-const COLOR_CLOUD := Color(0.40, 0.88, 0.40, 0.20)
+const COLOR_CLOUD := Color(0.40, 0.88, 0.40, 0.10)
 
 
 # ---------------------------------------------------------------------------
@@ -98,7 +98,7 @@ func _spawn_cloud_visual(aoe_range: float) -> void:
 	# Low explosiveness: puffs appear gradually over the lifetime rather than
 	# all at once, so the space fills incrementally.
 	particles.explosiveness = 0.10
-	particles.amount        = 36
+	particles.amount        = 18
 	particles.lifetime      = 1.4   # longer than CLOUD_LIFETIME so puffs linger visibly
 
 	# Spawn puffs spread across the full range area from the start so the

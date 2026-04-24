@@ -16,10 +16,13 @@ const Grid = preload("res://arena/Grid.gd")
 ## Travel speed in world units per second.
 const TRAVEL_SPEED: float = 20.0
 
-## Placeholder colour. Replaced by ASCII billboard in Phase 3.
+## Fallback colour for generic projectiles (non-snap-trap types).
 const COLOR_PROJECTILE := Color(1.0, 0.90, 0.25)   # bright yellow
-
 const COLOR_IMPACT     := Color(1.0, 0.80, 0.15)   # golden burst
+
+# Mirrors Trap.TrapType.SNAP_TRAP (int 0). Avoid preloading Trap.gd here to
+# prevent a circular dependency — update this if the enum order ever changes.
+const _SNAP_TRAP_TYPE: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -27,8 +30,10 @@ const COLOR_IMPACT     := Color(1.0, 0.80, 0.15)   # golden burst
 # ---------------------------------------------------------------------------
 
 var _target_pos: Vector3
-var _target: Node3D = null
-var _damage: float  = 0.0
+var _target:     Node3D = null
+var _damage:     float  = 0.0
+var _trap_type:  int    = -1
+var _visual:     Node3D = null   # visual mesh child; rotated each frame for tumble
 
 
 # ---------------------------------------------------------------------------
@@ -40,11 +45,12 @@ var _damage: float  = 0.0
 ## enemy's hit flash coincides with the visual impact.
 ## Must be called by Arena immediately after instantiation and before
 ## adding to the scene tree.
-func initialize(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float) -> void:
+func initialize(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, trap_type: int = -1) -> void:
 	position    = from_pos
 	_target_pos = Vector3(to_pos.x, from_pos.y, to_pos.z)   # travel flat on XZ plane
 	_target     = target
 	_damage     = damage
+	_trap_type  = trap_type
 	_spawn_visual()
 
 
@@ -53,6 +59,9 @@ func initialize(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: floa
 # ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
+	if _visual != null:
+		_visual.rotation_degrees.x += delta * 380.0   # tumble forward as it travels
+
 	var offset   := _target_pos - global_position
 	var distance := offset.length()
 	if distance < 0.05:
@@ -73,6 +82,10 @@ func _process(delta: float) -> void:
 # ---------------------------------------------------------------------------
 
 func _spawn_visual() -> void:
+	if _trap_type == _SNAP_TRAP_TYPE:
+		_spawn_cheese_visual()
+		return
+
 	var mi  := MeshInstance3D.new()
 	var box := BoxMesh.new()
 	# 50% of the enemy cylinder: diameter = CELL_SIZE * 1.35, height = CELL_SIZE * 0.5
@@ -88,9 +101,50 @@ func _spawn_visual() -> void:
 	add_child(mi)
 
 
+## Cheese wedge projectile — a triangular prism (3-segment cylinder) tipped on
+## its side so the wedge profile faces the camera as it tumbles.
+## The cylinder axis runs horizontally (Z = 90° rotation) so the triangular
+## cross-section is what rotates past the viewer, not the flat end caps.
+func _spawn_cheese_visual() -> void:
+	var mi             := MeshInstance3D.new()
+	var mesh           := CylinderMesh.new()
+	mesh.radial_segments = 3
+	mesh.top_radius      = Grid.CELL_SIZE * 0.22
+	mesh.bottom_radius   = Grid.CELL_SIZE * 0.22
+	mesh.height          = Grid.CELL_SIZE * 0.40
+
+	var mat           := StandardMaterial3D.new()
+	mat.albedo_color   = Color(0.95, 0.82, 0.15)
+	mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mi.mesh              = mesh
+	mi.material_override = mat
+	mi.rotation_degrees.z = 90.0   # tip onto side — wedge profile faces viewer
+
+	_visual = mi
+	add_child(mi)
+
+
 func _spawn_impact_effect(killed: bool, enemy_color: Color) -> void:
+	if _trap_type == _SNAP_TRAP_TYPE:
+		_spawn_cheese_splat(killed, enemy_color)
+		return
+
 	_spawn_particles(8, 0.4, Grid.CELL_SIZE * 1.15, Grid.CELL_SIZE * 2.875, 0.4, 0.7,
 			Grid.CELL_SIZE * 0.28, COLOR_IMPACT)
+
+	if killed:
+		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
+				Grid.CELL_SIZE * 0.495, enemy_color, true)
+
+
+## Impact effect for a cheese projectile: a flat spray of yellow chunks and a
+## few pale highlight flecks. Keeps the kill burst on enemy color so it reads
+## as a death moment rather than just a cheese hit.
+func _spawn_cheese_splat(killed: bool, enemy_color: Color) -> void:
+	_spawn_particles(7, 0.35, Grid.CELL_SIZE * 0.8, Grid.CELL_SIZE * 2.2, 0.35, 0.65,
+			Grid.CELL_SIZE * 0.22, Color(0.95, 0.82, 0.15))
+	_spawn_particles(3, 0.28, Grid.CELL_SIZE * 0.6, Grid.CELL_SIZE * 1.6, 0.20, 0.45,
+			Grid.CELL_SIZE * 0.14, Color(1.0, 0.95, 0.70))
 
 	if killed:
 		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
