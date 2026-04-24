@@ -118,6 +118,10 @@ var _selected_trap_outline: MeshInstance3D = null
 # Only one panel is open at a time — opening a new one closes the previous.
 var _upgrade_panel: Node = null
 
+# The trap whose upgrade panel is currently open. Kept so the range indicator
+# can be shown while the panel is open and hidden again when it closes.
+var _selected_trap: Node = null
+
 # True while the panel is the reason the tree is paused, so close knows to unpause.
 var _panel_paused: bool = false
 
@@ -425,7 +429,9 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 	panel.closed.connect(_on_upgrade_panel_closed)
 	add_child(panel)
 	panel.initialize(_trap_nodes[anchor])
-	_upgrade_panel = panel
+	_upgrade_panel  = panel
+	_selected_trap  = _trap_nodes[anchor]
+	_selected_trap.show_range_indicator()
 	_show_selected_trap_outline(anchor)
 	get_tree().paused = true
 	_panel_paused = true
@@ -436,6 +442,9 @@ func _close_upgrade_panel() -> void:
 	if _upgrade_panel != null and is_instance_valid(_upgrade_panel):
 		_upgrade_panel.queue_free()
 	_upgrade_panel = null
+	if _selected_trap != null and is_instance_valid(_selected_trap):
+		_selected_trap.hide_range_indicator()
+	_selected_trap = null
 	_hide_selected_trap_outline()
 	if _panel_paused:
 		get_tree().paused = false
@@ -444,6 +453,9 @@ func _close_upgrade_panel() -> void:
 
 func _on_upgrade_panel_closed() -> void:
 	_upgrade_panel = null
+	if _selected_trap != null and is_instance_valid(_selected_trap):
+		_selected_trap.hide_range_indicator()
+	_selected_trap = null
 	_hide_selected_trap_outline()
 	if _panel_paused:
 		get_tree().paused = false

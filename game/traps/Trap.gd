@@ -421,6 +421,20 @@ func _check_full_upgrade_bonus() -> void:
 	_bonus_applied = true
 
 
+## Forces the range indicator visible regardless of hover state.
+## Called by Arena when the upgrade panel opens for this trap.
+func show_range_indicator() -> void:
+	if _range_indicator != null:
+		_range_indicator.visible = true
+
+
+## Hides the range indicator unless the mouse is still over the trap.
+## Called by Arena when the upgrade panel closes.
+func hide_range_indicator() -> void:
+	if _range_indicator != null:
+		_range_indicator.visible = _is_hovered
+
+
 func _on_hover_enter() -> void:
 	_is_hovered = true
 	if _range_indicator != null:
