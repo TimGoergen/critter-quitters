@@ -12,9 +12,10 @@ extends Node3D
 
 const Grid = preload("res://arena/Grid.gd")
 
-## Wave expansion speed in world units per second. Set to match the slow
-## end of the particle velocity range so the visual leads the damage wave.
-const EXPAND_SPEED: float = 3.0
+## Wave expansion speed in world units per second.
+## Chosen so the wave crosses the full range (~6.4 units) in approximately
+## CLOUD_LIFETIME seconds — damage and visual dissipate together.
+const EXPAND_SPEED: float = 7.0
 
 const CLOUD_LIFETIME: float = 0.90
 const COLOR_CLOUD := Color(0.40, 0.88, 0.40, 0.20)
