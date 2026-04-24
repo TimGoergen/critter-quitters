@@ -46,7 +46,7 @@ enum TrapType { SNAP_TRAP, ZAPPER, FOGGER, GLUE_BOARD }
 const STATS := {
 	TrapType.SNAP_TRAP:  { "damage": 3.375, "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.40, 0.40, 0.80) },
 	TrapType.ZAPPER:     { "damage": 56.25, "range": 9.6, "cooldown": 2.5, "cost": 60, "color": Color(0.90, 0.85, 0.20) },
-	TrapType.FOGGER:     { "damage": 33.75, "range": 6.4, "cooldown": 2.0, "cost": 50, "color": Color(0.60, 0.90, 0.60) },
+	TrapType.FOGGER:     { "damage": 4.5,   "range": 4.0, "cooldown": 2.2, "cost": 50, "color": Color(0.60, 0.90, 0.60) },
 	TrapType.GLUE_BOARD: { "damage": 0.0,   "range": 4.8, "cooldown": 0.0, "cost": 35, "color": Color(0.80, 0.70, 0.30) },
 }
 
@@ -73,9 +73,14 @@ const UPGRADE_COSTS := {
 # Signals
 # ---------------------------------------------------------------------------
 
-## Emitted when the trap fires. Arena spawns a Projectile in response so
-## the trap itself does not need a reference to the scene tree root.
-signal fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float)
+## Emitted when a point-target trap fires (Snap Trap, Zapper). Arena spawns
+## a Projectile in response so the trap does not need a scene tree reference.
+signal fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, trap_type: TrapType)
+
+## Emitted once per Fogger firing cycle. Arena spawns a FogCloud that owns
+## the damage logic — it expands outward and damages each enemy when the wave
+## reaches them, so hits are staggered by distance rather than instant.
+signal aoe_fired(from_pos: Vector3, aoe_range: float, damage: float, active_enemies: Array)
 
 ## Emitted after any upgrade is applied. TrapUpgradePanel connects here to
 ## keep its display current without polling.
@@ -111,6 +116,17 @@ var _base_cooldown: float = 0.0
 # types, so this always reflects the live list without any extra bookkeeping.
 var _active_enemies: Array = []
 
+# Enemies currently inside this Glue Board's range. Used to track who enters
+# and leaves so we can call add/remove_slow_source exactly once per transition.
+var _slowed_enemies: Array[Node3D] = []
+
+# Range indicator shown on mouse hover.
+var _is_hovered:      bool   = false
+var _range_indicator: Node3D = null
+var _hover_area:      Area3D = null
+# When true, the indicator stays visible regardless of hover state (upgrade panel open).
+var _indicator_pinned: bool  = false
+
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -135,6 +151,12 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	_base_cooldown = _cooldown
 
 	_spawn_visual(stats["color"])
+	stats_changed.connect(_rebuild_range_indicator)
+
+
+func _ready() -> void:
+	_spawn_range_indicator()
+	_spawn_hover_area()
 
 
 # ---------------------------------------------------------------------------
@@ -269,19 +291,36 @@ func get_cost() -> int:
 # ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
-	if _cooldown <= 0.0:
-		return   # passive trap type — no firing logic
+	if _trap_type == TrapType.GLUE_BOARD:
+		_update_glue_slow()
+		return
 
 	_cooldown_remaining -= delta
 	if _cooldown_remaining > 0.0:
 		return
 
-	var target := _find_target()
-	if target == null:
-		return
+	var did_fire := false
+	if _trap_type == TrapType.FOGGER:
+		did_fire = _fire_fogger()
+		if did_fire:
+			aoe_fired.emit(global_position, _range, _damage, _active_enemies)
+	else:
+		var target := _find_target()
+		if target != null:
+			fired.emit(global_position, target.global_position, target, _damage, _trap_type)
+			did_fire = true
 
-	fired.emit(global_position, target.global_position, target, _damage)
-	_cooldown_remaining = _cooldown
+	if did_fire:
+		_cooldown_remaining = _cooldown
+
+
+func _exit_tree() -> void:
+	# Release any slow sources this trap was holding so enemies return to
+	# normal speed the moment the trap is sold or overwritten.
+	for enemy in _slowed_enemies:
+		if is_instance_valid(enemy):
+			enemy.remove_slow_source()
+	_slowed_enemies.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -294,8 +333,40 @@ func _find_target() -> Node3D:
 			return _nearest_in_range()
 		TrapType.ZAPPER:
 			return _farthest_in_range()
-		_:
-			return _nearest_in_range()
+	return null
+
+
+## Returns true if at least one enemy is currently within range.
+## Damage is NOT applied here — FogCloud applies it as the wave expands.
+func _fire_fogger() -> bool:
+	for enemy in _active_enemies:
+		if not is_instance_valid(enemy):
+			continue
+		if _xz_distance(enemy.global_position) <= _range:
+			return true
+	return false
+
+
+## Applies or removes the slow source on each enemy as they cross the range boundary.
+func _update_glue_slow() -> void:
+	# Remove entries for enemies that have died or despawned.
+	var i := _slowed_enemies.size() - 1
+	while i >= 0:
+		if not is_instance_valid(_slowed_enemies[i]):
+			_slowed_enemies.remove_at(i)
+		i -= 1
+
+	for enemy in _active_enemies:
+		if not is_instance_valid(enemy):
+			continue
+		var in_range:   bool = _xz_distance(enemy.global_position) <= _range
+		var is_tracked: bool = enemy in _slowed_enemies
+		if in_range and not is_tracked:
+			_slowed_enemies.append(enemy)
+			enemy.add_slow_source()
+		elif not in_range and is_tracked:
+			_slowed_enemies.erase(enemy)
+			enemy.remove_slow_source()
 
 
 ## Returns the enemy in range closest to this trap (used by Snap Trap).
@@ -350,6 +421,133 @@ func _check_full_upgrade_bonus() -> void:
 	if _base_cooldown > 0.0:
 		_cooldown = maxf(_cooldown / 1.1, 0.1)
 	_bonus_applied = true
+
+
+## Forces the range indicator visible and pins it so hover-exit cannot hide it.
+## Called by Arena when the upgrade panel opens for this trap.
+func show_range_indicator() -> void:
+	_indicator_pinned = true
+	if _range_indicator != null:
+		_range_indicator.visible = true
+
+
+## Unpins the indicator and hides it unless the mouse is still over the trap.
+## Called by Arena when the upgrade panel closes.
+func hide_range_indicator() -> void:
+	_indicator_pinned = false
+	if _range_indicator != null:
+		_range_indicator.visible = _is_hovered
+
+
+func _on_hover_enter() -> void:
+	_is_hovered = true
+	if _range_indicator != null:
+		_range_indicator.visible = true
+
+
+func _on_hover_exit() -> void:
+	_is_hovered = false
+	if _indicator_pinned:
+		return
+	if _range_indicator != null:
+		_range_indicator.visible = false
+
+
+## Rebuilds the range indicator after an upgrade changes _range.
+func _rebuild_range_indicator() -> void:
+	if _range_indicator != null:
+		_range_indicator.queue_free()
+		_range_indicator = null
+	_spawn_range_indicator()
+	if _range_indicator != null:
+		_range_indicator.visible = _is_hovered or _indicator_pinned
+
+
+## Creates a flat filled disc and outline ring at ground level to show trap range.
+## Hidden by default; shown on mouse hover via _hover_area.
+func _spawn_range_indicator() -> void:
+	_range_indicator            = Node3D.new()
+	_range_indicator.position.y = 0.02
+	_range_indicator.visible    = false
+
+	# Filled disc — white, 80% transparent (alpha 0.20)
+	var fill_mi              := MeshInstance3D.new()
+	var fill_mesh            := CylinderMesh.new()
+	fill_mesh.top_radius      = _range
+	fill_mesh.bottom_radius   = _range
+	fill_mesh.height          = 0.001
+	fill_mesh.radial_segments = 64
+	var fill_mat             := StandardMaterial3D.new()
+	fill_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.0175)
+	fill_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fill_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
+	fill_mi.mesh              = fill_mesh
+	fill_mi.material_override = fill_mat
+	_range_indicator.add_child(fill_mi)
+
+	# Outline ring — white, 60% transparent (alpha 0.40)
+	var ring_mi              := MeshInstance3D.new()
+	ring_mi.mesh              = _make_ring_mesh(_range, 0.10)
+	var ring_mat             := StandardMaterial3D.new()
+	ring_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.035)
+	ring_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ring_mi.material_override = ring_mat
+	_range_indicator.add_child(ring_mi)
+
+	add_child(_range_indicator)
+
+
+## Builds a flat triangulated annulus (hollow disc) at the given outer radius and ring width.
+func _make_ring_mesh(radius: float, width: float) -> ArrayMesh:
+	var inner    := radius - width
+	var segments := 64
+	var verts    := PackedVector3Array()
+	var indices  := PackedInt32Array()
+
+	for i in range(segments):
+		var angle := TAU * float(i) / float(segments)
+		var c     := cos(angle)
+		var s     := sin(angle)
+		verts.append(Vector3(c * inner,  0.0, s * inner))
+		verts.append(Vector3(c * radius, 0.0, s * radius))
+
+	for i in range(segments):
+		var nx := (i + 1) % segments
+		var a  := i * 2
+		var b  := i * 2 + 1
+		var c  := nx * 2
+		var d  := nx * 2 + 1
+		indices.append_array([a, b, c, b, d, c])
+
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_INDEX]  = indices
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+## Creates a flat Area3D over the trap footprint for mouse-enter/exit hover detection.
+func _spawn_hover_area() -> void:
+	_hover_area                    = Area3D.new()
+	_hover_area.collision_layer    = 8   # dedicated layer — no gameplay collisions
+	_hover_area.collision_mask     = 0
+	_hover_area.monitoring         = false
+	_hover_area.monitorable        = false
+	_hover_area.input_ray_pickable = true
+
+	var shape     := CollisionShape3D.new()
+	var box_shape := BoxShape3D.new()
+	box_shape.size = Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9)
+	shape.shape    = box_shape
+	_hover_area.add_child(shape)
+
+	_hover_area.mouse_entered.connect(_on_hover_enter)
+	_hover_area.mouse_exited.connect(_on_hover_exit)
+	add_child(_hover_area)
 
 
 ## Creates the placeholder visual as a child MeshInstance3D.

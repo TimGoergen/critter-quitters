@@ -31,6 +31,7 @@ const Pathfinder        = preload("res://arena/Pathfinder.gd")
 const Enemy             = preload("res://enemies/Enemy.gd")
 const Trap              = preload("res://traps/Trap.gd")
 const Projectile        = preload("res://traps/Projectile.gd")
+const FogCloud          = preload("res://traps/FogCloud.gd")
 const HUD               = preload("res://ui/HUD.gd")
 const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
 const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
@@ -117,6 +118,10 @@ var _selected_trap_outline: MeshInstance3D = null
 # Only one panel is open at a time — opening a new one closes the previous.
 var _upgrade_panel: Node = null
 
+# The trap whose upgrade panel is currently open. Kept so the range indicator
+# can be shown while the panel is open and hidden again when it closes.
+var _selected_trap: Node = null
+
 # True while the panel is the reason the tree is paused, so close knows to unpause.
 var _panel_paused: bool = false
 
@@ -194,6 +199,8 @@ func _ready() -> void:
 	_setup_selected_trap_outline()
 	_init_path_marker_pool()
 	_spawn_arena_border()
+
+	get_viewport().physics_object_picking = true
 
 	_pathfinder.recalculate()
 	add_child(HUD.new())
@@ -422,7 +429,9 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 	panel.closed.connect(_on_upgrade_panel_closed)
 	add_child(panel)
 	panel.initialize(_trap_nodes[anchor])
-	_upgrade_panel = panel
+	_upgrade_panel  = panel
+	_selected_trap  = _trap_nodes[anchor]
+	_selected_trap.show_range_indicator()
 	_show_selected_trap_outline(anchor)
 	get_tree().paused = true
 	_panel_paused = true
@@ -433,6 +442,9 @@ func _close_upgrade_panel() -> void:
 	if _upgrade_panel != null and is_instance_valid(_upgrade_panel):
 		_upgrade_panel.queue_free()
 	_upgrade_panel = null
+	if _selected_trap != null and is_instance_valid(_selected_trap):
+		_selected_trap.hide_range_indicator()
+	_selected_trap = null
 	_hide_selected_trap_outline()
 	if _panel_paused:
 		get_tree().paused = false
@@ -441,6 +453,9 @@ func _close_upgrade_panel() -> void:
 
 func _on_upgrade_panel_closed() -> void:
 	_upgrade_panel = null
+	if _selected_trap != null and is_instance_valid(_selected_trap):
+		_selected_trap.hide_range_indicator()
+	_selected_trap = null
 	_hide_selected_trap_outline()
 	if _panel_paused:
 		get_tree().paused = false
@@ -1044,16 +1059,23 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 	trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 	trap.fired.connect(_on_trap_fired)
-	_trap_container.add_child(trap)
+	trap.aoe_fired.connect(_on_fogger_aoe_fired)
 	trap.initialize(GameState.selected_trap_type as Trap.TrapType, _active_enemies)
+	_trap_container.add_child(trap)
 	GameState.spend_bug_bucks(trap.get_cost())
 	_trap_nodes[anchor] = trap
 
 
-func _on_trap_fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float) -> void:
+func _on_trap_fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, _trap_type: int) -> void:
 	var proj := Projectile.new()
 	proj.initialize(from_pos, to_pos, target, damage)
 	add_child(proj)
+
+
+func _on_fogger_aoe_fired(from_pos: Vector3, aoe_range: float, damage: float, active_enemies: Array) -> void:
+	var cloud := FogCloud.new()
+	cloud.initialize(from_pos, aoe_range, damage, active_enemies)
+	add_child(cloud)
 
 
 ## Returns the four cells of a 2x2 trap footprint given its top-left anchor.
