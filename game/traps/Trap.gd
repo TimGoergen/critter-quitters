@@ -460,7 +460,7 @@ func _rebuild_range_indicator() -> void:
 		_range_indicator = null
 	_spawn_range_indicator()
 	if _range_indicator != null:
-		_range_indicator.visible = _is_hovered
+		_range_indicator.visible = _is_hovered or _indicator_pinned
 
 
 ## Creates a flat filled disc and outline ring at ground level to show trap range.
