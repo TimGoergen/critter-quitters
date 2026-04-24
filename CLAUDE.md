@@ -174,7 +174,7 @@ Before considering any implementation complete, verify:
 
 These rules govern how Claude approaches work on this project in every session.
 
-**GDD maintenance** — The GDD (`docs/critter_quitters_gdd_v09.md`) is a live document.
+**GDD maintenance** — The GDD (`docs/critter_quitters_gdd.md`) is a live document.
 Update it whenever work changes, adds, or removes a design decision, mechanic, or system.
 Do not wait to be asked — keep it current as implementation evolves.
 

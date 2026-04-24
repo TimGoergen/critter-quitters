@@ -106,4 +106,4 @@ game/
 
 ## GDD
 
-Full design document: [`../docs/critter_quitters_gdd_v09.md`](../docs/critter_quitters_gdd_v09.md)
+Full design document: [`../docs/critter_quitters_gdd.md`](../docs/critter_quitters_gdd.md)
