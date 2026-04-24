@@ -579,17 +579,17 @@ func _spawn_visual(color: Color) -> void:
 	add_child(mi)
 
 
-## Builds the Snap Trap visual: a wooden base plate, a coil spring at the hinge,
-## a U-shaped wire kill bar (two thin arms + front crossbar) that slams down
-## when the trap fires, and a cheese wedge on the trigger platform that vanishes
-## during the snap and reappears on reset.
+## Builds the Snap Trap visual: a wooden base plate (portrait — taller than wide),
+## a coil spring at the hinge end, a U-shaped wire kill bar that slams down when
+## the trap fires, and a cheese wedge on the trigger platform that vanishes during
+## the snap and reappears on reset.
 func _spawn_snap_trap_visual() -> void:
 	var fp := Grid.CELL_SIZE * 1.9
 
-	# Wooden base plate — elongated like a real mousetrap (wider than deep).
+	# Wooden base — portrait orientation: narrow width, long depth.
 	var base_mi   := MeshInstance3D.new()
 	var base_mesh := BoxMesh.new()
-	base_mesh.size = Vector3(fp * 0.82, fp * 0.032, fp * 0.44)
+	base_mesh.size = Vector3(fp * 0.42, fp * 0.032, fp * 0.82)
 	base_mi.mesh   = base_mesh
 	base_mi.position.y = fp * 0.016
 	var base_mat := StandardMaterial3D.new()
@@ -598,8 +598,7 @@ func _spawn_snap_trap_visual() -> void:
 	base_mi.material_override = base_mat
 	add_child(base_mi)
 
-	# Coil spring — fixed to the base at the hinge end. A squat cylinder with
-	# many segments approximates the coiled spring profile from above.
+	# Coil spring — fixed at the far end of the base (the hinge side).
 	var spring_mi   := MeshInstance3D.new()
 	var spring_mesh := CylinderMesh.new()
 	spring_mesh.radial_segments = 16
@@ -607,49 +606,47 @@ func _spawn_snap_trap_visual() -> void:
 	spring_mesh.bottom_radius   = fp * 0.055
 	spring_mesh.height          = fp * 0.075
 	spring_mi.mesh     = spring_mesh
-	spring_mi.position = Vector3(0.0, fp * 0.032 + fp * 0.0375, -fp * 0.17)
+	spring_mi.position = Vector3(0.0, fp * 0.032 + fp * 0.0375, -fp * 0.34)
 	var spring_mat := StandardMaterial3D.new()
 	spring_mat.albedo_color = Color(0.62, 0.62, 0.66)
 	spring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	spring_mi.material_override = spring_mat
 	add_child(spring_mi)
 
-	# Kill bar pivot — hinge at the spring position at base-top height.
-	# Rotating on X swings the whole U-frame from raised (armed) to flat (fired).
+	# Kill bar pivot — hinge at the spring, at base-top height.
 	_snap_bar_pivot          = Node3D.new()
-	_snap_bar_pivot.position = Vector3(0.0, fp * 0.032, -fp * 0.17)
+	_snap_bar_pivot.position = Vector3(0.0, fp * 0.032, -fp * 0.34)
 	_snap_bar_pivot.rotation_degrees.x = -65.0   # armed: bar raised steeply
 	add_child(_snap_bar_pivot)
 
-	# U-shaped kill bar — two thin side arms plus a front crossbar.
-	# Thin wire proportions make it read as metal rod, not a plate or shelf.
+	# U-shaped kill bar — two thin arms running along Z, joined by a crossbar at
+	# the front. Wire proportions (3% of footprint) read as metal rod, not plate.
 	var wire_mat := StandardMaterial3D.new()
 	wire_mat.albedo_color = Color(0.72, 0.72, 0.76)
 	wire_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
-	for side_x: float in [-fp * 0.29, fp * 0.29]:
+	for side_x: float in [-fp * 0.155, fp * 0.155]:
 		var arm_mi   := MeshInstance3D.new()
 		var arm_mesh := BoxMesh.new()
-		arm_mesh.size    = Vector3(fp * 0.030, fp * 0.030, fp * 0.36)
-		arm_mi.mesh      = arm_mesh
-		arm_mi.position  = Vector3(side_x, 0.0, fp * 0.18)
+		arm_mesh.size   = Vector3(fp * 0.030, fp * 0.030, fp * 0.68)
+		arm_mi.mesh     = arm_mesh
+		arm_mi.position = Vector3(side_x, 0.0, fp * 0.34)
 		arm_mi.material_override = wire_mat
 		_snap_bar_pivot.add_child(arm_mi)
 
 	var cross_mi   := MeshInstance3D.new()
 	var cross_mesh := BoxMesh.new()
-	cross_mesh.size   = Vector3(fp * 0.61, fp * 0.030, fp * 0.030)
+	cross_mesh.size   = Vector3(fp * 0.34, fp * 0.030, fp * 0.030)
 	cross_mi.mesh     = cross_mesh
-	cross_mi.position = Vector3(0.0, 0.0, fp * 0.36)
+	cross_mi.position = Vector3(0.0, 0.0, fp * 0.68)
 	cross_mi.material_override = wire_mat
 	_snap_bar_pivot.add_child(cross_mi)
 
-	# Trigger platform — small darker rectangle in the center of the base where
-	# the bait sits. Slightly raised so it stands out from the wood.
+	# Trigger platform — small darker rectangle near the center of the base.
 	var trigger_mi   := MeshInstance3D.new()
 	var trigger_mesh := BoxMesh.new()
-	trigger_mesh.size  = Vector3(fp * 0.20, fp * 0.022, fp * 0.16)
-	trigger_mi.mesh    = trigger_mesh
+	trigger_mesh.size   = Vector3(fp * 0.18, fp * 0.022, fp * 0.14)
+	trigger_mi.mesh     = trigger_mesh
 	trigger_mi.position = Vector3(0.0, fp * 0.032 + fp * 0.011, fp * 0.06)
 	var trigger_mat := StandardMaterial3D.new()
 	trigger_mat.albedo_color = Color(0.42, 0.25, 0.09)
@@ -661,8 +658,8 @@ func _spawn_snap_trap_visual() -> void:
 	_snap_cheese = MeshInstance3D.new()
 	var cheese_mesh             := CylinderMesh.new()
 	cheese_mesh.radial_segments  = 3
-	cheese_mesh.top_radius       = fp * 0.075
-	cheese_mesh.bottom_radius    = fp * 0.075
+	cheese_mesh.top_radius       = fp * 0.072
+	cheese_mesh.bottom_radius    = fp * 0.072
 	cheese_mesh.height           = fp * 0.10
 	_snap_cheese.mesh             = cheese_mesh
 	_snap_cheese.position         = Vector3(0.0, fp * 0.032 + fp * 0.022 + fp * 0.05, fp * 0.06)

@@ -101,21 +101,24 @@ func _spawn_visual() -> void:
 	add_child(mi)
 
 
-## Cheese wedge projectile — a 3-segment cylinder (triangular prism) in cheese
-## yellow. Stored in _visual so _process can tumble it each frame.
+## Cheese wedge projectile — a triangular prism (3-segment cylinder) tipped on
+## its side so the wedge profile faces the camera as it tumbles.
+## The cylinder axis runs horizontally (Z = 90° rotation) so the triangular
+## cross-section is what rotates past the viewer, not the flat end caps.
 func _spawn_cheese_visual() -> void:
 	var mi             := MeshInstance3D.new()
 	var mesh           := CylinderMesh.new()
 	mesh.radial_segments = 3
-	mesh.top_radius      = Grid.CELL_SIZE * 0.18
-	mesh.bottom_radius   = Grid.CELL_SIZE * 0.18
-	mesh.height          = Grid.CELL_SIZE * 0.22
+	mesh.top_radius      = Grid.CELL_SIZE * 0.22
+	mesh.bottom_radius   = Grid.CELL_SIZE * 0.22
+	mesh.height          = Grid.CELL_SIZE * 0.40
 
 	var mat           := StandardMaterial3D.new()
 	mat.albedo_color   = Color(0.95, 0.82, 0.15)
 	mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mi.mesh              = mesh
 	mi.material_override = mat
+	mi.rotation_degrees.z = 90.0   # tip onto side — wedge profile faces viewer
 
 	_visual = mi
 	add_child(mi)
