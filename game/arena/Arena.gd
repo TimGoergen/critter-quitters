@@ -232,18 +232,24 @@ func _ready() -> void:
 # Input
 # ---------------------------------------------------------------------------
 
+## _input fires for every event, even those already consumed by GUI controls.
+## We use it only to suppress the reticle when the mouse is over the dialog,
+## because the dialog's Control nodes consume mouse-motion events before
+## _unhandled_input can see them, leaving the reticle frozen.
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventMouseMotion):
+		return
+	if _debug_dialog == null or not is_instance_valid(_debug_dialog):
+		return
+	if not (_debug_dialog as DebugStartDialog).covers_point(event.position):
+		return
+	_hover_cell = Vector2i(-1, -1)
+	_grid_highlight.mesh = null
+	_hide_hover_preview()
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
-		# When the mouse is over the setup dialog the reticle must be hidden.
-		# We force _hover_cell to invalid so the cell-change guard doesn't
-		# prevent _update_grid_highlight from clearing the mesh on the next move.
-		if _debug_dialog != null and is_instance_valid(_debug_dialog) \
-				and (_debug_dialog as DebugStartDialog).covers_point(event.position):
-			_hover_cell = Vector2i(-1, -1)
-			_grid_highlight.mesh = null
-			_hide_hover_preview()
-			return
-
 		var cell := _screen_to_grid(event.position)
 		if cell != _hover_cell:
 			_hover_cell = cell
