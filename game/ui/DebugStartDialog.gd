@@ -74,9 +74,9 @@ func _build_ui() -> void:
 	var lbl_title := Label.new()
 	lbl_title.text     = "Playtest Setup"
 	lbl_title.position = Vector2(PADDING, y)
-	lbl_title.add_theme_font_size_override("font_size", 16)
-	lbl_title.add_theme_color_override("font_color", COLOR_TEXT)
-	lbl_title.add_theme_font_override("font", UIFonts.flavor())
+	lbl_title.add_theme_font_size_override("font_size", 20)
+	lbl_title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	lbl_title.add_theme_font_override("font", UIFonts.header())
 	bg.add_child(lbl_title)
 	y += 28.0
 
@@ -146,7 +146,11 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
-		if not _panel_rect.has_point(event.position):
+		# Let clicks on the trap selector through so the player can pick a trap
+		# before starting without the click also dismissing the dialog.
+		var vp           := get_viewport().get_visible_rect().size
+		var in_selector  := vp.x >= vp.y and event.position.x >= vp.x - HUD.SELECTOR_PANEL_W
+		if not _panel_rect.has_point(event.position) and not in_selector:
 			get_viewport().set_input_as_handled()
 			_on_start_pressed()
 

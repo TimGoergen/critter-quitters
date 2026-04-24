@@ -29,6 +29,7 @@ extends Node3D
 
 const Grid       = preload("res://arena/Grid.gd")
 const Projectile = preload("res://traps/Projectile.gd")
+const FogCloud   = preload("res://traps/FogCloud.gd")
 
 
 # ---------------------------------------------------------------------------
@@ -120,6 +121,10 @@ var _active_enemies: Array = []
 # and leaves so we can call add/remove_slow_source exactly once per transition.
 var _slowed_enemies: Array[Node3D] = []
 
+# When true, this node is a visual-only placement preview: no combat, no hover area,
+# no range indicator. Set by initialize_preview() before the node enters the tree.
+var _is_preview: bool = false
+
 # Range indicator shown on mouse hover.
 var _is_hovered:      bool   = false
 var _range_indicator: Node3D = null
@@ -131,6 +136,20 @@ var _indicator_pinned: bool  = false
 var _snap_bar_pivot: Node3D         = null
 var _snap_cheese:    MeshInstance3D = null
 var _snap_animating: bool           = false
+
+# Fogger animation nodes — null for all other trap types.
+# _fogger_root bobs up/down at idle; _fogger_nozzle presses down on each shot.
+var _fogger_root:          Node3D = null
+var _fogger_nozzle:        Node3D = null
+var _fogger_nozzle_base_y: float  = 0.0
+var _fogger_bob_time:      float  = 0.0
+var _fogger_animating:     bool   = false
+
+# Tracks how many particle batches from this trap are still visually alive.
+# Each fire increments the count; a timer decrements it after the particles expire.
+# Firing is blocked when the count reaches FOG_BATCH_CAP (~6 puffs on screen).
+const FOG_BATCH_CAP: int = 2   # 2 batches × 3–4 puffs each ≈ 6 puffs max
+var _active_fog_batches: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -159,7 +178,18 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	stats_changed.connect(_rebuild_range_indicator)
 
 
+## Lightweight setup for placement preview ghosts.
+## Builds the visual only — no combat state, range indicator, or hover area.
+## Caller should set process_mode = DISABLED before adding to the tree.
+func initialize_preview(trap_type: TrapType) -> void:
+	_is_preview = true
+	_trap_type  = trap_type
+	_spawn_visual(STATS[trap_type]["color"])
+
+
 func _ready() -> void:
+	if _is_preview:
+		return
 	_spawn_range_indicator()
 	_spawn_hover_area()
 
@@ -300,6 +330,11 @@ func _process(delta: float) -> void:
 		_update_glue_slow()
 		return
 
+	# Fogger idle animation: gentle sine-wave float between shots.
+	if _trap_type == TrapType.FOGGER and _fogger_root != null:
+		_fogger_bob_time += delta
+		_fogger_root.position.y = sin(_fogger_bob_time * 1.5) * Grid.CELL_SIZE * 0.035
+
 	_cooldown_remaining -= delta
 	if _cooldown_remaining > 0.0:
 		return
@@ -309,6 +344,12 @@ func _process(delta: float) -> void:
 		did_fire = _fire_fogger()
 		if did_fire:
 			aoe_fired.emit(global_position, _range, _damage, _active_enemies)
+			_play_fogger_animation()
+			_active_fog_batches += 1
+			var expire := FogCloud.PARTICLE_LIFETIME * 2.0 + 0.20
+			get_tree().create_timer(expire).timeout.connect(
+				func(): _active_fog_batches = maxi(0, _active_fog_batches - 1)
+			)
 	else:
 		var target := _find_target()
 		if target != null:
@@ -343,9 +384,11 @@ func _find_target() -> Node3D:
 	return null
 
 
-## Returns true if at least one enemy is currently within range.
+## Returns true if at least one enemy is in range and the batch cap has not been reached.
 ## Damage is NOT applied here — FogCloud applies it as the wave expands.
 func _fire_fogger() -> bool:
+	if _active_fog_batches >= FOG_BATCH_CAP:
+		return false
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
 			continue
@@ -557,12 +600,14 @@ func _spawn_hover_area() -> void:
 	add_child(_hover_area)
 
 
-## Creates the trap's placeholder visual. Snap Trap gets a multi-part procedural
-## mesh; all other types get a flat colored box. Both will be replaced by
-## Sprite3D art in a later pass.
+## Creates the trap's placeholder visual. Snap Trap and Fogger get multi-part
+## procedural meshes; remaining types get a flat colored box.
 func _spawn_visual(color: Color) -> void:
 	if _trap_type == TrapType.SNAP_TRAP:
 		_spawn_snap_trap_visual()
+		return
+	if _trap_type == TrapType.FOGGER:
+		_spawn_fogger_visual()
 		return
 
 	var mi   := MeshInstance3D.new()
@@ -669,6 +714,137 @@ func _spawn_snap_trap_visual() -> void:
 	cheese_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_snap_cheese.material_override = cheese_mat
 	add_child(_snap_cheese)
+
+
+## Builds the Fogger visual: a squat aerosol canister with a yellow label band,
+## an angled shoulder dome, a silver nozzle stem, and an orange spray tip.
+## From above (top-down camera) this reads as concentric coloured rings:
+## green body → yellow label ring → dark shoulder dome → silver nozzle → orange tip.
+func _spawn_fogger_visual() -> void:
+	var fp := Grid.CELL_SIZE * 1.9
+
+	# _fogger_root is the container that bobs up/down for the idle animation.
+	_fogger_root = Node3D.new()
+	add_child(_fogger_root)
+
+	# Main canister body — squat green cylinder.
+	var body_mi   := MeshInstance3D.new()
+	var body_mesh := CylinderMesh.new()
+	body_mesh.radial_segments = 16
+	body_mesh.top_radius      = fp * 0.27
+	body_mesh.bottom_radius   = fp * 0.27
+	body_mesh.height          = fp * 0.36
+	body_mi.mesh       = body_mesh
+	body_mi.position.y = fp * 0.18   # centred: bottom at y=0, top at fp*0.36
+	var body_mat := StandardMaterial3D.new()
+	body_mat.albedo_color = Color(0.12, 0.58, 0.22)
+	body_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	body_mi.material_override = body_mat
+	_fogger_root.add_child(body_mi)
+
+	# Yellow label band — slightly wider thin ring around the can's midsection.
+	var band_mi   := MeshInstance3D.new()
+	var band_mesh := CylinderMesh.new()
+	band_mesh.radial_segments = 32
+	band_mesh.top_radius      = fp * 0.30
+	band_mesh.bottom_radius   = fp * 0.30
+	band_mesh.height          = fp * 0.11
+	band_mi.mesh       = band_mesh
+	band_mi.position.y = fp * 0.18   # same centre as body
+	var band_mat := StandardMaterial3D.new()
+	band_mat.albedo_color = Color(0.95, 0.88, 0.15)
+	band_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	band_mi.material_override = band_mat
+	_fogger_root.add_child(band_mi)
+
+	# Bottom rim — slight inward taper at the base, silver-gray.
+	var rim_mi   := MeshInstance3D.new()
+	var rim_mesh := CylinderMesh.new()
+	rim_mesh.radial_segments = 16
+	rim_mesh.top_radius      = fp * 0.27
+	rim_mesh.bottom_radius   = fp * 0.24
+	rim_mesh.height          = fp * 0.04
+	rim_mi.mesh       = rim_mesh
+	rim_mi.position.y = fp * 0.02
+	var rim_mat := StandardMaterial3D.new()
+	rim_mat.albedo_color = Color(0.62, 0.62, 0.66)
+	rim_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	rim_mi.material_override = rim_mat
+	_fogger_root.add_child(rim_mi)
+
+	# Shoulder dome — tapers from body radius down to nozzle base.
+	var shoulder_mi   := MeshInstance3D.new()
+	var shoulder_mesh := CylinderMesh.new()
+	shoulder_mesh.radial_segments = 16
+	shoulder_mesh.top_radius      = fp * 0.10
+	shoulder_mesh.bottom_radius   = fp * 0.27
+	shoulder_mesh.height          = fp * 0.09
+	shoulder_mi.mesh       = shoulder_mesh
+	shoulder_mi.position.y = fp * 0.405   # sits flush on top of body (fp*0.36 + half fp*0.09)
+	var shoulder_mat := StandardMaterial3D.new()
+	shoulder_mat.albedo_color = Color(0.10, 0.46, 0.18)
+	shoulder_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	shoulder_mi.material_override = shoulder_mat
+	_fogger_root.add_child(shoulder_mi)
+
+	# Nozzle assembly — child node so it can be pressed down independently on fire.
+	_fogger_nozzle_base_y  = fp * 0.45   # sits on top of shoulder (fp*0.36 + fp*0.09)
+	_fogger_nozzle         = Node3D.new()
+	_fogger_nozzle.position.y = _fogger_nozzle_base_y
+	_fogger_root.add_child(_fogger_nozzle)
+
+	# Nozzle stem — silver cylinder, slightly tapered.
+	var stem_mi   := MeshInstance3D.new()
+	var stem_mesh := CylinderMesh.new()
+	stem_mesh.radial_segments = 8
+	stem_mesh.top_radius      = fp * 0.116
+	stem_mesh.bottom_radius   = fp * 0.150
+	stem_mesh.height          = fp * 0.10
+	stem_mi.mesh       = stem_mesh
+	stem_mi.position.y = fp * 0.05   # centred in the stem height
+	var stem_mat := StandardMaterial3D.new()
+	stem_mat.albedo_color = Color(0.72, 0.72, 0.76)
+	stem_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	stem_mi.material_override = stem_mat
+	_fogger_nozzle.add_child(stem_mi)
+
+	# Spray tip — small orange sphere at the top of the stem; visible from above as
+	# the bright centre dot that colour-codes the Fogger at a glance.
+	var tip_mi   := MeshInstance3D.new()
+	var tip_mesh := SphereMesh.new()
+	tip_mesh.radius = fp * 0.060
+	tip_mesh.height = fp * 0.120
+	tip_mi.mesh       = tip_mesh
+	tip_mi.position.y = fp * 0.10 + fp * 0.060   # sits on top of stem
+	var tip_mat := StandardMaterial3D.new()
+	tip_mat.albedo_color = Color(0.88, 0.32, 0.08)
+	tip_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	tip_mi.material_override = tip_mat
+	_fogger_nozzle.add_child(tip_mi)
+
+
+## Plays the spray animation: squishes the can outward on XZ then springs back.
+## Y-axis movement is invisible from the top-down camera, so the animation
+## operates on scale — the can briefly expands radially and the player sees
+## the green circle pulse outward on each shot.
+func _play_fogger_animation() -> void:
+	if _fogger_root == null or _fogger_animating:
+		return
+	_fogger_animating = true
+
+	# Fast squish: expand XZ, compress Y — the "exhale" burst.
+	var squish := create_tween()
+	squish.tween_property(_fogger_root, "scale",
+		Vector3(1.35, 0.65, 1.35), 0.07).set_ease(Tween.EASE_OUT)
+	await squish.finished
+
+	# Slow spring back to resting size.
+	var spring := create_tween()
+	spring.tween_property(_fogger_root, "scale",
+		Vector3(1.0, 1.0, 1.0), 0.28).set_ease(Tween.EASE_OUT)
+	await spring.finished
+
+	_fogger_animating = false
 
 
 ## Plays the snap animation: slams the bar down, hides the cheese, then resets

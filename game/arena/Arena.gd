@@ -130,7 +130,12 @@ var _panel_paused: bool = false
 var _pressing: bool = false
 var _drag_origin: Vector2i = Vector2i(-1, -1)
 var _drag_anchors: Array[Vector2i] = []
-var _drag_ghosts: Array[MeshInstance3D] = []
+var _drag_ghosts: Array[Node3D] = []
+
+# A single ghost of the selected trap shown at the hover position before pressing.
+# Rebuilt when trap type changes; repositioned on every cursor move.
+var _hover_preview:      Node3D = null
+var _hover_preview_type: int    = -1
 
 # Outside-wall reference positions (x only matters; y is chosen per enemy).
 var _spawn_cell: Vector2i = Vector2i.ZERO    # centre spawn cell (used for x and gap centre)
@@ -206,6 +211,7 @@ func _ready() -> void:
 	add_child(HUD.new())
 	GameState.wave_skip_requested.connect(_on_wave_skip_requested)
 	GameState.run_ended.connect(_close_upgrade_panel)
+	GameState.trap_type_selected.connect(_on_trap_type_changed)
 
 	# Size the camera to fit the arena inside the non-HUD portion of the screen,
 	# and re-fit whenever the window is resized.
@@ -275,6 +281,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 ## Called on press. Records the origin and immediately shows the first ghost.
 func _start_drag_placement(cell: Vector2i) -> void:
+	_hide_hover_preview()
 	_pressing    = true
 	_drag_origin = _clamp_to_anchor(cell)
 	_update_drag_ghosts(cell)
@@ -297,14 +304,9 @@ func _update_drag_ghosts(target: Vector2i) -> void:
 				break
 		if not buildable:
 			continue
-		var trap_color := Trap.STATS[GameState.selected_trap_type]["color"] as Color
-		var ghost  := _make_box_mesh_instance(
-			Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9),
-			Color(trap_color.r, trap_color.g, trap_color.b, 0.50)
-		)
+		var ghost := _make_trap_preview(GameState.selected_trap_type, 0.45)
 		var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 		ghost.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
-		add_child(ghost)
 		_drag_ghosts.append(ghost)
 
 
@@ -664,6 +666,15 @@ func _on_debug_confirmed(bug_bucks: int, wave_size: int) -> void:
 	_start_wave()
 
 
+## Clears the hover preview whenever the selected trap type changes so the
+## next cursor move spawns a fresh ghost matching the new selection.
+func _on_trap_type_changed(_type: int) -> void:
+	if _hover_preview != null and is_instance_valid(_hover_preview):
+		_hover_preview.queue_free()
+	_hover_preview      = null
+	_hover_preview_type = -1
+
+
 ## Skips any active countdown and starts the wave immediately.
 ## Triggered by the "Send Wave Early" HUD button via GameState.wave_skip_requested.
 func _on_wave_skip_requested() -> void:
@@ -841,9 +852,17 @@ func _is_in_arena(cell: Vector2i) -> bool:
 func _update_grid_highlight() -> void:
 	if not _is_in_arena(_hover_cell):
 		_grid_highlight.mesh = null
+		_hide_hover_preview()
 		return
 
 	var anchor := _clamp_to_anchor(_hover_cell)
+
+	# Show a ghost of the selected trap at the anchor before pressing.
+	# During drag, the drag ghosts serve this role instead.
+	if not _pressing:
+		_update_hover_preview(anchor)
+	else:
+		_hide_hover_preview()
 
 	var blocked := false
 	for dr in range(2):
@@ -1141,6 +1160,51 @@ func _fit_camera_to_grid() -> void:
 	var top_total := float(HUD_TOP_PX)
 	var bot_total := HUD_BOT_PX + bot_add_px
 	_camera.v_offset = ((top_total - bot_total) / 2.0) * world_per_px
+
+
+## Shows (or repositions) the hover preview at the given anchor.
+## Rebuilds if the selected trap type has changed since last build.
+func _update_hover_preview(anchor: Vector2i) -> void:
+	var type := GameState.selected_trap_type
+	if _hover_preview_type != type or _hover_preview == null or not is_instance_valid(_hover_preview):
+		_hide_hover_preview()
+		_hover_preview      = _make_trap_preview(type, 0.35)
+		_hover_preview_type = type
+	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
+	_hover_preview.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
+	_hover_preview.visible  = true
+
+
+func _hide_hover_preview() -> void:
+	if _hover_preview != null and is_instance_valid(_hover_preview):
+		_hover_preview.visible = false
+
+
+## Builds a Trap preview node: full mesh hierarchy, no combat logic, no hover area.
+## All mesh materials are duplicated and dimmed to alpha so the result reads as a ghost.
+func _make_trap_preview(trap_type: int, alpha: float) -> Node3D:
+	var preview := Trap.new()
+	preview.process_mode = Node.PROCESS_MODE_DISABLED
+	preview.initialize_preview(trap_type as Trap.TrapType)
+	_apply_ghost_transparency(preview, alpha)
+	add_child(preview)
+	return preview
+
+
+## Recursively dims all MeshInstance3D materials in a node subtree.
+## Duplicates each material so the original asset is not modified.
+func _apply_ghost_transparency(node: Node, alpha: float) -> void:
+	for child in node.get_children():
+		if child is MeshInstance3D:
+			var mi := child as MeshInstance3D
+			if mi.material_override != null:
+				var mat := mi.material_override as StandardMaterial3D
+				if mat != null:
+					mat = mat.duplicate() as StandardMaterial3D
+					mat.albedo_color.a = alpha
+					mat.transparency   = BaseMaterial3D.TRANSPARENCY_ALPHA
+					mi.material_override = mat
+		_apply_ghost_transparency(child, alpha)
 
 
 ## Creates a MeshInstance3D with a BoxMesh of the given size and colour.
