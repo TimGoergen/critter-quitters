@@ -1,6 +1,6 @@
 # **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.14 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
+**Version:** Draft v0.16 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
 
 ---
 
@@ -23,6 +23,7 @@
 | v0.13 | (unchanged) |
 | v0.14 | Aesthetic direction fully revised. ASCII character rendering removed. Enemies and traps are now illustrated 2D sprites (Sprite3D in 3D world space), art style targeting modern CGI children's shows (rounded shapes, soft shading, slightly saturated palette). Traps are playful and cartoonish with thematic detail. Projectiles and hit effects remain 3D shapes and particles. Background system redesigned: procedurally generated, animated, arena-themed, with repeated environmental shapes; evolves slowly with each wave. Enemy animation defined: thematically appropriate walk/waddle with side-to-side movement plus hit reaction. Engine stays 3D (Godot 4, Mobile renderer) to preserve existing particle effects. |
 | v0.15 | Between-wave upgrade store removed entirely. Direct per-trap upgrade system introduced: each placed trap has a star level (0–5) and a tier (0+). Tapping a placed trap opens an upgrade panel offering three stat choices (Damage, Range, Fire Rate). Reaching star 5 enables a tier-up that resets the star and offers dramatic variation options. Upgrade and tier-up cost formulas defined. |
+| v0.16 | GDD updated to reflect implemented code state. Upgrade system description corrected: code implements per-stat independent upgrades (3 levels each) with a full-upgrade bonus, not the star/tier system from v0.15 (star/tier remains the design goal for a future pass). Section 2 targeting and projectile damage timing corrected. Section 4 Fogger damage model corrected (staggered by distance, not simultaneous). Snap Trap procedural placeholder visual documented. Section 13 ASCII reference corrected. Phase 3 marked in-progress. |
 
 ---
 
@@ -94,9 +95,9 @@ Before the first wave, the player is presented with 3 randomly selected trap typ
 
 **Range:** Each trap has a circular range field. A pest becomes exposed to a trap as soon as it enters that circle. The range circle is always displayed around a selected placed trap.
 
-**Targeting:** Each trap targets the exposed pest (within its range circle) that is farthest along the current path toward the exit — prioritising the most immediate threat.
+**Targeting:** Each trap has its own targeting model — see Section 4 for per-trap details.
 
-**Projectiles:** Traps fire projectiles or release effects that travel visually toward their target. Damage is applied instantly on firing — projectile travel is cosmetic.
+**Projectiles:** Traps fire projectiles or release effects that travel visually toward their target. Damage is applied when the projectile reaches its target — the enemy hit flash and impact effect coincide with arrival.
 
 **Placement during combat:** Trap placement is not locked to the pre-wave phase. The player may place, upgrade, or sell traps at any point during a wave as Bug Bucks become available. Path visualisation updates in real time. All pests currently on the arena immediately recalculate their path when the layout changes.
 
@@ -145,37 +146,44 @@ The arena evolves over the course of the run. See Section 6a.
 
 ## **4. Tower Roster (Initial)**
 
-Each trap is a tool in an exterminator's kit. Names below are working titles — final names TBD.
+Each trap is a tool in an exterminator's kit.
 
 **Availability:** Not all traps are available at run start. The player selects 2 of 3 randomly offered traps before wave 1. Remaining traps may be unlocked through the store.
 
-**Upgrade system:** Traps are upgraded directly through the trap context panel. Each placed trap has a **star level** (0–5) and a **tier** (starting at 0). Both values are tracked per trap instance — two traps of the same type can be independently upgraded.
+**Upgrade system (implemented):** Traps are upgraded directly through the trap context panel. Each placed trap tracks three independent upgrade levels — one per stat (Damage, Range, Fire Rate). Each stat can be upgraded up to 3 times. Two traps of the same type can be independently upgraded.
 
-**Normal upgrade (star 0–4):** The player is presented with three choices — Damage, Range, or Fire Rate. The chosen stat improves and the star level advances by one. All three options share the same Bug Bucks cost.
+The upgrade panel shows current stat values with per-stat star indicators (e.g. ★★☆) and three upgrade buttons. Each button shows the current value and the value after that upgrade so the choice is informed.
 
-**Upgrade cost:** `tier × buy_cost + target_star × buy_cost × 0.8`
-*(target_star is the star level being purchased, i.e. current star + 1)*
+**Stat increments per upgrade level:**
+- Damage: +25% of base value per level
+- Range: +10% of base value per level
+- Fire Rate: −8% of base cooldown per level (faster shots); minimum cooldown 0.1 s
 
-**Tier-up (star 5):** When a trap reaches star 5, the next upgrade is a tier-up. Three dramatic variation options replace the standard three — each option drastically alters one characteristic of the trap. On purchase, the tier increments and the star resets to 0.
+**Upgrade costs** are defined per trap type and per level (values are tuning placeholders):
 
-**Tier-up cost:** `(current_tier × buy_cost + 6 × buy_cost × 0.8) × 1.2`
-*(calculated as though reaching star 6, with a 1.2× premium on tier transitions)*
+| Trap | Level 1 | Level 2 | Level 3 |
+| :---- | :---- | :---- | :---- |
+| Snap Trap | 20 | 30 | 50 |
+| Zapper | 50 | 75 | 120 |
+| Fogger | 40 | 60 | 100 |
+| Glue Board | 30 | 45 | 70 |
 
-Tier 1+ traps can inflict damage-over-time (DoT) effects:
+**Full upgrade bonus:** When all upgradeable stats on a trap reach level 3, all stats receive a one-time +10% boost as a reward for full investment. Fire rate boost reduces cooldown by 10% (shots per second increases by ~11%).
+
+**Fire Rate** is not upgradeable on passive traps (Glue Board).
+
+*Note: a star/tier system (star level 0–5, tier 0+, dramatic tier-up variations) is the intended long-term design but is not yet implemented. The per-stat independent system above is the current implementation.*
+
+**Infestation modifier:** Certain traps or trap upgrades carry an infestation-reducing modifier. Kills made by these traps reduce the Infestation Level by a small amount per kill — a lifesteal-style mechanic that rewards strategic placement and active killing. *(Planned — not yet implemented.)*
+
+**DoT effects** (Planned — not yet implemented in the current build):
 
 | DoT Type | Behavior |
 | :---- | :---- |
 | Fire | Deals repeated damage ticks for a duration after the hit |
 | Ice | Reduces pest movement speed for a duration after the hit |
 
-**DoT rules:**
-- Effects do not stack — a subsequent hit of the same type refreshes the duration
-- Effects do not spread; they apply only to the pest directly hit
-- Fire and Ice can coexist on the same pest simultaneously
-
-**Infestation modifier:** Certain traps or trap upgrades carry an infestation-reducing modifier. Kills made by these traps reduce the Infestation Level by a small amount per kill — a lifesteal-style mechanic that rewards strategic placement and active killing.
-
-**Evolved unit visuals:** As a trap tiers up, its sprite evolves to reflect the chosen variation — a more aggressive or specialised visual treatment. Exact per-variation visuals are defined in Phase 5.
+DoT rules: effects do not stack (a subsequent hit refreshes duration); effects do not spread; Fire and Ice can coexist on the same pest simultaneously.
 
 **Footprint:** Traps occupy a 2×2 cell footprint. Placement is anchored to the top-left cell of the footprint. Footprints are fixed and do not rotate — all traps operate in a full 360-degree arc.
 
@@ -184,6 +192,12 @@ Tier 1+ traps can inflict damage-over-time (DoT) effects:
 **Archetype:** Basic / single-target
 
 Cheap, reliable. Small range circle, fast trigger rate, low damage. Fires at the nearest exposed pest. The expendable backbone of any build.
+
+**Targeting:** Nearest enemy in range.
+
+**Projectile:** A tumbling cheese wedge (the trap's bait, flung at the target). Impact produces a cheese-splat particle burst; kills add an enemy-color burst on top.
+
+**Placeholder visual (current):** A portrait-oriented procedural mesh — narrow wooden base, coil spring at the hinge end, U-shaped wire kill bar (two thin arms and a front crossbar) that slams down on fire and resets after half the cooldown, and a small yellow triangular cheese wedge on the trigger platform that disappears during the snap. To be replaced by an illustrated Sprite3D.
 
 ### **The Zapper**
 
@@ -195,7 +209,7 @@ Large range circle, very slow trigger rate, high damage. Fires an electrical bol
 
 **Archetype:** Area of effect / high damage
 
-Medium range circle, slow trigger rate, high damage per burst. When it fires, the fog cloud fills its entire range circle — damaging all exposed pests simultaneously. The range circle defines both targeting and AoE coverage. Ideal for chokepoints and tightly packed groups.
+Medium range circle, slow trigger rate, high damage per burst. When it fires, a fog cloud expands outward from the trap and damages exposed pests as the expanding wave reaches each one — pests closer to the trap are hit first. The range circle defines both triggering and AoE coverage. Ideal for chokepoints and tightly packed groups.
 
 ### **The Glue Board**
 
@@ -308,9 +322,9 @@ Boss waves occur every 10 waves (waves 10, 20, 30, ...). The wave immediately fo
 
 There is no between-wave store. Traps are upgraded directly by tapping a placed trap at any time — during a wave or between waves — as Bug Bucks become available from kills.
 
-Tapping a placed trap opens the upgrade panel for that specific trap instance. The panel displays the trap's current damage, range, fire rate, star level, and tier, then presents three upgrade options. The player selects one; that stat improves, the star level advances, and the cost is deducted from Bug Bucks.
+Tapping a placed trap opens the upgrade panel for that specific trap instance. The panel displays the trap name, current values for Damage, Range, and Fire Rate with per-stat star indicators (★★☆ style), and three upgrade buttons — one per stat. Each button shows the current value and the post-upgrade value. The player selects one stat to upgrade; the cost is deducted from Bug Bucks. A button is disabled when that stat is fully upgraded (shows MAX) or when the player cannot afford it. Tapping outside the panel or the close button dismisses it.
 
-See Section 4 for the full upgrade cost formula, tier-up rules, and stat increment details.
+See Section 4 for upgrade costs, stat increments, and the full upgrade bonus.
 
 **Starting trap selection**
 
@@ -517,7 +531,7 @@ The following mechanics were identified during design but deferred to a later pa
 | Engine | Godot 4 (latest stable at project start) |
 | Language | GDScript |
 | Renderer | Mobile |
-| Project type | 3D — fixed orthographic camera reads as 2D to the player; 3D world required for ASCII billboard aesthetic |
+| Project type | 3D — fixed orthographic camera reads as 2D to the player; enemies and traps are Sprite3D nodes in 3D world space; projectiles and effects are 3D geometry and particles |
 | Source control | Git + GitHub |
 | Branching strategy | `main` + feature branches |
 
@@ -547,13 +561,15 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: first playable loop*
 
-### **Phase 3 — Visual Style**
-- Sprite3D setup for enemies and traps (illustrated 2D images in 3D world space)
-- Enemy walk/waddle animation system with side-to-side movement
-- Enemy hit reaction animation
-- Death animation — brief flash, then disappear
-- Procedural animated background system, arena-themed, wave-evolving
-- Basic per-element color palette
+### **Phase 3 — Visual Style** *(In progress)*
+- ✓ Enemy walk/waddle animation — Ant has a 4-frame SVG sprite walk cycle with directional facing and side-to-side waddle
+- ✓ Enemy hit reaction — brief white flash on hit; white flash then queue_free on death
+- ✓ Snap Trap procedural placeholder visual — portrait mousetrap shape with animated kill bar and cheese wedge; to be replaced by illustrated Sprite3D
+- ✓ Snap Trap projectile — tumbling cheese wedge with cheese-splat impact particles
+- ✗ Sprite3D art for all enemies (Ant SVG placeholder only; Cricket, Beetle, Cockroach, Rat still use colored cylinders)
+- ✗ Sprite3D art for all traps (Snap Trap uses procedural mesh; Zapper, Fogger, Glue Board use colored boxes)
+- ✗ Procedural animated background system
+- ✗ Basic per-element color palette
 
 *Goal: looks and feels like the game*
 
