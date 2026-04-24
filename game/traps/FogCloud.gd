@@ -17,7 +17,7 @@ const Grid = preload("res://arena/Grid.gd")
 const EXPAND_SPEED: float = 3.0
 
 const CLOUD_LIFETIME: float = 0.90
-const COLOR_CLOUD := Color(0.40, 0.88, 0.40, 0.50)
+const COLOR_CLOUD := Color(0.40, 0.88, 0.40, 0.20)
 
 
 # ---------------------------------------------------------------------------
