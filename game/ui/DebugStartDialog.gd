@@ -148,8 +148,8 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		# Let clicks on the trap selector through so the player can pick a trap
 		# before starting without the click also dismissing the dialog.
-		var vp           := get_viewport().get_visible_rect().size
-		var in_selector  := vp.x >= vp.y and event.position.x >= vp.x - HUD.SELECTOR_PANEL_W
+		var vp:          Vector2 = get_viewport().get_visible_rect().size
+		var in_selector: bool   = vp.x >= vp.y and event.position.x >= vp.x - HUD.SELECTOR_PANEL_W
 		if not _panel_rect.has_point(event.position) and not in_selector:
 			get_viewport().set_input_as_handled()
 			_on_start_pressed()
