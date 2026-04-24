@@ -120,6 +120,11 @@ var _active_enemies: Array = []
 # and leaves so we can call add/remove_slow_source exactly once per transition.
 var _slowed_enemies: Array[Node3D] = []
 
+# Range indicator shown on mouse hover.
+var _is_hovered:      bool   = false
+var _range_indicator: Node3D = null
+var _hover_area:      Area3D = null
+
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -144,6 +149,12 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	_base_cooldown = _cooldown
 
 	_spawn_visual(stats["color"])
+	stats_changed.connect(_rebuild_range_indicator)
+
+
+func _ready() -> void:
+	_spawn_range_indicator()
+	_spawn_hover_area()
 
 
 # ---------------------------------------------------------------------------
@@ -408,6 +419,115 @@ func _check_full_upgrade_bonus() -> void:
 	if _base_cooldown > 0.0:
 		_cooldown = maxf(_cooldown / 1.1, 0.1)
 	_bonus_applied = true
+
+
+func _on_hover_enter() -> void:
+	_is_hovered = true
+	if _range_indicator != null:
+		_range_indicator.visible = true
+
+
+func _on_hover_exit() -> void:
+	_is_hovered = false
+	if _range_indicator != null:
+		_range_indicator.visible = false
+
+
+## Rebuilds the range indicator after an upgrade changes _range.
+func _rebuild_range_indicator() -> void:
+	if _range_indicator != null:
+		_range_indicator.queue_free()
+		_range_indicator = null
+	_spawn_range_indicator()
+	if _range_indicator != null:
+		_range_indicator.visible = _is_hovered
+
+
+## Creates a flat filled disc and outline ring at ground level to show trap range.
+## Hidden by default; shown on mouse hover via _hover_area.
+func _spawn_range_indicator() -> void:
+	_range_indicator            = Node3D.new()
+	_range_indicator.position.y = 0.02
+	_range_indicator.visible    = false
+
+	# Filled disc — white, 80% transparent (alpha 0.20)
+	var fill_mi              := MeshInstance3D.new()
+	var fill_mesh            := CylinderMesh.new()
+	fill_mesh.top_radius      = _range
+	fill_mesh.bottom_radius   = _range
+	fill_mesh.height          = 0.001
+	fill_mesh.radial_segments = 64
+	var fill_mat             := StandardMaterial3D.new()
+	fill_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.20)
+	fill_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fill_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
+	fill_mi.mesh              = fill_mesh
+	fill_mi.material_override = fill_mat
+	_range_indicator.add_child(fill_mi)
+
+	# Outline ring — white, 60% transparent (alpha 0.40)
+	var ring_mi              := MeshInstance3D.new()
+	ring_mi.mesh              = _make_ring_mesh(_range, 0.10)
+	var ring_mat             := StandardMaterial3D.new()
+	ring_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.40)
+	ring_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ring_mi.material_override = ring_mat
+	_range_indicator.add_child(ring_mi)
+
+	add_child(_range_indicator)
+
+
+## Builds a flat triangulated annulus (hollow disc) at the given outer radius and ring width.
+func _make_ring_mesh(radius: float, width: float) -> ArrayMesh:
+	var inner    := radius - width
+	var segments := 64
+	var verts    := PackedVector3Array()
+	var indices  := PackedInt32Array()
+
+	for i in range(segments):
+		var angle := TAU * float(i) / float(segments)
+		var c     := cos(angle)
+		var s     := sin(angle)
+		verts.append(Vector3(c * inner,  0.0, s * inner))
+		verts.append(Vector3(c * radius, 0.0, s * radius))
+
+	for i in range(segments):
+		var nx := (i + 1) % segments
+		var a  := i * 2
+		var b  := i * 2 + 1
+		var c  := nx * 2
+		var d  := nx * 2 + 1
+		indices.append_array([a, b, c, b, d, c])
+
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_INDEX]  = indices
+
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
+
+
+## Creates a flat Area3D over the trap footprint for mouse-enter/exit hover detection.
+func _spawn_hover_area() -> void:
+	_hover_area                    = Area3D.new()
+	_hover_area.collision_layer    = 8   # dedicated layer — no gameplay collisions
+	_hover_area.collision_mask     = 0
+	_hover_area.monitoring         = false
+	_hover_area.monitorable        = false
+	_hover_area.input_ray_pickable = true
+
+	var shape     := CollisionShape3D.new()
+	var box_shape := BoxShape3D.new()
+	box_shape.size = Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9)
+	shape.shape    = box_shape
+	_hover_area.add_child(shape)
+
+	_hover_area.mouse_entered.connect(_on_hover_enter)
+	_hover_area.mouse_exited.connect(_on_hover_exit)
+	add_child(_hover_area)
 
 
 ## Creates the placeholder visual as a child MeshInstance3D.
