@@ -10,8 +10,8 @@ extends Node3D
 
 const Grid = preload("res://arena/Grid.gd")
 
-const CLOUD_LIFETIME: float = 0.70
-const COLOR_CLOUD := Color(0.40, 0.88, 0.40, 0.60)
+const CLOUD_LIFETIME: float = 0.90
+const COLOR_CLOUD := Color(0.40, 0.88, 0.40, 0.50)
 
 # Set by initialize(); consumed by _ready() after the node enters the tree.
 var _aoe_range: float = 0.0
@@ -44,36 +44,37 @@ func _ready() -> void:
 # Private helpers
 # ---------------------------------------------------------------------------
 
-## Spawns a CPUParticles3D burst distributed flat across the AoE footprint.
-## Using a thin box emitter keeps all particles at floor level so the cloud
-## reads clearly from the top-down camera.
-func _spawn_cloud(aoe_range: float) -> void:
+## Spawns a CPUParticles3D burst that originates at the trap centre and
+## drifts radially outward. Emitting from a point with a near-hemisphere
+## spread means every puff starts at the trap and moves away from it in a
+## different direction — from above this reads as fog expanding outward.
+func _spawn_cloud(_aoe_range: float) -> void:
 	var particles                    := CPUParticles3D.new()
 	particles.one_shot                = true
-	# explosiveness < 1.0 gives a few straggler puffs that trail the main burst,
-	# making the cloud feel organic rather than an instant snap.
+	# explosiveness < 1.0 lets a few straggler puffs trail the main burst
+	# so the emission feels organic rather than a single instant pop.
 	particles.explosiveness           = 0.75
-	particles.amount                  = 48
+	particles.amount                  = 24
 	particles.lifetime                = CLOUD_LIFETIME
 
-	# Flat box emission — thin in Y so all particles start at ground level and
-	# rise, rather than scattering through a sphere volume above and below.
-	particles.emission_shape          = CPUParticles3D.EMISSION_SHAPE_BOX
-	particles.emission_box_extents    = Vector3(aoe_range, 0.05, aoe_range)
+	# Point emitter — all puffs originate at the trap centre.
+	particles.emission_shape          = CPUParticles3D.EMISSION_SHAPE_POINT
 
-	# Slow upward drift — the cloud rises gently and hangs in the air.
+	# Near-hemisphere spread around Vector3.UP: particles travel from directly
+	# overhead all the way to nearly horizontal, covering all compass directions.
+	# From the top-down camera this produces a radial outward drift.
 	particles.direction               = Vector3.UP
-	particles.spread                  = 15.0   # tight cone; no lateral scatter
-	particles.initial_velocity_min    = Grid.CELL_SIZE * 0.4
-	particles.initial_velocity_max    = Grid.CELL_SIZE * 1.1
-	# Zero gravity so puffs float rather than arcing back down.
+	particles.spread                  = 88.0
+	particles.initial_velocity_min    = Grid.CELL_SIZE * 1.5
+	particles.initial_velocity_max    = Grid.CELL_SIZE * 4.5
+	# Zero gravity so puffs float outward rather than arcing back to the floor.
 	particles.gravity                 = Vector3.ZERO
-	particles.scale_amount_min        = 1.2
-	particles.scale_amount_max        = 2.8
+	particles.scale_amount_min        = 1.4
+	particles.scale_amount_max        = 3.2
 
 	var sphere    := SphereMesh.new()
-	sphere.radius  = Grid.CELL_SIZE * 0.30
-	sphere.height  = Grid.CELL_SIZE * 0.60
+	sphere.radius  = Grid.CELL_SIZE * 0.50
+	sphere.height  = Grid.CELL_SIZE * 1.00
 	var mat               := StandardMaterial3D.new()
 	mat.albedo_color       = COLOR_CLOUD
 	mat.shading_mode       = BaseMaterial3D.SHADING_MODE_UNSHADED
