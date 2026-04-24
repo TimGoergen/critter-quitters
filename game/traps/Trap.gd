@@ -458,7 +458,7 @@ func _spawn_range_indicator() -> void:
 	fill_mesh.height          = 0.001
 	fill_mesh.radial_segments = 64
 	var fill_mat             := StandardMaterial3D.new()
-	fill_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.20)
+	fill_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.10)
 	fill_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fill_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	fill_mi.mesh              = fill_mesh
@@ -469,7 +469,7 @@ func _spawn_range_indicator() -> void:
 	var ring_mi              := MeshInstance3D.new()
 	ring_mi.mesh              = _make_ring_mesh(_range, 0.10)
 	var ring_mat             := StandardMaterial3D.new()
-	ring_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.40)
+	ring_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.20)
 	ring_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	ring_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	ring_mi.material_override = ring_mat
