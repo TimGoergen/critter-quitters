@@ -1058,9 +1058,9 @@ func _on_trap_fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: 
 	add_child(proj)
 
 
-func _on_fogger_aoe_fired(from_pos: Vector3, aoe_range: float) -> void:
+func _on_fogger_aoe_fired(from_pos: Vector3, aoe_range: float, damage: float, active_enemies: Array) -> void:
 	var cloud := FogCloud.new()
-	cloud.initialize(from_pos, aoe_range)
+	cloud.initialize(from_pos, aoe_range, damage, active_enemies)
 	add_child(cloud)
 
 

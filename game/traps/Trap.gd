@@ -77,10 +77,10 @@ const UPGRADE_COSTS := {
 ## a Projectile in response so the trap does not need a scene tree reference.
 signal fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, trap_type: TrapType)
 
-## Emitted once per Fogger firing cycle (not per enemy). Arena spawns a single
-## FogCloud covering the full range — one cloud regardless of how many enemies
-## were hit. Damage is applied directly in _fire_fogger(); this signal is visual only.
-signal aoe_fired(from_pos: Vector3, aoe_range: float)
+## Emitted once per Fogger firing cycle. Arena spawns a FogCloud that owns
+## the damage logic — it expands outward and damages each enemy when the wave
+## reaches them, so hits are staggered by distance rather than instant.
+signal aoe_fired(from_pos: Vector3, aoe_range: float, damage: float, active_enemies: Array)
 
 ## Emitted after any upgrade is applied. TrapUpgradePanel connects here to
 ## keep its display current without polling.
@@ -290,7 +290,7 @@ func _process(delta: float) -> void:
 	if _trap_type == TrapType.FOGGER:
 		did_fire = _fire_fogger()
 		if did_fire:
-			aoe_fired.emit(global_position, _range)
+			aoe_fired.emit(global_position, _range, _damage, _active_enemies)
 	else:
 		var target := _find_target()
 		if target != null:
@@ -323,18 +323,15 @@ func _find_target() -> Node3D:
 	return null
 
 
-## Damages every enemy currently in range. Returns true if at least one was hit.
-## Damage is applied here rather than via a projectile — the cloud visual is
-## spawned once by the caller; individual per-enemy projectiles are not used.
+## Returns true if at least one enemy is currently within range.
+## Damage is NOT applied here — FogCloud applies it as the wave expands.
 func _fire_fogger() -> bool:
-	var any_hit := false
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
 			continue
 		if _xz_distance(enemy.global_position) <= _range:
-			enemy.take_damage(_damage)
-			any_hit = true
-	return any_hit
+			return true
+	return false
 
 
 ## Applies or removes the slow source on each enemy as they cross the range boundary.
