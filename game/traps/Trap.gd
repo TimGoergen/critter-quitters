@@ -340,8 +340,8 @@ func _update_glue_slow() -> void:
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
 			continue
-		var in_range    := _xz_distance(enemy.global_position) <= _range
-		var is_tracked  := enemy in _slowed_enemies
+		var in_range:   bool = _xz_distance(enemy.global_position) <= _range
+		var is_tracked: bool = enemy in _slowed_enemies
 		if in_range and not is_tracked:
 			_slowed_enemies.append(enemy)
 			enemy.add_slow_source()
