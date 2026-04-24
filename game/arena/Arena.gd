@@ -31,6 +31,7 @@ const Pathfinder        = preload("res://arena/Pathfinder.gd")
 const Enemy             = preload("res://enemies/Enemy.gd")
 const Trap              = preload("res://traps/Trap.gd")
 const Projectile        = preload("res://traps/Projectile.gd")
+const FogCloud          = preload("res://traps/FogCloud.gd")
 const HUD               = preload("res://ui/HUD.gd")
 const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
 const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
@@ -1050,10 +1051,15 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	_trap_nodes[anchor] = trap
 
 
-func _on_trap_fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float) -> void:
-	var proj := Projectile.new()
-	proj.initialize(from_pos, to_pos, target, damage)
-	add_child(proj)
+func _on_trap_fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, trap_type: int) -> void:
+	if trap_type == Trap.TrapType.FOGGER:
+		var cloud := FogCloud.new()
+		cloud.initialize(from_pos, to_pos)
+		add_child(cloud)
+	else:
+		var proj := Projectile.new()
+		proj.initialize(from_pos, to_pos, target, damage)
+		add_child(proj)
 
 
 ## Returns the four cells of a 2x2 trap footprint given its top-left anchor.

@@ -73,9 +73,10 @@ const UPGRADE_COSTS := {
 # Signals
 # ---------------------------------------------------------------------------
 
-## Emitted when the trap fires. Arena spawns a Projectile in response so
-## the trap itself does not need a reference to the scene tree root.
-signal fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float)
+## Emitted when the trap fires. Arena spawns the appropriate visual in
+## response — Projectile for point targets, FogCloud for Fogger shots —
+## so the trap itself does not need a reference to the scene tree root.
+signal fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, trap_type: TrapType)
 
 ## Emitted after any upgrade is applied. TrapUpgradePanel connects here to
 ## keep its display current without polling.
@@ -287,7 +288,7 @@ func _process(delta: float) -> void:
 	else:
 		var target := _find_target()
 		if target != null:
-			fired.emit(global_position, target.global_position, target, _damage)
+			fired.emit(global_position, target.global_position, target, _damage, _trap_type)
 			did_fire = true
 
 	if did_fire:
@@ -323,7 +324,7 @@ func _fire_fogger() -> bool:
 		if not is_instance_valid(enemy):
 			continue
 		if _xz_distance(enemy.global_position) <= _range:
-			fired.emit(global_position, enemy.global_position, enemy, _damage)
+			fired.emit(global_position, enemy.global_position, enemy, _damage, _trap_type)
 			any_fired = true
 	return any_fired
 
