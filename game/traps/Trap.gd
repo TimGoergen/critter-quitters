@@ -127,6 +127,11 @@ var _hover_area:      Area3D = null
 # When true, the indicator stays visible regardless of hover state (upgrade panel open).
 var _indicator_pinned: bool  = false
 
+# Snap Trap animation nodes — null for all other trap types.
+var _snap_bar_pivot: Node3D         = null
+var _snap_cheese:    MeshInstance3D = null
+var _snap_animating: bool           = false
+
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -309,6 +314,8 @@ func _process(delta: float) -> void:
 		if target != null:
 			fired.emit(global_position, target.global_position, target, _damage, _trap_type)
 			did_fire = true
+			if _trap_type == TrapType.SNAP_TRAP:
+				_play_snap_animation()
 
 	if did_fire:
 		_cooldown_remaining = _cooldown
@@ -550,9 +557,14 @@ func _spawn_hover_area() -> void:
 	add_child(_hover_area)
 
 
-## Creates the placeholder visual as a child MeshInstance3D.
-## Replaced by a sprite node in Phase 3.
+## Creates the trap's placeholder visual. Snap Trap gets a multi-part procedural
+## mesh; all other types get a flat colored box. Both will be replaced by
+## Sprite3D art in a later pass.
 func _spawn_visual(color: Color) -> void:
+	if _trap_type == TrapType.SNAP_TRAP:
+		_spawn_snap_trap_visual()
+		return
+
 	var mi   := MeshInstance3D.new()
 	var box  := BoxMesh.new()
 	box.size  = Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9)
@@ -565,3 +577,84 @@ func _spawn_visual(color: Color) -> void:
 	mi.material_override = mat
 
 	add_child(mi)
+
+
+## Builds the Snap Trap visual: a wooden base plate, a hinged spring bar that
+## slams down when the trap fires, and a cheese wedge that vanishes on fire and
+## reappears once the bar resets. All sized relative to the 1.9-cell footprint.
+func _spawn_snap_trap_visual() -> void:
+	var fp := Grid.CELL_SIZE * 1.9
+
+	# Wooden base plate — warm brown, thin and flat.
+	var base_mi   := MeshInstance3D.new()
+	var base_mesh := BoxMesh.new()
+	base_mesh.size = Vector3(fp * 0.88, fp * 0.04, fp * 0.60)
+	base_mi.mesh   = base_mesh
+	base_mi.position.y = fp * 0.02
+	var base_mat := StandardMaterial3D.new()
+	base_mat.albedo_color = Color(0.52, 0.32, 0.12)
+	base_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	base_mi.material_override = base_mat
+	add_child(base_mi)
+
+	# Spring bar pivot — sits at the back edge of the base at base-top height.
+	# Rotating this node on X swings the bar from raised (armed) to flat (fired).
+	_snap_bar_pivot          = Node3D.new()
+	_snap_bar_pivot.position = Vector3(0.0, fp * 0.04, -(fp * 0.30 - fp * 0.04))
+	_snap_bar_pivot.rotation_degrees.x = -55.0   # armed: bar angled up
+	add_child(_snap_bar_pivot)
+
+	# The bar itself — child of the pivot so it inherits the hinge rotation.
+	# Offset forward along Z so the pivot acts as a hinge at its back edge.
+	var bar_mi   := MeshInstance3D.new()
+	var bar_mesh := BoxMesh.new()
+	bar_mesh.size = Vector3(fp * 0.76, fp * 0.028, fp * 0.50)
+	bar_mi.mesh   = bar_mesh
+	bar_mi.position.z = fp * 0.25
+	var bar_mat := StandardMaterial3D.new()
+	bar_mat.albedo_color = Color(0.72, 0.72, 0.76)
+	bar_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bar_mi.material_override = bar_mat
+	_snap_bar_pivot.add_child(bar_mi)
+
+	# Cheese wedge — triangular prism (3-segment cylinder) standing upright on
+	# the bait platform. Reads clearly from above. Hidden during the snap.
+	_snap_cheese = MeshInstance3D.new()
+	var cheese_mesh             := CylinderMesh.new()
+	cheese_mesh.radial_segments  = 3
+	cheese_mesh.top_radius       = fp * 0.095
+	cheese_mesh.bottom_radius    = fp * 0.095
+	cheese_mesh.height           = fp * 0.13
+	_snap_cheese.mesh             = cheese_mesh
+	_snap_cheese.position         = Vector3(0.0, fp * 0.04 + fp * 0.065, fp * 0.16)
+	_snap_cheese.rotation_degrees.y = 15.0   # orient a flat face toward the player
+	var cheese_mat := StandardMaterial3D.new()
+	cheese_mat.albedo_color = Color(0.95, 0.82, 0.15)
+	cheese_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_snap_cheese.material_override = cheese_mat
+	add_child(_snap_cheese)
+
+
+## Plays the snap animation: slams the bar down, hides the cheese, then resets
+## both after half the cooldown has elapsed. Guards against overlap so a fast
+## trigger rate cannot stack multiple tweens on the same bar.
+func _play_snap_animation() -> void:
+	if _snap_bar_pivot == null or _snap_animating:
+		return
+	_snap_animating      = true
+	_snap_cheese.visible = false
+
+	var snap_tween := create_tween()
+	snap_tween.tween_property(_snap_bar_pivot, "rotation_degrees:x", 8.0, 0.07)
+
+	await get_tree().create_timer(_cooldown * 0.50).timeout
+	if not is_inside_tree():
+		_snap_animating = false
+		return
+
+	var reset_tween := create_tween()
+	reset_tween.tween_property(_snap_bar_pivot, "rotation_degrees:x", -55.0, 0.18)
+	await reset_tween.finished
+
+	_snap_cheese.visible = true
+	_snap_animating      = false
