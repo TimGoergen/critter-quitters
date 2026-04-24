@@ -95,41 +95,50 @@ func _process(delta: float) -> void:
 func _spawn_cloud_visual(aoe_range: float) -> void:
 	var particles          := CPUParticles3D.new()
 	particles.one_shot      = true
-	particles.explosiveness = 0.55   # slightly staggered so puffs build rather than burst as one ring
-	particles.amount        = 32
-	particles.lifetime      = CLOUD_LIFETIME
+	# Low explosiveness: puffs appear gradually over the lifetime rather than
+	# all at once, so the space fills incrementally.
+	particles.explosiveness = 0.10
+	particles.amount        = 36
+	particles.lifetime      = 1.4   # longer than CLOUD_LIFETIME so puffs linger visibly
 
-	# Sphere emission: puffs start at random positions within a small volume
-	# rather than all from the same point, which breaks the uniform ring pattern.
+	# Spawn puffs spread across the full range area from the start so the
+	# visual is a field of clouds rather than an outward-expanding ring.
 	particles.emission_shape         = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	particles.emission_sphere_radius = Grid.CELL_SIZE * 0.5
-	particles.direction               = Vector3.UP
-	particles.spread                  = 88.0
-	particles.initial_velocity_min    = Grid.CELL_SIZE * 0.8
-	particles.initial_velocity_max    = Grid.CELL_SIZE * 5.5   # wide range = irregular spread
-	particles.gravity                 = Vector3.ZERO
+	particles.emission_sphere_radius = aoe_range * 0.80
 
-	# Damping slows each puff so it bloats in place rather than travelling
-	# at constant speed — gives a billowing, organic silhouette.
-	particles.damping_min      = 1.5
-	particles.damping_max      = 4.5
+	# Very slow random drift — puffs sit nearly in place and bloom, not travel.
+	particles.direction            = Vector3.UP
+	particles.spread               = 88.0
+	particles.initial_velocity_min = 0.0
+	particles.initial_velocity_max = Grid.CELL_SIZE * 0.35
+	particles.gravity              = Vector3.ZERO
+	particles.damping_min          = 1.0
+	particles.damping_max          = 3.0
 
-	particles.scale_amount_min = 2.0
-	particles.scale_amount_max = 5.5   # wide scale variance adds size irregularity
+	# Wide size variance so puffs are visibly different from each other.
+	particles.scale_amount_min = 3.0
+	particles.scale_amount_max = 7.0
 
-	# Mesh: vertex_color_use_as_albedo lets the color_ramp drive the final color.
-	var sphere    := SphereMesh.new()
-	sphere.radius  = Grid.CELL_SIZE * 0.50
-	sphere.height  = Grid.CELL_SIZE * 1.00
-	var mat                        := StandardMaterial3D.new()
-	mat.albedo_color                = Color.WHITE
-	mat.vertex_color_use_as_albedo  = true
-	mat.shading_mode                = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency                = BaseMaterial3D.TRANSPARENCY_ALPHA
-	sphere.material                 = mat
-	particles.mesh                  = sphere
+	# Each puff blooms from a tiny seed to full size then softly fades.
+	var scale_curve := Curve.new()
+	scale_curve.add_point(Vector2(0.0, 0.06))
+	scale_curve.add_point(Vector2(0.40, 1.0))
+	scale_curve.add_point(Vector2(1.0,  0.80))
+	particles.scale_amount_curve = scale_curve
 
-	# Fade from cloud color to transparent so puffs dissolve rather than pop.
+	# Mesh: vertex_color_use_as_albedo lets color_ramp drive the final tint.
+	var sphere   := SphereMesh.new()
+	sphere.radius = Grid.CELL_SIZE * 0.50
+	sphere.height = Grid.CELL_SIZE * 1.00
+	var mat                       := StandardMaterial3D.new()
+	mat.albedo_color               = Color.WHITE
+	mat.vertex_color_use_as_albedo = true
+	mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	sphere.material                = mat
+	particles.mesh                 = sphere
+
+	# Alpha fade to zero so puffs dissolve rather than pop out.
 	var gradient := Gradient.new()
 	gradient.set_color(0, COLOR_CLOUD)
 	gradient.set_color(1, Color(COLOR_CLOUD.r, COLOR_CLOUD.g, COLOR_CLOUD.b, 0.0))
@@ -138,7 +147,9 @@ func _spawn_cloud_visual(aoe_range: float) -> void:
 	get_parent().add_child(particles)
 	particles.global_position = global_position
 	particles.restart()
-	get_tree().create_timer(CLOUD_LIFETIME + 0.20).timeout.connect(particles.queue_free)
+	# Puffs emit over ~(lifetime * (1 - explosiveness)) seconds then each lives
+	# lifetime longer — budget both phases plus a small buffer for cleanup.
+	get_tree().create_timer(particles.lifetime * 2.0 + 0.20).timeout.connect(particles.queue_free)
 
 
 ## XZ-plane distance from this cloud's origin to a world position.
