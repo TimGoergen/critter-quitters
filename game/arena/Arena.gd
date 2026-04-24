@@ -1045,21 +1045,23 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 	trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 	trap.fired.connect(_on_trap_fired)
+	trap.aoe_fired.connect(_on_fogger_aoe_fired)
 	_trap_container.add_child(trap)
 	trap.initialize(GameState.selected_trap_type as Trap.TrapType, _active_enemies)
 	GameState.spend_bug_bucks(trap.get_cost())
 	_trap_nodes[anchor] = trap
 
 
-func _on_trap_fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, trap_type: int) -> void:
-	if trap_type == Trap.TrapType.FOGGER:
-		var cloud := FogCloud.new()
-		cloud.initialize(from_pos, to_pos)
-		add_child(cloud)
-	else:
-		var proj := Projectile.new()
-		proj.initialize(from_pos, to_pos, target, damage)
-		add_child(proj)
+func _on_trap_fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, _trap_type: int) -> void:
+	var proj := Projectile.new()
+	proj.initialize(from_pos, to_pos, target, damage)
+	add_child(proj)
+
+
+func _on_fogger_aoe_fired(from_pos: Vector3, aoe_range: float) -> void:
+	var cloud := FogCloud.new()
+	cloud.initialize(from_pos, aoe_range)
+	add_child(cloud)
 
 
 ## Returns the four cells of a 2x2 trap footprint given its top-left anchor.

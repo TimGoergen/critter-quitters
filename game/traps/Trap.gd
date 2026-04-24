@@ -73,10 +73,14 @@ const UPGRADE_COSTS := {
 # Signals
 # ---------------------------------------------------------------------------
 
-## Emitted when the trap fires. Arena spawns the appropriate visual in
-## response — Projectile for point targets, FogCloud for Fogger shots —
-## so the trap itself does not need a reference to the scene tree root.
+## Emitted when a point-target trap fires (Snap Trap, Zapper). Arena spawns
+## a Projectile in response so the trap does not need a scene tree reference.
 signal fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, trap_type: TrapType)
+
+## Emitted once per Fogger firing cycle (not per enemy). Arena spawns a single
+## FogCloud covering the full range — one cloud regardless of how many enemies
+## were hit. Damage is applied directly in _fire_fogger(); this signal is visual only.
+signal aoe_fired(from_pos: Vector3, aoe_range: float)
 
 ## Emitted after any upgrade is applied. TrapUpgradePanel connects here to
 ## keep its display current without polling.
@@ -285,6 +289,8 @@ func _process(delta: float) -> void:
 	var did_fire := false
 	if _trap_type == TrapType.FOGGER:
 		did_fire = _fire_fogger()
+		if did_fire:
+			aoe_fired.emit(global_position, _range)
 	else:
 		var target := _find_target()
 		if target != null:
@@ -317,16 +323,18 @@ func _find_target() -> Node3D:
 	return null
 
 
-## Fires at every enemy currently in range. Returns true if at least one shot fired.
+## Damages every enemy currently in range. Returns true if at least one was hit.
+## Damage is applied here rather than via a projectile — the cloud visual is
+## spawned once by the caller; individual per-enemy projectiles are not used.
 func _fire_fogger() -> bool:
-	var any_fired := false
+	var any_hit := false
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
 			continue
 		if _xz_distance(enemy.global_position) <= _range:
-			fired.emit(global_position, enemy.global_position, enemy, _damage, _trap_type)
-			any_fired = true
-	return any_fired
+			enemy.take_damage(_damage)
+			any_hit = true
+	return any_hit
 
 
 ## Applies or removes the slow source on each enemy as they cross the range boundary.
