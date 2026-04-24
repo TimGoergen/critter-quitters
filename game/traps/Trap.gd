@@ -124,6 +124,8 @@ var _slowed_enemies: Array[Node3D] = []
 var _is_hovered:      bool   = false
 var _range_indicator: Node3D = null
 var _hover_area:      Area3D = null
+# When true, the indicator stays visible regardless of hover state (upgrade panel open).
+var _indicator_pinned: bool  = false
 
 
 # ---------------------------------------------------------------------------
@@ -421,16 +423,18 @@ func _check_full_upgrade_bonus() -> void:
 	_bonus_applied = true
 
 
-## Forces the range indicator visible regardless of hover state.
+## Forces the range indicator visible and pins it so hover-exit cannot hide it.
 ## Called by Arena when the upgrade panel opens for this trap.
 func show_range_indicator() -> void:
+	_indicator_pinned = true
 	if _range_indicator != null:
 		_range_indicator.visible = true
 
 
-## Hides the range indicator unless the mouse is still over the trap.
+## Unpins the indicator and hides it unless the mouse is still over the trap.
 ## Called by Arena when the upgrade panel closes.
 func hide_range_indicator() -> void:
+	_indicator_pinned = false
 	if _range_indicator != null:
 		_range_indicator.visible = _is_hovered
 
@@ -443,6 +447,8 @@ func _on_hover_enter() -> void:
 
 func _on_hover_exit() -> void:
 	_is_hovered = false
+	if _indicator_pinned:
+		return
 	if _range_indicator != null:
 		_range_indicator.visible = false
 
