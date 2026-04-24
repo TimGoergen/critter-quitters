@@ -93,30 +93,47 @@ func _process(delta: float) -> void:
 ## node freeing. Particles are already a one-shot burst and need no owner
 ## after they have started.
 func _spawn_cloud_visual(aoe_range: float) -> void:
-	var particles                    := CPUParticles3D.new()
-	particles.one_shot                = true
-	particles.explosiveness           = 0.75
-	particles.amount                  = 24
-	particles.lifetime                = CLOUD_LIFETIME
+	var particles          := CPUParticles3D.new()
+	particles.one_shot      = true
+	particles.explosiveness = 0.55   # slightly staggered so puffs build rather than burst as one ring
+	particles.amount        = 32
+	particles.lifetime      = CLOUD_LIFETIME
 
-	particles.emission_shape          = CPUParticles3D.EMISSION_SHAPE_POINT
+	# Sphere emission: puffs start at random positions within a small volume
+	# rather than all from the same point, which breaks the uniform ring pattern.
+	particles.emission_shape         = CPUParticles3D.EMISSION_SHAPE_SPHERE
+	particles.emission_sphere_radius = Grid.CELL_SIZE * 0.5
 	particles.direction               = Vector3.UP
 	particles.spread                  = 88.0
-	particles.initial_velocity_min    = Grid.CELL_SIZE * 1.5
-	particles.initial_velocity_max    = Grid.CELL_SIZE * 4.5
+	particles.initial_velocity_min    = Grid.CELL_SIZE * 0.8
+	particles.initial_velocity_max    = Grid.CELL_SIZE * 5.5   # wide range = irregular spread
 	particles.gravity                 = Vector3.ZERO
-	particles.scale_amount_min        = 1.4
-	particles.scale_amount_max        = 3.2
 
+	# Damping slows each puff so it bloats in place rather than travelling
+	# at constant speed — gives a billowing, organic silhouette.
+	particles.damping_min      = 1.5
+	particles.damping_max      = 4.5
+
+	particles.scale_amount_min = 2.0
+	particles.scale_amount_max = 5.5   # wide scale variance adds size irregularity
+
+	# Mesh: vertex_color_use_as_albedo lets the color_ramp drive the final color.
 	var sphere    := SphereMesh.new()
 	sphere.radius  = Grid.CELL_SIZE * 0.50
 	sphere.height  = Grid.CELL_SIZE * 1.00
-	var mat               := StandardMaterial3D.new()
-	mat.albedo_color       = COLOR_CLOUD
-	mat.shading_mode       = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency       = BaseMaterial3D.TRANSPARENCY_ALPHA
-	sphere.material        = mat
-	particles.mesh         = sphere
+	var mat                        := StandardMaterial3D.new()
+	mat.albedo_color                = Color.WHITE
+	mat.vertex_color_use_as_albedo  = true
+	mat.shading_mode                = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency                = BaseMaterial3D.TRANSPARENCY_ALPHA
+	sphere.material                 = mat
+	particles.mesh                  = sphere
+
+	# Fade from cloud color to transparent so puffs dissolve rather than pop.
+	var gradient := Gradient.new()
+	gradient.set_color(0, COLOR_CLOUD)
+	gradient.set_color(1, Color(COLOR_CLOUD.r, COLOR_CLOUD.g, COLOR_CLOUD.b, 0.0))
+	particles.color_ramp = gradient
 
 	get_parent().add_child(particles)
 	particles.global_position = global_position
