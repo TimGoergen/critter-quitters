@@ -15,7 +15,7 @@ const Grid = preload("res://arena/Grid.gd")
 ## Wave expansion speed in world units per second.
 ## Chosen so the wave crosses the full range (~6.4 units) in approximately
 ## CLOUD_LIFETIME seconds — damage and visual dissipate together.
-const EXPAND_SPEED: float = 7.0
+const EXPAND_SPEED: float = 4.44
 
 const CLOUD_LIFETIME: float = 0.90
 const COLOR_CLOUD := Color(0.40, 0.88, 0.40, 0.20)
