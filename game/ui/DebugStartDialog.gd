@@ -144,6 +144,12 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 	return field
 
 
+## Returns true when screen_pos falls inside the dialog panel.
+## Arena calls this to suppress the grid reticle while the dialog is open.
+func covers_point(screen_pos: Vector2) -> bool:
+	return _panel_rect.has_point(screen_pos)
+
+
 func _input(event: InputEvent) -> void:
 	if event is InputEventMouseButton and event.pressed:
 		# Let clicks on the trap selector through so the player can pick a trap

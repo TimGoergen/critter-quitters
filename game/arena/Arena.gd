@@ -137,6 +137,9 @@ var _drag_ghosts: Array[Node3D] = []
 var _hover_preview:      Node3D = null
 var _hover_preview_type: int    = -1
 
+# Reference to the playtest setup dialog while it is open; null after it confirms.
+var _debug_dialog: Node = null
+
 # Outside-wall reference positions (x only matters; y is chosen per enemy).
 var _spawn_cell: Vector2i = Vector2i.ZERO    # centre spawn cell (used for x and gap centre)
 var _despawn_cell: Vector2i = Vector2i.ZERO  # fixed despawn cell on the exit side
@@ -222,6 +225,7 @@ func _ready() -> void:
 	var dialog := DebugStartDialog.new()
 	dialog.confirmed.connect(_on_debug_confirmed)
 	add_child(dialog)
+	_debug_dialog = dialog
 
 
 # ---------------------------------------------------------------------------
@@ -850,6 +854,14 @@ func _is_in_arena(cell: Vector2i) -> bool:
 ##   Footprint contains a TRAP or OBSTACLE                         → 20% opacity
 ##   Footprint is clear (EMPTY / ENTRANCE / EXIT only)             → 100% opacity
 func _update_grid_highlight() -> void:
+	# Suppress the reticle while the mouse is over the playtest setup dialog.
+	if _debug_dialog != null and is_instance_valid(_debug_dialog):
+		var mouse_pos: Vector2 = get_viewport().get_mouse_position()
+		if (_debug_dialog as DebugStartDialog).covers_point(mouse_pos):
+			_grid_highlight.mesh = null
+			_hide_hover_preview()
+			return
+
 	if not _is_in_arena(_hover_cell):
 		_grid_highlight.mesh = null
 		_hide_hover_preview()
