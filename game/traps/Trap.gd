@@ -111,6 +111,10 @@ var _base_cooldown: float = 0.0
 # types, so this always reflects the live list without any extra bookkeeping.
 var _active_enemies: Array = []
 
+# Enemies currently inside this Glue Board's range. Used to track who enters
+# and leaves so we can call add/remove_slow_source exactly once per transition.
+var _slowed_enemies: Array[Node3D] = []
+
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -269,19 +273,34 @@ func get_cost() -> int:
 # ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
-	if _cooldown <= 0.0:
-		return   # passive trap type — no firing logic
+	if _trap_type == TrapType.GLUE_BOARD:
+		_update_glue_slow()
+		return
 
 	_cooldown_remaining -= delta
 	if _cooldown_remaining > 0.0:
 		return
 
-	var target := _find_target()
-	if target == null:
-		return
+	var did_fire := false
+	if _trap_type == TrapType.FOGGER:
+		did_fire = _fire_fogger()
+	else:
+		var target := _find_target()
+		if target != null:
+			fired.emit(global_position, target.global_position, target, _damage)
+			did_fire = true
 
-	fired.emit(global_position, target.global_position, target, _damage)
-	_cooldown_remaining = _cooldown
+	if did_fire:
+		_cooldown_remaining = _cooldown
+
+
+func _exit_tree() -> void:
+	# Release any slow sources this trap was holding so enemies return to
+	# normal speed the moment the trap is sold or overwritten.
+	for enemy in _slowed_enemies:
+		if is_instance_valid(enemy):
+			enemy.remove_slow_source()
+	_slowed_enemies.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -294,8 +313,41 @@ func _find_target() -> Node3D:
 			return _nearest_in_range()
 		TrapType.ZAPPER:
 			return _farthest_in_range()
-		_:
-			return _nearest_in_range()
+	return null
+
+
+## Fires at every enemy currently in range. Returns true if at least one shot fired.
+func _fire_fogger() -> bool:
+	var any_fired := false
+	for enemy in _active_enemies:
+		if not is_instance_valid(enemy):
+			continue
+		if _xz_distance(enemy.global_position) <= _range:
+			fired.emit(global_position, enemy.global_position, enemy, _damage)
+			any_fired = true
+	return any_fired
+
+
+## Applies or removes the slow source on each enemy as they cross the range boundary.
+func _update_glue_slow() -> void:
+	# Remove entries for enemies that have died or despawned.
+	var i := _slowed_enemies.size() - 1
+	while i >= 0:
+		if not is_instance_valid(_slowed_enemies[i]):
+			_slowed_enemies.remove_at(i)
+		i -= 1
+
+	for enemy in _active_enemies:
+		if not is_instance_valid(enemy):
+			continue
+		var in_range    := _xz_distance(enemy.global_position) <= _range
+		var is_tracked  := enemy in _slowed_enemies
+		if in_range and not is_tracked:
+			_slowed_enemies.append(enemy)
+			enemy.add_slow_source()
+		elif not in_range and is_tracked:
+			_slowed_enemies.erase(enemy)
+			enemy.remove_slow_source()
 
 
 ## Returns the enemy in range closest to this trap (used by Snap Trap).

@@ -74,6 +74,9 @@ const ARRIVAL_THRESHOLD: float = 0.05
 ## Duration of the death flash in seconds.
 const DEATH_FLASH_DURATION: float = 0.12
 
+## Speed multiplier applied while at least one Glue Board is in range.
+const SLOW_FACTOR: float = 0.45
+
 
 # ---------------------------------------------------------------------------
 # Signals
@@ -121,6 +124,11 @@ var _infestation_damage: int = 0
 var _is_dead: bool = false
 var _bounty: int = 0
 
+# Slow state — tracks how many Glue Boards currently have this enemy in range.
+# Speed is reduced while count > 0 and restored when it drops back to zero.
+var _base_move_speed: float = 0.0
+var _slow_source_count: int = 0
+
 # Accumulated walk time used to index into ANT_FRAMES.
 var _walk_time: float = 0.0
 
@@ -146,6 +154,7 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 
 	var stats          = STATS[enemy_type]
 	_move_speed        = stats["speed"]
+	_base_move_speed   = _move_speed
 	# Compound 7% per wave — doubles every ~10 waves, matching the boss cycle cadence.
 	_max_hp            = stats["hp"] * pow(1.07, wave)
 	_current_hp        = _max_hp
@@ -178,6 +187,21 @@ func take_damage(amount: float) -> void:
 		_die()
 	else:
 		_flash_hit()
+
+
+## Called by a Glue Board when this enemy enters its range circle.
+## Reference-counted so overlapping boards compose correctly.
+func add_slow_source() -> void:
+	_slow_source_count += 1
+	if _slow_source_count == 1:
+		_move_speed = _base_move_speed * SLOW_FACTOR
+
+
+## Called by a Glue Board when this enemy leaves its range circle (or the board is removed).
+func remove_slow_source() -> void:
+	_slow_source_count = maxi(_slow_source_count - 1, 0)
+	if _slow_source_count == 0:
+		_move_speed = _base_move_speed
 
 
 ## Briefly flashes the enemy white then returns to its base color.
