@@ -196,6 +196,8 @@ func _ready() -> void:
 	_init_path_marker_pool()
 	_spawn_arena_border()
 
+	get_viewport().physics_object_picking = true
+
 	_pathfinder.recalculate()
 	add_child(HUD.new())
 	GameState.wave_skip_requested.connect(_on_wave_skip_requested)
@@ -1046,8 +1048,8 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 	trap.fired.connect(_on_trap_fired)
 	trap.aoe_fired.connect(_on_fogger_aoe_fired)
-	_trap_container.add_child(trap)
 	trap.initialize(GameState.selected_trap_type as Trap.TrapType, _active_enemies)
+	_trap_container.add_child(trap)
 	GameState.spend_bug_bucks(trap.get_cost())
 	_trap_nodes[anchor] = trap
 
