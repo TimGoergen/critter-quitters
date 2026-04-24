@@ -234,6 +234,16 @@ func _ready() -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventMouseMotion:
+		# When the mouse is over the setup dialog the reticle must be hidden.
+		# We force _hover_cell to invalid so the cell-change guard doesn't
+		# prevent _update_grid_highlight from clearing the mesh on the next move.
+		if _debug_dialog != null and is_instance_valid(_debug_dialog) \
+				and (_debug_dialog as DebugStartDialog).covers_point(event.position):
+			_hover_cell = Vector2i(-1, -1)
+			_grid_highlight.mesh = null
+			_hide_hover_preview()
+			return
+
 		var cell := _screen_to_grid(event.position)
 		if cell != _hover_cell:
 			_hover_cell = cell
@@ -854,14 +864,6 @@ func _is_in_arena(cell: Vector2i) -> bool:
 ##   Footprint contains a TRAP or OBSTACLE                         → 20% opacity
 ##   Footprint is clear (EMPTY / ENTRANCE / EXIT only)             → 100% opacity
 func _update_grid_highlight() -> void:
-	# Suppress the reticle while the mouse is over the playtest setup dialog.
-	if _debug_dialog != null and is_instance_valid(_debug_dialog):
-		var mouse_pos: Vector2 = get_viewport().get_mouse_position()
-		if (_debug_dialog as DebugStartDialog).covers_point(mouse_pos):
-			_grid_highlight.mesh = null
-			_hide_hover_preview()
-			return
-
 	if not _is_in_arena(_hover_cell):
 		_grid_highlight.mesh = null
 		_hide_hover_preview()
