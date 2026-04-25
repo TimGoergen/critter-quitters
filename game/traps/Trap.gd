@@ -835,23 +835,22 @@ func _spawn_fogger_visual() -> void:
 
 
 ## Builds the Zapper visual: a dark navy housing plate, a raised frame border,
-## a 3×3 pale silver-blue wire grid, and a bright purple UV light cylinder at
-## the centre. From above the grid crosshatch and the purple dot identify it
-## instantly. The UV light node is stored so the fire animation can scale it.
-## Builds the Zapper visual: a dark navy base plate, a single-mesh wire grid,
-## and a bright purple UV light cylinder. All six grid wires live in one
-## ArrayMesh so the GPU never runs a depth comparison between them — the only
-## proven fix for z-fighting between crossing flat geometry. The transparent
-## glow halo is omitted because a sphere that intersects opaque geometry causes
-## depth-sort artefacts on the mobile renderer.
+## Builds the Zapper visual: a flat circular disc housing, a thick annulus ring
+## for the outer cage, and a bright purple UV light cylinder at the centre.
+## No thin-line geometry — all elements cover multiple pixels at any game
+## resolution, eliminating the sub-pixel aliasing that made the wire-grid
+## design render differently at each world position.
 func _spawn_zapper_visual() -> void:
 	var fp := Grid.CELL_SIZE * 1.9
 
-	# Dark navy housing base plate.
+	# Circular housing base — dark navy disc.
 	var base_mi   := MeshInstance3D.new()
-	var base_mesh := BoxMesh.new()
-	base_mesh.size = Vector3(fp * 0.90, fp * 0.040, fp * 0.90)
-	base_mi.mesh   = base_mesh
+	var base_mesh := CylinderMesh.new()
+	base_mesh.radial_segments = 24
+	base_mesh.top_radius      = fp * 0.44
+	base_mesh.bottom_radius   = fp * 0.44
+	base_mesh.height          = fp * 0.040
+	base_mi.mesh       = base_mesh
 	base_mi.position.y = fp * 0.020
 	var base_mat := StandardMaterial3D.new()
 	base_mat.albedo_color = Color(0.10, 0.13, 0.22)
@@ -859,20 +858,21 @@ func _spawn_zapper_visual() -> void:
 	base_mi.material_override = base_mat
 	add_child(base_mi)
 
-	# Wire grid — all six wires in one ArrayMesh (see _make_zapper_grid_mesh).
-	# Positioned well above the base plate top (fp*0.040) to avoid depth fighting.
-	var grid_mi           := MeshInstance3D.new()
-	grid_mi.mesh           = _make_zapper_grid_mesh(fp)
-	grid_mi.position.y     = fp * 0.060
-	var wire_mat           := StandardMaterial3D.new()
-	wire_mat.albedo_color   = Color(0.65, 0.72, 0.88)
-	wire_mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
-	wire_mat.cull_mode      = BaseMaterial3D.CULL_DISABLED
-	grid_mi.material_override = wire_mat
-	add_child(grid_mi)
+	# Outer cage ring — thick annulus raised above the base.
+	# Width fp*0.07 covers multiple pixels at all resolutions.
+	# CULL_DISABLED because _make_ring_mesh produces downward-facing normals.
+	var ring_mi           := MeshInstance3D.new()
+	ring_mi.mesh           = _make_ring_mesh(fp * 0.42, fp * 0.07)
+	ring_mi.position.y     = fp * 0.060
+	var ring_mat           := StandardMaterial3D.new()
+	ring_mat.albedo_color   = Color(0.50, 0.58, 0.82)
+	ring_mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring_mat.cull_mode      = BaseMaterial3D.CULL_DISABLED
+	ring_mi.material_override = ring_mat
+	add_child(ring_mi)
 
-	# UV light — bright purple cylinder, clearly above the grid (fp*0.060 + fp*0.040 gap).
-	# _zapper_uv_light is a container node so _play_zapper_animation() can scale it.
+	# UV light — bright purple cylinder at the centre, clearly above the ring.
+	# Stored in a container node so _play_zapper_animation() can scale it.
 	_zapper_uv_light = Node3D.new()
 	_zapper_uv_light.position.y = fp * 0.10
 	add_child(_zapper_uv_light)
@@ -890,46 +890,6 @@ func _spawn_zapper_visual() -> void:
 	uv_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	uv_mi.material_override = uv_mat
 	_zapper_uv_light.add_child(uv_mi)
-
-
-## Builds the wire grid as a single ArrayMesh containing all six wires as flat
-## single-face quads. X-direction wires sit at y=0 and Z-direction wires at
-## y=fp*0.016 within the mesh, so no two quads are ever coplanar — even at the
-## nine crossing points — making z-fighting geometrically impossible.
-## The MeshInstance is positioned at fp*0.060 (world) to sit above the base plate.
-func _make_zapper_grid_mesh(fp: float) -> ArrayMesh:
-	var verts   := PackedVector3Array()
-	var indices := PackedInt32Array()
-	var hw  := fp * 0.0075  # half-width of each wire strip
-	var hl  := fp * 0.36    # half-length of each wire strip
-	var y_x := 0.0          # X-direction wires at this local y
-	var y_z := fp * 0.016   # Z-direction wires one wire-width above X-wires
-
-	# Vertices are wound counter-clockwise from above for a +Y normal.
-	for z: float in [-fp * 0.24, 0.0, fp * 0.24]:
-		var b := verts.size()
-		verts.append(Vector3(-hl, y_x, z - hw))
-		verts.append(Vector3(-hl, y_x, z + hw))
-		verts.append(Vector3( hl, y_x, z + hw))
-		verts.append(Vector3( hl, y_x, z - hw))
-		indices.append_array([b, b+1, b+2, b, b+2, b+3])
-
-	for x: float in [-fp * 0.24, 0.0, fp * 0.24]:
-		var b := verts.size()
-		verts.append(Vector3(x - hw, y_z, -hl))
-		verts.append(Vector3(x - hw, y_z,  hl))
-		verts.append(Vector3(x + hw, y_z,  hl))
-		verts.append(Vector3(x + hw, y_z, -hl))
-		indices.append_array([b, b+1, b+2, b, b+2, b+3])
-
-	var arrays := []
-	arrays.resize(Mesh.ARRAY_MAX)
-	arrays[Mesh.ARRAY_VERTEX] = verts
-	arrays[Mesh.ARRAY_INDEX]  = indices
-
-	var mesh := ArrayMesh.new()
-	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
-	return mesh
 
 
 ## Plays the fire animation: the UV light node scales outward sharply then
