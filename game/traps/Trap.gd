@@ -887,12 +887,14 @@ func _spawn_zapper_visual() -> void:
 		w_mi.position = Vector3(0.0, fp * 0.055, wire_z)
 		w_mi.material_override = wire_mat
 		add_child(w_mi)
+	# Z-direction wires sit slightly above the X-direction wires (fp*0.072 vs fp*0.055)
+	# so their faces are never coplanar at the intersections — eliminates z-fighting.
 	for wire_x: float in [-fp * 0.24, 0.0, fp * 0.24]:
 		var w_mi   := MeshInstance3D.new()
 		var w_mesh := BoxMesh.new()
 		w_mesh.size   = Vector3(fp * 0.015, fp * 0.015, fp * 0.72)
 		w_mi.mesh     = w_mesh
-		w_mi.position = Vector3(wire_x, fp * 0.055, 0.0)
+		w_mi.position = Vector3(wire_x, fp * 0.072, 0.0)
 		w_mi.material_override = wire_mat
 		add_child(w_mi)
 
