@@ -145,6 +145,12 @@ var _fogger_nozzle_base_y: float  = 0.0
 var _fogger_bob_time:      float  = 0.0
 var _fogger_animating:     bool   = false
 
+# Zapper animation nodes — null for all other trap types.
+# _zapper_uv_light is the container node for the UV cylinder + glow halo;
+# scaling it on fire creates the electric-discharge pulse visible from above.
+var _zapper_uv_light: Node3D = null
+var _zapper_animating: bool  = false
+
 # Tracks how many particle batches from this trap are still visually alive.
 # Each fire increments the count; a timer decrements it after the particles expire.
 # Firing is blocked when the count reaches FOG_BATCH_CAP (~6 puffs on screen).
@@ -357,6 +363,8 @@ func _process(delta: float) -> void:
 			did_fire = true
 			if _trap_type == TrapType.SNAP_TRAP:
 				_play_snap_animation()
+			if _trap_type == TrapType.ZAPPER:
+				_play_zapper_animation()
 
 	if did_fire:
 		_cooldown_remaining = _cooldown
@@ -600,11 +608,14 @@ func _spawn_hover_area() -> void:
 	add_child(_hover_area)
 
 
-## Creates the trap's placeholder visual. Snap Trap and Fogger get multi-part
-## procedural meshes; remaining types get a flat colored box.
+## Creates the trap's placeholder visual. Snap Trap, Zapper, and Fogger get
+## multi-part procedural meshes; remaining types get a flat colored box.
 func _spawn_visual(color: Color) -> void:
 	if _trap_type == TrapType.SNAP_TRAP:
 		_spawn_snap_trap_visual()
+		return
+	if _trap_type == TrapType.ZAPPER:
+		_spawn_zapper_visual()
 		return
 	if _trap_type == TrapType.FOGGER:
 		_spawn_fogger_visual()
@@ -821,6 +832,127 @@ func _spawn_fogger_visual() -> void:
 	tip_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	tip_mi.material_override = tip_mat
 	_fogger_nozzle.add_child(tip_mi)
+
+
+## Builds the Zapper visual: a dark navy housing plate, a raised frame border,
+## a 3×3 pale silver-blue wire grid, and a bright purple UV light cylinder at
+## the centre. From above the grid crosshatch and the purple dot identify it
+## instantly. The UV light node is stored so the fire animation can scale it.
+func _spawn_zapper_visual() -> void:
+	var fp := Grid.CELL_SIZE * 1.9
+
+	# Dark navy housing base plate.
+	var base_mi   := MeshInstance3D.new()
+	var base_mesh := BoxMesh.new()
+	base_mesh.size = Vector3(fp * 0.90, fp * 0.040, fp * 0.90)
+	base_mi.mesh   = base_mesh
+	base_mi.position.y = fp * 0.020
+	var base_mat := StandardMaterial3D.new()
+	base_mat.albedo_color = Color(0.10, 0.13, 0.22)
+	base_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	base_mi.material_override = base_mat
+	add_child(base_mi)
+
+	# Raised outer frame: two bars running along X (front/back) and two along Z (sides).
+	var frame_mat := StandardMaterial3D.new()
+	frame_mat.albedo_color = Color(0.20, 0.25, 0.42)
+	frame_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	for side_z: float in [-fp * 0.415, fp * 0.415]:
+		var bar_mi   := MeshInstance3D.new()
+		var bar_mesh := BoxMesh.new()
+		bar_mesh.size   = Vector3(fp * 0.90, fp * 0.07, fp * 0.06)
+		bar_mi.mesh     = bar_mesh
+		bar_mi.position = Vector3(0.0, fp * 0.035, side_z)
+		bar_mi.material_override = frame_mat
+		add_child(bar_mi)
+	for side_x: float in [-fp * 0.415, fp * 0.415]:
+		var bar_mi   := MeshInstance3D.new()
+		var bar_mesh := BoxMesh.new()
+		bar_mesh.size   = Vector3(fp * 0.06, fp * 0.07, fp * 0.76)
+		bar_mi.mesh     = bar_mesh
+		bar_mi.position = Vector3(side_x, fp * 0.035, 0.0)
+		bar_mi.material_override = frame_mat
+		add_child(bar_mi)
+
+	# Wire grid: 3 wires along X and 3 along Z, pale silver-blue.
+	# Spacing at ±0.24 and 0 keeps wires inside the frame with even gaps.
+	var wire_mat := StandardMaterial3D.new()
+	wire_mat.albedo_color = Color(0.65, 0.72, 0.88)
+	wire_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	for wire_z: float in [-fp * 0.24, 0.0, fp * 0.24]:
+		var w_mi   := MeshInstance3D.new()
+		var w_mesh := BoxMesh.new()
+		w_mesh.size   = Vector3(fp * 0.72, fp * 0.015, fp * 0.015)
+		w_mi.mesh     = w_mesh
+		w_mi.position = Vector3(0.0, fp * 0.055, wire_z)
+		w_mi.material_override = wire_mat
+		add_child(w_mi)
+	for wire_x: float in [-fp * 0.24, 0.0, fp * 0.24]:
+		var w_mi   := MeshInstance3D.new()
+		var w_mesh := BoxMesh.new()
+		w_mesh.size   = Vector3(fp * 0.015, fp * 0.015, fp * 0.72)
+		w_mi.mesh     = w_mesh
+		w_mi.position = Vector3(wire_x, fp * 0.055, 0.0)
+		w_mi.material_override = wire_mat
+		add_child(w_mi)
+
+	# UV light: bright purple cylinder in the centre. Stored in a Node3D container
+	# so _play_zapper_animation() can scale the whole assembly (cylinder + halo).
+	_zapper_uv_light = Node3D.new()
+	_zapper_uv_light.position.y = fp * 0.055
+	add_child(_zapper_uv_light)
+
+	var uv_mi   := MeshInstance3D.new()
+	var uv_mesh := CylinderMesh.new()
+	uv_mesh.radial_segments = 12
+	uv_mesh.top_radius      = fp * 0.085
+	uv_mesh.bottom_radius   = fp * 0.085
+	uv_mesh.height          = fp * 0.08
+	uv_mi.mesh       = uv_mesh
+	uv_mi.position.y = fp * 0.040
+	var uv_mat := StandardMaterial3D.new()
+	uv_mat.albedo_color = Color(0.55, 0.20, 1.00)
+	uv_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	uv_mi.material_override = uv_mat
+	_zapper_uv_light.add_child(uv_mi)
+
+	# Soft glow halo: transparent sphere around the UV cylinder for a bloom effect.
+	var glow_mi   := MeshInstance3D.new()
+	var glow_mesh := SphereMesh.new()
+	glow_mesh.radius = fp * 0.17
+	glow_mesh.height = fp * 0.34
+	glow_mi.mesh       = glow_mesh
+	glow_mi.position.y = fp * 0.040
+	var glow_mat := StandardMaterial3D.new()
+	glow_mat.albedo_color = Color(0.65, 0.40, 1.0, 0.18)
+	glow_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow_mi.material_override = glow_mat
+	_zapper_uv_light.add_child(glow_mi)
+
+
+## Plays the fire animation: the UV light node scales outward sharply then
+## eases back, simulating the electric discharge flash visible from above.
+func _play_zapper_animation() -> void:
+	if _zapper_uv_light == null or _zapper_animating:
+		return
+	_zapper_animating = true
+
+	var burst := create_tween()
+	burst.tween_property(_zapper_uv_light, "scale",
+		Vector3(4.0, 1.5, 4.0), 0.06).set_ease(Tween.EASE_OUT)
+	await burst.finished
+
+	if not is_inside_tree():
+		_zapper_animating = false
+		return
+
+	var settle := create_tween()
+	settle.tween_property(_zapper_uv_light, "scale",
+		Vector3(1.0, 1.0, 1.0), 0.30).set_ease(Tween.EASE_OUT)
+	await settle.finished
+
+	_zapper_animating = false
 
 
 ## Plays the spray animation: squishes the can outward on XZ then springs back.

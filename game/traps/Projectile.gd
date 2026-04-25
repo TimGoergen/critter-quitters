@@ -13,16 +13,24 @@ const Grid = preload("res://arena/Grid.gd")
 # Constants
 # ---------------------------------------------------------------------------
 
-## Travel speed in world units per second.
+## Default travel speed in world units per second.
 const TRAVEL_SPEED: float = 20.0
+
+## Zapper bolt travels faster — electricity should feel near-instant.
+const ZAPPER_TRAVEL_SPEED: float = 32.0
 
 ## Fallback colour for generic projectiles (non-snap-trap types).
 const COLOR_PROJECTILE := Color(1.0, 0.90, 0.25)   # bright yellow
 const COLOR_IMPACT     := Color(1.0, 0.80, 0.15)   # golden burst
 
-# Mirrors Trap.TrapType.SNAP_TRAP (int 0). Avoid preloading Trap.gd here to
-# prevent a circular dependency — update this if the enum order ever changes.
+# Zapper bolt and spark colours.
+const COLOR_ZAPPER_BOLT  := Color(0.45, 0.80, 1.00)   # electric blue
+const COLOR_ZAPPER_SPARK := Color(0.65, 0.88, 1.00)   # pale blue-white
+
+# Mirror Trap.TrapType int values. Avoid preloading Trap.gd here to prevent
+# a circular dependency — update these if the enum order ever changes.
 const _SNAP_TRAP_TYPE: int = 0
+const _ZAPPER_TYPE:    int = 1
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +82,8 @@ func _process(delta: float) -> void:
 		_spawn_impact_effect(killed, enemy_color)
 		queue_free()
 		return
-	global_position += offset.normalized() * minf(TRAVEL_SPEED * delta, distance)
+	var speed := ZAPPER_TRAVEL_SPEED if _trap_type == _ZAPPER_TYPE else TRAVEL_SPEED
+	global_position += offset.normalized() * minf(speed * delta, distance)
 
 
 # ---------------------------------------------------------------------------
@@ -84,6 +93,9 @@ func _process(delta: float) -> void:
 func _spawn_visual() -> void:
 	if _trap_type == _SNAP_TRAP_TYPE:
 		_spawn_cheese_visual()
+		return
+	if _trap_type == _ZAPPER_TYPE:
+		_spawn_zapper_bolt_visual()
 		return
 
 	var mi  := MeshInstance3D.new()
@@ -128,6 +140,9 @@ func _spawn_impact_effect(killed: bool, enemy_color: Color) -> void:
 	if _trap_type == _SNAP_TRAP_TYPE:
 		_spawn_cheese_splat(killed, enemy_color)
 		return
+	if _trap_type == _ZAPPER_TYPE:
+		_spawn_zapper_impact(killed, enemy_color)
+		return
 
 	_spawn_particles(8, 0.4, Grid.CELL_SIZE * 1.15, Grid.CELL_SIZE * 2.875, 0.4, 0.7,
 			Grid.CELL_SIZE * 0.28, COLOR_IMPACT)
@@ -151,9 +166,52 @@ func _spawn_cheese_splat(killed: bool, enemy_color: Color) -> void:
 				Grid.CELL_SIZE * 0.495, enemy_color, true)
 
 
+## Electric bolt: a bright blue sphere with a soft transparent halo.
+## No tumble rotation — it reads more like a contained energy ball.
+func _spawn_zapper_bolt_visual() -> void:
+	var core_mi   := MeshInstance3D.new()
+	var core_mesh := SphereMesh.new()
+	core_mesh.radius = Grid.CELL_SIZE * 0.14
+	core_mesh.height = Grid.CELL_SIZE * 0.28
+	core_mi.mesh     = core_mesh
+	var core_mat           := StandardMaterial3D.new()
+	core_mat.albedo_color   = COLOR_ZAPPER_BOLT
+	core_mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
+	core_mi.material_override = core_mat
+	add_child(core_mi)
+
+	# Larger transparent halo gives the bolt a visible glow bloom from above.
+	var halo_mi   := MeshInstance3D.new()
+	var halo_mesh := SphereMesh.new()
+	halo_mesh.radius = Grid.CELL_SIZE * 0.24
+	halo_mesh.height = Grid.CELL_SIZE * 0.48
+	halo_mi.mesh     = halo_mesh
+	var halo_mat           := StandardMaterial3D.new()
+	halo_mat.albedo_color   = Color(COLOR_ZAPPER_BOLT.r, COLOR_ZAPPER_BOLT.g, COLOR_ZAPPER_BOLT.b, 0.30)
+	halo_mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
+	halo_mat.transparency   = BaseMaterial3D.TRANSPARENCY_ALPHA
+	halo_mi.material_override = halo_mat
+	add_child(halo_mi)
+
+
+## Electric impact: fast blue-white sparks with minimal gravity so they scatter
+## outward rather than falling (electric arcs don't arc downward like debris).
+func _spawn_zapper_impact(killed: bool, enemy_color: Color) -> void:
+	_spawn_particles(10, 0.22, Grid.CELL_SIZE * 3.5, Grid.CELL_SIZE * 10.0,
+			0.20, 0.55, Grid.CELL_SIZE * 0.14, COLOR_ZAPPER_SPARK,
+			false, -Grid.CELL_SIZE * 2.0)
+	# Tiny white centre flash that dissolves almost immediately.
+	_spawn_particles(5, 0.14, Grid.CELL_SIZE * 1.5, Grid.CELL_SIZE * 4.0,
+			0.35, 0.80, Grid.CELL_SIZE * 0.10, Color.WHITE,
+			false, -Grid.CELL_SIZE * 2.0)
+	if killed:
+		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
+				Grid.CELL_SIZE * 0.495, enemy_color, true)
+
+
 func _spawn_particles(amount: int, lifetime: float, vel_min: float, vel_max: float,
 		scale_min: float, scale_max: float, spark_size: float, color: Color,
-		round_mesh: bool = false) -> void:
+		round_mesh: bool = false, gravity_y: float = -Grid.CELL_SIZE * 10.0) -> void:
 	var particles := CPUParticles3D.new()
 	particles.one_shot             = true
 	particles.explosiveness        = 1.0
@@ -163,7 +221,7 @@ func _spawn_particles(amount: int, lifetime: float, vel_min: float, vel_max: flo
 	particles.spread               = 180.0
 	particles.initial_velocity_min = vel_min
 	particles.initial_velocity_max = vel_max
-	particles.gravity              = Vector3(0.0, -Grid.CELL_SIZE * 10.0, 0.0)
+	particles.gravity              = Vector3(0.0, gravity_y, 0.0)
 	particles.scale_amount_min     = scale_min
 	particles.scale_amount_max     = scale_max
 
