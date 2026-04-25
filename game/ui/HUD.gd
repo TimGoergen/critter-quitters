@@ -21,20 +21,34 @@ const COLOR_COUNTDOWN   := Color(0.85, 0.85, 0.85, 0.92)
 const COLOR_INFESTED    := Color(0.85, 0.10, 0.10, 1.0)
 const COLOR_OVERLAY_BG  := Color(0.04, 0.02, 0.02, 0.82)
 
-# Button style: base gray is the panel bg (~0.10); 20% lighter puts the fill at ~0.30.
-# The border is light gray to make the button stand out against the dark overlay.
+# Generic button style — used by Send Wave Early and Restart, not the trap selector.
 const COLOR_BTN_NORMAL  := Color(0.30, 0.30, 0.30, 1.0)
 const COLOR_BTN_HOVER   := Color(0.38, 0.38, 0.38, 1.0)
 const COLOR_BTN_PRESSED := Color(0.22, 0.22, 0.22, 1.0)
 const COLOR_BTN_BORDER  := Color(0.68, 0.68, 0.68, 1.0)
 
-# Selected button gets a green-tinted background and brighter border.
-# Cost label is gold when affordable, red when not.
-const COLOR_SEL_BG       := Color(0.14, 0.22, 0.14, 1.0)
-const COLOR_SEL_BG_HOVER := Color(0.20, 0.30, 0.20, 1.0)
-const COLOR_SEL_BORDER   := Color(0.45, 0.80, 0.45, 1.0)
-const COLOR_COST_OK      := Color(0.80, 0.60, 0.10, 1.0)
-const COLOR_COST_NO      := Color(0.70, 0.25, 0.20, 1.0)
+# Trap selector — hazard / sticker palette.
+const COLOR_HAZARD_YELLOW         := Color(1.00, 0.84, 0.00, 1.0)  # active-state border
+const COLOR_BTN_SHADOW            := Color(0.00, 0.00, 0.00, 0.80)  # sticker drop-shadow
+# Applied to the whole button node when the player can't afford it; washes colour out.
+const COLOR_UNAFFORDABLE_MODULATE := Color(0.58, 0.55, 0.52, 0.80)
+
+# Per-trap brand colours and badge text.  Indices match Trap.Type: 0=Snap, 1=Zapper, 2=Fogger, 3=Glue.
+# Colours are intentionally saturated — low-budget exterminator business-card aesthetic.
+const TRAP_BRAND: Array = [
+	{"normal": Color(0.52, 0.20, 0.07), "hover": Color(0.64, 0.26, 0.09), "sel": Color(0.68, 0.28, 0.10), "badge": "PRO GRADE"},
+	{"normal": Color(0.07, 0.25, 0.60), "hover": Color(0.10, 0.33, 0.76), "sel": Color(0.09, 0.30, 0.68), "badge": "+-1000V"},
+	{"normal": Color(0.09, 0.38, 0.18), "hover": Color(0.12, 0.48, 0.24), "sel": Color(0.11, 0.44, 0.20), "badge": "SAFE*"},
+	{"normal": Color(0.50, 0.34, 0.05), "hover": Color(0.62, 0.43, 0.07), "sel": Color(0.57, 0.38, 0.06), "badge": "STICKY"},
+]
+
+# Per-trap button text: [name line, tagline format].  %d receives the cost.
+const TRAP_LABELS: Array = [
+	["SNAP TRAP",  "$%d  *  SINCE 1952"],
+	["ZAPPER",     "$%d  *  GUARANTEED"],
+	["FOGGER",     "$%d  *  MOSTLY SAFE"],
+	["GLUE BOARD", "$%d  *  NO ESCAPE"],
+]
 
 const PANEL_H:          float = 44.0   # top stats bar height
 const BAR_H:            float = 14.0   # infestation bar fill height
@@ -63,6 +77,9 @@ var _selector_buttons: Array[Button] = []
 var _selector_root: Control = null
 # Tracks the orientation at last build so we only rebuild when it flips.
 var _selector_is_landscape: bool = true
+
+# Index of the selector button currently under the mouse (-1 = none).
+var _hovered_btn_idx: int = -1
 
 
 func _ready() -> void:
@@ -278,12 +295,12 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 var _blink_time: float = 0.0
 
 func _process(delta: float) -> void:
-	if not _countdown_number_label.visible:
-		return
-	_blink_time += delta
-	# 2 full on-off cycles per second: period = 1/2 s, on for the first half of each cycle.
-	var on: bool = fmod(_blink_time, 1.0 / 2.0) < (1.0 / 4.0)
-	_countdown_number_label.modulate.a = 1.0 if on else 0.0
+	# Countdown blink: 2 on/off cycles per second while the label is visible.
+	if _countdown_number_label.visible:
+		_blink_time += delta
+		var on: bool = fmod(_blink_time, 1.0 / 2.0) < (1.0 / 4.0)
+		_countdown_number_label.modulate.a = 1.0 if on else 0.0
+
 
 
 func _on_send_wave_pressed() -> void:
@@ -315,6 +332,7 @@ func _on_viewport_resized() -> void:
 	if landscape == _selector_is_landscape:
 		return
 	# Orientation changed — free the old layout and build the new one.
+	_hovered_btn_idx = -1
 	_selector_buttons.clear()
 	if _selector_root != null and is_instance_valid(_selector_root):
 		_selector_root.queue_free()
@@ -406,15 +424,19 @@ func _build_selector_landscape() -> void:
 
 	for i in range(4):
 		var btn := Button.new()
-		btn.custom_minimum_size = Vector2(0.0, SELECTOR_BTN_H)
+		btn.custom_minimum_size   = Vector2(0.0, SELECTOR_BTN_H)
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.clip_contents         = false
 		btn.add_theme_font_size_override("font_size", 13)
-		btn.add_theme_font_override("font", UIFonts.primary())
+		btn.add_theme_font_override("font", UIFonts.primary_bold())
 		btn.text = _selector_label(i)
 		btn.pressed.connect(GameState.select_trap_type.bind(i))
-		_style_selector_button(btn, i == GameState.selected_trap_type, _can_afford(i))
+		btn.mouse_entered.connect(_on_btn_hover_start.bind(i))
+		btn.mouse_exited.connect(_on_btn_hover_end.bind(i))
+		_style_selector_button(btn, i, i == GameState.selected_trap_type, _can_afford(i))
 		col.add_child(btn)
 		_selector_buttons.append(btn)
+		_add_btn_badge(btn, i)
 
 
 ## Portrait: buttons in a horizontal strip above the infestation bar at the bottom.
@@ -447,19 +469,24 @@ func _build_selector_portrait() -> void:
 	for i in range(4):
 		var btn := Button.new()
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.add_theme_font_size_override("font_size", 13)
-		btn.add_theme_font_override("font", UIFonts.primary())
+		btn.clip_contents         = false
+		btn.add_theme_font_size_override("font_size", 11)
+		btn.add_theme_font_override("font", UIFonts.primary_bold())
 		btn.text = _selector_label(i)
 		btn.pressed.connect(GameState.select_trap_type.bind(i))
-		_style_selector_button(btn, i == GameState.selected_trap_type, _can_afford(i))
+		btn.mouse_entered.connect(_on_btn_hover_start.bind(i))
+		btn.mouse_exited.connect(_on_btn_hover_end.bind(i))
+		_style_selector_button(btn, i, i == GameState.selected_trap_type, _can_afford(i))
 		row.add_child(btn)
 		_selector_buttons.append(btn)
+		_add_btn_badge(btn, i)
 
 
 func _refresh_trap_selector() -> void:
 	for i in range(_selector_buttons.size()):
 		_style_selector_button(
 			_selector_buttons[i],
+			i,
 			i == GameState.selected_trap_type,
 			_can_afford(i)
 		)
@@ -469,15 +496,11 @@ func _on_trap_type_selected(_type: int) -> void:
 	_refresh_trap_selector()
 
 
-# Returns the display text for one trap selector button.
+# Returns two-line display text: trap name on the first line, cost + tagline on the second.
 func _selector_label(type: int) -> String:
-	var cost: int = Trap.STATS[type]["cost"]
-	match type:
-		0: return "Snap Trap  $%d" % cost
-		1: return "Zapper  $%d"    % cost
-		2: return "Fogger  $%d"    % cost
-		3: return "Glue Board  $%d" % cost
-	return "???"
+	var cost: int   = Trap.STATS[type]["cost"]
+	var lines: Array = TRAP_LABELS[type]
+	return lines[0] + "\n" + (lines[1] % cost)
 
 
 # Returns true if the player can currently afford the given trap type.
@@ -485,28 +508,107 @@ func _can_afford(type: int) -> bool:
 	return GameState.bug_bucks >= Trap.STATS[type]["cost"]
 
 
-# Applies the correct visual style to a selector button based on its
-# selected state and whether the player can afford it.
-func _style_selector_button(btn: Button, selected: bool, affordable: bool) -> void:
-	var bg_normal := COLOR_SEL_BG     if selected else COLOR_BTN_NORMAL
-	var bg_hover  := COLOR_SEL_BG_HOVER if selected else COLOR_BTN_HOVER
-	var bg_press  := COLOR_BTN_PRESSED
-	var border    := COLOR_SEL_BORDER if selected else COLOR_BTN_BORDER
-	var bwidth    := 2                if selected else 1
+# Applies the hazard-sticker visual style to a trap selector button.
+# Selected state: thick caution-yellow border + raised drop-shadow (sticker sitting proud).
+# Pressed state: shadow collapses to simulate the sticker being pushed flat.
+# Unaffordable state: entire button node is modulated grey (sun-bleached look).
+func _style_selector_button(btn: Button, type: int, selected: bool, affordable: bool) -> void:
+	var brand: Dictionary = TRAP_BRAND[type]
+	var border_color := COLOR_HAZARD_YELLOW       if selected else Color(0.72, 0.72, 0.72, 1.0)
+	var border_width := 4                         if selected else 2
+	var shadow_size  := 3                         if selected else 2
+	var shadow_off   := Vector2(3, 4)             if selected else Vector2(2, 3)
 
-	for pair: Array in [["normal", bg_normal], ["hover", bg_hover], ["pressed", bg_press]]:
-		var box := StyleBoxFlat.new()
-		box.bg_color     = pair[1]
-		box.border_color = border
-		box.set_border_width_all(bwidth)
-		box.set_corner_radius_all(4)
-		box.content_margin_left   = 8.0
-		box.content_margin_right  = 8.0
-		box.content_margin_top    = 3.0
-		box.content_margin_bottom = 3.0
-		btn.add_theme_stylebox_override(pair[0], box)
+	# Normal — raised shadow gives the "sticker sitting off the surface" look.
+	var box_n := StyleBoxFlat.new()
+	box_n.bg_color              = brand["sel"]   if selected else brand["normal"]
+	box_n.border_color          = border_color
+	box_n.set_border_width_all(border_width)
+	box_n.set_corner_radius_all(6)
+	box_n.shadow_color          = COLOR_BTN_SHADOW
+	box_n.shadow_size           = shadow_size
+	box_n.shadow_offset         = shadow_off
+	box_n.content_margin_left   = 10.0
+	box_n.content_margin_right  = 10.0
+	box_n.content_margin_top    = 5.0
+	box_n.content_margin_bottom = 5.0
+	btn.add_theme_stylebox_override("normal", box_n)
 
-	btn.add_theme_color_override("font_color", COLOR_COST_OK if affordable else COLOR_COST_NO)
+	# Hover — brighter background, same border and shadow.
+	var box_h := StyleBoxFlat.new()
+	box_h.bg_color              = brand["hover"]
+	box_h.border_color          = border_color
+	box_h.set_border_width_all(border_width)
+	box_h.set_corner_radius_all(6)
+	box_h.shadow_color          = COLOR_BTN_SHADOW
+	box_h.shadow_size           = shadow_size
+	box_h.shadow_offset         = shadow_off
+	box_h.content_margin_left   = 10.0
+	box_h.content_margin_right  = 10.0
+	box_h.content_margin_top    = 5.0
+	box_h.content_margin_bottom = 5.0
+	btn.add_theme_stylebox_override("hover", box_h)
+
+	# Pressed — shadow collapses; top margin grows slightly to simulate pressing in.
+	var box_p := StyleBoxFlat.new()
+	box_p.bg_color              = brand["sel"].darkened(0.15)
+	box_p.border_color          = border_color
+	box_p.set_border_width_all(border_width)
+	box_p.set_corner_radius_all(6)
+	box_p.shadow_color          = COLOR_BTN_SHADOW
+	box_p.shadow_size           = 0
+	box_p.shadow_offset         = Vector2(0, 1)
+	box_p.content_margin_left   = 10.0
+	box_p.content_margin_right  = 10.0
+	box_p.content_margin_top    = 6.0
+	box_p.content_margin_bottom = 4.0
+	btn.add_theme_stylebox_override("pressed", box_p)
+
+	# White text reads clearly on every dark saturated background.
+	btn.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+
+	# Desaturate the whole button (background, text, badge) when the player can't afford it.
+	btn.modulate = Color(1.0, 1.0, 1.0, 1.0) if affordable else COLOR_UNAFFORDABLE_MODULATE
+
+
+# Adds a small hazard-yellow fake-credential badge to the top-right corner of a button.
+# The label is a child of the button so it moves with it, but ignores mouse input.
+func _add_btn_badge(btn: Button, type: int) -> void:
+	var lbl := Label.new()
+	lbl.text         = TRAP_BRAND[type]["badge"]
+	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	lbl.add_theme_font_size_override("font_size", 9)
+	lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
+	# Anchor to the button's top-right corner.
+	lbl.anchor_left   = 1.0
+	lbl.anchor_right  = 1.0
+	lbl.anchor_top    = 0.0
+	lbl.anchor_bottom = 0.0
+	lbl.offset_left   = -58.0
+	lbl.offset_right  = -4.0
+	lbl.offset_top    = 4.0
+	lbl.offset_bottom = 16.0
+	btn.add_child(lbl)
+
+
+func _on_btn_hover_start(idx: int) -> void:
+	if _hovered_btn_idx == idx:
+		return  # already at hover scale — ignore re-entry caused by the scale animation shifting bounds
+	_hovered_btn_idx = idx
+	var btn := _selector_buttons[idx]
+	btn.pivot_offset = btn.size * 0.5
+	var t := create_tween()
+	t.tween_property(btn, "scale", Vector2(1.042, 1.042), 0.09).set_ease(Tween.EASE_OUT)
+
+
+func _on_btn_hover_end(idx: int) -> void:
+	if _hovered_btn_idx == idx:
+		_hovered_btn_idx = -1
+	var btn := _selector_buttons[idx]
+	btn.pivot_offset = btn.size * 0.5
+	var t := create_tween()
+	t.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.08).set_ease(Tween.EASE_IN)
 
 
 func _apply_button_style(btn: Button) -> void:

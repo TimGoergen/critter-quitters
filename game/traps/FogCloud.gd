@@ -19,6 +19,8 @@ const EXPAND_SPEED: float = 4.44
 
 const CLOUD_LIFETIME: float = 0.90
 const COLOR_CLOUD := Color(0.40, 0.88, 0.40, 0.10)
+# Exposed so Trap.gd can compute the batch visual lifetime for the cloud cap timer.
+const PARTICLE_LIFETIME: float = 4.8
 
 
 # ---------------------------------------------------------------------------
@@ -98,32 +100,38 @@ func _spawn_cloud_visual(aoe_range: float) -> void:
 	# Low explosiveness: puffs appear gradually over the lifetime rather than
 	# all at once, so the space fills incrementally.
 	particles.explosiveness = 0.10
-	particles.amount        = 18
-	particles.lifetime      = 1.4   # longer than CLOUD_LIFETIME so puffs linger visibly
+	particles.amount        = randi_range(3, 4)
+	particles.lifetime      = PARTICLE_LIFETIME
 
-	# Spawn puffs spread across the full range area from the start so the
-	# visual is a field of clouds rather than an outward-expanding ring.
+	# Puffs spawn in a tight cluster around the trap then drift slowly outward.
 	particles.emission_shape         = CPUParticles3D.EMISSION_SHAPE_SPHERE
-	particles.emission_sphere_radius = aoe_range * 0.80
+	particles.emission_sphere_radius = aoe_range * 0.04
 
-	# Very slow random drift — puffs sit nearly in place and bloom, not travel.
+	# direction=UP + spread=90 gives random horizontal XZ velocity in all directions
+	# (Godot rotates UP by a random angle up to spread° around a random horizontal axis,
+	# producing the full XZ circle). Velocity must significantly exceed particle radius
+	# (0.5–1.25 units) so drift is visible, and damping must stay near zero so particles
+	# carry that velocity across their full lifetime rather than stopping early.
 	particles.direction            = Vector3.UP
-	particles.spread               = 88.0
-	particles.initial_velocity_min = 0.0
-	particles.initial_velocity_max = Grid.CELL_SIZE * 0.35
+	particles.spread               = 90.0
+	particles.initial_velocity_min = Grid.CELL_SIZE * 0.36
+	particles.initial_velocity_max = Grid.CELL_SIZE * 0.80
 	particles.gravity              = Vector3.ZERO
-	particles.damping_min          = 1.0
-	particles.damping_max          = 3.0
+	particles.damping_min          = 0.0
+	particles.damping_max          = 0.15
 
 	# Wide size variance so puffs are visibly different from each other.
-	particles.scale_amount_min = 3.0
-	particles.scale_amount_max = 7.0
+	# Reduced from 3–7 to 2–5 for smaller individual puffs.
+	particles.scale_amount_min = 2.0
+	particles.scale_amount_max = 5.0
 
-	# Each puff blooms from a tiny seed to full size then softly fades.
+	# Slow bloom-in then a long plateau before gently shrinking — gas expands
+	# into the space rather than popping out.
 	var scale_curve := Curve.new()
-	scale_curve.add_point(Vector2(0.0, 0.06))
-	scale_curve.add_point(Vector2(0.40, 1.0))
-	scale_curve.add_point(Vector2(1.0,  0.80))
+	scale_curve.add_point(Vector2(0.0,  0.03))
+	scale_curve.add_point(Vector2(0.35, 1.0))
+	scale_curve.add_point(Vector2(0.70, 1.0))
+	scale_curve.add_point(Vector2(1.0,  0.85))
 	particles.scale_amount_curve = scale_curve
 
 	# Mesh: vertex_color_use_as_albedo lets color_ramp drive the final tint.
@@ -138,10 +146,14 @@ func _spawn_cloud_visual(aoe_range: float) -> void:
 	sphere.material                = mat
 	particles.mesh                 = sphere
 
-	# Alpha fade to zero so puffs dissolve rather than pop out.
+	# Puffs materialise and dissolve at half the previous rate.
+	# Fade-in runs 0→0.36, plateau 0.36→0.64, fade-out 0.64→1.0
+	# (previously 0→0.18 and 0.72→1.0 — both transition windows doubled).
 	var gradient := Gradient.new()
-	gradient.set_color(0, COLOR_CLOUD)
+	gradient.set_color(0, Color(COLOR_CLOUD.r, COLOR_CLOUD.g, COLOR_CLOUD.b, 0.0))
 	gradient.set_color(1, Color(COLOR_CLOUD.r, COLOR_CLOUD.g, COLOR_CLOUD.b, 0.0))
+	gradient.add_point(0.36, COLOR_CLOUD)
+	gradient.add_point(0.64, COLOR_CLOUD)
 	particles.color_ramp = gradient
 
 	get_parent().add_child(particles)
