@@ -52,8 +52,8 @@ const HUD_TOP_PX: float = 44.0   # top stats bar only (HUD.PANEL_H)
 const HUD_BOT_PX: float = 38.0   # infestation bar (HUD.BAR_H + HUD.MARGIN * 2)
 
 # Phase 1 placeholder colours. These are replaced by ASCII billboards in Phase 3.
-const COLOR_ENTRANCE  := Color(0.20, 0.80, 0.20, 1.0)   # green
-const COLOR_EXIT      := Color(0.80, 0.20, 0.20, 1.0)   # red
+const COLOR_ENTRANCE  := Color(0.40, 0.60, 0.42, 1.0)   # muted sage green
+const COLOR_EXIT      := Color(0.62, 0.38, 0.38, 1.0)   # muted dusty red
 const COLOR_TRAP      := Color(0.40, 0.40, 0.80, 1.0)   # blue-grey box
 const COLOR_PATH      := Color(0.80, 0.70, 0.20, 0.5)   # yellow, semi-transparent
 const COLOR_GRID_GLOW    := Color(0.65, 0.90, 1.0)       # cool blue-white for cursor glow
@@ -200,8 +200,8 @@ func _ready() -> void:
 	_pathfinder.path_updated.connect(_on_path_updated)
 
 	# Spawn one elongated marker covering all 3 rows for entrance and exit.
-	_spawn_zone_marker(_spawn_cell,   3, COLOR_ENTRANCE)
-	_spawn_zone_marker(_despawn_cell, 3, COLOR_EXIT)
+	_spawn_zone_marker(_spawn_cell,   3, COLOR_ENTRANCE, true)
+	_spawn_zone_marker(_despawn_cell, 3, COLOR_EXIT,     true)
 
 	_setup_grid_highlight()
 	_setup_selected_trap_outline()
@@ -1070,25 +1070,44 @@ func _spawn_wall_slab(center: Vector3, size: Vector2) -> void:
 	add_child(mi)
 
 
-## Spawns a thin flat square to mark the entrance or exit cell.
-func _spawn_flat_marker(cell: Vector2i, color: Color) -> void:
-	var marker := _make_box_mesh_instance(
-		Vector3(Grid.CELL_SIZE * 0.9, 0.05, Grid.CELL_SIZE * 0.9),
-		color
-	)
-	marker.position = _cell_to_world(cell)
-	add_child(marker)
-
-
-## Spawns a flat marker spanning `rows` cells tall, centred on center_cell.
-## Used for the 3-row entrance and exit zone indicators.
-func _spawn_zone_marker(center_cell: Vector2i, rows: int, color: Color) -> void:
+## Spawns an entrance or exit zone marker: a muted-colour slab spanning `rows`
+## cells tall, with a dark directional triangle on top indicating pest flow.
+## Pass arrow_right = true when enemies travel in the +X direction (left→right).
+func _spawn_zone_marker(center_cell: Vector2i, rows: int, color: Color, arrow_right: bool) -> void:
 	var marker := _make_box_mesh_instance(
 		Vector3(Grid.CELL_SIZE * 0.9, 0.05, Grid.CELL_SIZE * rows * 0.9),
 		color
 	)
 	marker.position = _cell_to_world(center_cell)
 	add_child(marker)
+
+	# Filled triangle drawn just above the slab surface, lying flat in the XZ
+	# plane. The tip points in the direction pests are travelling — +X for a
+	# right-pointing arrow, −X for left. Both entrance and exit point right
+	# because enemies always travel left to right on the default layout.
+	var c      := _cell_to_world(center_cell)
+	var sign_x := 1.0 if arrow_right else -1.0
+	var half_z := Grid.CELL_SIZE * float(rows) * 0.40   # base half-height (~80% of zone height)
+	var tip_x  := c.x + sign_x * Grid.CELL_SIZE * 0.30  # tip: 30% of a cell ahead of centre
+	var base_x := c.x - sign_x * Grid.CELL_SIZE * 0.26  # base: 26% of a cell behind centre
+	var y      := 0.06                                   # just above the slab top (slab top ≈ 0.025)
+
+	var im := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	im.surface_set_color(Color(0.05, 0.05, 0.05, 1.0))
+	im.surface_add_vertex(Vector3(base_x, y, c.z - half_z))
+	im.surface_add_vertex(Vector3(tip_x,  y, c.z))
+	im.surface_add_vertex(Vector3(base_x, y, c.z + half_z))
+	im.surface_end()
+
+	var arrow     := MeshInstance3D.new()
+	arrow.mesh     = im
+	var mat       := StandardMaterial3D.new()
+	mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	mat.cull_mode                  = BaseMaterial3D.CULL_DISABLED  # visible from top-down
+	arrow.material_override = mat
+	add_child(arrow)
 
 
 ## Spawns a Trap node centred on the 2x2 footprint and wires it to the

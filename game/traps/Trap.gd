@@ -836,7 +836,7 @@ func _spawn_fogger_visual() -> void:
 
 ## Builds the Zapper visual: a dark navy housing plate, a raised frame border,
 ## Builds the Zapper visual: a flat circular disc housing, a thick annulus ring
-## for the outer cage, and a bright purple UV light cylinder at the centre.
+## for the outer cage, and a bright neon blue UV light cylinder at the centre.
 ## No thin-line geometry — all elements cover multiple pixels at any game
 ## resolution, eliminating the sub-pixel aliasing that made the wire-grid
 ## design render differently at each world position.
@@ -871,7 +871,7 @@ func _spawn_zapper_visual() -> void:
 	ring_mi.material_override = ring_mat
 	add_child(ring_mi)
 
-	# UV light — bright purple cylinder at the centre, clearly above the ring.
+	# UV light — bright neon blue cylinder at the centre, clearly above the ring.
 	# Stored in a container node so _play_zapper_animation() can scale it.
 	_zapper_uv_light = Node3D.new()
 	_zapper_uv_light.position.y = fp * 0.10
@@ -886,7 +886,7 @@ func _spawn_zapper_visual() -> void:
 	uv_mi.mesh       = uv_mesh
 	uv_mi.position.y = fp * 0.040
 	var uv_mat := StandardMaterial3D.new()
-	uv_mat.albedo_color = Color(0.55, 0.20, 1.00)
+	uv_mat.albedo_color = Color(0.10, 0.55, 1.00)   # neon blue
 	uv_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	uv_mi.material_override = uv_mat
 	_zapper_uv_light.add_child(uv_mi)
