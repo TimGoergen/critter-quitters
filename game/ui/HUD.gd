@@ -29,6 +29,13 @@ const COLOR_BTN_HOVER   := Color(0.38, 0.38, 0.38, 1.0)
 const COLOR_BTN_PRESSED := Color(0.22, 0.22, 0.22, 1.0)
 const COLOR_BTN_BORDER  := Color(0.68, 0.68, 0.68, 1.0)
 
+# Gold palette — used for the control buttons (EXIT, RESTART, pause, speed).
+const COLOR_GOLD_BG_NORMAL  := Color(0.72, 0.55, 0.04, 1.0)
+const COLOR_GOLD_BG_HOVER   := Color(0.85, 0.66, 0.06, 1.0)
+const COLOR_GOLD_BG_PRESSED := Color(0.55, 0.41, 0.02, 1.0)
+const COLOR_GOLD_BORDER     := Color(1.00, 0.92, 0.35, 1.0)
+const COLOR_GOLD_TEXT       := Color(0.08, 0.05, 0.00, 1.0)  # near-black for contrast on gold
+
 # Trap selector — hazard / sticker palette.
 const COLOR_HAZARD_YELLOW         := Color(1.00, 0.84, 0.00, 1.0)  # active-state border
 const COLOR_BTN_SHADOW            := Color(0.00, 0.00, 0.00, 0.80)  # sticker drop-shadow
@@ -52,7 +59,7 @@ const TRAP_LABELS: Array = [
 	["GLUE BOARD", "$%d  *  NO ESCAPE"],
 ]
 
-const PANEL_H:          float = 56.0   # top stats bar height
+const PANEL_H:          float = 72.0   # top stats bar height — matches SELECTOR_LANDSCAPE_STRIP_H
 const BAR_H:            float = 14.0   # infestation bar fill height
 const MARGIN:           float = 12.0   # general UI margin
 
@@ -126,30 +133,39 @@ func _build_ui() -> void:
 	top_bg.add_child(top_margin)
 
 	var top_row := HBoxContainer.new()
-	top_row.add_theme_constant_override("separation", 12)
+	top_row.add_theme_constant_override("separation", 32)
 	top_margin.add_child(top_row)
 
-	# Left: wave number stacked above bug bucks.
-	var left_col := VBoxContainer.new()
-	left_col.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	left_col.add_theme_constant_override("separation", 1)
-	top_row.add_child(left_col)
-
+	# Left group: wave label then coin + amount, all on the same row as everything else.
 	_wave_label = Label.new()
 	_wave_label.text = "WAVE  1"
-	_wave_label.add_theme_font_size_override("font_size", 18)
+	_wave_label.add_theme_font_size_override("font_size", 54)
 	_wave_label.add_theme_font_override("font", UIFonts.header())
 	_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_wave_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	left_col.add_child(_wave_label)
+	top_row.add_child(_wave_label)
+
+	# Currency: coin icon kept small so the spider/web detail blurs into a clean gold disc.
+	var bucks_row := HBoxContainer.new()
+	bucks_row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	bucks_row.add_theme_constant_override("separation", 4)
+	top_row.add_child(bucks_row)
+
+	var coin_icon := TextureRect.new()
+	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
+	coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	coin_icon.custom_minimum_size = Vector2(48, 48)
+	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	bucks_row.add_child(coin_icon)
 
 	_bucks_label = Label.new()
-	_bucks_label.text = "Bug Bucks: $0"
-	_bucks_label.add_theme_font_size_override("font_size", 14)
+	_bucks_label.text = "0"
+	_bucks_label.add_theme_font_size_override("font_size", 42)
 	_bucks_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_bucks_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
 	_bucks_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	left_col.add_child(_bucks_label)
+	bucks_row.add_child(_bucks_label)
 
 	# Centre: "INFESTATION" label, expanding bar track, percentage readout.
 	var center_hbox := HBoxContainer.new()
@@ -160,9 +176,9 @@ func _build_ui() -> void:
 
 	var inf_label := Label.new()
 	inf_label.text = "INFESTATION"
-	inf_label.add_theme_font_size_override("font_size", 11)
-	inf_label.add_theme_font_override("font", UIFonts.primary())
-	inf_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	inf_label.add_theme_font_size_override("font_size", 54)
+	inf_label.add_theme_font_override("font", UIFonts.primary_bold())
+	inf_label.add_theme_color_override("font_color", COLOR_INFESTED)
 	inf_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	center_hbox.add_child(inf_label)
 
@@ -181,8 +197,8 @@ func _build_ui() -> void:
 
 	_infestation_label = Label.new()
 	_infestation_label.text = "0%"
-	_infestation_label.add_theme_font_size_override("font_size", 11)
-	_infestation_label.add_theme_font_override("font", UIFonts.primary())
+	_infestation_label.add_theme_font_size_override("font_size", 33)
+	_infestation_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_infestation_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 	_infestation_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	center_hbox.add_child(_infestation_label)
@@ -197,17 +213,17 @@ func _build_ui() -> void:
 
 	var exit_btn := Button.new()
 	exit_btn.text = "EXIT"
-	exit_btn.add_theme_font_size_override("font_size", 13)
+	exit_btn.add_theme_font_size_override("font_size", 21)
 	exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_button_style(exit_btn)
+	_apply_gold_button_style(exit_btn)
 	exit_btn.pressed.connect(_on_exit_pressed)
 	right_hbox.add_child(exit_btn)
 
 	var restart_btn := Button.new()
 	restart_btn.text = "RESTART"
-	restart_btn.add_theme_font_size_override("font_size", 13)
+	restart_btn.add_theme_font_size_override("font_size", 21)
 	restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_button_style(restart_btn)
+	_apply_gold_button_style(restart_btn)
 	restart_btn.pressed.connect(_on_restart_pressed)
 	right_hbox.add_child(restart_btn)
 
@@ -265,17 +281,19 @@ func _build_ui() -> void:
 
 	_pause_btn = Button.new()
 	_pause_btn.text = "▮▮"
-	_pause_btn.add_theme_font_size_override("font_size", 36)
+	_pause_btn.add_theme_font_size_override("font_size", 21)
 	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_icon_button_style(_pause_btn)
+	_apply_gold_icon_button_style(_pause_btn)
+	# Lock width to the wider "▮▮" state so it doesn't reflow when toggled to "▶".
+	_pause_btn.custom_minimum_size = Vector2(48, 0)
 	_pause_btn.pressed.connect(_on_pause_btn_pressed)
 	_speed_pause_box.add_child(_pause_btn)
 
 	_speed_btn = Button.new()
 	_speed_btn.text = "▶▶ 1x"
-	_speed_btn.add_theme_font_size_override("font_size", 26)
+	_speed_btn.add_theme_font_size_override("font_size", 21)
 	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_button_style(_speed_btn)
+	_apply_gold_button_style(_speed_btn)
 	_speed_btn.pressed.connect(_on_speed_btn_pressed)
 	_speed_pause_box.add_child(_speed_btn)
 
@@ -324,7 +342,7 @@ func _build_run_over_overlay() -> void:
 
 
 func _on_bucks_changed(amount: int) -> void:
-	_bucks_label.text = "Bug Bucks: $%d" % amount
+	_bucks_label.text = "%d" % amount
 	_refresh_trap_selector()
 
 
@@ -685,6 +703,37 @@ func _on_btn_hover_end(idx: int) -> void:
 	btn.pivot_offset = btn.size * 0.5
 	var t := create_tween()
 	t.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.08).set_ease(Tween.EASE_IN)
+
+
+func _apply_gold_button_style(btn: Button) -> void:
+	for state in [["normal", COLOR_GOLD_BG_NORMAL], ["hover", COLOR_GOLD_BG_HOVER], ["pressed", COLOR_GOLD_BG_PRESSED]]:
+		var box := StyleBoxFlat.new()
+		box.bg_color           = state[1]
+		box.border_color       = COLOR_GOLD_BORDER
+		box.set_border_width_all(3)
+		box.set_corner_radius_all(5)
+		box.content_margin_left   = 12.0
+		box.content_margin_right  = 12.0
+		box.content_margin_top    = 6.0
+		box.content_margin_bottom = 6.0
+		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
+
+
+# Compact variant for icon-only buttons: 4px content margins instead of 12px.
+func _apply_gold_icon_button_style(btn: Button) -> void:
+	for state in [["normal", COLOR_GOLD_BG_NORMAL], ["hover", COLOR_GOLD_BG_HOVER], ["pressed", COLOR_GOLD_BG_PRESSED]]:
+		var box := StyleBoxFlat.new()
+		box.bg_color           = state[1]
+		box.border_color       = COLOR_GOLD_BORDER
+		box.set_border_width_all(3)
+		box.set_corner_radius_all(5)
+		box.content_margin_left   = 4.0
+		box.content_margin_right  = 4.0
+		box.content_margin_top    = 4.0
+		box.content_margin_bottom = 4.0
+		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
 
 
 # Compact variant for icon-only buttons: 4px content margins instead of 12px.
