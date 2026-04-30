@@ -46,8 +46,8 @@ const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
 const SHOW_PATH_LINE: bool = false
 
 # Fixed HUD heights in screen pixels — must match the corresponding constants in HUD.gd.
-# The trap selector is no longer part of the top strip; it lives in a right-side panel
-# (landscape) or a bottom strip (portrait), so HUD_TOP_PX is now just the stats bar.
+# The trap selector lives in a bottom strip in both landscape and portrait.
+# HUD_TOP_PX is the stats bar only; the selector strip is added to HUD_BOT_PX per orientation.
 const HUD_TOP_PX: float = 44.0   # top stats bar only (HUD.PANEL_H)
 const HUD_BOT_PX: float = 38.0   # infestation bar (HUD.BAR_H + HUD.MARGIN * 2)
 
@@ -1152,20 +1152,15 @@ func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
 ## Sizes and centres the orthographic camera so the arena fills the usable
 ## screen area — the portion not covered by HUD panels or the trap selector.
 ##
-## Layout depends on orientation:
-##   Landscape — selector is a right-side panel (HUD.SELECTOR_PANEL_W wide);
-##               usable area is left of that panel, between top and bottom bars.
-##   Portrait  — selector is a bottom strip (HUD.SELECTOR_STRIP_H tall);
-##               usable area is the full width, above the selector and bottom bar.
+## The selector now sits at the bottom in both orientations, so the arena
+## always uses the full screen width.
+##   Landscape — selector strip is HUD.SELECTOR_LANDSCAPE_STRIP_H tall.
+##   Portrait  — selector strip is HUD.SELECTOR_STRIP_H tall.
 ##
 ## With KEEP_HEIGHT (Godot default), camera.size is the total world height
 ## covered by the full viewport. We inflate it until the arena fits in both
 ## the vertical and horizontal extents of the usable area, then apply
-## h_offset / v_offset to shift the camera's aim to the centre of that area.
-##
-## Offset derivation (positive h_offset → world origin shifts LEFT on screen):
-##   h_offset = (right_px / 2) × world_per_px
-##   v_offset = ((top_px - bot_px) / 2) × world_per_px
+## v_offset to shift the camera's aim to the centre of the usable area.
 ##
 ## v_offset sign convention for this top-down camera (local Y = world −Z):
 ##   positive → aim shifts toward world −Z → origin appears lower on screen.
@@ -1175,11 +1170,10 @@ func _fit_camera_to_grid() -> void:
 	var scr_h    := vp.y
 	var landscape := scr_w >= scr_h
 
-	var right_px   := HUD.SELECTOR_PANEL_W if landscape else 0.0
-	var bot_add_px := HUD.SELECTOR_STRIP_H if not landscape else 0.0
+	var bot_add_px := HUD.SELECTOR_LANDSCAPE_STRIP_H if landscape else HUD.SELECTOR_STRIP_H
 
 	var usable_h := scr_h - HUD_TOP_PX - HUD_BOT_PX - bot_add_px
-	var usable_w := scr_w - right_px
+	var usable_w := scr_w
 	if usable_h <= 0.0 or usable_w <= 0.0:
 		return
 
@@ -1194,8 +1188,8 @@ func _fit_camera_to_grid() -> void:
 
 	var world_per_px := _camera.size / scr_h
 
-	# Shift aim so the arena appears centred in the usable area, not screen centre.
-	_camera.h_offset = (right_px / 2.0) * world_per_px
+	# Arena is horizontally centred on screen; no h_offset needed.
+	_camera.h_offset = 0.0
 	var top_total := float(HUD_TOP_PX)
 	var bot_total := HUD_BOT_PX + bot_add_px
 	_camera.v_offset = ((top_total - bot_total) / 2.0) * world_per_px

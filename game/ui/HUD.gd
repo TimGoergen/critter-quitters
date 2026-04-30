@@ -55,13 +55,12 @@ const BAR_H:            float = 14.0   # infestation bar fill height
 const MARGIN:           float = 12.0   # infestation bar padding
 
 # Trap selector layout — read by Arena.gd to compute usable arena area.
-# SELECTOR_PANEL_W is the right-panel width in landscape.
+# SELECTOR_PANEL_W is the minimum width of each button in the landscape bottom strip.
+# SELECTOR_LANDSCAPE_STRIP_H is the bottom strip height in landscape.
 # SELECTOR_STRIP_H is the bottom strip height in portrait.
-const SELECTOR_PANEL_W: float = 160.0
-const SELECTOR_STRIP_H: float = 40.0
-
-# Height of each button in the landscape vertical panel.
-const SELECTOR_BTN_H:   float = 64.0
+const SELECTOR_PANEL_W:          float = 160.0
+const SELECTOR_LANDSCAPE_STRIP_H: float = 72.0
+const SELECTOR_STRIP_H:           float = 40.0
 
 var _wave_label:        RichTextLabel
 var _bucks_label:       Label
@@ -382,81 +381,56 @@ func _build_trap_selector() -> void:
 	_update_arena_ui_centering()
 
 
-# In landscape the Bug Bucks label must stop before the selector panel begins,
-# so the text does not crowd against or flow under the panel's left edge.
+# Selector is now at the bottom in both orientations, so Bug Bucks has the
+# full top bar width available regardless of orientation.
 func _update_bucks_right_margin() -> void:
-	_bucks_label.offset_right = -(SELECTOR_PANEL_W + MARGIN) if _is_landscape() else -MARGIN
+	_bucks_label.offset_right = -MARGIN
 
 
-# Shifts the countdown labels and "Send Wave Early" button so they are centred
-# over the arena rather than the full screen. In landscape the arena occupies
-# only the left (screen_w - SELECTOR_PANEL_W) pixels, so all centred elements
-# must treat that narrower region as their horizontal extent.
+# Arena occupies full screen width in both orientations now that the selector
+# sits at the bottom. Countdown labels and send-wave button span the full width.
 func _update_arena_ui_centering() -> void:
-	var scr_w := get_viewport().get_visible_rect().size.x
-	# arena_right_frac: what fraction of screen width the arena occupies (0–1).
-	var arena_right_frac := (scr_w - SELECTOR_PANEL_W) / scr_w if _is_landscape() else 1.0
-
-	# Countdown labels: set anchor_right so the label spans only the arena's width.
-	# horizontal_alignment = CENTER still centres the text within that span.
-	_countdown_wave_label.anchor_right   = arena_right_frac
-	_countdown_number_label.anchor_right = arena_right_frac
-
-	# "Send Wave Early" button: keep it at 30–70% of the arena width, not screen width.
-	_send_wave_btn.anchor_left  = arena_right_frac * 0.30
-	_send_wave_btn.anchor_right = arena_right_frac * 0.70
+	_countdown_wave_label.anchor_right   = 1.0
+	_countdown_number_label.anchor_right = 1.0
+	_send_wave_btn.anchor_left  = 0.30
+	_send_wave_btn.anchor_right = 0.70
 
 
-## Landscape: buttons in a vertical panel pinned to the right edge of the screen.
-## A 10% gap is added at the top and bottom of the available space (between the
-## stats bar and the infestation bar), so the panel is ~20% shorter than the
-## available height and sits clearly separate from the Bug Bucks display.
+## Landscape: buttons in a horizontal strip at the bottom left, above the infestation bar.
+## Buttons are left-aligned and sized to SELECTOR_PANEL_W each — the strip does not
+## span the full screen width, leaving the right portion clear.
 func _build_selector_landscape() -> void:
 	var bar_h_total := BAR_H + MARGIN * 2.0
-	var scr_h       := get_viewport().get_visible_rect().size.y
-	var available   := scr_h - PANEL_H - bar_h_total
-	# 10% gap each side → panel is 80% of available height, vertically centred.
-	var gap_v       := roundf(available * 0.10)
 
 	var bg := ColorRect.new()
 	bg.color         = COLOR_PANEL_BG
-	bg.anchor_left   = 1.0
+	bg.anchor_left   = 0.0
 	bg.anchor_right  = 1.0
-	bg.anchor_top    = 0.0
+	bg.anchor_top    = 1.0
 	bg.anchor_bottom = 1.0
-	bg.offset_left   = -SELECTOR_PANEL_W
-	bg.offset_right  = 0.0
-	bg.offset_top    = PANEL_H + gap_v
-	bg.offset_bottom = -bar_h_total - gap_v
+	bg.offset_top    = -(bar_h_total + SELECTOR_LANDSCAPE_STRIP_H)
+	bg.offset_bottom = -bar_h_total
 	add_child(bg)
 	_selector_root = bg
-
-	# Thin left border to separate the panel from the arena.
-	var border := ColorRect.new()
-	border.color         = Color(0.25, 0.25, 0.35, 1.0)
-	border.anchor_top    = 0.0
-	border.anchor_bottom = 1.0
-	border.offset_right  = 2.0
-	bg.add_child(border)
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left",   8)
 	margin.add_theme_constant_override("margin_right",  8)
-	margin.add_theme_constant_override("margin_top",    8)
-	margin.add_theme_constant_override("margin_bottom", 8)
+	margin.add_theme_constant_override("margin_top",    6)
+	margin.add_theme_constant_override("margin_bottom", 6)
 	bg.add_child(margin)
 
-	# VBoxContainer centred so the button group sits in the middle of the panel.
-	var col := VBoxContainer.new()
-	col.alignment = BoxContainer.ALIGNMENT_CENTER
-	col.add_theme_constant_override("separation", 6)
-	margin.add_child(col)
+	# Left-aligned row — buttons occupy only their minimum width, not the full strip.
+	var row := HBoxContainer.new()
+	row.alignment = BoxContainer.ALIGNMENT_BEGIN
+	row.add_theme_constant_override("separation", 6)
+	margin.add_child(row)
 
 	for i in range(4):
 		var btn := Button.new()
-		btn.custom_minimum_size   = Vector2(0.0, SELECTOR_BTN_H)
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.custom_minimum_size   = Vector2(SELECTOR_PANEL_W, 0.0)
+		btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		btn.clip_contents         = false
 		btn.add_theme_font_size_override("font_size", 13)
 		btn.add_theme_font_override("font", UIFonts.primary_bold())
@@ -465,7 +439,7 @@ func _build_selector_landscape() -> void:
 		btn.mouse_entered.connect(_on_btn_hover_start.bind(i))
 		btn.mouse_exited.connect(_on_btn_hover_end.bind(i))
 		_style_selector_button(btn, i, i == GameState.selected_trap_type, _can_afford(i))
-		col.add_child(btn)
+		row.add_child(btn)
 		_selector_buttons.append(btn)
 		_add_btn_badge(btn, i)
 
