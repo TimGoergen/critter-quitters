@@ -46,10 +46,11 @@ const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
 const SHOW_PATH_LINE: bool = false
 
 # Fixed HUD heights in screen pixels — must match the corresponding constants in HUD.gd.
-# The trap selector lives in a bottom strip in both landscape and portrait.
-# HUD_TOP_PX is the stats bar only; the selector strip is added to HUD_BOT_PX per orientation.
-const HUD_TOP_PX: float = 44.0   # top stats bar only (HUD.PANEL_H)
-const HUD_BOT_PX: float = 38.0   # infestation bar (HUD.BAR_H + HUD.MARGIN * 2)
+# The selector strip is added to HUD_BOT_PX per orientation (see _fit_camera_to_grid).
+# Infestation bar moved to the top panel, so HUD_BOT_PX is now 0 — the selector
+# sits directly at the screen's bottom edge with no additional strip below it.
+const HUD_TOP_PX: float = 56.0   # top stats bar (HUD.PANEL_H)
+const HUD_BOT_PX: float = 0.0    # no persistent bottom strip below the selector
 
 # Phase 1 placeholder colours. These are replaced by ASCII billboards in Phase 3.
 const COLOR_ENTRANCE  := Color(0.40, 0.60, 0.42, 1.0)   # muted sage green
@@ -1154,8 +1155,8 @@ func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
 ##
 ## The selector now sits at the bottom in both orientations, so the arena
 ## always uses the full screen width.
-##   Landscape — single-row selector strip, HUD.SELECTOR_LANDSCAPE_STRIP_H tall.
-##   Portrait  — 2×2 grid selector strip, HUD.SELECTOR_STRIP_H tall.
+##   Landscape — HUD.SELECTOR_LANDSCAPE_STRIP_H (single row of buttons).
+##   Portrait  — HUD.SELECTOR_STRIP_H (2×2 grid of buttons).
 ##
 ## With KEEP_HEIGHT (Godot default), camera.size is the total world height
 ## covered by the full viewport. We inflate it until the arena fits in both

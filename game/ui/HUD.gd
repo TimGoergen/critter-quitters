@@ -3,9 +3,11 @@
 ## between-wave countdown splash, run-over screen, and trap type selector.
 ## Built procedurally — no scene file required.
 ##
-## The trap selector repositions itself based on screen orientation:
-##   Landscape — horizontal strip at the bottom left, buttons in a single row
-##   Portrait  — 2×2 grid strip above the infestation bar at the bottom
+## Top panel: single row — wave + bucks (left), infestation bar (centre),
+##   speed toggle + EXIT + RESTART (right).
+## Selector: pinned to the bottom edge, orientation-aware.
+##   Landscape — single-row horizontal strip, left-aligned.
+##   Portrait  — 2×2 grid strip spanning full width.
 
 extends CanvasLayer
 
@@ -50,9 +52,9 @@ const TRAP_LABELS: Array = [
 	["GLUE BOARD", "$%d  *  NO ESCAPE"],
 ]
 
-const PANEL_H:          float = 44.0   # top stats bar height
+const PANEL_H:          float = 56.0   # top stats bar height
 const BAR_H:            float = 14.0   # infestation bar fill height
-const MARGIN:           float = 12.0   # infestation bar padding
+const MARGIN:           float = 12.0   # general UI margin
 
 # Trap selector layout — read by Arena.gd to compute usable arena area.
 # SELECTOR_PANEL_W is the minimum width of each button in the landscape bottom strip.
@@ -62,7 +64,7 @@ const SELECTOR_PANEL_W:          float = 160.0
 const SELECTOR_LANDSCAPE_STRIP_H: float = 72.0
 const SELECTOR_STRIP_H:           float = 88.0   # two button rows + margins
 
-var _wave_label:        RichTextLabel
+var _wave_label:        Label
 var _bucks_label:       Label
 var _infestation_fill:  ColorRect
 var _infestation_label: Label
@@ -104,6 +106,7 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	# --- Top panel ---
+	# Layout: [wave + bucks (left)] [infestation bar (centre, expands)] [speed + exit + restart (right)]
 	var top_bg := ColorRect.new()
 	top_bg.color         = COLOR_PANEL_BG
 	top_bg.anchor_right  = 1.0
@@ -111,94 +114,107 @@ func _build_ui() -> void:
 	top_bg.offset_bottom = PANEL_H
 	add_child(top_bg)
 
-	# Wave display: RichTextLabel mixes font sizes in one node and baseline-aligns
-	# runs automatically, so "WAVE" (small) and the numeral (large) share a common
-	# bottom edge without any manual positioning.
-	_wave_label                  = RichTextLabel.new()
-	_wave_label.bbcode_enabled   = true
-	_wave_label.fit_content      = true
-	_wave_label.scroll_active    = false
-	_wave_label.autowrap_mode    = TextServer.AUTOWRAP_OFF
-	_wave_label.custom_minimum_size = Vector2(260, 80)
-	_wave_label.offset_left      = MARGIN
-	_wave_label.offset_top       = 4.0
-	_wave_label.add_theme_font_override("normal_font", UIFonts.header())
-	_wave_label.add_theme_color_override("default_color", COLOR_TEXT)
-	add_child(_wave_label)
+	var top_margin := MarginContainer.new()
+	top_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	top_margin.add_theme_constant_override("margin_left",   MARGIN)
+	top_margin.add_theme_constant_override("margin_right",  MARGIN)
+	top_margin.add_theme_constant_override("margin_top",    6)
+	top_margin.add_theme_constant_override("margin_bottom", 6)
+	top_bg.add_child(top_margin)
 
-	_bucks_label                      = _make_label("Bug Bucks: $0", Vector2(0.0, 0.0), PANEL_H)
-	_bucks_label.anchor_left          = 1.0
-	_bucks_label.anchor_right         = 1.0
-	_bucks_label.offset_left          = -290.0
-	_bucks_label.offset_right         = -MARGIN
-	_bucks_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_bucks_label.add_theme_font_size_override("font_size", 31)
-	_bucks_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
+	var top_row := HBoxContainer.new()
+	top_row.add_theme_constant_override("separation", 12)
+	top_margin.add_child(top_row)
+
+	# Left: wave number stacked above bug bucks.
+	var left_col := VBoxContainer.new()
+	left_col.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	left_col.add_theme_constant_override("separation", 1)
+	top_row.add_child(left_col)
+
+	_wave_label = Label.new()
+	_wave_label.text = "WAVE  1"
+	_wave_label.add_theme_font_size_override("font_size", 18)
+	_wave_label.add_theme_font_override("font", UIFonts.header())
+	_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
+	_wave_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	left_col.add_child(_wave_label)
+
+	_bucks_label = Label.new()
+	_bucks_label.text = "Bug Bucks: $0"
+	_bucks_label.add_theme_font_size_override("font_size", 14)
 	_bucks_label.add_theme_font_override("font", UIFonts.primary_bold())
-	top_bg.add_child(_bucks_label)
+	_bucks_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
+	_bucks_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	left_col.add_child(_bucks_label)
 
-	# --- Bottom infestation bar ---
-	var bar_bg := ColorRect.new()
-	bar_bg.color        = COLOR_PANEL_BG
-	bar_bg.anchor_top   = 1.0
-	bar_bg.anchor_bottom = 1.0
-	bar_bg.anchor_right  = 1.0
-	bar_bg.offset_top    = -(BAR_H + MARGIN * 2.0)
-	add_child(bar_bg)
+	# Centre: "INFESTATION" label, expanding bar track, percentage readout.
+	var center_hbox := HBoxContainer.new()
+	center_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	center_hbox.alignment             = BoxContainer.ALIGNMENT_CENTER
+	center_hbox.add_theme_constant_override("separation", 8)
+	top_row.add_child(center_hbox)
 
-	# Speed toggle button — anchored to the left of the bar, above the fill track.
-	# Shows "1x" or "2x" to indicate the current game speed.
-	const SPEED_BTN_W: float = 72.0
-	_speed_btn = Button.new()
-	_speed_btn.text         = "▶▶ 1x"
-	_speed_btn.process_mode = Node.PROCESS_MODE_ALWAYS
-	_speed_btn.anchor_top    = 0.0
-	_speed_btn.anchor_bottom = 1.0
-	_speed_btn.offset_left   = MARGIN
-	_speed_btn.offset_right  = MARGIN + SPEED_BTN_W
-	_speed_btn.offset_top    = 4.0
-	_speed_btn.offset_bottom = -4.0
-	_speed_btn.add_theme_font_size_override("font_size", 13)
-	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_button_style(_speed_btn)
-	_speed_btn.pressed.connect(_on_speed_btn_pressed)
-	bar_bg.add_child(_speed_btn)
-
-	# Shift the label and track right by (SPEED_BTN_W + gap) to clear the button.
-	const BAR_SHIFT: float = SPEED_BTN_W + 8.0
-	var bar_label := _make_label("INFESTATION", Vector2(MARGIN + BAR_SHIFT, 0.0), BAR_H + MARGIN * 2.0)
-	bar_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
-	bar_label.add_theme_font_override("font", UIFonts.primary())
-	bar_bg.add_child(bar_label)
+	var inf_label := Label.new()
+	inf_label.text = "INFESTATION"
+	inf_label.add_theme_font_size_override("font_size", 11)
+	inf_label.add_theme_font_override("font", UIFonts.primary())
+	inf_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	inf_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	center_hbox.add_child(inf_label)
 
 	var track := ColorRect.new()
-	track.color         = COLOR_BAR_BG
-	track.anchor_right  = 1.0
-	track.offset_left   = 130.0 + BAR_SHIFT
-	track.offset_right  = -MARGIN
-	track.offset_top    = MARGIN
-	track.offset_bottom = MARGIN + BAR_H
-	bar_bg.add_child(track)
+	track.color                 = COLOR_BAR_BG
+	track.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	track.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	track.custom_minimum_size   = Vector2(0, BAR_H)
+	center_hbox.add_child(track)
 
 	_infestation_fill          = ColorRect.new()
 	_infestation_fill.color    = COLOR_BAR_FILL
 	_infestation_fill.size.y   = BAR_H
-	_infestation_fill.position.y = 0
+	_infestation_fill.position = Vector2.ZERO
 	track.add_child(_infestation_fill)
 
-	_infestation_label                      = _make_label("0%", Vector2(0.0, 0.0), BAR_H + MARGIN * 2.0)
-	_infestation_label.anchor_left          = 1.0
-	_infestation_label.anchor_right         = 1.0
-	_infestation_label.anchor_top           = 0.0
-	_infestation_label.anchor_bottom        = 1.0
-	_infestation_label.offset_left          = -56.0
-	_infestation_label.offset_right         = -MARGIN
-	_infestation_label.offset_top           = 0.0
-	_infestation_label.offset_bottom        = 0.0
-	_infestation_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_infestation_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_infestation_label = Label.new()
+	_infestation_label.text = "0%"
+	_infestation_label.add_theme_font_size_override("font_size", 11)
+	_infestation_label.add_theme_font_override("font", UIFonts.primary())
 	_infestation_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
-	bar_bg.add_child(_infestation_label)
+	_infestation_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	center_hbox.add_child(_infestation_label)
+
+	# Right: speed toggle, exit, restart.
+	# EXIT and RESTART both restart the run for now. Future pass: EXIT returns to the
+	# between-level hub; RESTART replays the current contract from wave 1.
+	var right_hbox := HBoxContainer.new()
+	right_hbox.size_flags_horizontal = Control.SIZE_SHRINK_END
+	right_hbox.add_theme_constant_override("separation", 6)
+	top_row.add_child(right_hbox)
+
+	_speed_btn = Button.new()
+	_speed_btn.text = "▶▶ 1x"
+	_speed_btn.add_theme_font_size_override("font_size", 13)
+	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_button_style(_speed_btn)
+	_speed_btn.pressed.connect(_on_speed_btn_pressed)
+	right_hbox.add_child(_speed_btn)
+
+	var exit_btn := Button.new()
+	exit_btn.text = "EXIT"
+	exit_btn.add_theme_font_size_override("font_size", 13)
+	exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_button_style(exit_btn)
+	exit_btn.pressed.connect(_on_exit_pressed)
+	right_hbox.add_child(exit_btn)
+
+	var restart_btn := Button.new()
+	restart_btn.text = "RESTART"
+	restart_btn.add_theme_font_size_override("font_size", 13)
+	restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_button_style(restart_btn)
+	restart_btn.pressed.connect(_on_restart_pressed)
+	right_hbox.add_child(restart_btn)
 
 	# --- Countdown splash (upper-centre, hidden by default) ---
 	# Band 0.15–0.30: "WAVE X" — bold, larger
@@ -297,7 +313,7 @@ func _on_infestation_changed(level: float) -> void:
 
 
 func _on_wave_changed(wave: int) -> void:
-	_wave_label.text = "[font_size=38]WAVE [/font_size][font_size=64]%d[/font_size]" % wave
+	_wave_label.text = "WAVE  %d" % wave
 
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
@@ -347,6 +363,12 @@ func _on_restart_pressed() -> void:
 	get_tree().reload_current_scene()
 
 
+func _on_exit_pressed() -> void:
+	# Future: navigate to the between-level hub instead of restarting.
+	get_tree().paused = false
+	get_tree().reload_current_scene()
+
+
 # ---------------------------------------------------------------------------
 # Trap selector
 # ---------------------------------------------------------------------------
@@ -377,39 +399,20 @@ func _build_trap_selector() -> void:
 		_build_selector_landscape()
 	else:
 		_build_selector_portrait()
-	_update_bucks_right_margin()
-	_update_arena_ui_centering()
 
 
-# Selector is now at the bottom in both orientations, so Bug Bucks has the
-# full top bar width available regardless of orientation.
-func _update_bucks_right_margin() -> void:
-	_bucks_label.offset_right = -MARGIN
-
-
-# Arena occupies full screen width in both orientations now that the selector
-# sits at the bottom. Countdown labels and send-wave button span the full width.
-func _update_arena_ui_centering() -> void:
-	_countdown_wave_label.anchor_right   = 1.0
-	_countdown_number_label.anchor_right = 1.0
-	_send_wave_btn.anchor_left  = 0.30
-	_send_wave_btn.anchor_right = 0.70
-
-
-## Landscape: buttons in a horizontal strip at the bottom left, above the infestation bar.
+## Landscape: buttons in a horizontal strip pinned to the bottom-left of the screen.
 ## Buttons are left-aligned and sized to SELECTOR_PANEL_W each — the strip does not
 ## span the full screen width, leaving the right portion clear.
 func _build_selector_landscape() -> void:
-	var bar_h_total := BAR_H + MARGIN * 2.0
-
 	var bg := ColorRect.new()
 	bg.color         = COLOR_PANEL_BG
 	bg.anchor_left   = 0.0
 	bg.anchor_right  = 1.0
 	bg.anchor_top    = 1.0
 	bg.anchor_bottom = 1.0
-	bg.offset_top    = -(bar_h_total + SELECTOR_LANDSCAPE_STRIP_H)
-	bg.offset_bottom = -bar_h_total
+	bg.offset_top    = -SELECTOR_LANDSCAPE_STRIP_H
+	bg.offset_bottom = 0
 	add_child(bg)
 	_selector_root = bg
 
@@ -444,19 +447,17 @@ func _build_selector_landscape() -> void:
 		_add_btn_badge(btn, i)
 
 
-## Portrait: 2×2 grid of buttons above the infestation bar at the bottom.
+## Portrait: 2×2 grid of buttons pinned to the bottom edge of the screen.
 ## Each trap occupies one cell; the two columns fill the screen width evenly.
 func _build_selector_portrait() -> void:
-	var bar_h_total := BAR_H + MARGIN * 2.0
-
 	var bg := ColorRect.new()
 	bg.color         = COLOR_PANEL_BG
 	bg.anchor_left   = 0.0
 	bg.anchor_right  = 1.0
 	bg.anchor_top    = 1.0
 	bg.anchor_bottom = 1.0
-	bg.offset_top    = -(bar_h_total + SELECTOR_STRIP_H)
-	bg.offset_bottom = -bar_h_total
+	bg.offset_top    = -SELECTOR_STRIP_H
+	bg.offset_bottom = 0
 	add_child(bg)
 	_selector_root = bg
 
@@ -636,9 +637,3 @@ func _apply_button_style(btn: Button) -> void:
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
 
 
-func _make_label(text: String, pos: Vector2, container_h: float) -> Label:
-	var lbl := Label.new()
-	lbl.text     = text
-	lbl.position = Vector2(pos.x, (container_h - 16.0) * 0.5)
-	lbl.add_theme_color_override("font_color", COLOR_TEXT)
-	return lbl
