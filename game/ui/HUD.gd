@@ -257,7 +257,7 @@ func _build_ui() -> void:
 	# Speed toggle and pause: two standalone buttons anchored to the bottom-right corner,
 	# floating above the selector strip.  _position_speed_btn() places both.
 	_pause_btn = Button.new()
-	_pause_btn.text = "⏸"
+	_pause_btn.text = "▮▮"
 	_pause_btn.add_theme_font_size_override("font_size", 18)
 	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_icon_button_style(_pause_btn)
@@ -366,7 +366,7 @@ func _process(delta: float) -> void:
 ## Called after the selector is built and on every orientation change.
 func _position_speed_btn() -> void:
 	var speed_w := 88.0   # wide enough for "▶▶ 2x" with padding
-	var pause_w := 32.0   # icon-only — about a third of the speed button
+	var pause_w := 52.0   # icon-only — about a third of the speed button, 60% wider than original 32px
 	var gap     := 6.0
 
 	for btn in [_speed_btn, _pause_btn]:
@@ -418,7 +418,7 @@ func _on_speed_btn_pressed() -> void:
 func _on_pause_btn_pressed() -> void:
 	_is_paused = not _is_paused
 	get_tree().paused = _is_paused
-	_pause_btn.text   = "▶" if _is_paused else "⏸"
+	_pause_btn.text   = "▶" if _is_paused else "▮▮"
 
 
 func _on_send_wave_pressed() -> void:
@@ -429,7 +429,7 @@ func _on_run_ended() -> void:
 	Engine.time_scale = 1.0
 	# Clear any player-initiated pause so the run-over overlay owns the paused state cleanly.
 	_is_paused      = false
-	_pause_btn.text = "⏸"
+	_pause_btn.text = "▮▮"
 	_run_over_overlay.visible = true
 	get_tree().paused = true
 
