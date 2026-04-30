@@ -258,7 +258,7 @@ func _build_ui() -> void:
 	# floating above the selector strip.  _position_speed_btn() places both.
 	_pause_btn = Button.new()
 	_pause_btn.text = "▮▮"
-	_pause_btn.add_theme_font_size_override("font_size", 18)
+	_pause_btn.add_theme_font_size_override("font_size", 36)
 	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_icon_button_style(_pause_btn)
 	_pause_btn.pressed.connect(_on_pause_btn_pressed)
@@ -266,7 +266,7 @@ func _build_ui() -> void:
 
 	_speed_btn = Button.new()
 	_speed_btn.text = "▶▶ 1x"
-	_speed_btn.add_theme_font_size_override("font_size", 13)
+	_speed_btn.add_theme_font_size_override("font_size", 26)
 	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_button_style(_speed_btn)
 	_speed_btn.pressed.connect(_on_speed_btn_pressed)
@@ -365,8 +365,8 @@ func _process(delta: float) -> void:
 ##
 ## Called after the selector is built and on every orientation change.
 func _position_speed_btn() -> void:
-	var speed_w := 88.0   # wide enough for "▶▶ 2x" with padding
-	var pause_w := 52.0   # icon-only — about a third of the speed button, 60% wider than original 32px
+	var speed_w := 53.0   # 40% narrower than original 88px
+	var pause_w := 52.0   # icon-only
 	var gap     := 6.0
 
 	for btn in [_speed_btn, _pause_btn]:
