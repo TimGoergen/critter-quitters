@@ -4,8 +4,8 @@
 ## Built procedurally — no scene file required.
 ##
 ## The trap selector repositions itself based on screen orientation:
-##   Landscape — right-side panel, buttons stacked vertically
-##   Portrait  — horizontal strip above the infestation bar at the bottom
+##   Landscape — horizontal strip at the bottom left, buttons in a single row
+##   Portrait  — 2×2 grid strip above the infestation bar at the bottom
 
 extends CanvasLayer
 
@@ -60,7 +60,7 @@ const MARGIN:           float = 12.0   # infestation bar padding
 # SELECTOR_STRIP_H is the bottom strip height in portrait.
 const SELECTOR_PANEL_W:          float = 160.0
 const SELECTOR_LANDSCAPE_STRIP_H: float = 72.0
-const SELECTOR_STRIP_H:           float = 40.0
+const SELECTOR_STRIP_H:           float = 88.0   # two button rows + margins
 
 var _wave_label:        RichTextLabel
 var _bucks_label:       Label
@@ -444,7 +444,8 @@ func _build_selector_landscape() -> void:
 		_add_btn_badge(btn, i)
 
 
-## Portrait: buttons in a horizontal strip above the infestation bar at the bottom.
+## Portrait: 2×2 grid of buttons above the infestation bar at the bottom.
+## Each trap occupies one cell; the two columns fill the screen width evenly.
 func _build_selector_portrait() -> void:
 	var bar_h_total := BAR_H + MARGIN * 2.0
 
@@ -467,13 +468,17 @@ func _build_selector_portrait() -> void:
 	margin.add_theme_constant_override("margin_bottom", 5)
 	bg.add_child(margin)
 
-	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	margin.add_child(row)
+	# 2 columns → 4 buttons become a 2×2 grid; each cell expands to fill its half.
+	var grid := GridContainer.new()
+	grid.columns = 2
+	grid.add_theme_constant_override("h_separation", 6)
+	grid.add_theme_constant_override("v_separation", 6)
+	margin.add_child(grid)
 
 	for i in range(4):
 		var btn := Button.new()
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
 		btn.clip_contents         = false
 		btn.add_theme_font_size_override("font_size", 11)
 		btn.add_theme_font_override("font", UIFonts.primary_bold())
@@ -482,7 +487,7 @@ func _build_selector_portrait() -> void:
 		btn.mouse_entered.connect(_on_btn_hover_start.bind(i))
 		btn.mouse_exited.connect(_on_btn_hover_end.bind(i))
 		_style_selector_button(btn, i, i == GameState.selected_trap_type, _can_afford(i))
-		row.add_child(btn)
+		grid.add_child(btn)
 		_selector_buttons.append(btn)
 		_add_btn_badge(btn, i)
 

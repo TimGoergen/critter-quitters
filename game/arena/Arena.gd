@@ -1154,8 +1154,8 @@ func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
 ##
 ## The selector now sits at the bottom in both orientations, so the arena
 ## always uses the full screen width.
-##   Landscape — selector strip is HUD.SELECTOR_LANDSCAPE_STRIP_H tall.
-##   Portrait  — selector strip is HUD.SELECTOR_STRIP_H tall.
+##   Landscape — single-row selector strip, HUD.SELECTOR_LANDSCAPE_STRIP_H tall.
+##   Portrait  — 2×2 grid selector strip, HUD.SELECTOR_STRIP_H tall.
 ##
 ## With KEEP_HEIGHT (Godot default), camera.size is the total world height
 ## covered by the full viewport. We inflate it until the arena fits in both
