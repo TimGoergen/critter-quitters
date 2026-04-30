@@ -73,8 +73,10 @@ var _countdown_number_label: Label
 var _send_wave_btn:     Button
 var _run_over_overlay:  Control
 
-var _speed_btn: Button
-var _is_fast: bool = false
+var _speed_btn:  Button
+var _pause_btn:  Button
+var _is_fast:    bool = false
+var _is_paused:  bool = false
 
 var _selector_buttons: Array[Button] = []
 # Root node of the current selector layout — freed and rebuilt on orientation change.
@@ -252,8 +254,16 @@ func _build_ui() -> void:
 
 	_build_trap_selector()
 
-	# Speed toggle: standalone button anchored to the bottom-right corner, floating above
-	# the selector strip.  Positioned by _position_speed_btn() so it adapts to orientation.
+	# Speed toggle and pause: two standalone buttons anchored to the bottom-right corner,
+	# floating above the selector strip.  _position_speed_btn() places both.
+	_pause_btn = Button.new()
+	_pause_btn.text = "⏸  PAUSE"
+	_pause_btn.add_theme_font_size_override("font_size", 13)
+	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_button_style(_pause_btn)
+	_pause_btn.pressed.connect(_on_pause_btn_pressed)
+	add_child(_pause_btn)
+
 	_speed_btn = Button.new()
 	_speed_btn.text = "▶▶ 1x"
 	_speed_btn.add_theme_font_size_override("font_size", 13)
@@ -346,18 +356,36 @@ func _process(delta: float) -> void:
 
 
 
-## Repositions the speed toggle to sit just above the selector strip in the bottom-right
-## corner.  Called after the selector is built and again whenever the orientation changes.
+## Repositions the speed toggle and pause button above the selector strip in the
+## bottom-right corner.  Called after the selector is built and on every orientation change.
 func _position_speed_btn() -> void:
-	var strip_h := SELECTOR_LANDSCAPE_STRIP_H if _selector_is_landscape else SELECTOR_STRIP_H
+	var strip_h  := SELECTOR_LANDSCAPE_STRIP_H if _selector_is_landscape else SELECTOR_STRIP_H
+	var btn_h    := 32.0
+	var speed_w  := 88.0   # wide enough for "▶▶ 2x" with padding
+	var pause_w  := 96.0   # wide enough for "▶ RESUME" with padding
+	var gap      := 6.0
+	var bottom   := -(strip_h + MARGIN)
+	var top      := bottom - btn_h
+
+	# Speed button: rightmost.
 	_speed_btn.anchor_left   = 1.0
 	_speed_btn.anchor_right  = 1.0
 	_speed_btn.anchor_top    = 1.0
 	_speed_btn.anchor_bottom = 1.0
 	_speed_btn.offset_right  = -MARGIN
-	_speed_btn.offset_left   = -MARGIN - 88.0  # wide enough for "▶▶ 2x" with padding
-	_speed_btn.offset_bottom = -(strip_h + MARGIN)
-	_speed_btn.offset_top    = -(strip_h + MARGIN + 32.0)
+	_speed_btn.offset_left   = -MARGIN - speed_w
+	_speed_btn.offset_bottom = bottom
+	_speed_btn.offset_top    = top
+
+	# Pause button: immediately to the left of the speed button.
+	_pause_btn.anchor_left   = 1.0
+	_pause_btn.anchor_right  = 1.0
+	_pause_btn.anchor_top    = 1.0
+	_pause_btn.anchor_bottom = 1.0
+	_pause_btn.offset_right  = -MARGIN - speed_w - gap
+	_pause_btn.offset_left   = -MARGIN - speed_w - gap - pause_w
+	_pause_btn.offset_bottom = bottom
+	_pause_btn.offset_top    = top
 
 
 func _on_speed_btn_pressed() -> void:
@@ -366,12 +394,21 @@ func _on_speed_btn_pressed() -> void:
 	_speed_btn.text    = "▶▶ 2x" if _is_fast else "▶▶ 1x"
 
 
+func _on_pause_btn_pressed() -> void:
+	_is_paused = not _is_paused
+	get_tree().paused  = _is_paused
+	_pause_btn.text    = "▶  RESUME" if _is_paused else "⏸  PAUSE"
+
+
 func _on_send_wave_pressed() -> void:
 	GameState.wave_skip_requested.emit()
 
 
 func _on_run_ended() -> void:
 	Engine.time_scale = 1.0
+	# Clear any player-initiated pause so the run-over overlay owns the paused state cleanly.
+	_is_paused       = false
+	_pause_btn.text  = "⏸  PAUSE"
 	_run_over_overlay.visible = true
 	get_tree().paused = true
 
