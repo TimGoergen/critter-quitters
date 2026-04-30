@@ -4,7 +4,7 @@
 ## Built procedurally — no scene file required.
 ##
 ## Top panel: single row — wave + bucks (left), infestation bar (centre),
-##   speed toggle + EXIT + RESTART (right).
+##   EXIT + RESTART (right).
 ## Selector: pinned to the bottom edge, orientation-aware.
 ##   Landscape — single-row horizontal strip, left-aligned.
 ##   Portrait  — 2×2 grid strip spanning full width.
@@ -184,21 +184,13 @@ func _build_ui() -> void:
 	_infestation_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	center_hbox.add_child(_infestation_label)
 
-	# Right: speed toggle, exit, restart.
+	# Right: exit and restart.
 	# EXIT and RESTART both restart the run for now. Future pass: EXIT returns to the
 	# between-level hub; RESTART replays the current contract from wave 1.
 	var right_hbox := HBoxContainer.new()
 	right_hbox.size_flags_horizontal = Control.SIZE_SHRINK_END
 	right_hbox.add_theme_constant_override("separation", 6)
 	top_row.add_child(right_hbox)
-
-	_speed_btn = Button.new()
-	_speed_btn.text = "▶▶ 1x"
-	_speed_btn.add_theme_font_size_override("font_size", 13)
-	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_button_style(_speed_btn)
-	_speed_btn.pressed.connect(_on_speed_btn_pressed)
-	right_hbox.add_child(_speed_btn)
 
 	var exit_btn := Button.new()
 	exit_btn.text = "EXIT"
@@ -259,6 +251,18 @@ func _build_ui() -> void:
 	add_child(_send_wave_btn)
 
 	_build_trap_selector()
+
+	# Speed toggle: standalone button anchored to the bottom-right corner, floating above
+	# the selector strip.  Positioned by _position_speed_btn() so it adapts to orientation.
+	_speed_btn = Button.new()
+	_speed_btn.text = "▶▶ 1x"
+	_speed_btn.add_theme_font_size_override("font_size", 13)
+	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_button_style(_speed_btn)
+	_speed_btn.pressed.connect(_on_speed_btn_pressed)
+	add_child(_speed_btn)
+	_position_speed_btn()
+
 	_build_run_over_overlay()
 
 
@@ -342,6 +346,20 @@ func _process(delta: float) -> void:
 
 
 
+## Repositions the speed toggle to sit just above the selector strip in the bottom-right
+## corner.  Called after the selector is built and again whenever the orientation changes.
+func _position_speed_btn() -> void:
+	var strip_h := SELECTOR_LANDSCAPE_STRIP_H if _selector_is_landscape else SELECTOR_STRIP_H
+	_speed_btn.anchor_left   = 1.0
+	_speed_btn.anchor_right  = 1.0
+	_speed_btn.anchor_top    = 1.0
+	_speed_btn.anchor_bottom = 1.0
+	_speed_btn.offset_right  = -MARGIN
+	_speed_btn.offset_left   = -MARGIN - 88.0  # wide enough for "▶▶ 2x" with padding
+	_speed_btn.offset_bottom = -(strip_h + MARGIN)
+	_speed_btn.offset_top    = -(strip_h + MARGIN + 32.0)
+
+
 func _on_speed_btn_pressed() -> void:
 	_is_fast = not _is_fast
 	Engine.time_scale  = 2.0 if _is_fast else 1.0
@@ -390,7 +408,7 @@ func _on_viewport_resized() -> void:
 		_selector_root.queue_free()
 	_selector_root = null
 	_build_trap_selector()
-	# _build_trap_selector already calls _update_bucks_right_margin and _update_arena_ui_centering.
+	_position_speed_btn()
 
 
 func _build_trap_selector() -> void:
@@ -635,5 +653,3 @@ func _apply_button_style(btn: Button) -> void:
 		box.content_margin_bottom = 6.0
 		btn.add_theme_stylebox_override(state[0], box)
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
-
-
