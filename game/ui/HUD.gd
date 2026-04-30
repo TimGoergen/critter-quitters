@@ -73,10 +73,11 @@ var _countdown_number_label: Label
 var _send_wave_btn:     Button
 var _run_over_overlay:  Control
 
-var _speed_btn:  Button
-var _pause_btn:  Button
-var _is_fast:    bool = false
-var _is_paused:  bool = false
+var _speed_btn:      Button
+var _pause_btn:      Button
+var _speed_pause_box: HBoxContainer  # wraps both buttons; repositioned on orientation change
+var _is_fast:        bool = false
+var _is_paused:      bool = false
 
 var _selector_buttons: Array[Button] = []
 # Root node of the current selector layout — freed and rebuilt on orientation change.
@@ -254,15 +255,21 @@ func _build_ui() -> void:
 
 	_build_trap_selector()
 
-	# Speed toggle and pause: two standalone buttons anchored to the bottom-right corner,
-	# floating above the selector strip.  _position_speed_btn() places both.
+	# Speed toggle and pause: wrapped in an HBoxContainer anchored to the bottom-right.
+	# The container measures its own width from the buttons' content; _position_speed_btn()
+	# sets the vertical bounds to align with the selector strip.
+	_speed_pause_box = HBoxContainer.new()
+	_speed_pause_box.alignment = BoxContainer.ALIGNMENT_END
+	_speed_pause_box.add_theme_constant_override("separation", 6)
+	add_child(_speed_pause_box)
+
 	_pause_btn = Button.new()
 	_pause_btn.text = "▮▮"
 	_pause_btn.add_theme_font_size_override("font_size", 36)
 	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_icon_button_style(_pause_btn)
 	_pause_btn.pressed.connect(_on_pause_btn_pressed)
-	add_child(_pause_btn)
+	_speed_pause_box.add_child(_pause_btn)
 
 	_speed_btn = Button.new()
 	_speed_btn.text = "▶▶ 1x"
@@ -270,7 +277,8 @@ func _build_ui() -> void:
 	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_button_style(_speed_btn)
 	_speed_btn.pressed.connect(_on_speed_btn_pressed)
-	add_child(_speed_btn)
+	_speed_pause_box.add_child(_speed_btn)
+
 	_position_speed_btn()
 
 	_build_run_over_overlay()
@@ -356,57 +364,38 @@ func _process(delta: float) -> void:
 
 
 
-## Repositions the speed toggle and pause button so they align with the selector strip.
+## Repositions the speed/pause container to align with the selector strip.
 ##
-## Landscape: buttons sit inside the strip's inner bounds on the right side, vertically
-##   flush with the trap selector buttons (no gap above or below the strip).
-## Portrait: selector is a full-width 2×2 grid, so buttons float above the strip instead,
-##   sized to match a single portrait selector row.
+## The container is anchored to the bottom-right corner and given a generous fixed width;
+## ALIGNMENT_END keeps the buttons right-justified within it regardless of their content
+## widths, so no manual pixel measurement is needed.  Godot resolves each button's width
+## from its own minimum size (font + margins), not from any offset we supply.
+##
+## Landscape: vertically flush with the selector strip's inner bounds.
+## Portrait:  floats above the strip, one row tall.
 ##
 ## Called after the selector is built and on every orientation change.
 func _position_speed_btn() -> void:
-	var speed_w := 53.0   # 40% narrower than original 88px
-	var pause_w := 52.0   # icon-only
-	var gap     := 6.0
-
-	for btn in [_speed_btn, _pause_btn]:
-		btn.anchor_left   = 1.0
-		btn.anchor_right  = 1.0
-		btn.anchor_top    = 1.0
-		btn.anchor_bottom = 1.0
+	var box := _speed_pause_box
+	box.anchor_left   = 1.0
+	box.anchor_right  = 1.0
+	box.anchor_top    = 1.0
+	box.anchor_bottom = 1.0
+	# 400px is well beyond the combined button widths; ALIGNMENT_END right-justifies the
+	# buttons so the speed toggle is always flush with the right screen edge.
+	box.offset_right  = 0
+	box.offset_left   = -400
 
 	if _selector_is_landscape:
-		# inner_top/bot match the MarginContainer margins in _build_selector_landscape.
-		var inner_top := 6.0
-		var inner_bot := 6.0
-		var top    := -(SELECTOR_LANDSCAPE_STRIP_H - inner_top)
-		var bottom := -inner_bot
-
-		_speed_btn.offset_right  = -MARGIN
-		_speed_btn.offset_left   = -MARGIN - speed_w
-		_speed_btn.offset_bottom = bottom
-		_speed_btn.offset_top    = top
-
-		_pause_btn.offset_right  = -MARGIN - speed_w - gap
-		_pause_btn.offset_left   = -MARGIN - speed_w - gap - pause_w
-		_pause_btn.offset_bottom = bottom
-		_pause_btn.offset_top    = top
+		# inner margins match the MarginContainer values in _build_selector_landscape.
+		box.offset_bottom = -6.0
+		box.offset_top    = -(SELECTOR_LANDSCAPE_STRIP_H - 6.0)
 	else:
 		# Portrait selector fills the full width, so float buttons just above it.
-		# Height matches one portrait selector row: (strip - top margin - bottom margin - row gap) / 2.
-		var row_h  := (SELECTOR_STRIP_H - 5.0 - 5.0 - 6.0) / 2.0
-		var bottom := -(SELECTOR_STRIP_H + MARGIN)
-		var top    := bottom - row_h
-
-		_speed_btn.offset_right  = -MARGIN
-		_speed_btn.offset_left   = -MARGIN - speed_w
-		_speed_btn.offset_bottom = bottom
-		_speed_btn.offset_top    = top
-
-		_pause_btn.offset_right  = -MARGIN - speed_w - gap
-		_pause_btn.offset_left   = -MARGIN - speed_w - gap - pause_w
-		_pause_btn.offset_bottom = bottom
-		_pause_btn.offset_top    = top
+		# Height matches one portrait selector row.
+		var row_h := (SELECTOR_STRIP_H - 5.0 - 5.0 - 6.0) / 2.0
+		box.offset_bottom = -(SELECTOR_STRIP_H + MARGIN)
+		box.offset_top    = box.offset_bottom - row_h
 
 
 func _on_speed_btn_pressed() -> void:
