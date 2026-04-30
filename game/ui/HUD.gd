@@ -72,6 +72,9 @@ var _countdown_number_label: Label
 var _send_wave_btn:     Button
 var _run_over_overlay:  Control
 
+var _speed_btn: Button
+var _is_fast: bool = false
+
 var _selector_buttons: Array[Button] = []
 # Root node of the current selector layout — freed and rebuilt on orientation change.
 var _selector_root: Control = null
@@ -86,6 +89,7 @@ func _ready() -> void:
 	# Allow the HUD layer itself to process input while the tree is paused,
 	# so the run-over overlay's Restart button remains clickable.
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	Engine.time_scale = 1.0
 	_build_ui()
 	GameState.bug_bucks_changed.connect(_on_bucks_changed)
 	GameState.infestation_changed.connect(_on_infestation_changed)
@@ -143,7 +147,27 @@ func _build_ui() -> void:
 	bar_bg.offset_top    = -(BAR_H + MARGIN * 2.0)
 	add_child(bar_bg)
 
-	var bar_label := _make_label("INFESTATION", Vector2(MARGIN, 0.0), BAR_H + MARGIN * 2.0)
+	# Speed toggle button — anchored to the left of the bar, above the fill track.
+	# Shows "1x" or "2x" to indicate the current game speed.
+	const SPEED_BTN_W: float = 72.0
+	_speed_btn = Button.new()
+	_speed_btn.text         = "▶▶ 1x"
+	_speed_btn.process_mode = Node.PROCESS_MODE_ALWAYS
+	_speed_btn.anchor_top    = 0.0
+	_speed_btn.anchor_bottom = 1.0
+	_speed_btn.offset_left   = MARGIN
+	_speed_btn.offset_right  = MARGIN + SPEED_BTN_W
+	_speed_btn.offset_top    = 4.0
+	_speed_btn.offset_bottom = -4.0
+	_speed_btn.add_theme_font_size_override("font_size", 13)
+	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_button_style(_speed_btn)
+	_speed_btn.pressed.connect(_on_speed_btn_pressed)
+	bar_bg.add_child(_speed_btn)
+
+	# Shift the label and track right by (SPEED_BTN_W + gap) to clear the button.
+	const BAR_SHIFT: float = SPEED_BTN_W + 8.0
+	var bar_label := _make_label("INFESTATION", Vector2(MARGIN + BAR_SHIFT, 0.0), BAR_H + MARGIN * 2.0)
 	bar_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 	bar_label.add_theme_font_override("font", UIFonts.primary())
 	bar_bg.add_child(bar_label)
@@ -151,7 +175,7 @@ func _build_ui() -> void:
 	var track := ColorRect.new()
 	track.color         = COLOR_BAR_BG
 	track.anchor_right  = 1.0
-	track.offset_left   = 130.0
+	track.offset_left   = 130.0 + BAR_SHIFT
 	track.offset_right  = -MARGIN
 	track.offset_top    = MARGIN
 	track.offset_bottom = MARGIN + BAR_H
@@ -303,11 +327,18 @@ func _process(delta: float) -> void:
 
 
 
+func _on_speed_btn_pressed() -> void:
+	_is_fast = not _is_fast
+	Engine.time_scale  = 2.0 if _is_fast else 1.0
+	_speed_btn.text    = "▶▶ 2x" if _is_fast else "▶▶ 1x"
+
+
 func _on_send_wave_pressed() -> void:
 	GameState.wave_skip_requested.emit()
 
 
 func _on_run_ended() -> void:
+	Engine.time_scale = 1.0
 	_run_over_overlay.visible = true
 	get_tree().paused = true
 

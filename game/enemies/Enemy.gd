@@ -75,7 +75,8 @@ const ARRIVAL_THRESHOLD: float = 0.05
 const DEATH_FLASH_DURATION: float = 0.12
 
 ## Speed multiplier applied while at least one Glue Board is in range.
-const SLOW_FACTOR: float = 0.45
+## 0.285 = 71.5% slowdown (up 30% from the original 55% slowdown at 0.45).
+const SLOW_FACTOR: float = 0.285
 
 
 # ---------------------------------------------------------------------------
