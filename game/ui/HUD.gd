@@ -257,10 +257,10 @@ func _build_ui() -> void:
 	# Speed toggle and pause: two standalone buttons anchored to the bottom-right corner,
 	# floating above the selector strip.  _position_speed_btn() places both.
 	_pause_btn = Button.new()
-	_pause_btn.text = "⏸  PAUSE"
-	_pause_btn.add_theme_font_size_override("font_size", 13)
+	_pause_btn.text = "⏸"
+	_pause_btn.add_theme_font_size_override("font_size", 18)
 	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_button_style(_pause_btn)
+	_apply_icon_button_style(_pause_btn)
 	_pause_btn.pressed.connect(_on_pause_btn_pressed)
 	add_child(_pause_btn)
 
@@ -356,36 +356,57 @@ func _process(delta: float) -> void:
 
 
 
-## Repositions the speed toggle and pause button above the selector strip in the
-## bottom-right corner.  Called after the selector is built and on every orientation change.
+## Repositions the speed toggle and pause button so they align with the selector strip.
+##
+## Landscape: buttons sit inside the strip's inner bounds on the right side, vertically
+##   flush with the trap selector buttons (no gap above or below the strip).
+## Portrait: selector is a full-width 2×2 grid, so buttons float above the strip instead,
+##   sized to match a single portrait selector row.
+##
+## Called after the selector is built and on every orientation change.
 func _position_speed_btn() -> void:
-	var strip_h  := SELECTOR_LANDSCAPE_STRIP_H if _selector_is_landscape else SELECTOR_STRIP_H
-	var btn_h    := 32.0
-	var speed_w  := 88.0   # wide enough for "▶▶ 2x" with padding
-	var pause_w  := 96.0   # wide enough for "▶ RESUME" with padding
-	var gap      := 6.0
-	var bottom   := -(strip_h + MARGIN)
-	var top      := bottom - btn_h
+	var speed_w := 88.0   # wide enough for "▶▶ 2x" with padding
+	var pause_w := 32.0   # icon-only — about a third of the speed button
+	var gap     := 6.0
 
-	# Speed button: rightmost.
-	_speed_btn.anchor_left   = 1.0
-	_speed_btn.anchor_right  = 1.0
-	_speed_btn.anchor_top    = 1.0
-	_speed_btn.anchor_bottom = 1.0
-	_speed_btn.offset_right  = -MARGIN
-	_speed_btn.offset_left   = -MARGIN - speed_w
-	_speed_btn.offset_bottom = bottom
-	_speed_btn.offset_top    = top
+	for btn in [_speed_btn, _pause_btn]:
+		btn.anchor_left   = 1.0
+		btn.anchor_right  = 1.0
+		btn.anchor_top    = 1.0
+		btn.anchor_bottom = 1.0
 
-	# Pause button: immediately to the left of the speed button.
-	_pause_btn.anchor_left   = 1.0
-	_pause_btn.anchor_right  = 1.0
-	_pause_btn.anchor_top    = 1.0
-	_pause_btn.anchor_bottom = 1.0
-	_pause_btn.offset_right  = -MARGIN - speed_w - gap
-	_pause_btn.offset_left   = -MARGIN - speed_w - gap - pause_w
-	_pause_btn.offset_bottom = bottom
-	_pause_btn.offset_top    = top
+	if _selector_is_landscape:
+		# inner_top/bot match the MarginContainer margins in _build_selector_landscape.
+		var inner_top := 6.0
+		var inner_bot := 6.0
+		var top    := -(SELECTOR_LANDSCAPE_STRIP_H - inner_top)
+		var bottom := -inner_bot
+
+		_speed_btn.offset_right  = -MARGIN
+		_speed_btn.offset_left   = -MARGIN - speed_w
+		_speed_btn.offset_bottom = bottom
+		_speed_btn.offset_top    = top
+
+		_pause_btn.offset_right  = -MARGIN - speed_w - gap
+		_pause_btn.offset_left   = -MARGIN - speed_w - gap - pause_w
+		_pause_btn.offset_bottom = bottom
+		_pause_btn.offset_top    = top
+	else:
+		# Portrait selector fills the full width, so float buttons just above it.
+		# Height matches one portrait selector row: (strip - top margin - bottom margin - row gap) / 2.
+		var row_h  := (SELECTOR_STRIP_H - 5.0 - 5.0 - 6.0) / 2.0
+		var bottom := -(SELECTOR_STRIP_H + MARGIN)
+		var top    := bottom - row_h
+
+		_speed_btn.offset_right  = -MARGIN
+		_speed_btn.offset_left   = -MARGIN - speed_w
+		_speed_btn.offset_bottom = bottom
+		_speed_btn.offset_top    = top
+
+		_pause_btn.offset_right  = -MARGIN - speed_w - gap
+		_pause_btn.offset_left   = -MARGIN - speed_w - gap - pause_w
+		_pause_btn.offset_bottom = bottom
+		_pause_btn.offset_top    = top
 
 
 func _on_speed_btn_pressed() -> void:
@@ -396,8 +417,8 @@ func _on_speed_btn_pressed() -> void:
 
 func _on_pause_btn_pressed() -> void:
 	_is_paused = not _is_paused
-	get_tree().paused  = _is_paused
-	_pause_btn.text    = "▶  RESUME" if _is_paused else "⏸  PAUSE"
+	get_tree().paused = _is_paused
+	_pause_btn.text   = "▶" if _is_paused else "⏸"
 
 
 func _on_send_wave_pressed() -> void:
@@ -407,8 +428,8 @@ func _on_send_wave_pressed() -> void:
 func _on_run_ended() -> void:
 	Engine.time_scale = 1.0
 	# Clear any player-initiated pause so the run-over overlay owns the paused state cleanly.
-	_is_paused       = false
-	_pause_btn.text  = "⏸  PAUSE"
+	_is_paused      = false
+	_pause_btn.text = "⏸"
 	_run_over_overlay.visible = true
 	get_tree().paused = true
 
@@ -675,6 +696,22 @@ func _on_btn_hover_end(idx: int) -> void:
 	btn.pivot_offset = btn.size * 0.5
 	var t := create_tween()
 	t.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.08).set_ease(Tween.EASE_IN)
+
+
+# Compact variant for icon-only buttons: 4px content margins instead of 12px.
+func _apply_icon_button_style(btn: Button) -> void:
+	for state in [["normal", COLOR_BTN_NORMAL], ["hover", COLOR_BTN_HOVER], ["pressed", COLOR_BTN_PRESSED]]:
+		var box := StyleBoxFlat.new()
+		box.bg_color           = state[1]
+		box.border_color       = COLOR_BTN_BORDER
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(5)
+		box.content_margin_left   = 4.0
+		box.content_margin_right  = 4.0
+		box.content_margin_top    = 4.0
+		box.content_margin_bottom = 4.0
+		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_color_override("font_color", COLOR_TEXT)
 
 
 func _apply_button_style(btn: Button) -> void:
