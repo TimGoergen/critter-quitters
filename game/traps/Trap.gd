@@ -314,6 +314,9 @@ func get_cooldown() -> float:
 func is_passive() -> bool:
 	return _base_cooldown == 0.0
 
+func get_type() -> TrapType:
+	return _trap_type
+
 func get_type_name() -> String:
 	match _trap_type:
 		TrapType.SNAP_TRAP:  return "Snap Trap"

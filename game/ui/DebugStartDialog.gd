@@ -89,11 +89,11 @@ func _build_ui() -> void:
 	y += 10.0
 
 	# Bug Bucks row
-	_field_bucks = _add_field_row(bg, y, "Starting Bug Bucks", str(DEFAULT_BUG_BUCKS))
+	_field_bucks = _add_field_row(bg, y, "Starting Bug Bucks", str(DEFAULT_BUG_BUCKS), 100, 0)
 	y += 36.0
 
 	# Wave size row
-	_field_waves = _add_field_row(bg, y, "Enemies per Wave", str(DEFAULT_WAVE_SIZE))
+	_field_waves = _add_field_row(bg, y, "Enemies per Wave", str(DEFAULT_WAVE_SIZE), 100, 1)
 	y += 36.0
 
 	# Divider
@@ -116,11 +116,14 @@ func _build_ui() -> void:
 	bg.add_child(btn)
 
 
-## Builds one label + LineEdit row and returns the LineEdit.
-func _add_field_row(parent: Control, y: float, label_text: String, default_value: String) -> LineEdit:
+## Builds one label + [−] LineEdit [+] row and returns the LineEdit.
+## The ± buttons each change the value by `step`; the field is clamped to >= min_val.
+func _add_field_row(parent: Control, y: float, label_text: String, default_value: String,
+		step: int = 100, min_val: int = 0) -> LineEdit:
 	var row := HBoxContainer.new()
 	row.position            = Vector2(PADDING, y)
 	row.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, 28.0)
+	row.add_theme_constant_override("separation", 4)
 	parent.add_child(row)
 
 	var lbl := Label.new()
@@ -132,14 +135,39 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 	lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(lbl)
 
+	var minus_btn := Button.new()
+	minus_btn.text              = "−"
+	minus_btn.custom_minimum_size = Vector2(28.0, 28.0)
+	minus_btn.add_theme_font_size_override("font_size", 15)
+	minus_btn.add_theme_font_override("font", UIFonts.primary())
+	_style_button(minus_btn)
+	row.add_child(minus_btn)
+
 	var field := LineEdit.new()
 	field.text                  = default_value
-	field.custom_minimum_size   = Vector2(72.0, 28.0)
+	field.custom_minimum_size   = Vector2(64.0, 28.0)
 	field.alignment             = HORIZONTAL_ALIGNMENT_CENTER
 	field.add_theme_font_size_override("font_size", 13)
 	field.add_theme_font_override("font", UIFonts.primary())
 	_style_field(field)
 	row.add_child(field)
+
+	var plus_btn := Button.new()
+	plus_btn.text               = "+"
+	plus_btn.custom_minimum_size = Vector2(28.0, 28.0)
+	plus_btn.add_theme_font_size_override("font_size", 15)
+	plus_btn.add_theme_font_override("font", UIFonts.primary())
+	_style_button(plus_btn)
+	row.add_child(plus_btn)
+
+	minus_btn.pressed.connect(func() -> void:
+		var val: int = int(field.text) if field.text.is_valid_int() else min_val
+		field.text = str(maxi(min_val, val - step))
+	)
+	plus_btn.pressed.connect(func() -> void:
+		var val: int = int(field.text) if field.text.is_valid_int() else min_val
+		field.text = str(val + step)
+	)
 
 	return field
 

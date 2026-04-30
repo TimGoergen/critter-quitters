@@ -60,7 +60,7 @@ const TRAP_LABELS: Array = [
 ]
 
 const PANEL_H:          float = 72.0   # top stats bar height — matches SELECTOR_LANDSCAPE_STRIP_H
-const BAR_H:            float = 14.0   # infestation bar fill height
+const BAR_H:            float = 45.0   # infestation bar fill height — ~3/4 of usable row height (60px)
 const MARGIN:           float = 12.0   # general UI margin
 
 # Trap selector layout — read by Arena.gd to compute usable arena area.
@@ -281,11 +281,14 @@ func _build_ui() -> void:
 
 	_pause_btn = Button.new()
 	_pause_btn.text = "▮▮"
-	_pause_btn.add_theme_font_size_override("font_size", 21)
+	_pause_btn.add_theme_font_size_override("font_size", 15)
 	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_icon_button_style(_pause_btn)
-	# Lock width to the wider "▮▮" state so it doesn't reflow when toggled to "▶".
-	_pause_btn.custom_minimum_size = Vector2(48, 0)
+	# Fix both axes so neither icon state can change the button's footprint.
+	# Width 44 is safely above "▮▮" at 15 px + margins; SIZE_FILL delegates
+	# height to the container so glyph metric differences are irrelevant.
+	_pause_btn.custom_minimum_size  = Vector2(44, 0)
+	_pause_btn.size_flags_vertical  = Control.SIZE_FILL
 	_pause_btn.pressed.connect(_on_pause_btn_pressed)
 	_speed_pause_box.add_child(_pause_btn)
 
@@ -518,9 +521,10 @@ func _build_selector_landscape() -> void:
 		btn.custom_minimum_size   = Vector2(SELECTOR_PANEL_W, 0.0)
 		btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 		btn.clip_contents         = false
-		btn.add_theme_font_size_override("font_size", 13)
+		btn.add_theme_font_size_override("font_size", 20)
 		btn.add_theme_font_override("font", UIFonts.primary_bold())
 		btn.text = _selector_label(i)
+
 		btn.pressed.connect(GameState.select_trap_type.bind(i))
 		btn.mouse_entered.connect(_on_btn_hover_start.bind(i))
 		btn.mouse_exited.connect(_on_btn_hover_end.bind(i))
@@ -528,6 +532,7 @@ func _build_selector_landscape() -> void:
 		row.add_child(btn)
 		_selector_buttons.append(btn)
 		_add_btn_badge(btn, i)
+		_add_btn_cost_label(btn, i, 13)
 
 
 ## Portrait: 2×2 grid of buttons pinned to the bottom edge of the screen.
@@ -564,9 +569,10 @@ func _build_selector_portrait() -> void:
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
 		btn.clip_contents         = false
-		btn.add_theme_font_size_override("font_size", 11)
+		btn.add_theme_font_size_override("font_size", 17)
 		btn.add_theme_font_override("font", UIFonts.primary_bold())
 		btn.text = _selector_label(i)
+
 		btn.pressed.connect(GameState.select_trap_type.bind(i))
 		btn.mouse_entered.connect(_on_btn_hover_start.bind(i))
 		btn.mouse_exited.connect(_on_btn_hover_end.bind(i))
@@ -574,6 +580,7 @@ func _build_selector_portrait() -> void:
 		grid.add_child(btn)
 		_selector_buttons.append(btn)
 		_add_btn_badge(btn, i)
+		_add_btn_cost_label(btn, i, 11)
 
 
 func _refresh_trap_selector() -> void:
@@ -590,11 +597,14 @@ func _on_trap_type_selected(_type: int) -> void:
 	_refresh_trap_selector()
 
 
-# Returns two-line display text: trap name on the first line, cost + tagline on the second.
+# Returns the trap name only (first line). The cost/tagline is a separate child Label.
 func _selector_label(type: int) -> String:
-	var cost: int   = Trap.STATS[type]["cost"]
-	var lines: Array = TRAP_LABELS[type]
-	return lines[0] + "\n" + (lines[1] % cost)
+	return TRAP_LABELS[type][0]
+
+# Returns the cost + tagline string for use in the child cost Label.
+func _selector_cost_line(type: int) -> String:
+	var cost: int = Trap.STATS[type]["cost"]
+	return TRAP_LABELS[type][1] % cost
 
 
 # Returns true if the player can currently afford the given trap type.
@@ -683,6 +693,25 @@ func _add_btn_badge(btn: Button, type: int) -> void:
 	lbl.offset_right  = -4.0
 	lbl.offset_top    = 4.0
 	lbl.offset_bottom = 16.0
+	btn.add_child(lbl)
+
+
+# Adds the cost + tagline as a small Label anchored to the bottom of the button.
+# Kept separate from the trap name so each line can have its own font size.
+func _add_btn_cost_label(btn: Button, type: int, font_size: int) -> void:
+	var lbl := Label.new()
+	lbl.text                  = _selector_cost_line(type)
+	lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	lbl.add_theme_font_size_override("font_size", font_size)
+	lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.85))
+	lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.anchor_left           = 0.0
+	lbl.anchor_right          = 1.0
+	lbl.anchor_top            = 1.0
+	lbl.anchor_bottom         = 1.0
+	lbl.offset_top            = -(font_size + 8)
+	lbl.offset_bottom         = -5.0
 	btn.add_child(lbl)
 
 

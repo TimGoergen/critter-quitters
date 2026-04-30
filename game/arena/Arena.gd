@@ -49,7 +49,7 @@ const SHOW_PATH_LINE: bool = false
 # The selector strip is added to HUD_BOT_PX per orientation (see _fit_camera_to_grid).
 # Infestation bar moved to the top panel, so HUD_BOT_PX is now 0 — the selector
 # sits directly at the screen's bottom edge with no additional strip below it.
-const HUD_TOP_PX: float = 56.0   # top stats bar (HUD.PANEL_H)
+const HUD_TOP_PX: float = 72.0   # top stats bar (HUD.PANEL_H)
 const HUD_BOT_PX: float = 0.0    # no persistent bottom strip below the selector
 
 # Phase 1 placeholder colours. These are replaced by ASCII billboards in Phase 3.
@@ -114,6 +114,11 @@ var _hover_cell: Vector2i = Vector2i(-1, -1)
 # Gold perimeter drawn around the 2×2 footprint of the currently open upgrade panel.
 # Separate node from _grid_highlight so cursor movement does not clear it.
 var _selected_trap_outline: MeshInstance3D = null
+
+# Per-placed-trap inset perimeter outlines. Neutral by default; swapped to neon while
+# the mouse hovers over the trap's footprint.
+var _trap_outlines: Dictionary = {}           # anchor Vector2i -> MeshInstance3D
+var _hovered_trap_anchor: Vector2i = Vector2i(-1, -1)
 
 # The currently open upgrade panel, or null if none is open.
 # Only one panel is open at a time — opening a new one closes the previous.
@@ -250,13 +255,19 @@ func _input(event: InputEvent) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Mouse motion always updates the reticle — even while paused — so the hover
+	# preview stays live during the debug dialog, upgrade panel, or player pause.
 	if event is InputEventMouseMotion:
 		var cell := _screen_to_grid(event.position)
 		if cell != _hover_cell:
 			_hover_cell = cell
 			_update_grid_highlight()
-			if _pressing:
+			if _pressing and not get_tree().paused:
 				_update_drag_ghosts(cell)
+		return
+
+	# All placement and removal actions are blocked while the tree is paused.
+	if get_tree().paused:
 		return
 
 	# Mobile: a second finger tap while dragging cancels the placement.
@@ -423,6 +434,7 @@ func _try_place_trap(anchor: Vector2i) -> bool:
 		_trap_anchors[cell] = anchor
 
 	_spawn_trap(anchor)
+	_draw_trap_outline(anchor, false)
 	return true
 
 
@@ -437,6 +449,12 @@ func _try_remove_trap(cell: Vector2i) -> void:
 		GameState.add_bug_bucks(int(_trap_nodes[anchor].get_cost() * 0.7))
 		_trap_nodes[anchor].queue_free()
 		_trap_nodes.erase(anchor)
+
+	if _trap_outlines.has(anchor):
+		_trap_outlines[anchor].queue_free()
+		_trap_outlines.erase(anchor)
+	if _hovered_trap_anchor == anchor:
+		_hovered_trap_anchor = Vector2i(-1, -1)
 
 	for c in _get_trap_cells(anchor):
 		_grid.remove_trap(c)
@@ -878,6 +896,17 @@ func _update_grid_highlight() -> void:
 
 	var anchor := _clamp_to_anchor(_hover_cell)
 
+	# Swap trap outline between neutral and neon as the cursor enters/leaves footprints.
+	var new_hovered: Vector2i = Vector2i(-1, -1)
+	if _trap_anchors.has(_hover_cell):
+		new_hovered = _trap_anchors[_hover_cell]
+	if new_hovered != _hovered_trap_anchor:
+		if _hovered_trap_anchor != Vector2i(-1, -1) and _trap_outlines.has(_hovered_trap_anchor):
+			_draw_trap_outline(_hovered_trap_anchor, false)
+		if new_hovered != Vector2i(-1, -1) and _trap_outlines.has(new_hovered):
+			_draw_trap_outline(new_hovered, true)
+		_hovered_trap_anchor = new_hovered
+
 	# Show a ghost of the selected trap at the anchor before pressing.
 	# During drag, the drag ghosts serve this role instead.
 	if not _pressing:
@@ -929,6 +958,120 @@ func _dist_to_footprint(cell: Vector2i, anchor: Vector2i) -> int:
 	var dx := maxi(0, maxi(anchor.x - cell.x, cell.x - (anchor.x + 1)))
 	var dy := maxi(0, maxi(anchor.y - cell.y, cell.y - (anchor.y + 1)))
 	return dx + dy
+
+
+## Draws (or redraws) the outline + radial glow for a placed trap.
+##
+## Surface 0 — radial gradient fill (TRIANGLES): triangle fan from the footprint
+##   centre (bright) to the rounded perimeter (alpha 0).  The GPU interpolates
+##   alpha linearly across each triangle, producing a smooth radial falloff.
+## Surface 1 — rounded outline (LINES): two concentric inset rounded-corner
+##   rectangles simulate ~2 px line width.
+func _draw_trap_outline(anchor: Vector2i, hovered: bool) -> void:
+	var trap_type: int = _trap_nodes[anchor].get_type()
+	var base: Color    = Trap.STATS[trap_type]["color"]
+
+	var outline_color:     Color
+	var fill_center_color: Color
+	var fill_edge_color:   Color
+	if hovered:
+		outline_color      = base.lightened(0.45); outline_color.a      = 1.0
+		fill_center_color  = base.lightened(0.55); fill_center_color.a  = 0.45
+		fill_edge_color    = base;                 fill_edge_color.a    = 0.0
+	else:
+		outline_color      = base.darkened(0.2);   outline_color.a      = 0.60
+		fill_center_color  = base.lightened(0.15); fill_center_color.a  = 0.22
+		fill_edge_color    = base;                 fill_edge_color.a    = 0.0
+
+	var hs := Grid.CELL_SIZE * 0.5
+	var cs := Grid.CELL_SIZE
+	var c  := _cell_to_world(anchor)
+
+	var min_x := c.x - hs;       var max_x := c.x + hs + cs
+	var min_z := c.z - hs;       var max_z := c.z + hs + cs
+	var cx    := (min_x + max_x) * 0.5
+	var cz    := (min_z + max_z) * 0.5
+
+	const CORNER_R:    float = 0.15   # world-unit corner radius (~15% of one cell)
+	const CORNER_SEGS: int   = 5      # arc segments per corner; 5 gives smooth top-down look
+
+	var y_fill    := 0.03   # below the outline so the border draws on top
+	var y_outline := 0.06   # above floor; below cursor glow (0.08)
+
+	var im := ImmediateMesh.new()
+
+	# --- Surface 0: radial glow fill ---
+	var fill_pts := _rounded_rect_pts(min_x, max_x, min_z, max_z, y_fill, CORNER_R, CORNER_SEGS)
+	var center   := Vector3(cx, y_fill, cz)
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(fill_pts.size()):
+		var a: Vector3 = fill_pts[i]
+		var b: Vector3 = fill_pts[(i + 1) % fill_pts.size()]
+		im.surface_set_color(fill_center_color); im.surface_add_vertex(center)
+		im.surface_set_color(fill_edge_color);   im.surface_add_vertex(a)
+		im.surface_set_color(fill_edge_color);   im.surface_add_vertex(b)
+	im.surface_end()
+
+	# --- Surface 1: rounded outline (two inset passes for ~2 px thickness) ---
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	for inset: float in [0.04, 0.08]:
+		var r: float = maxf(CORNER_R - inset, 0.0)
+		var pts := _rounded_rect_pts(
+			min_x + inset, max_x - inset,
+			min_z + inset, max_z - inset,
+			y_outline, r, CORNER_SEGS
+		)
+		for i in range(pts.size()):
+			var a: Vector3 = pts[i]
+			var b: Vector3 = pts[(i + 1) % pts.size()]
+			im.surface_set_color(outline_color); im.surface_add_vertex(a)
+			im.surface_set_color(outline_color); im.surface_add_vertex(b)
+	im.surface_end()
+
+	if _trap_outlines.has(anchor):
+		_trap_outlines[anchor].mesh = im
+	else:
+		var mi  := MeshInstance3D.new()
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.vertex_color_use_as_albedo = true
+		# Disable back-face culling so the fill quad is visible regardless of winding.
+		mat.cull_mode = BaseMaterial3D.CULL_DISABLED
+		mi.material_override = mat
+		add_child(mi)
+		mi.mesh = im
+		_trap_outlines[anchor] = mi
+
+
+## Returns perimeter points for a rounded rectangle in the XZ plane, traversed
+## clockwise from above.  Each of the four corners has CORNER_SEGS+1 points
+## (including both tangent endpoints), so the total count is (segs+1)*4.
+## The segment between the last point of one corner and the first of the next
+## naturally forms the straight edge connecting them.
+##
+## Corner angles (atan2(dz, dx) in XZ plane, +Z = screen-down):
+##   TL: π → 3π/2   TR: 3π/2 → 2π   BR: 0 → π/2   BL: π/2 → π
+func _rounded_rect_pts(min_x: float, max_x: float, min_z: float, max_z: float,
+		y: float, r: float, segs: int) -> Array[Vector3]:
+	var pts: Array[Vector3] = []
+	# Flat float array avoids Variant-typed inner arrays: [cx, cz, a0, a1] × 4 corners.
+	var corners: Array[float] = [
+		min_x + r, min_z + r, PI,           1.5 * PI,
+		max_x - r, min_z + r, 1.5 * PI,     2.0 * PI,
+		max_x - r, max_z - r, 0.0,          0.5 * PI,
+		min_x + r, max_z - r, 0.5 * PI,     PI,
+	]
+	for ci in range(4):
+		var ccx: float = corners[ci * 4]
+		var ccz: float = corners[ci * 4 + 1]
+		var a0:  float = corners[ci * 4 + 2]
+		var a1:  float = corners[ci * 4 + 3]
+		for i in range(segs + 1):
+			var t: float = float(i) / float(segs)
+			var a: float = lerpf(a0, a1, t)
+			pts.append(Vector3(ccx + cos(a) * r, y, ccz + sin(a) * r))
+	return pts
 
 
 ## Draws the outer perimeter of the 2x2 footprint as two concentric rectangles.
