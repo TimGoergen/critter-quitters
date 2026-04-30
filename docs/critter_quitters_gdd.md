@@ -1,6 +1,6 @@
 # **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.16 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
+**Version:** Draft v0.19 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
 
 ---
 
@@ -24,6 +24,9 @@
 | v0.14 | Aesthetic direction fully revised. ASCII character rendering removed. Enemies and traps are now illustrated 2D sprites (Sprite3D in 3D world space), art style targeting modern CGI children's shows (rounded shapes, soft shading, slightly saturated palette). Traps are playful and cartoonish with thematic detail. Projectiles and hit effects remain 3D shapes and particles. Background system redesigned: procedurally generated, animated, arena-themed, with repeated environmental shapes; evolves slowly with each wave. Enemy animation defined: thematically appropriate walk/waddle with side-to-side movement plus hit reaction. Engine stays 3D (Godot 4, Mobile renderer) to preserve existing particle effects. |
 | v0.15 | Between-wave upgrade store removed entirely. Direct per-trap upgrade system introduced: each placed trap has a star level (0–5) and a tier (0+). Tapping a placed trap opens an upgrade panel offering three stat choices (Damage, Range, Fire Rate). Reaching star 5 enables a tier-up that resets the star and offers dramatic variation options. Upgrade and tier-up cost formulas defined. |
 | v0.16 | GDD updated to reflect implemented code state. Upgrade system description corrected: code implements per-stat independent upgrades (3 levels each) with a full-upgrade bonus, not the star/tier system from v0.15 (star/tier remains the design goal for a future pass). Section 2 targeting and projectile damage timing corrected. Section 4 Fogger damage model corrected (staggered by distance, not simultaneous). Snap Trap procedural placeholder visual documented. Section 13 ASCII reference corrected. Phase 3 marked in-progress. |
+| v0.17 | Player character named Magee (working name). Wave/Round/Level contract structure confirmed as long-term design target; current prototype remains endless-wave for testing and balancing purposes. |
+| v0.18 | Roguelike perk system confirmed: at the end of each Round, the player is presented with 3 randomly selected temporary perks and picks 1. Perks last for the remainder of the run. |
+| v0.19 | Avatar/character movement mechanic rejected. No player character appears on screen. Camera perspective and top-down placement mechanics are unchanged. Magee exists as a narrative framing device only. Trap repositioning remains the existing Bug Bucks fee model. |
 
 ---
 
@@ -54,6 +57,8 @@ Critter Quitters Pest Control is a mobile tower defense game built on the open m
 You are an exterminator. Pests are invading a property and heading for a food source or exit point. Your job is to place traps, barriers, and deterrents to reroute and eliminate them before they get there. Pests naturally pathfind around obstacles — building maze-like trap corridors feels completely believable.
 
 The core strategic insight: damage output is a function of path engineering. A trap that no enemy walks past is wasted. A barrier with no trap behind it still has value. The player's job is to force pests to take longer routes through more trap coverage zones.
+
+The player character is **Magee** — a solo exterminator running a one-man operation. The name is a working title.
 
 The tone is functional with a light comic edge: a local pest control company doing a job, and the job keeps getting worse.
 
@@ -326,6 +331,18 @@ Tapping a placed trap opens the upgrade panel for that specific trap instance. T
 
 See Section 4 for upgrade costs, stat increments, and the full upgrade bonus.
 
+**Round-end perks**
+
+At the end of each Round (a group of 3–5 waves), the player is presented with 3 randomly selected perks and must choose 1. Perks are temporary — they apply for the remainder of the current run only and do not carry into future runs.
+
+Perks are drawn from a pool of run-modifying buffs. Specific perk designs and the pool are TBD, but the mechanic is confirmed. The Copilot design doc includes sample perks as a starting point (*Lightweight Plastics*, *Industrial Solvent*, *Marathon Sprinter*).
+
+This layer sits between Bug Bucks (tactical, wave-to-wave) and Service Fees (permanent, meta). It adds meaningful strategic choice at the round boundary without permanently changing the game state.
+
+*(Not yet implemented — applies to the Wave/Round/Level target structure only.)*
+
+---
+
 **Starting trap selection**
 
 At run start, before wave 1, 3 trap types are randomly selected and presented to the player. The player chooses 2. The chosen traps are immediately available for purchase and placement. Trap unlock mechanic TBD.
@@ -583,6 +600,10 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 - Save file system — multiple independent run slots
 
 *Goal: complete playable game from start to run-end*
+
+### **Prototype note**
+
+The current prototype uses an endless-wave structure for testing and balancing purposes. The target shipped design groups waves into Rounds (3–5 waves) and Rounds into Levels (Contracts, 5–10 rounds). At the end of each Round, the player picks 1 of 3 randomly offered temporary perks that last for the remainder of the run. Completing a Level (Contract) awards Service Fees for meta progression. The prototype will remain endless until the core loop is balanced and the grouping structure is fully designed.
 
 ### **Phase 4b — Meta Progression**
 - Service Fees earned at run end based on performance
