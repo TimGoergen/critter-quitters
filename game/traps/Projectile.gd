@@ -27,10 +27,14 @@ const COLOR_IMPACT     := Color(1.0, 0.80, 0.15)   # golden burst
 const COLOR_ZAPPER_BOLT  := Color(0.45, 0.80, 1.00)   # electric blue
 const COLOR_ZAPPER_SPARK := Color(0.65, 0.88, 1.00)   # pale blue-white
 
+# Glue Board projectile and impact colour — amber, matching the splatter badge.
+const COLOR_GLUE := Color(0.88, 0.70, 0.18, 0.90)
+
 # Mirror Trap.TrapType int values. Avoid preloading Trap.gd here to prevent
 # a circular dependency — update these if the enum order ever changes.
-const _SNAP_TRAP_TYPE: int = 0
-const _ZAPPER_TYPE:    int = 1
+const _SNAP_TRAP_TYPE:  int = 0
+const _ZAPPER_TYPE:     int = 1
+const _GLUE_BOARD_TYPE: int = 3
 
 
 # ---------------------------------------------------------------------------
@@ -41,7 +45,8 @@ var _target_pos: Vector3
 var _target:     Node3D = null
 var _damage:     float  = 0.0
 var _trap_type:  int    = -1
-var _visual:     Node3D = null   # visual mesh child; rotated each frame for tumble
+var _visual:     Node3D = null          # visual mesh child; rotated on X each frame for tumble
+var _glue_blob:  MeshInstance3D = null  # glue blob mesh; spun on Y axis each frame
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +74,8 @@ func initialize(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: floa
 func _process(delta: float) -> void:
 	if _visual != null:
 		_visual.rotation_degrees.x += delta * 380.0   # tumble forward as it travels
+	if _glue_blob != null:
+		_glue_blob.rotation_degrees.y += delta * 150.0   # slow spin so the blob shape is visible
 
 	var offset   := _target_pos - global_position
 	var distance := offset.length()
@@ -77,8 +84,11 @@ func _process(delta: float) -> void:
 		var enemy_color  := Color.WHITE
 		if is_instance_valid(_target):
 			enemy_color = _target.get_color()
-			_target.take_damage(_damage)
-			killed = _target.get_hp_fraction() == 0.0
+			# Glue Board deals no damage and we skip take_damage entirely — calling
+			# it with 0 would still trigger the white hit-flash, which is misleading.
+			if _trap_type != _GLUE_BOARD_TYPE:
+				_target.take_damage(_damage)
+				killed = _target.get_hp_fraction() == 0.0
 		_spawn_impact_effect(killed, enemy_color)
 		queue_free()
 		return
@@ -96,6 +106,9 @@ func _spawn_visual() -> void:
 		return
 	if _trap_type == _ZAPPER_TYPE:
 		_spawn_zapper_bolt_visual()
+		return
+	if _trap_type == _GLUE_BOARD_TYPE:
+		_spawn_glue_visual()
 		return
 
 	var mi  := MeshInstance3D.new()
@@ -136,12 +149,52 @@ func _spawn_cheese_visual() -> void:
 	add_child(mi)
 
 
+## Glue blob projectile — a flat irregular polygon in the XZ plane that spins
+## slowly on Y so the blobby outline is clearly visible from the top-down camera.
+## Shape is randomised per-projectile so no two shots look identical.
+func _spawn_glue_visual() -> void:
+	_glue_blob          = MeshInstance3D.new()
+	_glue_blob.mesh      = _build_glue_blob_mesh(Grid.CELL_SIZE * 0.20, COLOR_GLUE)
+	_glue_blob.position.y = Grid.CELL_SIZE * 0.02   # float just above ground
+	var mat                       := StandardMaterial3D.new()
+	mat.albedo_color               = Color.WHITE
+	mat.vertex_color_use_as_albedo = true
+	mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode                  = BaseMaterial3D.CULL_DISABLED
+	_glue_blob.material_override   = mat
+	add_child(_glue_blob)
+
+
+## Builds a flat ImmediateMesh polygon on the XZ plane with per-vertex colour.
+## Each of the `segments` radii is independently perturbed so the outline is
+## irregular — blobby rather than circular.
+func _build_glue_blob_mesh(base_r: float, color: Color) -> ImmediateMesh:
+	var im       := ImmediateMesh.new()
+	var segments := 8
+	var pts: Array[Vector3] = []
+	for i in range(segments):
+		var angle := TAU * float(i) / float(segments)
+		var r     := base_r * randf_range(0.60, 1.40)
+		pts.append(Vector3(cos(angle) * r, 0.0, sin(angle) * r))
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(segments):
+		im.surface_set_color(color); im.surface_add_vertex(Vector3.ZERO)
+		im.surface_set_color(color); im.surface_add_vertex(pts[i])
+		im.surface_set_color(color); im.surface_add_vertex(pts[(i + 1) % segments])
+	im.surface_end()
+	return im
+
+
 func _spawn_impact_effect(killed: bool, enemy_color: Color) -> void:
 	if _trap_type == _SNAP_TRAP_TYPE:
 		_spawn_cheese_splat(killed, enemy_color)
 		return
 	if _trap_type == _ZAPPER_TYPE:
 		_spawn_zapper_impact(killed, enemy_color)
+		return
+	if _trap_type == _GLUE_BOARD_TYPE:
+		_spawn_glue_impact(killed, enemy_color)
 		return
 
 	_spawn_particles(8, 0.4, Grid.CELL_SIZE * 1.15, Grid.CELL_SIZE * 2.875, 0.4, 0.7,
@@ -252,6 +305,17 @@ func _spawn_zapper_impact(killed: bool, enemy_color: Color) -> void:
 	_spawn_particles(5, 0.14, Grid.CELL_SIZE * 1.5, Grid.CELL_SIZE * 4.0,
 			0.35, 0.80, Grid.CELL_SIZE * 0.10, Color.WHITE,
 			false, -Grid.CELL_SIZE * 2.0)
+	if killed:
+		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
+				Grid.CELL_SIZE * 0.495, enemy_color, true)
+
+
+## Glue splat: a handful of amber chunks scatter outward from the hit point.
+## The actual badge visual is handled by Enemy.gd (_show_glue_splatter), so
+## this effect just confirms the hit with a quick burst of particles.
+func _spawn_glue_impact(killed: bool, enemy_color: Color) -> void:
+	_spawn_particles(5, 0.35, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.6,
+			0.35, 0.70, Grid.CELL_SIZE * 0.16, COLOR_GLUE)
 	if killed:
 		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
 				Grid.CELL_SIZE * 0.495, enemy_color, true)

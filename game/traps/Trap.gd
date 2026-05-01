@@ -425,6 +425,9 @@ func _update_glue_slow() -> void:
 		if in_range and not is_tracked:
 			_slowed_enemies.append(enemy)
 			enemy.add_slow_source()
+			# Fire a cosmetic glue projectile the moment the enemy is first caught.
+			# Damage is 0 — the slow is the only effect; this is purely visual.
+			fired.emit(global_position, enemy.global_position, enemy, 0.0, _trap_type)
 		elif not in_range and is_tracked:
 			_slowed_enemies.erase(enemy)
 			enemy.remove_slow_source()
