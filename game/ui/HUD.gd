@@ -145,14 +145,13 @@ func _build_ui() -> void:
 	_wave_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	top_row.add_child(_wave_label)
 
-	# Currency: coin icon kept small so the spider/web detail blurs into a clean gold disc.
 	var bucks_row := HBoxContainer.new()
 	bucks_row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bucks_row.add_theme_constant_override("separation", 4)
 	top_row.add_child(bucks_row)
 
 	var coin_icon := TextureRect.new()
-	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
+	coin_icon.texture             = load("res://assets/bug_buck_coin.svg")
 	coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	coin_icon.custom_minimum_size = Vector2(48, 48)
