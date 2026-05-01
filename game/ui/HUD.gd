@@ -154,7 +154,7 @@ func _build_ui() -> void:
 	coin_icon.texture             = load("res://assets/bug_buck_coin.svg")
 	coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	coin_icon.custom_minimum_size = Vector2(48, 48)
+	coin_icon.custom_minimum_size = Vector2(34, 34)
 	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bucks_row.add_child(coin_icon)
 
