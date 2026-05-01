@@ -337,10 +337,10 @@ func _spawn_coin_burst() -> void:
 	particles.initial_velocity_min = Grid.CELL_SIZE * 2.5
 	particles.initial_velocity_max = Grid.CELL_SIZE * 7.0
 	particles.gravity           = Vector3(0.0, -Grid.CELL_SIZE * 9.0, 0.0)
-	particles.scale_amount_min  = 0.55
-	particles.scale_amount_max  = 0.90
+	particles.scale_amount_min  = 0.80
+	particles.scale_amount_max  = 1.10
 
-	var coin_size := Grid.CELL_SIZE * 0.32
+	var coin_size := Grid.CELL_SIZE * 0.58
 	var plane     := PlaneMesh.new()
 	plane.size     = Vector2(coin_size, coin_size)
 	var mat                   := StandardMaterial3D.new()
