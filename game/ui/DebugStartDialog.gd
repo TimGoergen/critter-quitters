@@ -44,10 +44,7 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	var vp := get_viewport().get_visible_rect().size
-	# In landscape the arena occupies only the left portion of the screen.
-	# Centre the dialog within that region rather than the full viewport width.
-	var arena_w := vp.x - HUD.SELECTOR_PANEL_W if vp.x >= vp.y else vp.x
-	var px := (arena_w - PANEL_W) * 0.5
+	var px := (vp.x - PANEL_W) * 0.5
 	var py := (vp.y - PANEL_H) * 0.5
 
 	# Store the full panel rect (including border) for outside-click detection.
@@ -183,7 +180,8 @@ func _input(event: InputEvent) -> void:
 		# Let clicks on the trap selector through so the player can pick a trap
 		# before starting without the click also dismissing the dialog.
 		var vp:          Vector2 = get_viewport().get_visible_rect().size
-		var in_selector: bool   = vp.x >= vp.y and event.position.x >= vp.x - HUD.SELECTOR_PANEL_W
+		var selector_h: float   = HUD.SELECTOR_LANDSCAPE_STRIP_H if vp.x >= vp.y else HUD.SELECTOR_STRIP_H
+		var in_selector: bool   = event.position.y >= vp.y - selector_h
 		if not _panel_rect.has_point(event.position) and not in_selector:
 			get_viewport().set_input_as_handled()
 			_on_start_pressed()
