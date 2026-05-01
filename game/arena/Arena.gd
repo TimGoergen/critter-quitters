@@ -983,7 +983,7 @@ func _neon_color(base: Color) -> Color:
 ##   selected → brighter outline;  hovered → medium;  default → base.
 ##
 ## Surface 0 — solid neon fill (TRIANGLES): flat 20% opacity triangle fan
-##   covering the full footprint at 8% opacity.
+##   covering the full footprint at 3% opacity.
 ## Surface 1 — rounded outline (LINES): two concentric inset rounded-corner
 ##   rectangles simulate ~2 px line width.
 func _draw_trap_outline(anchor: Vector2i) -> void:
@@ -1003,7 +1003,7 @@ func _draw_trap_outline(anchor: Vector2i) -> void:
 		outline_color = base.darkened(0.2);   outline_color.a = 0.60
 
 	var fill_color := neon
-	fill_color.a   = 0.08
+	fill_color.a   = 0.03
 
 	var hs := Grid.CELL_SIZE * 0.5
 	var cs := Grid.CELL_SIZE
