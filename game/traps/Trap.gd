@@ -45,10 +45,10 @@ enum TrapType { SNAP_TRAP, ZAPPER, FOGGER, GLUE_BOARD }
 ##   cost     — Bug Bucks to place one trap of this type
 ##   color    — placeholder box colour (replaced by sprites in Phase 3)
 const STATS := {
-	TrapType.SNAP_TRAP:  { "damage": 3.375, "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.40, 0.40, 0.80) },
-	TrapType.ZAPPER:     { "damage": 56.25, "range": 9.6, "cooldown": 2.5, "cost": 60, "color": Color(0.90, 0.85, 0.20) },
-	TrapType.FOGGER:     { "damage": 4.5,   "range": 4.0, "cooldown": 2.2, "cost": 50, "color": Color(0.60, 0.90, 0.60) },
-	TrapType.GLUE_BOARD: { "damage": 0.0,   "range": 4.8, "cooldown": 0.0, "cost": 35, "color": Color(0.80, 0.70, 0.30) },
+	TrapType.SNAP_TRAP:  { "damage": 3.375, "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.52, 0.27, 0.08) },
+	TrapType.ZAPPER:     { "damage": 56.25, "range": 9.6, "cooldown": 2.5, "cost": 60, "color": Color(0.10, 0.50, 1.00) },
+	TrapType.FOGGER:     { "damage": 4.5,   "range": 4.0, "cooldown": 2.2, "cost": 50, "color": Color(0.35, 0.88, 0.18) },
+	TrapType.GLUE_BOARD: { "damage": 0.0,   "range": 4.8, "cooldown": 0.0, "cost": 35, "color": Color(0.92, 0.89, 0.78) },
 }
 
 ## Each stat can be upgraded this many times independently.
@@ -611,9 +611,9 @@ func _spawn_hover_area() -> void:
 	add_child(_hover_area)
 
 
-## Creates the trap's placeholder visual. Snap Trap, Zapper, and Fogger get
-## multi-part procedural meshes; remaining types get a flat colored box.
-func _spawn_visual(color: Color) -> void:
+## Creates the trap's placeholder visual. All four trap types get multi-part
+## procedural meshes matched to their real-world appearance.
+func _spawn_visual(_color: Color) -> void:
 	if _trap_type == TrapType.SNAP_TRAP:
 		_spawn_snap_trap_visual()
 		return
@@ -623,19 +623,60 @@ func _spawn_visual(color: Color) -> void:
 	if _trap_type == TrapType.FOGGER:
 		_spawn_fogger_visual()
 		return
+	if _trap_type == TrapType.GLUE_BOARD:
+		_spawn_glue_board_visual()
+		return
 
-	var mi   := MeshInstance3D.new()
-	var box  := BoxMesh.new()
-	box.size  = Vector3(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.9)
-	mi.mesh   = box
 
-	var mat           := StandardMaterial3D.new()
-	mat.albedo_color   = color
-	mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency   = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mi.material_override = mat
+## Builds the Glue Board visual: a flat rectangular glue board as seen from above.
+## The camera is pure top-down, so all detail lives on the XZ plane.
+##
+## Layout from above:
+##   outer cardboard border (tan/brown) → inset amber adhesive surface → centre crease line
+func _spawn_glue_board_visual() -> void:
+	var fp := Grid.CELL_SIZE * 1.9
+	var y0 := fp * 0.008   # base layer — just above ground
+	var y1 := fp * 0.020   # adhesive layer — on top of cardboard
+	var y2 := fp * 0.030   # crease line — on top of adhesive
 
-	add_child(mi)
+	# Cardboard base — warm tan, slightly wider than tall (landscape orientation).
+	var base_mi   := MeshInstance3D.new()
+	var base_mesh := BoxMesh.new()
+	base_mesh.size           = Vector3(fp * 0.88, fp * 0.016, fp * 0.58)
+	base_mi.mesh             = base_mesh
+	base_mi.position.y       = y0
+	var base_mat             := StandardMaterial3D.new()
+	base_mat.albedo_color     = Color(0.70, 0.54, 0.30)
+	base_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	base_mi.material_override = base_mat
+	add_child(base_mi)
+
+	# Adhesive surface — amber yellow, inset from the cardboard border.
+	# Slight transparency suggests the glossy sticky surface.
+	var glue_mi   := MeshInstance3D.new()
+	var glue_mesh := BoxMesh.new()
+	glue_mesh.size           = Vector3(fp * 0.74, fp * 0.012, fp * 0.44)
+	glue_mi.mesh             = glue_mesh
+	glue_mi.position.y       = y1
+	var glue_mat             := StandardMaterial3D.new()
+	glue_mat.albedo_color     = Color(0.88, 0.70, 0.18, 0.90)
+	glue_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glue_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glue_mi.material_override = glue_mat
+	add_child(glue_mi)
+
+	# Centre crease — thin dark line running the full width, marking the fold
+	# typical of physical glue boards (folded tent-style for placement).
+	var crease_mi   := MeshInstance3D.new()
+	var crease_mesh := BoxMesh.new()
+	crease_mesh.size           = Vector3(fp * 0.74, fp * 0.008, fp * 0.018)
+	crease_mi.mesh             = crease_mesh
+	crease_mi.position.y       = y2
+	var crease_mat             := StandardMaterial3D.new()
+	crease_mat.albedo_color     = Color(0.48, 0.34, 0.10)
+	crease_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	crease_mi.material_override = crease_mat
+	add_child(crease_mi)
 
 
 ## Builds the Snap Trap visual: a wooden base plate (portrait — taller than wide),
@@ -837,61 +878,116 @@ func _spawn_fogger_visual() -> void:
 	_fogger_nozzle.add_child(tip_mi)
 
 
-## Builds the Zapper visual: a dark navy housing plate, a raised frame border,
-## Builds the Zapper visual: a flat circular disc housing, a thick annulus ring
-## for the outer cage, and a bright neon blue UV light cylinder at the centre.
-## No thin-line geometry — all elements cover multiple pixels at any game
-## resolution, eliminating the sub-pixel aliasing that made the wire-grid
-## design render differently at each world position.
+## Builds the Zapper visual: a flat top-down silhouette of a bug zapper.
+## The camera is a pure top-down orthographic view, so all detail must live
+## on the XZ plane — upright geometry only shows its circular cross-section.
+##
+## Layout from above (X = right, Z = down):
+##   +----|----|-[tube]-|----|-+    <- cage bars (gray) inside outer frame (dark)
+##
+## Parts: a dark charcoal outer rectangular frame, four evenly-spaced
+## gray cage bars running front-to-back (Z), and a wide neon-blue UV tube
+## strip running left-to-right (X) at the centre.
 func _spawn_zapper_visual() -> void:
 	var fp := Grid.CELL_SIZE * 1.9
 
-	# Circular housing base — dark navy disc.
-	var base_mi   := MeshInstance3D.new()
-	var base_mesh := CylinderMesh.new()
-	base_mesh.radial_segments = 24
-	base_mesh.top_radius      = fp * 0.44
-	base_mesh.bottom_radius   = fp * 0.44
-	base_mesh.height          = fp * 0.040
-	base_mi.mesh       = base_mesh
-	base_mi.position.y = fp * 0.020
-	var base_mat := StandardMaterial3D.new()
-	base_mat.albedo_color = Color(0.10, 0.13, 0.22)
-	base_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	base_mi.material_override = base_mat
-	add_child(base_mi)
+	# Outer cage rectangle dimensions.
+	var cw  := fp * 0.72   # total width  (X)
+	var cd  := fp * 0.50   # total depth  (Z)
+	var ft  := fp * 0.055  # outer frame bar thickness
+	var y0  := fp * 0.012  # base Y — just above ground to avoid z-fighting
+	var yhi := fp * 0.020  # Y for elements that sit on top of the frame
 
-	# Outer cage ring — thick annulus raised above the base.
-	# Width fp*0.07 covers multiple pixels at all resolutions.
-	# CULL_DISABLED because _make_ring_mesh produces downward-facing normals.
-	var ring_mi           := MeshInstance3D.new()
-	ring_mi.mesh           = _make_ring_mesh(fp * 0.42, fp * 0.07)
-	ring_mi.position.y     = fp * 0.060
-	var ring_mat           := StandardMaterial3D.new()
-	ring_mat.albedo_color   = Color(0.50, 0.58, 0.82)
-	ring_mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
-	ring_mat.cull_mode      = BaseMaterial3D.CULL_DISABLED
-	ring_mi.material_override = ring_mat
-	add_child(ring_mi)
+	var housing_mat := StandardMaterial3D.new()
+	housing_mat.albedo_color = Color(0.14, 0.14, 0.20)
+	housing_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
-	# UV light — bright neon blue cylinder at the centre, clearly above the ring.
-	# Stored in a container node so _play_zapper_animation() can scale it.
-	_zapper_uv_light = Node3D.new()
-	_zapper_uv_light.position.y = fp * 0.10
+	var cage_mat := StandardMaterial3D.new()
+	cage_mat.albedo_color = Color(0.52, 0.58, 0.68)
+	cage_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	# Outer frame — four flat bars forming the rectangular border.
+	var frame_h := fp * 0.022   # visual height of all flat boxes (invisible top-down, just avoids z-fight)
+
+	# Top bar (−Z edge)
+	var top_bar_mi   := MeshInstance3D.new()
+	var top_bar_mesh := BoxMesh.new()
+	top_bar_mesh.size           = Vector3(cw, frame_h, ft)
+	top_bar_mi.mesh             = top_bar_mesh
+	top_bar_mi.position         = Vector3(0.0, y0, -cd * 0.5 + ft * 0.5)
+	top_bar_mi.material_override = housing_mat
+	add_child(top_bar_mi)
+
+	# Bottom bar (+Z edge)
+	var bot_bar_mi   := MeshInstance3D.new()
+	var bot_bar_mesh := BoxMesh.new()
+	bot_bar_mesh.size           = Vector3(cw, frame_h, ft)
+	bot_bar_mi.mesh             = bot_bar_mesh
+	bot_bar_mi.position         = Vector3(0.0, y0, cd * 0.5 - ft * 0.5)
+	bot_bar_mi.material_override = housing_mat
+	add_child(bot_bar_mi)
+
+	# Left bar (−X edge)
+	var lft_bar_mi   := MeshInstance3D.new()
+	var lft_bar_mesh := BoxMesh.new()
+	lft_bar_mesh.size           = Vector3(ft, frame_h, cd)
+	lft_bar_mi.mesh             = lft_bar_mesh
+	lft_bar_mi.position         = Vector3(-cw * 0.5 + ft * 0.5, y0, 0.0)
+	lft_bar_mi.material_override = housing_mat
+	add_child(lft_bar_mi)
+
+	# Right bar (+X edge)
+	var rgt_bar_mi   := MeshInstance3D.new()
+	var rgt_bar_mesh := BoxMesh.new()
+	rgt_bar_mesh.size           = Vector3(ft, frame_h, cd)
+	rgt_bar_mi.mesh             = rgt_bar_mesh
+	rgt_bar_mi.position         = Vector3(cw * 0.5 - ft * 0.5, y0, 0.0)
+	rgt_bar_mi.material_override = housing_mat
+	add_child(rgt_bar_mi)
+
+	# Interior cage bars — 4 thin strips running front-to-back (Z), evenly spaced.
+	# Placed above the frame layer so they render on top.
+	var inner_w  := cw - ft * 2
+	var bar_w    := fp * 0.030
+	var inner_cd := cd - ft * 2   # bar runs only inside the frame
+	for i in range(4):
+		var t    := float(i + 1) / 5.0   # positions at 0.20, 0.40, 0.60, 0.80
+		var bx   := -inner_w * 0.5 + inner_w * t
+		var cb_mi   := MeshInstance3D.new()
+		var cb_mesh := BoxMesh.new()
+		cb_mesh.size           = Vector3(bar_w, frame_h, inner_cd)
+		cb_mi.mesh             = cb_mesh
+		cb_mi.position         = Vector3(bx, yhi, 0.0)
+		cb_mi.material_override = cage_mat
+		add_child(cb_mi)
+
+	# UV light assembly — container node scaled on discharge animation.
+	# Positioned at the vertical centre of the cage.
+	_zapper_uv_light          = Node3D.new()
+	_zapper_uv_light.position = Vector3(0.0, yhi + fp * 0.010, 0.0)
 	add_child(_zapper_uv_light)
 
+	# Glow halo — wide semi-transparent box; the soft blue spill visible around the tube.
+	var glow_mi   := MeshInstance3D.new()
+	var glow_mesh := BoxMesh.new()
+	glow_mesh.size           = Vector3(inner_w * 0.70, frame_h, cd * 0.32)
+	glow_mi.mesh             = glow_mesh
+	var glow_mat             := StandardMaterial3D.new()
+	glow_mat.albedo_color     = Color(0.18, 0.45, 1.00, 0.35)
+	glow_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow_mi.material_override = glow_mat
+	_zapper_uv_light.add_child(glow_mi)
+
+	# UV fluorescent tube — solid neon blue bar running the full inner width.
 	var uv_mi   := MeshInstance3D.new()
-	var uv_mesh := CylinderMesh.new()
-	uv_mesh.radial_segments = 12
-	uv_mesh.top_radius      = fp * 0.085
-	uv_mesh.bottom_radius   = fp * 0.085
-	uv_mesh.height          = fp * 0.08
-	uv_mi.mesh       = uv_mesh
-	uv_mi.position.y = fp * 0.040
-	var uv_mat := StandardMaterial3D.new()
-	uv_mat.albedo_color = Color(0.10, 0.55, 1.00)   # neon blue
-	uv_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	uv_mi.material_override = uv_mat
+	var uv_mesh := BoxMesh.new()
+	uv_mesh.size             = Vector3(inner_w * 0.62, frame_h, cd * 0.14)
+	uv_mi.mesh               = uv_mesh
+	var uv_mat               := StandardMaterial3D.new()
+	uv_mat.albedo_color       = Color(0.12, 0.55, 1.00)
+	uv_mat.shading_mode       = BaseMaterial3D.SHADING_MODE_UNSHADED
+	uv_mi.material_override   = uv_mat
 	_zapper_uv_light.add_child(uv_mi)
 
 
@@ -904,7 +1000,7 @@ func _play_zapper_animation() -> void:
 
 	var burst := create_tween()
 	burst.tween_property(_zapper_uv_light, "scale",
-		Vector3(4.0, 1.5, 4.0), 0.06).set_ease(Tween.EASE_OUT)
+		Vector3(2.0, 1.0, 3.5), 0.06).set_ease(Tween.EASE_OUT)
 	await burst.finished
 
 	if not is_inside_tree():

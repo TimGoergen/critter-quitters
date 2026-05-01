@@ -166,32 +166,80 @@ func _spawn_cheese_splat(killed: bool, enemy_color: Color) -> void:
 				Grid.CELL_SIZE * 0.495, enemy_color, true)
 
 
-## Electric bolt: a bright blue sphere with a soft transparent halo.
-## No tumble rotation — it reads more like a contained energy ball.
+## Lightning bolt: a flat zigzag ribbon mesh in the XZ plane, oriented toward
+## the target. The camera is pure top-down, so all bolt detail must be flat —
+## upright geometry only shows its circular cross-section from above.
+## Built from two ImmediateMesh layers: a solid neon-blue core and a wider
+## semi-transparent glow underneath. No tumble — _visual is not set.
 func _spawn_zapper_bolt_visual() -> void:
-	var core_mi   := MeshInstance3D.new()
-	var core_mesh := SphereMesh.new()
-	core_mesh.radius = Grid.CELL_SIZE * 0.14
-	core_mesh.height = Grid.CELL_SIZE * 0.28
-	core_mi.mesh     = core_mesh
-	var core_mat           := StandardMaterial3D.new()
-	core_mat.albedo_color   = COLOR_ZAPPER_BOLT
-	core_mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
-	core_mi.material_override = core_mat
-	add_child(core_mi)
+	var cs := Grid.CELL_SIZE
 
-	# Larger transparent halo gives the bolt a visible glow bloom from above.
-	var halo_mi   := MeshInstance3D.new()
-	var halo_mesh := SphereMesh.new()
-	halo_mesh.radius = Grid.CELL_SIZE * 0.24
-	halo_mesh.height = Grid.CELL_SIZE * 0.48
-	halo_mi.mesh     = halo_mesh
-	var halo_mat           := StandardMaterial3D.new()
-	halo_mat.albedo_color   = Color(COLOR_ZAPPER_BOLT.r, COLOR_ZAPPER_BOLT.g, COLOR_ZAPPER_BOLT.b, 0.30)
-	halo_mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
-	halo_mat.transparency   = BaseMaterial3D.TRANSPARENCY_ALPHA
-	halo_mi.material_override = halo_mat
-	add_child(halo_mi)
+	# Container node rotated once at spawn so the bolt points toward the target.
+	var bolt_node     := Node3D.new()
+	bolt_node.position.y = cs * 0.025   # float just above ground plane
+	var dir           := _target_pos - position
+	dir.y              = 0.0
+	if dir.length() > 0.01:
+		bolt_node.rotation.y = atan2(-dir.z, dir.x)
+
+	# Zigzag waypoints in local space: bolt runs along +X, deflections along Z.
+	var bolt_len := cs * 1.6
+	var pts: Array[Vector2] = [
+		Vector2(0.0,             0.0),
+		Vector2(bolt_len * 0.20, cs * +0.17),
+		Vector2(bolt_len * 0.40, cs * -0.14),
+		Vector2(bolt_len * 0.58, cs * +0.11),
+		Vector2(bolt_len * 0.74, cs * -0.07),
+		Vector2(bolt_len * 0.88, cs * +0.03),
+		Vector2(bolt_len,        0.0),
+	]
+
+	# Solid core — narrow ribbon, fully opaque neon blue.
+	var core_mi              := MeshInstance3D.new()
+	core_mi.mesh              = _build_bolt_ribbon(pts, cs * 0.048)
+	var core_mat             := StandardMaterial3D.new()
+	core_mat.albedo_color     = COLOR_ZAPPER_BOLT
+	core_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	core_mat.cull_mode        = BaseMaterial3D.CULL_DISABLED
+	core_mi.material_override = core_mat
+	bolt_node.add_child(core_mi)
+
+	# Glow layer — wider ribbon, semi-transparent; sits fractionally below
+	# the core to avoid z-fighting with the same XZ plane geometry.
+	var glow_mi              := MeshInstance3D.new()
+	glow_mi.mesh              = _build_bolt_ribbon(pts, cs * 0.15)
+	glow_mi.position.y        = -cs * 0.002
+	var glow_mat             := StandardMaterial3D.new()
+	glow_mat.albedo_color     = Color(COLOR_ZAPPER_BOLT.r, COLOR_ZAPPER_BOLT.g, COLOR_ZAPPER_BOLT.b, 0.28)
+	glow_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow_mat.cull_mode        = BaseMaterial3D.CULL_DISABLED
+	glow_mi.material_override = glow_mat
+	bolt_node.add_child(glow_mi)
+
+	add_child(bolt_node)
+	# _visual intentionally not assigned — zapper bolt does not tumble.
+
+
+## Builds a flat ribbon mesh on the XZ plane following the given 2D waypoints.
+## Each adjacent pair of points produces a quad with half_w on each side of
+## the segment's perpendicular, resulting in a ribbon of constant width.
+func _build_bolt_ribbon(pts: Array[Vector2], half_w: float) -> ImmediateMesh:
+	var im := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(pts.size() - 1):
+		var a    := pts[i]
+		var b    := pts[i + 1]
+		var seg  := (b - a).normalized()
+		var perp := Vector2(-seg.y, seg.x) * half_w
+		var v0   := Vector3(a.x + perp.x, 0.0, a.y + perp.y)
+		var v1   := Vector3(a.x - perp.x, 0.0, a.y - perp.y)
+		var v2   := Vector3(b.x + perp.x, 0.0, b.y + perp.y)
+		var v3   := Vector3(b.x - perp.x, 0.0, b.y - perp.y)
+		im.surface_add_vertex(v0);  im.surface_add_vertex(v1);  im.surface_add_vertex(v2)
+		im.surface_add_vertex(v1);  im.surface_add_vertex(v3);  im.surface_add_vertex(v2)
+	im.surface_end()
+	return im
 
 
 ## Electric impact: fast blue-white sparks with minimal gravity so they scatter

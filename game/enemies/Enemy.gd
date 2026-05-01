@@ -130,6 +130,10 @@ var _bounty: int = 0
 var _base_move_speed: float = 0.0
 var _slow_source_count: int = 0
 
+# Glue splatter visual — spawned when the first slow source is applied,
+# freed when the last one is removed.
+var _glue_splatter: Node3D = null
+
 # Accumulated walk time used to index into ANT_FRAMES.
 var _walk_time: float = 0.0
 
@@ -195,6 +199,7 @@ func add_slow_source() -> void:
 	_slow_source_count += 1
 	if _slow_source_count == 1:
 		_move_speed = _base_move_speed * SLOW_FACTOR
+		_show_glue_splatter()
 
 
 ## Called by a Glue Board when this enemy leaves its range circle (or the board is removed).
@@ -202,6 +207,7 @@ func remove_slow_source() -> void:
 	_slow_source_count = maxi(_slow_source_count - 1, 0)
 	if _slow_source_count == 0:
 		_move_speed = _base_move_speed
+		_hide_glue_splatter()
 
 
 ## Briefly flashes the enemy white then returns to its base color.
@@ -353,6 +359,56 @@ func _cell_to_world(cell: Vector2i) -> Vector3:
 	var x         := cell.x * Grid.CELL_SIZE - half_grid + Grid.CELL_SIZE * 0.5
 	var z         := cell.y * Grid.CELL_SIZE - half_grid + Grid.CELL_SIZE * 0.5
 	return Vector3(x, 0.0, z)
+
+
+## Spawns the glue splatter overlay on first contact with a Glue Board.
+## One central blob plus five offset drops at fixed positions — asymmetric
+## enough to read as a splatter without needing runtime randomness.
+func _show_glue_splatter() -> void:
+	if _glue_splatter != null:
+		return
+	_glue_splatter          = Node3D.new()
+	_glue_splatter.position.y = 0.015   # sits just above the enemy sprite
+
+	var cs    := Grid.CELL_SIZE
+	var color := Color(0.88, 0.70, 0.18, 0.88)   # amber, matches Glue Board trap color
+
+	_add_splatter_disc(_glue_splatter, Vector3(0.0,          0.0,  0.0),         cs * 0.16, color)
+	_add_splatter_disc(_glue_splatter, Vector3( cs * 0.20,   0.0,  cs * 0.05),   cs * 0.09, color)
+	_add_splatter_disc(_glue_splatter, Vector3(-cs * 0.14,   0.0,  cs * 0.18),   cs * 0.08, color)
+	_add_splatter_disc(_glue_splatter, Vector3( cs * 0.08,   0.0, -cs * 0.22),   cs * 0.10, color)
+	_add_splatter_disc(_glue_splatter, Vector3(-cs * 0.18,   0.0, -cs * 0.10),   cs * 0.07, color)
+	_add_splatter_disc(_glue_splatter, Vector3( cs * 0.22,   0.0, -cs * 0.12),   cs * 0.06, color)
+
+	add_child(_glue_splatter)
+
+
+## Frees the splatter overlay when the last slow source is removed.
+func _hide_glue_splatter() -> void:
+	if _glue_splatter == null:
+		return
+	_glue_splatter.queue_free()
+	_glue_splatter = null
+
+
+## Adds one flat disc to parent at pos with the given radius and color.
+## Discs are thin cylinders (height 0.004) — invisible side-on but clearly
+## visible from the top-down camera.
+func _add_splatter_disc(parent: Node3D, pos: Vector3, radius: float, color: Color) -> void:
+	var mi   := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	mesh.radial_segments = 8
+	mesh.top_radius      = radius
+	mesh.bottom_radius   = radius
+	mesh.height          = 0.004
+	mi.mesh              = mesh
+	mi.position          = pos
+	var mat              := StandardMaterial3D.new()
+	mat.albedo_color      = color
+	mat.shading_mode      = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency      = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mi.material_override  = mat
+	parent.add_child(mi)
 
 
 ## Creates the enemy visual as a billboard quad using the ant sprite.
