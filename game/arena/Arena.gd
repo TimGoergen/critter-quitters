@@ -982,10 +982,8 @@ func _neon_color(base: Color) -> Color:
 ## Glow state is derived from _hovered_trap_anchor / _selected_trap_anchor:
 ##   selected → brighter outline;  hovered → medium;  default → base.
 ##
-## Surface 0 — neon glow fill (TRIANGLES): two-ring triangle fan.
-##   Interior (center → FILL_SOLID_FRAC) is flat at fill_opaque alpha.
-##   Narrow outer band fades from fill_opaque to transparent so the glow
-##   hugs the sprite and drops off quickly near the outline.
+## Surface 0 — solid neon fill (TRIANGLES): flat 20% opacity triangle fan
+##   covering the full footprint.
 ## Surface 1 — rounded outline (LINES): two concentric inset rounded-corner
 ##   rectangles simulate ~2 px line width.
 func _draw_trap_outline(anchor: Vector2i) -> void:
@@ -993,28 +991,19 @@ func _draw_trap_outline(anchor: Vector2i) -> void:
 	var base: Color    = Trap.STATS[trap_type]["color"]
 	var neon: Color    = _neon_color(base)
 
-	# Gradient fades to transparent at this fraction of center→outline distance.
-	# 0.75 leaves 25% of transparent space before the outline.
-	const FADE_END_FRAC: float = 0.75
-
 	var is_selected := anchor == _selected_trap_anchor
 	var is_hovered  := anchor == _hovered_trap_anchor
 
 	var outline_color: Color
-	var fill_center:   Color   # peak opacity at the center vertex
-	var fill_clear:    Color   # zero opacity at the fade ring
 	if is_selected:
 		outline_color = base.lightened(0.70); outline_color.a = 1.0
-		fill_center   = neon; fill_center.a   = 0.50
-		fill_clear    = neon; fill_clear.a    = 0.0
 	elif is_hovered:
 		outline_color = base.lightened(0.45); outline_color.a = 1.0
-		fill_center   = neon; fill_center.a   = 0.30
-		fill_clear    = neon; fill_clear.a    = 0.0
 	else:
 		outline_color = base.darkened(0.2);   outline_color.a = 0.60
-		fill_center   = neon; fill_center.a   = 0.25
-		fill_clear    = neon; fill_clear.a    = 0.0
+
+	var fill_color := neon
+	fill_color.a   = 0.20
 
 	var hs := Grid.CELL_SIZE * 0.5
 	var cs := Grid.CELL_SIZE
@@ -1033,25 +1022,18 @@ func _draw_trap_outline(anchor: Vector2i) -> void:
 
 	var im := ImmediateMesh.new()
 
-	# --- Surface 0: neon radial glow (center → fade ring) ---
+	# --- Surface 0: solid neon fill ---
 	var fill_pts := _rounded_rect_pts(min_x, max_x, min_z, max_z, y_fill, CORNER_R, CORNER_SEGS)
 	var center   := Vector3(cx, y_fill, cz)
 
-	# Fade ring — the gradient reaches full transparency here, well inside the outline.
-	var fade_pts: Array[Vector3] = []
-	for pt: Vector3 in fill_pts:
-		fade_pts.append(center.lerp(pt, FADE_END_FRAC))
-
 	var n := fill_pts.size()
 	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	# Single pass: center (peak opacity) → fade ring (transparent).
-	# The fill_clear vertices at the ring ensure nothing renders between the ring and outline.
 	for i in range(n):
-		var a: Vector3 = fade_pts[i]
-		var b: Vector3 = fade_pts[(i + 1) % n]
-		im.surface_set_color(fill_center); im.surface_add_vertex(center)
-		im.surface_set_color(fill_clear);  im.surface_add_vertex(a)
-		im.surface_set_color(fill_clear);  im.surface_add_vertex(b)
+		var a: Vector3 = fill_pts[i]
+		var b: Vector3 = fill_pts[(i + 1) % n]
+		im.surface_set_color(fill_color); im.surface_add_vertex(center)
+		im.surface_set_color(fill_color); im.surface_add_vertex(a)
+		im.surface_set_color(fill_color); im.surface_add_vertex(b)
 	im.surface_end()
 
 	# --- Surface 1: rounded outline (two inset passes for ~2 px thickness) ---
