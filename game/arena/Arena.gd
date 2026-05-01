@@ -912,11 +912,12 @@ func _update_grid_highlight() -> void:
 	if _trap_anchors.has(_hover_cell):
 		new_hovered = _trap_anchors[_hover_cell]
 	if new_hovered != _hovered_trap_anchor:
-		if _hovered_trap_anchor != Vector2i(-1, -1) and _trap_outlines.has(_hovered_trap_anchor):
-			_draw_trap_outline(_hovered_trap_anchor)
+		var prev_hovered := _hovered_trap_anchor
+		_hovered_trap_anchor = new_hovered   # update before drawing so state checks are correct
+		if prev_hovered != Vector2i(-1, -1) and _trap_outlines.has(prev_hovered):
+			_draw_trap_outline(prev_hovered)
 		if new_hovered != Vector2i(-1, -1) and _trap_outlines.has(new_hovered):
 			_draw_trap_outline(new_hovered)
-		_hovered_trap_anchor = new_hovered
 
 	# Show a ghost of the selected trap at the anchor before pressing.
 	# During drag, the drag ghosts serve this role instead.
@@ -971,18 +972,9 @@ func _dist_to_footprint(cell: Vector2i, anchor: Vector2i) -> int:
 	return dx + dy
 
 
-## Returns a copy of colour with saturation and value pushed toward 1.0 by amount (0–1).
-## amount = 0.3 → 30% more neon;  amount = 0.6 → 60% more neon.
-func _neonify(color: Color, amount: float) -> Color:
-	var h := color.h
-	var s := color.s + (1.0 - color.s) * amount
-	var v := color.v + (1.0 - color.v) * amount
-	return Color.from_hsv(h, s, v, color.a)
-
-
 ## Draws (or redraws) the outline + colour fill for a placed trap.
 ## Glow state is derived from _hovered_trap_anchor / _selected_trap_anchor:
-##   selected → 60% neon;  hovered → 30% neon;  default → base colour.
+##   selected → 60% brighter fill + outline;  hovered → 30% brighter;  default → base.
 ##
 ## Surface 0 — inverted edge-fade fill (TRIANGLES): two-ring triangle fan.
 ##   Interior (center → FILL_SPRITE_FRAC) is flat at fill_opaque alpha.
@@ -998,27 +990,21 @@ func _draw_trap_outline(anchor: Vector2i) -> void:
 	var is_selected := anchor == _selected_trap_anchor
 	var is_hovered  := anchor == _hovered_trap_anchor
 
-	var tinted: Color = base
-	if is_selected:
-		tinted = _neonify(base, 0.6)
-	elif is_hovered:
-		tinted = _neonify(base, 0.3)
-
 	var outline_color: Color
 	var fill_opaque:   Color
 	var fill_clear:    Color
 	if is_selected:
-		outline_color = _neonify(base, 0.6).lightened(0.45); outline_color.a = 1.0
-		fill_opaque   = tinted;                               fill_opaque.a   = 0.3
-		fill_clear    = tinted;                               fill_clear.a    = 0.0
+		outline_color = base.lightened(0.70); outline_color.a = 1.0
+		fill_opaque   = base.lightened(0.60); fill_opaque.a   = 0.60
+		fill_clear    = base.lightened(0.60); fill_clear.a    = 0.0
 	elif is_hovered:
-		outline_color = _neonify(base, 0.3).lightened(0.45); outline_color.a = 1.0
-		fill_opaque   = tinted;                               fill_opaque.a   = 0.3
-		fill_clear    = tinted;                               fill_clear.a    = 0.0
+		outline_color = base.lightened(0.45); outline_color.a = 1.0
+		fill_opaque   = base.lightened(0.35); fill_opaque.a   = 0.50
+		fill_clear    = base.lightened(0.35); fill_clear.a    = 0.0
 	else:
-		outline_color = base.darkened(0.2);                   outline_color.a = 0.60
-		fill_opaque   = base;                                 fill_opaque.a   = 0.3
-		fill_clear    = base;                                 fill_clear.a    = 0.0
+		outline_color = base.darkened(0.2);   outline_color.a = 0.60
+		fill_opaque   = base;                 fill_opaque.a   = 0.30
+		fill_clear    = base;                 fill_clear.a    = 0.0
 
 	var hs := Grid.CELL_SIZE * 0.5
 	var cs := Grid.CELL_SIZE
