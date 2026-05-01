@@ -115,10 +115,10 @@ var _hover_cell: Vector2i = Vector2i(-1, -1)
 # Separate node from _grid_highlight so cursor movement does not clear it.
 var _selected_trap_outline: MeshInstance3D = null
 
-# Per-placed-trap inset perimeter outlines. Neutral by default; swapped to neon while
-# the mouse hovers over the trap's footprint.
+# Per-placed-trap inset perimeter outlines. Redrawn when hover or selection state changes.
 var _trap_outlines: Dictionary = {}           # anchor Vector2i -> MeshInstance3D
-var _hovered_trap_anchor: Vector2i = Vector2i(-1, -1)
+var _hovered_trap_anchor:  Vector2i = Vector2i(-1, -1)
+var _selected_trap_anchor: Vector2i = Vector2i(-1, -1)
 
 # The currently open upgrade panel, or null if none is open.
 # Only one panel is open at a time — opening a new one closes the previous.
@@ -434,7 +434,7 @@ func _try_place_trap(anchor: Vector2i) -> bool:
 		_trap_anchors[cell] = anchor
 
 	_spawn_trap(anchor)
-	_draw_trap_outline(anchor, false)
+	_draw_trap_outline(anchor)
 	return true
 
 
@@ -474,6 +474,9 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 	_selected_trap  = _trap_nodes[anchor]
 	_selected_trap.show_range_indicator()
 	_show_selected_trap_outline(anchor)
+	_selected_trap_anchor = anchor
+	if _trap_outlines.has(anchor):
+		_draw_trap_outline(anchor)
 	get_tree().paused = true
 	_panel_paused = true
 
@@ -487,6 +490,10 @@ func _close_upgrade_panel() -> void:
 		_selected_trap.hide_range_indicator()
 	_selected_trap = null
 	_hide_selected_trap_outline()
+	var prev_selected := _selected_trap_anchor
+	_selected_trap_anchor = Vector2i(-1, -1)
+	if _trap_outlines.has(prev_selected):
+		_draw_trap_outline(prev_selected)
 	if _panel_paused:
 		get_tree().paused = false
 		_panel_paused = false
@@ -498,6 +505,10 @@ func _on_upgrade_panel_closed() -> void:
 		_selected_trap.hide_range_indicator()
 	_selected_trap = null
 	_hide_selected_trap_outline()
+	var prev_selected := _selected_trap_anchor
+	_selected_trap_anchor = Vector2i(-1, -1)
+	if _trap_outlines.has(prev_selected):
+		_draw_trap_outline(prev_selected)
 	if _panel_paused:
 		get_tree().paused = false
 		_panel_paused = false
@@ -902,9 +913,9 @@ func _update_grid_highlight() -> void:
 		new_hovered = _trap_anchors[_hover_cell]
 	if new_hovered != _hovered_trap_anchor:
 		if _hovered_trap_anchor != Vector2i(-1, -1) and _trap_outlines.has(_hovered_trap_anchor):
-			_draw_trap_outline(_hovered_trap_anchor, false)
+			_draw_trap_outline(_hovered_trap_anchor)
 		if new_hovered != Vector2i(-1, -1) and _trap_outlines.has(new_hovered):
-			_draw_trap_outline(new_hovered, true)
+			_draw_trap_outline(new_hovered)
 		_hovered_trap_anchor = new_hovered
 
 	# Show a ghost of the selected trap at the anchor before pressing.
@@ -960,28 +971,54 @@ func _dist_to_footprint(cell: Vector2i, anchor: Vector2i) -> int:
 	return dx + dy
 
 
-## Draws (or redraws) the outline + radial glow for a placed trap.
+## Returns a copy of colour with saturation and value pushed toward 1.0 by amount (0–1).
+## amount = 0.3 → 30% more neon;  amount = 0.6 → 60% more neon.
+func _neonify(color: Color, amount: float) -> Color:
+	var h := color.h
+	var s := color.s + (1.0 - color.s) * amount
+	var v := color.v + (1.0 - color.v) * amount
+	return Color.from_hsv(h, s, v, color.a)
+
+
+## Draws (or redraws) the outline + colour fill for a placed trap.
+## Glow state is derived from _hovered_trap_anchor / _selected_trap_anchor:
+##   selected → 60% neon;  hovered → 30% neon;  default → base colour.
 ##
-## Surface 0 — radial gradient fill (TRIANGLES): triangle fan from the footprint
-##   centre (bright) to the rounded perimeter (alpha 0).  The GPU interpolates
-##   alpha linearly across each triangle, producing a smooth radial falloff.
+## Surface 0 — inverted edge-fade fill (TRIANGLES): two-ring triangle fan.
+##   Interior (center → FILL_SPRITE_FRAC) is flat at fill_opaque alpha.
+##   Outer band fades from fill_opaque to transparent at the outline boundary.
 ## Surface 1 — rounded outline (LINES): two concentric inset rounded-corner
 ##   rectangles simulate ~2 px line width.
-func _draw_trap_outline(anchor: Vector2i, hovered: bool) -> void:
+func _draw_trap_outline(anchor: Vector2i) -> void:
 	var trap_type: int = _trap_nodes[anchor].get_type()
 	var base: Color    = Trap.STATS[trap_type]["color"]
 
-	var outline_color:     Color
-	var fill_center_color: Color
-	var fill_edge_color:   Color
-	if hovered:
-		outline_color      = base.lightened(0.45); outline_color.a      = 1.0
-		fill_center_color  = base.lightened(0.55); fill_center_color.a  = 0.45
-		fill_edge_color    = base;                 fill_edge_color.a    = 0.0
+	const FILL_SPRITE_FRAC: float = 0.10
+
+	var is_selected := anchor == _selected_trap_anchor
+	var is_hovered  := anchor == _hovered_trap_anchor
+
+	var tinted: Color = base
+	if is_selected:
+		tinted = _neonify(base, 0.6)
+	elif is_hovered:
+		tinted = _neonify(base, 0.3)
+
+	var outline_color: Color
+	var fill_opaque:   Color
+	var fill_clear:    Color
+	if is_selected:
+		outline_color = _neonify(base, 0.6).lightened(0.45); outline_color.a = 1.0
+		fill_opaque   = tinted;                               fill_opaque.a   = 0.3
+		fill_clear    = tinted;                               fill_clear.a    = 0.0
+	elif is_hovered:
+		outline_color = _neonify(base, 0.3).lightened(0.45); outline_color.a = 1.0
+		fill_opaque   = tinted;                               fill_opaque.a   = 0.3
+		fill_clear    = tinted;                               fill_clear.a    = 0.0
 	else:
-		outline_color      = base.darkened(0.2);   outline_color.a      = 0.60
-		fill_center_color  = base.lightened(0.15); fill_center_color.a  = 0.22
-		fill_edge_color    = base;                 fill_edge_color.a    = 0.0
+		outline_color = base.darkened(0.2);                   outline_color.a = 0.60
+		fill_opaque   = base;                                 fill_opaque.a   = 0.3
+		fill_clear    = base;                                 fill_clear.a    = 0.0
 
 	var hs := Grid.CELL_SIZE * 0.5
 	var cs := Grid.CELL_SIZE
@@ -1000,16 +1037,34 @@ func _draw_trap_outline(anchor: Vector2i, hovered: bool) -> void:
 
 	var im := ImmediateMesh.new()
 
-	# --- Surface 0: radial glow fill ---
+	# --- Surface 0: radial glow fill (two-ring) ---
 	var fill_pts := _rounded_rect_pts(min_x, max_x, min_z, max_z, y_fill, CORNER_R, CORNER_SEGS)
 	var center   := Vector3(cx, y_fill, cz)
+
+	# Inner ring at the sprite boundary — fully opaque inside, fades to clear outside.
+	var inner_pts: Array[Vector3] = []
+	for pt: Vector3 in fill_pts:
+		inner_pts.append(center.lerp(pt, FILL_SPRITE_FRAC))
+
+	var n := fill_pts.size()
 	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in range(fill_pts.size()):
-		var a: Vector3 = fill_pts[i]
-		var b: Vector3 = fill_pts[(i + 1) % fill_pts.size()]
-		im.surface_set_color(fill_center_color); im.surface_add_vertex(center)
-		im.surface_set_color(fill_edge_color);   im.surface_add_vertex(a)
-		im.surface_set_color(fill_edge_color);   im.surface_add_vertex(b)
+	# Band 1: center → sprite boundary — flat, fully opaque trap colour
+	for i in range(n):
+		var a: Vector3 = inner_pts[i]
+		var b: Vector3 = inner_pts[(i + 1) % n]
+		im.surface_set_color(fill_opaque); im.surface_add_vertex(center)
+		im.surface_set_color(fill_opaque); im.surface_add_vertex(a)
+		im.surface_set_color(fill_opaque); im.surface_add_vertex(b)
+	# Band 2: sprite boundary → outline — fades from fully opaque to transparent
+	for i in range(n):
+		var ai: Vector3 = inner_pts[i];      var bi: Vector3 = inner_pts[(i + 1) % n]
+		var ao: Vector3 = fill_pts[i];       var bo: Vector3 = fill_pts[(i + 1) % n]
+		im.surface_set_color(fill_opaque); im.surface_add_vertex(ai)
+		im.surface_set_color(fill_opaque); im.surface_add_vertex(bi)
+		im.surface_set_color(fill_clear);  im.surface_add_vertex(ao)
+		im.surface_set_color(fill_opaque); im.surface_add_vertex(bi)
+		im.surface_set_color(fill_clear);  im.surface_add_vertex(bo)
+		im.surface_set_color(fill_clear);  im.surface_add_vertex(ao)
 	im.surface_end()
 
 	# --- Surface 1: rounded outline (two inset passes for ~2 px thickness) ---
