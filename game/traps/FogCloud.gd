@@ -155,7 +155,7 @@ func _spawn_cloud_visual(aoe_range: float) -> void:
 	# Alpha 0.11 per puff: a single puff is barely visible, but 5–8 overlapping
 	# in the dense centre stack up to ~0.55–0.65 effective opacity — solid enough
 	# to read as a cloud mass without looking painted.
-	var peak := Color(COLOR_CLOUD.r, COLOR_CLOUD.g, COLOR_CLOUD.b, 0.01)
+	var peak := Color(COLOR_CLOUD.r, COLOR_CLOUD.g, COLOR_CLOUD.b, 0.004)
 	var gradient := Gradient.new()
 	gradient.set_color(0, Color(peak.r, peak.g, peak.b, 0.0))
 	gradient.set_color(1, Color(peak.r, peak.g, peak.b, 0.0))
