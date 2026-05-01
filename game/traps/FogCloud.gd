@@ -20,7 +20,7 @@ const EXPAND_SPEED: float = 4.44
 const CLOUD_LIFETIME: float = 0.90
 const COLOR_CLOUD := Color(0.40, 0.88, 0.40, 0.05)
 # Exposed so Trap.gd can compute the batch visual lifetime for the cloud cap timer.
-const PARTICLE_LIFETIME: float = 2.0
+const PARTICLE_LIFETIME: float = 2.75
 
 
 # ---------------------------------------------------------------------------
@@ -128,10 +128,12 @@ func _spawn_cloud_visual(aoe_range: float) -> void:
 	particles.scale_amount_max = 8.0
 
 	# Bloom in quickly, hold, then dissolve — no lingering shrink artefact.
+	# Fractions recalculated so absolute bloom (0.24 s) and fade (0.56 s) durations
+	# stay the same as before; only the hold region grows (1.20 s → 1.95 s, +750 ms).
 	var scale_curve := Curve.new()
 	scale_curve.add_point(Vector2(0.0,  0.0))
-	scale_curve.add_point(Vector2(0.12, 1.0))
-	scale_curve.add_point(Vector2(0.72, 1.0))
+	scale_curve.add_point(Vector2(0.09, 1.0))
+	scale_curve.add_point(Vector2(0.80, 1.0))
 	scale_curve.add_point(Vector2(1.0,  0.0))
 	particles.scale_amount_curve = scale_curve
 
@@ -155,8 +157,8 @@ func _spawn_cloud_visual(aoe_range: float) -> void:
 	var gradient := Gradient.new()
 	gradient.set_color(0, Color(peak.r, peak.g, peak.b, 0.0))
 	gradient.set_color(1, Color(peak.r, peak.g, peak.b, 0.0))
-	gradient.add_point(0.12, peak)
-	gradient.add_point(0.72, peak)
+	gradient.add_point(0.09, peak)
+	gradient.add_point(0.80, peak)
 	particles.color_ramp = gradient
 
 	get_parent().add_child(particles)
