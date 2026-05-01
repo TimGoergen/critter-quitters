@@ -126,27 +126,53 @@ func _spawn_visual() -> void:
 	add_child(mi)
 
 
-## Cheese wedge projectile — a triangular prism (3-segment cylinder) tipped on
-## its side so the wedge profile faces the camera as it tumbles.
-## The cylinder axis runs horizontally (Z = 90° rotation) so the triangular
-## cross-section is what rotates past the viewer, not the flat end caps.
+## Cheese block projectile — a flat rectangular slab with small dark holes on
+## both broad faces (swiss-cheese style). Tumbles forward on the X axis as it
+## travels, so the rectangular profile reads clearly from the top-down camera.
+## Holes are placed on both the top (+Y) and bottom (−Y) faces so they appear
+## as depressions regardless of which face is toward the viewer during the tumble.
 func _spawn_cheese_visual() -> void:
-	var mi             := MeshInstance3D.new()
-	var mesh           := CylinderMesh.new()
-	mesh.radial_segments = 3
-	mesh.top_radius      = Grid.CELL_SIZE * 0.22
-	mesh.bottom_radius   = Grid.CELL_SIZE * 0.22
-	mesh.height          = Grid.CELL_SIZE * 0.40
+	var container := Node3D.new()
 
-	var mat           := StandardMaterial3D.new()
-	mat.albedo_color   = Color(0.95, 0.82, 0.15)
-	mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mi.mesh              = mesh
-	mi.material_override = mat
-	mi.rotation_degrees.z = 90.0   # tip onto side — wedge profile faces viewer
+	var bw := Grid.CELL_SIZE * 0.50
+	var bh := Grid.CELL_SIZE * 0.17
+	var bd := Grid.CELL_SIZE * 0.35
 
-	_visual = mi
-	add_child(mi)
+	var block_mi  := MeshInstance3D.new()
+	var block_box := BoxMesh.new()
+	block_box.size = Vector3(bw, bh, bd)
+	var block_mat  := StandardMaterial3D.new()
+	block_mat.albedo_color     = Color(0.95, 0.82, 0.15)
+	block_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	block_mi.mesh              = block_box
+	block_mi.material_override = block_mat
+	container.add_child(block_mi)
+
+	# Three holes at fixed XZ offsets, mirrored onto both broad faces.
+	var hole_r  := Grid.CELL_SIZE * 0.054
+	var face_y  := bh * 0.5 - hole_r * 0.45   # sphere centre inset so cap pokes through face
+	var hole_xz := [Vector2(-bw * 0.20, -bd * 0.12),
+	                Vector2( bw * 0.18,  bd * 0.16),
+	                Vector2(-bw * 0.04, -bd * 0.26)]
+
+	for yf: float in [1.0, -1.0]:
+		for off: Vector2 in hole_xz:
+			var hmi   := MeshInstance3D.new()
+			var hmesh := SphereMesh.new()
+			hmesh.radius          = hole_r
+			hmesh.height          = hole_r * 2.0
+			hmesh.radial_segments = 8
+			hmesh.rings           = 4
+			var hmat              := StandardMaterial3D.new()
+			hmat.albedo_color      = Color(0.50, 0.34, 0.04)
+			hmat.shading_mode      = BaseMaterial3D.SHADING_MODE_UNSHADED
+			hmi.mesh               = hmesh
+			hmi.material_override  = hmat
+			hmi.position           = Vector3(off.x, yf * face_y, off.y)
+			container.add_child(hmi)
+
+	_visual = container
+	add_child(container)
 
 
 ## Glue blob projectile — a flat irregular polygon in the XZ plane that spins

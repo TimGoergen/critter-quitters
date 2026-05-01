@@ -634,18 +634,22 @@ func _spawn_visual(_color: Color) -> void:
 ## Builds the Glue Board visual: a flat rectangular glue board as seen from above.
 ## The camera is pure top-down, so all detail lives on the XZ plane.
 ##
-## Layout from above:
-##   outer cardboard border (tan/brown) → inset amber adhesive surface → centre crease line
+## Layout from above (X axis, left to right):
+##   [red end tab] → cardboard gap → amber adhesive surface → cardboard gap → [red end tab]
+##   A centre crease line marks the fold used when placing real glue boards.
 func _spawn_glue_board_visual() -> void:
-	var fp := Grid.CELL_SIZE * 1.9
-	var y0 := fp * 0.008   # base layer — just above ground
-	var y1 := fp * 0.020   # adhesive layer — on top of cardboard
-	var y2 := fp * 0.030   # crease line — on top of adhesive
+	var fp  := Grid.CELL_SIZE * 1.9
+	var bw  := fp * 0.70   # board width (X) — smaller footprint than the 2×2 cell
+	var bd  := fp * 0.44   # board depth (Z)
+	var y0  := fp * 0.008   # cardboard base
+	var y1  := fp * 0.018   # red end-cap layer
+	var y2  := fp * 0.024   # adhesive layer
+	var y3  := fp * 0.032   # crease line
 
-	# Cardboard base — warm tan, slightly wider than tall (landscape orientation).
+	# Cardboard base — warm tan, landscape orientation.
 	var base_mi   := MeshInstance3D.new()
 	var base_mesh := BoxMesh.new()
-	base_mesh.size           = Vector3(fp * 0.88, fp * 0.016, fp * 0.58)
+	base_mesh.size           = Vector3(bw, fp * 0.016, bd)
 	base_mi.mesh             = base_mesh
 	base_mi.position.y       = y0
 	var base_mat             := StandardMaterial3D.new()
@@ -654,13 +658,31 @@ func _spawn_glue_board_visual() -> void:
 	base_mi.material_override = base_mat
 	add_child(base_mi)
 
-	# Adhesive surface — amber yellow, inset from the cardboard border.
+	# Red packaging end tabs — sit on the short ends of the cardboard and span
+	# its full depth. Real commercial glue boards have distinct colored end pieces
+	# (typically red) showing brand and instruction markings.
+	var tab_w   := fp * 0.096
+	var tab_mat := StandardMaterial3D.new()
+	tab_mat.albedo_color = Color(0.76, 0.11, 0.08)
+	tab_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	for sx: float in [-(bw * 0.5 - tab_w * 0.5), bw * 0.5 - tab_w * 0.5]:
+		var tab_mi   := MeshInstance3D.new()
+		var tab_mesh := BoxMesh.new()
+		tab_mesh.size           = Vector3(tab_w, fp * 0.010, bd)
+		tab_mi.mesh             = tab_mesh
+		tab_mi.position         = Vector3(sx, y1, 0.0)
+		tab_mi.material_override = tab_mat
+		add_child(tab_mi)
+
+	# Adhesive surface — amber yellow, inset from the end tabs.
 	# Slight transparency suggests the glossy sticky surface.
+	var glue_w := bw - tab_w * 2.0 - fp * 0.012
 	var glue_mi   := MeshInstance3D.new()
 	var glue_mesh := BoxMesh.new()
-	glue_mesh.size           = Vector3(fp * 0.74, fp * 0.012, fp * 0.44)
+	glue_mesh.size           = Vector3(glue_w, fp * 0.012, bd * 0.76)
 	glue_mi.mesh             = glue_mesh
-	glue_mi.position.y       = y1
+	glue_mi.position.y       = y2
 	var glue_mat             := StandardMaterial3D.new()
 	glue_mat.albedo_color     = Color(0.88, 0.70, 0.18, 0.90)
 	glue_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
@@ -668,13 +690,13 @@ func _spawn_glue_board_visual() -> void:
 	glue_mi.material_override = glue_mat
 	add_child(glue_mi)
 
-	# Centre crease — thin dark line running the full width, marking the fold
+	# Centre crease — thin dark line running the full glue width, marking the fold
 	# typical of physical glue boards (folded tent-style for placement).
 	var crease_mi   := MeshInstance3D.new()
 	var crease_mesh := BoxMesh.new()
-	crease_mesh.size           = Vector3(fp * 0.74, fp * 0.008, fp * 0.018)
+	crease_mesh.size           = Vector3(glue_w, fp * 0.008, fp * 0.018)
 	crease_mi.mesh             = crease_mesh
-	crease_mi.position.y       = y2
+	crease_mi.position.y       = y3
 	var crease_mat             := StandardMaterial3D.new()
 	crease_mat.albedo_color     = Color(0.48, 0.34, 0.10)
 	crease_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
