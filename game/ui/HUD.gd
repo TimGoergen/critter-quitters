@@ -15,7 +15,7 @@ const Trap     = preload("res://traps/Trap.gd")
 const UIFonts  = preload("res://ui/UIFonts.gd")
 
 const COLOR_PANEL_BG    := Color(0.08, 0.08, 0.13, 0.88)
-const COLOR_BAR_BG      := Color(0.15, 0.10, 0.10, 1.0)
+const COLOR_BAR_BG      := Color(0.28, 0.28, 0.28, 1.0)
 const COLOR_BAR_FILL    := Color(0.85, 0.22, 0.22, 1.0)
 const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM    := Color(0.60, 0.60, 0.65, 1.0)

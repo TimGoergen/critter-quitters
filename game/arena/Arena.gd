@@ -937,28 +937,17 @@ func _update_grid_highlight() -> void:
 				break
 
 	var opacity_scale := 0.2 if blocked else 1.0
-	const MAX_GLOW_DIST: int = 2
+
+	if _pressing:
+		_grid_highlight.mesh = null
+		return
 
 	var im := ImmediateMesh.new()
 	var hs := Grid.CELL_SIZE * 0.5
 	var y  := 0.08
 
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
-
-	for dr in range(-MAX_GLOW_DIST, 2 + MAX_GLOW_DIST):
-		for dc in range(-MAX_GLOW_DIST, 2 + MAX_GLOW_DIST):
-			var cell := Vector2i(anchor.x + dc, anchor.y + dr)
-			if not _grid.is_in_bounds(cell):
-				continue
-			var dist := _dist_to_footprint(cell, anchor)
-			if dist == 0 or dist > MAX_GLOW_DIST:
-				continue
-			var alpha := 0.56 * opacity_scale * pow(1.0 - float(dist) / float(MAX_GLOW_DIST + 1), 2.5)
-			_draw_cell_glow(im, cell, hs, y, alpha)
-
-	if not _pressing:
-		_draw_2x2_perimeter(im, anchor, hs, y, 0.56 * opacity_scale)
-
+	_draw_2x2_perimeter(im, anchor, hs, y, 0.56 * opacity_scale)
 	im.surface_end()
 	_grid_highlight.mesh = im
 
