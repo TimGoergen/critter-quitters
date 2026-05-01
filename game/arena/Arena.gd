@@ -994,8 +994,8 @@ func _draw_trap_outline(anchor: Vector2i) -> void:
 	var neon: Color    = _neon_color(base)
 
 	# Gradient fades to transparent at this fraction of center→outline distance.
-	# 0.91 leaves ~9% (~6 px at mobile scale) of transparent space before the outline.
-	const FADE_END_FRAC: float = 0.91
+	# 0.75 leaves 25% of transparent space before the outline.
+	const FADE_END_FRAC: float = 0.75
 
 	var is_selected := anchor == _selected_trap_anchor
 	var is_hovered  := anchor == _hovered_trap_anchor
@@ -1005,15 +1005,15 @@ func _draw_trap_outline(anchor: Vector2i) -> void:
 	var fill_clear:    Color   # zero opacity at the fade ring
 	if is_selected:
 		outline_color = base.lightened(0.70); outline_color.a = 1.0
-		fill_center   = neon; fill_center.a   = 0.54
+		fill_center   = neon; fill_center.a   = 0.50
 		fill_clear    = neon; fill_clear.a    = 0.0
 	elif is_hovered:
 		outline_color = base.lightened(0.45); outline_color.a = 1.0
-		fill_center   = neon; fill_center.a   = 0.48
+		fill_center   = neon; fill_center.a   = 0.30
 		fill_clear    = neon; fill_clear.a    = 0.0
 	else:
 		outline_color = base.darkened(0.2);   outline_color.a = 0.60
-		fill_center   = neon; fill_center.a   = 0.42
+		fill_center   = neon; fill_center.a   = 0.25
 		fill_clear    = neon; fill_clear.a    = 0.0
 
 	var hs := Grid.CELL_SIZE * 0.5
