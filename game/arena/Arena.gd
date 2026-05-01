@@ -994,8 +994,8 @@ func _draw_trap_outline(anchor: Vector2i) -> void:
 	var neon: Color    = _neon_color(base)
 
 	# Gradient fades to transparent at this fraction of center→outline distance.
-	# 0.88 leaves a ~12% transparent band before the outline (a few pixels at mobile scale).
-	const FADE_END_FRAC: float = 0.88
+	# 0.94 leaves ~6% (~4 px at mobile scale) of transparent space before the outline.
+	const FADE_END_FRAC: float = 0.94
 
 	var is_selected := anchor == _selected_trap_anchor
 	var is_hovered  := anchor == _hovered_trap_anchor
