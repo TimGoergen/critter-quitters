@@ -187,6 +187,8 @@ func _build_glue_blob_mesh(base_r: float, color: Color) -> ImmediateMesh:
 
 
 func _spawn_impact_effect(killed: bool, enemy_color: Color) -> void:
+	if killed:
+		_spawn_coin_burst()
 	if _trap_type == _SNAP_TRAP_TYPE:
 		_spawn_cheese_splat(killed, enemy_color)
 		return
@@ -319,6 +321,40 @@ func _spawn_glue_impact(killed: bool, enemy_color: Color) -> void:
 	if killed:
 		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
 				Grid.CELL_SIZE * 0.495, enemy_color, true)
+
+
+## Scatters a few miniature Bug Bucks coin sprites on enemy death.
+## PlaneMesh is horizontal (XZ plane), so the coin SVG texture faces the
+## top-down camera directly — the graphic reads without any tilting required.
+func _spawn_coin_burst() -> void:
+	var particles              := CPUParticles3D.new()
+	particles.one_shot          = true
+	particles.explosiveness     = 1.0
+	particles.amount            = 4
+	particles.lifetime          = 0.55
+	particles.direction         = Vector3.UP
+	particles.spread            = 180.0
+	particles.initial_velocity_min = Grid.CELL_SIZE * 2.5
+	particles.initial_velocity_max = Grid.CELL_SIZE * 7.0
+	particles.gravity           = Vector3(0.0, -Grid.CELL_SIZE * 9.0, 0.0)
+	particles.scale_amount_min  = 0.55
+	particles.scale_amount_max  = 0.90
+
+	var coin_size := Grid.CELL_SIZE * 0.32
+	var plane     := PlaneMesh.new()
+	plane.size     = Vector2(coin_size, coin_size)
+	var mat                   := StandardMaterial3D.new()
+	mat.albedo_texture         = load("res://assets/bug_buck_coin.svg")
+	mat.shading_mode           = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency           = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode              = BaseMaterial3D.CULL_DISABLED
+	plane.material             = mat
+	particles.mesh             = plane
+
+	get_parent().add_child(particles)
+	particles.global_position  = global_position
+	particles.restart()
+	get_tree().create_timer(particles.lifetime + 0.15).timeout.connect(particles.queue_free)
 
 
 func _spawn_particles(amount: int, lifetime: float, vel_min: float, vel_max: float,
