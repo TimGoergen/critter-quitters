@@ -10,7 +10,7 @@ extends CanvasLayer
 ## the values and then begin the first wave countdown.
 signal confirmed(bug_bucks: int, wave_size: int)
 
-const DEFAULT_BUG_BUCKS: int = 100
+const DEFAULT_BUG_BUCKS: int = 1000
 const DEFAULT_WAVE_SIZE:  int = 10
 
 const PANEL_W: float = 300.0
