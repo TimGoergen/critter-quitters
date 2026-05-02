@@ -1221,7 +1221,7 @@ uniform vec2  crop_offset = vec2(0.2, 0.2);
 uniform float crop_size   = 0.400;
 
 // Darkens the floor so game objects read clearly against it.
-const float BRIGHTNESS = 0.55;
+const float BRIGHTNESS = 0.7;
 
 // 3x3 box blur tap spacing in full-texture UV units.
 const float BLUR_STEP = 0.002;
