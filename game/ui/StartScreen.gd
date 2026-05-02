@@ -22,7 +22,7 @@ const COLOR_BTN_PRESSED := Color(0.14, 0.14, 0.16, 1.0)
 const COLOR_BTN_BORDER  := Color(0.60, 0.60, 0.65, 1.0)
 
 # The van sprite is sized to this fraction of the viewport width.
-const VAN_WIDTH_FRACTION := 0.62
+const VAN_WIDTH_FRACTION := 0.81  # 0.62 * 1.3
 
 var _van:       Sprite2D
 var _start_btn: Button
@@ -109,10 +109,14 @@ func _play_van_exit() -> void:
 	# Drive the van fully off the left edge of the screen.
 	var target_x := -(van_scaled_w / 2.0)
 
-	# Stagger exhaust puffs across the first two-thirds of the drive-off.
-	_spawn_exhaust_puffs()
-	get_tree().create_timer(0.35).timeout.connect(_spawn_exhaust_puffs)
-	get_tree().create_timer(0.65).timeout.connect(_spawn_exhaust_puffs)
+	# Spawn a puff every 0.12 s across the full 1.1 s drive-off so the trail
+	# follows the van as it accelerates. Each callback reads _van.position at
+	# fire time, so the spawn point tracks the current rear position naturally.
+	for i: int in 9:
+		if i == 0:
+			_spawn_exhaust_puffs()
+		else:
+			get_tree().create_timer(i * 0.12).timeout.connect(_spawn_exhaust_puffs)
 
 	var tween := create_tween()
 	tween.tween_property(_van, "position:x", target_x, 1.1) \
@@ -122,22 +126,21 @@ func _play_van_exit() -> void:
 
 
 func _spawn_exhaust_puffs() -> void:
-	# The van's rear is at the right edge of the sprite (Sprite2D origin is centre).
-	# Puffs are added directly to this CanvasLayer (as siblings of the van sprite)
-	# so they stay in place while the van drives left.
-	var van_half_w    := _van.texture.get_size().x * _van.scale.x / 2.0
-	var van_half_h    := _van.texture.get_size().y * _van.scale.y / 2.0
-	# Exhaust pipe sits at roughly the lower-right quarter of the van image.
-	var exhaust_x     := _van.position.x + van_half_w * 0.80
-	var exhaust_y     := _van.position.y + van_half_h * 0.40
+	# Puffs are added to this CanvasLayer (siblings of the van sprite) so they
+	# stay in place while the van drives left, forming a lingering cloud trail.
+	var van_half_w := _van.texture.get_size().x * _van.scale.x / 2.0
+	var van_half_h := _van.texture.get_size().y * _van.scale.y / 2.0
+	# 0.56 places the origin at the actual van body rear (~78 % of the PNG width
+	# from the left), not at the full canvas edge. Adjust if the image proportions differ.
+	var exhaust_x  := _van.position.x + van_half_w * 0.56
+	var exhaust_y  := _van.position.y + van_half_h * 0.38
 	for i: int in 2:
-		var puff         := _ExhaustPuff.new()
-		puff.position    =  Vector2(
-			exhaust_x + randf_range(-20.0, 20.0),
-			exhaust_y + randf_range(-15.0, 20.0)
+		var puff        := _ExhaustPuff.new()
+		puff.position   =  Vector2(
+			exhaust_x + randf_range(-18.0, 18.0),
+			exhaust_y + randf_range(-12.0, 18.0)
 		)
-		puff.max_radius  = randf_range(48.0, 75.0)
-		puff.start_delay = i * 0.10
+		puff.max_radius = randf_range(48.0, 75.0)
 		add_child(puff)
 
 
@@ -171,24 +174,29 @@ func _apply_button_style(btn: Button) -> void:
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
 
 
-# One transient exhaust cloud puff. Expands from a small point, fades, then frees itself.
+# One transient exhaust cloud puff.
+# Animation: grow to full size (0.3 s) → hold (0.5 s) → slow fade out (0.8 s) → free.
 class _ExhaustPuff extends Node2D:
-	var start_delay: float = 0.0
-	var max_radius:  float = 65.0
+	var max_radius: float = 65.0
 
-	var _radius: float = 0.0
+	var _radius: float = 10.0
 	var _alpha:  float = 0.0
 
 	func _ready() -> void:
 		var tween := create_tween()
-		if start_delay > 0.0:
-			tween.tween_interval(start_delay)
-		tween.tween_method(_update, 0.0, 1.0, 0.6)
+		tween.tween_method(_grow, 0.0, 1.0, 0.30)   # expand to full size
+		tween.tween_interval(0.50)                    # hold at full size
+		tween.tween_method(_fade, 1.0, 0.0, 0.80)   # slow fade out
 		tween.tween_callback(queue_free)
 
-	func _update(t: float) -> void:
+	func _grow(t: float) -> void:
 		_radius = lerp(10.0, max_radius, t)
-		_alpha  = sin(t * PI)  # smooth bell: rises quickly then fades out
+		_alpha  = t
+		queue_redraw()
+
+	func _fade(t: float) -> void:
+		# _radius stays at max_radius during the fade.
+		_alpha = t
 		queue_redraw()
 
 	func _draw() -> void:
