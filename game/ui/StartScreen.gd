@@ -25,9 +25,10 @@ const COLOR_BTN_BORDER  := Color(0.60, 0.60, 0.65, 1.0)
 # scale = min(screen_w / img_w, screen_h / img_h)  — same as CSS background-size: contain.
 
 # Tailpipe pixel coordinates in the source image (1536 × 1024).
-# Used to place exhaust clouds at the actual pipe, not the canvas boundary.
-const TAILPIPE_IMG_X := 942.0
-const TAILPIPE_IMG_Y := 473.0
+# x=1042 is the horizontal centre of the rear undercarriage; y=712 is the bottom
+# edge of the van body at that column — where the pipe exits beneath the bumper.
+const TAILPIPE_IMG_X := 1042.0
+const TAILPIPE_IMG_Y := 712.0
 
 var _van:       Sprite2D
 var _start_btn: Button
@@ -36,6 +37,17 @@ var _quit_btn:  Button
 
 func _ready() -> void:
 	_build_ui()
+	get_viewport().size_changed.connect(_on_viewport_resized)
+
+
+func _on_viewport_resized() -> void:
+	if not is_instance_valid(_van):
+		return
+	var vp       := get_viewport().get_visible_rect().size
+	var tex_size := _van.texture.get_size()
+	var scale_f  := minf(vp.x / tex_size.x, vp.y / tex_size.y)
+	_van.scale    = Vector2(scale_f, scale_f)
+	_van.position = Vector2(vp.x * 0.5, vp.y * 0.5)
 
 
 func _build_ui() -> void:
@@ -117,14 +129,15 @@ func _play_van_exit() -> void:
 	# Drive the van fully off the left edge of the screen.
 	var target_x := -(van_scaled_w / 2.0)
 
-	# Spawn a puff every 0.12 s across the full 1.1 s drive-off so the trail
-	# follows the van as it accelerates. Each callback reads _van.position at
-	# fire time, so the spawn point tracks the current rear position naturally.
-	for i: int in 9:
+	# Spawn a burst every ~0.07 s across the full 1.1 s drive-off. Higher
+	# frequency than before so the cloud builds up to fogger-like density.
+	# Each callback reads _van.position at fire time, so the spawn point
+	# tracks the current rear position naturally.
+	for i: int in 15:
 		if i == 0:
 			_spawn_exhaust_puffs()
 		else:
-			get_tree().create_timer(i * 0.12).timeout.connect(_spawn_exhaust_puffs)
+			get_tree().create_timer(i * 0.075).timeout.connect(_spawn_exhaust_puffs)
 
 	var tween := create_tween()
 	tween.tween_property(_van, "position:x", target_x, 1.1) \
@@ -143,13 +156,15 @@ func _spawn_exhaust_puffs() -> void:
 	var tex_size  := _van.texture.get_size()
 	var exhaust_x := _van.position.x + (TAILPIPE_IMG_X - tex_size.x / 2.0) * _van.scale.x
 	var exhaust_y := _van.position.y + (TAILPIPE_IMG_Y - tex_size.y / 2.0) * _van.scale.y
-	for i: int in 2:
+	# 5 puffs per burst, all spawning close to the pipe — they overlap and
+	# merge into a fogger-like cloud mass rather than discrete circles.
+	for i: int in 5:
 		var puff        := _ExhaustPuff.new()
-		puff.position   =  Vector2(
-			exhaust_x + randf_range(-18.0, 18.0),
-			exhaust_y + randf_range(-12.0, 18.0)
+		puff.position   = Vector2(
+			exhaust_x + randf_range(-8.0, 8.0),
+			exhaust_y + randf_range(-8.0, 8.0)
 		)
-		puff.max_radius = randf_range(48.0, 75.0)
+		puff.max_radius = randf_range(70.0, 110.0)
 		add_child(puff)
 
 
@@ -184,30 +199,45 @@ func _apply_button_style(btn: Button) -> void:
 
 
 # One transient exhaust cloud puff.
-# Animation: grow to full size (0.3 s) → hold (0.5 s) → slow fade out (0.8 s) → free.
+#
+# Designed like the in-game Fogger clouds: individual puffs are nearly
+# transparent (alpha * 0.18 per puff) so a single puff barely shows, but
+# 5–7 overlapping puffs in the cloud core stack up to ~0.6 effective opacity
+# — a dense, cohesive mass rather than visible separate circles.
+#
+# Animation: quick bloom (0.15 s) → hold (0.65 s) → slow dissolve (1.00 s).
+# Puff also drifts upward 30 px over its full lifetime, mimicking real exhaust.
 class _ExhaustPuff extends Node2D:
-	var max_radius: float = 65.0
+	var max_radius: float = 90.0
 
-	var _radius: float = 10.0
+	var _radius: float = 8.0
 	var _alpha:  float = 0.0
 
+	const _LIFETIME := 1.80   # grow + hold + fade — must match tween durations below
+	const _DRIFT_PX := 30.0   # upward travel in pixels over the full lifetime
+
 	func _ready() -> void:
-		var tween := create_tween()
-		tween.tween_method(_grow, 0.0, 1.0, 0.30)   # expand to full size
-		tween.tween_interval(0.50)                    # hold at full size
-		tween.tween_method(_fade, 1.0, 0.0, 0.80)   # slow fade out
-		tween.tween_callback(queue_free)
+		# Drift upward slowly over the full lifetime.
+		create_tween() \
+			.tween_property(self, "position:y", position.y - _DRIFT_PX, _LIFETIME) \
+			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+
+		var anim := create_tween()
+		anim.tween_method(_grow, 0.0, 1.0, 0.15)   # quick bloom
+		anim.tween_interval(0.65)                    # hold at full size
+		anim.tween_method(_fade, 1.0, 0.0, 1.00)   # slow dissolve
+		anim.tween_callback(queue_free)
 
 	func _grow(t: float) -> void:
-		_radius = lerp(10.0, max_radius, t)
+		_radius = lerp(8.0, max_radius, t)
 		_alpha  = t
 		queue_redraw()
 
 	func _fade(t: float) -> void:
-		# _radius stays at max_radius during the fade.
 		_alpha = t
 		queue_redraw()
 
 	func _draw() -> void:
 		if _alpha > 0.0:
-			draw_circle(Vector2.ZERO, _radius, Color(0.65, 0.65, 0.65, _alpha * 0.65))
+			# Low per-puff alpha so stacked puffs merge into a solid-looking mass.
+			draw_circle(Vector2.ZERO, _radius, Color(0.80, 0.80, 0.82, _alpha * 0.18))
