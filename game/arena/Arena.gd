@@ -62,6 +62,11 @@ const COLOR_WALL_FILL    := Color(0.72, 0.72, 0.72, 1.0) # light gray wall fill
 const COLOR_WALL_BORDER  := Color(0.25, 0.25, 0.25, 1.0) # dark gray cell border lines
 const COLOR_TRAP_SELECTED := Color(0.90, 0.70, 0.10, 1.0) # gold outline on selected trap
 
+# Backyard arena floor colours
+const COLOR_FLOOR_DIRT  := Color(0.42, 0.32, 0.18, 1.0)   # warm brown dirt base
+const COLOR_FLOOR_GRASS := Color(0.22, 0.43, 0.14, 0.65)  # muted grass green, semi-transparent
+const COLOR_FLOOR_LINES := Color(0.26, 0.18, 0.08, 0.32)  # faint dark brown grid marks
+
 
 # ---------------------------------------------------------------------------
 # Node references — resolved at scene load via @onready
@@ -212,6 +217,7 @@ func _ready() -> void:
 	_setup_grid_highlight()
 	_setup_selected_trap_outline()
 	_init_path_marker_pool()
+	_spawn_floor()
 	_spawn_arena_border()
 
 	get_viewport().physics_object_picking = true
@@ -1135,6 +1141,109 @@ func _draw_cell_glow(im: ImmediateMesh, cell: Vector2i, hs: float, y: float, alp
 ##
 ## All four walls sit on the outermost rows/columns of the 31×31 grid:
 ##   Top/bottom — rows 0 and 30 (z = ±15.0)
+## Builds the Backyard arena floor: a dirt base, semi-transparent grass patches,
+## and faint broken grid lines. Three mesh instances, one draw call each.
+##
+## Y layer stack (floor sits below all other arena geometry):
+##   0.010  dirt base plane
+##   0.012  grass patches
+##   0.013  grid lines
+func _spawn_floor() -> void:
+	var cs     := Grid.CELL_SIZE
+	var half   := Grid.GRID_SIZE * cs * 0.5   # 15.5
+	# World position of the top-left corner of the interior (col 1, row 1).
+	var origin := -half + cs                   # -14.5
+	var inner  := float(Grid.GRID_SIZE - 2) * cs  # 29.0
+
+	# --- Dirt base ---
+	var floor_mi   := MeshInstance3D.new()
+	var floor_mesh := PlaneMesh.new()
+	floor_mesh.size        = Vector2(inner, inner)
+	floor_mi.mesh          = floor_mesh
+	floor_mi.position      = Vector3(0.0, 0.010, 0.0)
+	var floor_mat          := StandardMaterial3D.new()
+	floor_mat.albedo_color  = COLOR_FLOOR_DIRT
+	floor_mat.shading_mode  = BaseMaterial3D.SHADING_MODE_UNSHADED
+	floor_mi.material_override = floor_mat
+	add_child(floor_mi)
+
+	# --- Grass patches ---
+	# ~40% of interior cells receive a randomly sized and slightly offset patch.
+	# All patches are batched into one ImmediateMesh to keep draw calls to one.
+	# Winding is CCW from above so the front face (+Y normal) faces the camera.
+	var gim    := ImmediateMesh.new()
+	gim.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	gim.surface_set_color(COLOR_FLOOR_GRASS)
+	var y_grass := 0.012
+	for row in range(1, Grid.GRID_SIZE - 1):
+		for col in range(1, Grid.GRID_SIZE - 1):
+			if randf() > 0.40:
+				continue
+			var pw := randf_range(0.55, 0.92) * cs
+			var pd := randf_range(0.55, 0.92) * cs
+			var cx := origin + (col - 0.5) * cs + randf_range(-0.12, 0.12) * cs
+			var cz := origin + (row - 0.5) * cs + randf_range(-0.12, 0.12) * cs
+			var hw := pw * 0.5
+			var hd := pd * 0.5
+			# Triangle 1
+			gim.surface_add_vertex(Vector3(cx - hw, y_grass, cz - hd))
+			gim.surface_add_vertex(Vector3(cx - hw, y_grass, cz + hd))
+			gim.surface_add_vertex(Vector3(cx + hw, y_grass, cz - hd))
+			# Triangle 2
+			gim.surface_add_vertex(Vector3(cx + hw, y_grass, cz - hd))
+			gim.surface_add_vertex(Vector3(cx - hw, y_grass, cz + hd))
+			gim.surface_add_vertex(Vector3(cx + hw, y_grass, cz + hd))
+	gim.surface_end()
+
+	var grass_mi              := MeshInstance3D.new()
+	grass_mi.mesh              = gim
+	var grass_mat             := StandardMaterial3D.new()
+	grass_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	grass_mat.vertex_color_use_as_albedo = true
+	grass_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
+	grass_mat.cull_mode        = BaseMaterial3D.CULL_DISABLED
+	grass_mi.material_override = grass_mat
+	add_child(grass_mi)
+
+	# --- Broken grid lines ---
+	# Each cell-boundary line is split into unit-length segments. Each segment
+	# has a 55% chance of being skipped, producing a fragmented grid pattern.
+	var lim := ImmediateMesh.new()
+	lim.surface_begin(Mesh.PRIMITIVE_LINES)
+	lim.surface_set_color(COLOR_FLOOR_LINES)
+	var y_line := 0.013
+
+	# Vertical lines at each column boundary (parallel to Z axis).
+	for kx in range(Grid.GRID_SIZE - 1):   # 30 boundaries across 29 interior columns
+		var x := origin + kx * cs
+		for kz in range(Grid.GRID_SIZE - 2):   # 29 unit segments per line
+			if randf() < 0.55:
+				continue
+			var z0 := origin + kz * cs
+			lim.surface_add_vertex(Vector3(x, y_line, z0))
+			lim.surface_add_vertex(Vector3(x, y_line, z0 + cs))
+
+	# Horizontal lines at each row boundary (parallel to X axis).
+	for kz in range(Grid.GRID_SIZE - 1):   # 30 boundaries across 29 interior rows
+		var z := origin + kz * cs
+		for kx in range(Grid.GRID_SIZE - 2):   # 29 unit segments per line
+			if randf() < 0.55:
+				continue
+			var x0 := origin + kx * cs
+			lim.surface_add_vertex(Vector3(x0, y_line, z))
+			lim.surface_add_vertex(Vector3(x0 + cs, y_line, z))
+
+	lim.surface_end()
+
+	var lines_mi              := MeshInstance3D.new()
+	lines_mi.mesh              = lim
+	var lines_mat             := StandardMaterial3D.new()
+	lines_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	lines_mat.vertex_color_use_as_albedo = true
+	lines_mi.material_override = lines_mat
+	add_child(lines_mi)
+
+
 ##   Left/right — columns 0 and 30 (x = ±15.0, with entrance/exit gaps)
 ##
 ## Placing geometry outside the grid boundary (z = ±15.5) consistently failed

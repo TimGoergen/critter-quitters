@@ -45,17 +45,17 @@ enum TrapType { SNAP_TRAP, ZAPPER, FOGGER, GLUE_BOARD }
 ##   cost     — Bug Bucks to place one trap of this type
 ##   color    — placeholder box colour (replaced by sprites in Phase 3)
 const STATS := {
-	TrapType.SNAP_TRAP:  { "damage": 3.375, "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.52, 0.27, 0.08) },
-	TrapType.ZAPPER:     { "damage": 56.25, "range": 9.6, "cooldown": 2.5, "cost": 60, "color": Color(0.10, 0.50, 1.00) },
-	TrapType.FOGGER:     { "damage": 4.5,   "range": 4.0, "cooldown": 2.2, "cost": 50, "color": Color(0.35, 0.88, 0.18) },
-	TrapType.GLUE_BOARD: { "damage": 0.0,   "range": 4.8, "cooldown": 0.0, "cost": 35, "color": Color(0.92, 0.89, 0.78) },
+	TrapType.SNAP_TRAP:  { "damage": 5.0,  "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.52, 0.27, 0.08) },
+	TrapType.ZAPPER:     { "damage": 30.0, "range": 9.6, "cooldown": 2.5, "cost": 75, "color": Color(0.10, 0.50, 1.00) },
+	TrapType.FOGGER:     { "damage": 3.0,  "range": 4.0, "cooldown": 2.2, "cost": 60, "color": Color(0.35, 0.88, 0.18) },
+	TrapType.GLUE_BOARD: { "damage": 0.0,  "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(0.92, 0.89, 0.78) },
 }
 
 ## Each stat can be upgraded this many times independently.
 const MAX_UPGRADE_LEVEL: int = 3
 
 ## Stat increment per upgrade level, as a fraction of the base value.
-const UPGRADE_DAMAGE_FACTOR:    float = 0.25  # +25% of base damage per level
+const UPGRADE_DAMAGE_FACTOR:    float = 0.20  # +20% of base damage per level
 const UPGRADE_RANGE_FACTOR:     float = 0.10  # +10% of base range per level
 const UPGRADE_FIRE_RATE_FACTOR: float = 0.08  # −8% of base cooldown per level (faster shots)
 
@@ -117,9 +117,16 @@ var _base_cooldown: float = 0.0
 # types, so this always reflects the live list without any extra bookkeeping.
 var _active_enemies: Array = []
 
-# Enemies currently inside this Glue Board's range. Used to track who enters
-# and leaves so we can call add/remove_slow_source exactly once per transition.
-var _slowed_enemies: Array[Node3D] = []
+# The single enemy currently slowed by this Glue Board (null if none).
+# The board targets one enemy at a time — always the closest in range.
+var _slowed_enemy: Node3D = null
+
+# Seconds remaining before the board can switch to a new slow target.
+# Prevents the board from re-targeting every frame when enemies swap distance ranks.
+var _glue_apply_cooldown: float = 0.0
+
+## How often (in seconds) the Glue Board may pick a new slow target.
+const GLUE_APPLY_INTERVAL: float = 1.0
 
 # When true, this node is a visual-only placement preview: no combat, no hover area,
 # no range indicator. Set by initialize_preview() before the node enters the tree.
@@ -247,7 +254,7 @@ func get_shots_per_sec_after_upgrade() -> float:
 # Upgrade — apply
 # ---------------------------------------------------------------------------
 
-## Increases damage by 25% of base. Only call when not maxed.
+## Increases damage by 20% of base. Only call when not maxed.
 func apply_damage_upgrade() -> void:
 	_damage += _base_damage * UPGRADE_DAMAGE_FACTOR
 	_damage_level += 1
@@ -374,12 +381,11 @@ func _process(delta: float) -> void:
 
 
 func _exit_tree() -> void:
-	# Release any slow sources this trap was holding so enemies return to
-	# normal speed the moment the trap is sold or overwritten.
-	for enemy in _slowed_enemies:
-		if is_instance_valid(enemy):
-			enemy.remove_slow_source()
-	_slowed_enemies.clear()
+	# Release the slow source so the enemy returns to normal speed immediately
+	# when the trap is sold or overwritten.
+	if is_instance_valid(_slowed_enemy):
+		_slowed_enemy.remove_slow_source()
+	_slowed_enemy = null
 
 
 # ---------------------------------------------------------------------------
@@ -408,29 +414,47 @@ func _fire_fogger() -> bool:
 	return false
 
 
-## Applies or removes the slow source on each enemy as they cross the range boundary.
+## Targets the closest enemy in range and slows it. Switches to a new target at
+## most once per GLUE_APPLY_INTERVAL so enemies cannot be swapped every frame.
 func _update_glue_slow() -> void:
-	# Remove entries for enemies that have died or despawned.
-	var i := _slowed_enemies.size() - 1
-	while i >= 0:
-		if not is_instance_valid(_slowed_enemies[i]):
-			_slowed_enemies.remove_at(i)
-		i -= 1
+	_glue_apply_cooldown -= get_process_delta_time()
 
+	# If the current target has died or walked out of range, release it immediately
+	# so the slot is free — we don't wait for the interval to expire.
+	if is_instance_valid(_slowed_enemy):
+		if _xz_distance(_slowed_enemy.global_position) > _range:
+			_slowed_enemy.remove_slow_source()
+			_slowed_enemy = null
+	elif _slowed_enemy != null:
+		# Instance is no longer valid (enemy died).
+		_slowed_enemy = null
+
+	# Only re-target when the interval has elapsed.
+	if _glue_apply_cooldown > 0.0:
+		return
+
+	# Find the closest enemy in range.
+	var closest: Node3D = null
+	var closest_dist    := INF
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
 			continue
-		var in_range:   bool = _xz_distance(enemy.global_position) <= _range
-		var is_tracked: bool = enemy in _slowed_enemies
-		if in_range and not is_tracked:
-			_slowed_enemies.append(enemy)
-			enemy.add_slow_source()
-			# Fire a cosmetic glue projectile the moment the enemy is first caught.
-			# Damage is 0 — the slow is the only effect; this is purely visual.
-			fired.emit(global_position, enemy.global_position, enemy, 0.0, _trap_type)
-		elif not in_range and is_tracked:
-			_slowed_enemies.erase(enemy)
-			enemy.remove_slow_source()
+		var dist := _xz_distance(enemy.global_position)
+		if dist <= _range and dist < closest_dist:
+			closest_dist = dist
+			closest      = enemy
+
+	# Switch to the new target if it differs from the current one.
+	if closest != _slowed_enemy:
+		if is_instance_valid(_slowed_enemy):
+			_slowed_enemy.remove_slow_source()
+		_slowed_enemy = closest
+		if _slowed_enemy != null:
+			_slowed_enemy.add_slow_source()
+			# Cosmetic glue projectile — damage is 0, slow is the only effect.
+			fired.emit(global_position, _slowed_enemy.global_position, _slowed_enemy, 0.0, _trap_type)
+
+	_glue_apply_cooldown = GLUE_APPLY_INTERVAL
 
 
 ## Returns the enemy in range closest to this trap (used by Snap Trap).
@@ -475,15 +499,15 @@ func _xz_distance(world_pos: Vector3) -> float:
 # ---------------------------------------------------------------------------
 
 ## Called after each upgrade. If all stats are now maxed and the bonus has not
-## yet been applied, boosts every stat by 10% as a reward for full investment.
-## Fire rate boost reduces cooldown so shots-per-second increases by ~11%.
+## yet been applied, boosts every stat by 7.5% as a reward for full investment.
+## Fire rate boost reduces cooldown so shots-per-second increases by ~8%.
 func _check_full_upgrade_bonus() -> void:
 	if _bonus_applied or not is_fully_upgraded():
 		return
-	_damage  *= 1.1
-	_range   *= 1.1
+	_damage  *= 1.075
+	_range   *= 1.075
 	if _base_cooldown > 0.0:
-		_cooldown = maxf(_cooldown / 1.1, 0.1)
+		_cooldown = maxf(_cooldown / 1.075, 0.1)
 	_bonus_applied = true
 
 

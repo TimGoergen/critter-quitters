@@ -25,10 +25,10 @@ const COLOR_BTN_BORDER  := Color(0.60, 0.60, 0.65, 1.0)
 # scale = min(screen_w / img_w, screen_h / img_h)  — same as CSS background-size: contain.
 
 # Tailpipe pixel coordinates in the source image (1536 × 1024).
-# x=1042 is the horizontal centre of the rear undercarriage; y=712 is the bottom
-# edge of the van body at that column — where the pipe exits beneath the bumper.
-const TAILPIPE_IMG_X := 1042.0
-const TAILPIPE_IMG_Y := 712.0
+# x is the horizontal centre of the exhaust pipe at the rear bumper;
+# y is the pipe exit height (undercarriage, just above the rear bumper bottom).
+const TAILPIPE_IMG_X := 1058.0
+const TAILPIPE_IMG_Y := 648.0
 
 var _van:       Sprite2D
 var _start_btn: Button
@@ -160,12 +160,15 @@ func _spawn_exhaust_puffs() -> void:
 	# merge into a fogger-like cloud mass rather than discrete circles.
 	for i: int in 5:
 		var puff        := _ExhaustPuff.new()
+		var angle       := randf() * TAU
+		var dist        := randf_range(0.0, 18.0)
 		puff.position   = Vector2(
-			exhaust_x + randf_range(-8.0, 8.0),
-			exhaust_y + randf_range(-8.0, 8.0)
+			exhaust_x + cos(angle) * dist,
+			exhaust_y + sin(angle) * dist
 		)
-		puff.max_radius = randf_range(70.0, 110.0)
+		puff.max_radius = randf_range(76.5, 103.5)   # base 90, ±15%
 		add_child(puff)
+		move_child(puff, _van.get_index())
 
 
 func _on_van_exited() -> void:
@@ -205,7 +208,7 @@ func _apply_button_style(btn: Button) -> void:
 # 5–7 overlapping puffs in the cloud core stack up to ~0.6 effective opacity
 # — a dense, cohesive mass rather than visible separate circles.
 #
-# Animation: quick bloom (0.15 s) → hold (0.65 s) → slow dissolve (1.00 s).
+# Animation: quick bloom (0.15 s) → hold (0.25 s) → dissolve (0.50 s).
 # Puff also drifts upward 30 px over its full lifetime, mimicking real exhaust.
 class _ExhaustPuff extends Node2D:
 	var max_radius: float = 90.0
@@ -213,7 +216,7 @@ class _ExhaustPuff extends Node2D:
 	var _radius: float = 8.0
 	var _alpha:  float = 0.0
 
-	const _LIFETIME := 1.80   # grow + hold + fade — must match tween durations below
+	const _LIFETIME := 0.90   # grow + hold + fade — must match tween durations below
 	const _DRIFT_PX := 30.0   # upward travel in pixels over the full lifetime
 
 	func _ready() -> void:
@@ -224,8 +227,8 @@ class _ExhaustPuff extends Node2D:
 
 		var anim := create_tween()
 		anim.tween_method(_grow, 0.0, 1.0, 0.15)   # quick bloom
-		anim.tween_interval(0.65)                    # hold at full size
-		anim.tween_method(_fade, 1.0, 0.0, 1.00)   # slow dissolve
+		anim.tween_interval(0.25)                    # hold at full size
+		anim.tween_method(_fade, 1.0, 0.0, 0.50)   # dissolve
 		anim.tween_callback(queue_free)
 
 	func _grow(t: float) -> void:
