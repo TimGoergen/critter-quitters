@@ -1214,7 +1214,7 @@ func _draw_cell_glow(im: ImmediateMesh, cell: Vector2i, hs: float, y: float, alp
 ## blur_step is in full-texture UV units. At the default 0.008, a ~1080px source
 ## image gets roughly a 9-pixel blur radius per tap (5×5 = 25 taps total).
 ## Increase for more softening; decrease to show more detail.
-const FLOOR_BLUR_STEP: float = 0.008
+const FLOOR_BLUR_STEP: float = 0.0032
 
 # Shader source embedded here so no separate .gdshader file needs to be loaded —
 # avoids a null-shader if Godot hasn't rescanned the project after adding the file.
@@ -1245,9 +1245,9 @@ func _spawn_floor() -> void:
 		push_warning("Arena: floor texture not found — expected at res://assets/arena/backyard_floor.png")
 		return
 
-	# 8% of image area = a crop window with side length sqrt(0.08) ≈ 0.283.
+	# 16% of image area = a crop window with side length sqrt(0.16) ≈ 0.400.
 	# A random UV offset places the window anywhere it fits inside the full image.
-	const CROP_SIZE: float = 0.283
+	const CROP_SIZE: float = 0.400
 	var max_offset  := 1.0 - CROP_SIZE
 	var crop_offset := Vector2(randf() * max_offset, randf() * max_offset)
 
