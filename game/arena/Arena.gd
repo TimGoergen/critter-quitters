@@ -62,10 +62,10 @@ const COLOR_WALL_FILL    := Color(0.72, 0.72, 0.72, 1.0) # light gray wall fill
 const COLOR_WALL_BORDER  := Color(0.25, 0.25, 0.25, 1.0) # dark gray cell border lines
 const COLOR_TRAP_SELECTED := Color(0.90, 0.70, 0.10, 1.0) # gold outline on selected trap
 
-# Backyard arena floor colours
-const COLOR_FLOOR_DIRT  := Color(0.42, 0.32, 0.18, 1.0)   # warm brown dirt base
-const COLOR_FLOOR_GRASS := Color(0.22, 0.43, 0.14, 0.65)  # muted grass green, semi-transparent
-const COLOR_FLOOR_LINES := Color(0.26, 0.18, 0.08, 0.32)  # faint dark brown grid marks
+# Backyard arena floor colours — dimmed to ~20% of original brightness, dirt +20% brighter
+const COLOR_FLOOR_DIRT  := Color(0.10, 0.07, 0.05, 1.0)   # dark brown dirt base
+const COLOR_FLOOR_GRASS := Color(0.01, 0.03, 0.01, 0.65)  # dark forest green, semi-transparent (-40% then -35% brightness)
+const COLOR_FLOOR_LINES := Color(0.02, 0.016, 0.008, 0.32)  # barely-visible grid marks (-50% then -20% brightness)
 
 
 # ---------------------------------------------------------------------------
@@ -142,6 +142,7 @@ var _pressing: bool = false
 var _drag_origin: Vector2i = Vector2i(-1, -1)
 var _drag_anchors: Array[Vector2i] = []
 var _drag_ghosts: Array[Node3D] = []
+var _drag_ghost_outlines: Array[MeshInstance3D] = []
 
 # A single ghost of the selected trap shown at the hover position before pressing.
 # Rebuilt when trap type changes; repositioned on every cursor move.
@@ -346,6 +347,7 @@ func _update_drag_ghosts(target: Vector2i) -> void:
 		var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 		ghost.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 		_drag_ghosts.append(ghost)
+		_drag_ghost_outlines.append(_make_drag_outline(anchor))
 
 
 ## On release, commits anchors in order from origin to end.
@@ -415,11 +417,80 @@ func _compute_drag_anchors(origin: Vector2i, target: Vector2i) -> Array[Vector2i
 	return anchors
 
 
-## Frees all ghost nodes from the current drag line.
+## Frees all ghost nodes and their outlines from the current drag line.
 func _clear_drag_ghosts() -> void:
 	for ghost in _drag_ghosts:
 		ghost.queue_free()
 	_drag_ghosts.clear()
+	for outline in _drag_ghost_outlines:
+		outline.queue_free()
+	_drag_ghost_outlines.clear()
+
+
+## Builds and returns an outline MeshInstance3D for a drag-preview ghost.
+## Mirrors _draw_trap_outline but uses hovered brightness (no placed trap exists yet)
+## and returns a fresh node rather than updating _trap_outlines.
+func _make_drag_outline(anchor: Vector2i) -> MeshInstance3D:
+	var trap_type: int  = GameState.selected_trap_type
+	var base: Color     = Trap.STATS[trap_type]["color"]
+	var outline_color: Color = base.lightened(0.45)
+	outline_color.a = 1.0
+	var fill_color := _neon_color(base)
+	fill_color.a = 0.03
+
+	var hs := Grid.CELL_SIZE * 0.5
+	var cs := Grid.CELL_SIZE
+	var c  := _cell_to_world(anchor)
+
+	var min_x := c.x - hs;       var max_x := c.x + hs + cs
+	var min_z := c.z - hs;       var max_z := c.z + hs + cs
+	var cx    := (min_x + max_x) * 0.5
+	var cz    := (min_z + max_z) * 0.5
+
+	const CORNER_R:    float = 0.15
+	const CORNER_SEGS: int   = 5
+	var y_fill    := 0.03
+	var y_outline := 0.06
+
+	var im := ImmediateMesh.new()
+
+	var fill_pts := _rounded_rect_pts(min_x, max_x, min_z, max_z, y_fill, CORNER_R, CORNER_SEGS)
+	var center   := Vector3(cx, y_fill, cz)
+	var n := fill_pts.size()
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(n):
+		var a: Vector3 = fill_pts[i]
+		var b: Vector3 = fill_pts[(i + 1) % n]
+		im.surface_set_color(fill_color); im.surface_add_vertex(center)
+		im.surface_set_color(fill_color); im.surface_add_vertex(a)
+		im.surface_set_color(fill_color); im.surface_add_vertex(b)
+	im.surface_end()
+
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	for inset: float in [0.04, 0.08]:
+		var r: float = maxf(CORNER_R - inset, 0.0)
+		var pts := _rounded_rect_pts(
+			min_x + inset, max_x - inset,
+			min_z + inset, max_z - inset,
+			y_outline, r, CORNER_SEGS
+		)
+		for i in range(pts.size()):
+			var a: Vector3 = pts[i]
+			var b: Vector3 = pts[(i + 1) % pts.size()]
+			im.surface_set_color(outline_color); im.surface_add_vertex(a)
+			im.surface_set_color(outline_color); im.surface_add_vertex(b)
+	im.surface_end()
+
+	var mi  := MeshInstance3D.new()
+	var mat := StandardMaterial3D.new()
+	mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.vertex_color_use_as_albedo = true
+	mat.cull_mode                  = BaseMaterial3D.CULL_DISABLED
+	mi.material_override = mat
+	add_child(mi)
+	mi.mesh = im
+	return mi
 
 
 func _try_place_trap(anchor: Vector2i) -> bool:
@@ -1167,32 +1238,110 @@ func _spawn_floor() -> void:
 	floor_mi.material_override = floor_mat
 	add_child(floor_mi)
 
+	# Noise generators for spatially coherent color variation.
+	# Low frequency = large clumps; each layer uses an independent seed
+	# so dirt and grass don't mirror each other.
+	var dirt_noise := FastNoiseLite.new()
+	dirt_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	dirt_noise.frequency  = 0.12   # clump size ~8 cells across
+	dirt_noise.seed       = randi()
+
+	var grass_noise := FastNoiseLite.new()
+	grass_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
+	grass_noise.frequency  = 0.07   # low frequency = large, well-separated clumps
+	grass_noise.seed       = randi()
+
+	# --- Dirt variation sublayer ---
+	# ~60% of cells get a patch whose colour is driven by dirt_noise, so
+	# adjacent patches share similar tones and form visible brown clumps.
+	var dim        := ImmediateMesh.new()
+	dim.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	var y_dirt_var := 0.011
+	for row in range(1, Grid.GRID_SIZE - 1):
+		for col in range(1, Grid.GRID_SIZE - 1):
+			if randf() > 0.60:
+				continue
+			# noise returns -1..1; scale to a ±0.07 brightness shift
+			var n := dirt_noise.get_noise_2d(float(col), float(row))
+			var v := n * 0.07
+			dim.surface_set_color(Color(
+				clampf(COLOR_FLOOR_DIRT.r + v,        0.0, 1.0),
+				clampf(COLOR_FLOOR_DIRT.g + v * 0.8,  0.0, 1.0),
+				clampf(COLOR_FLOOR_DIRT.b + v * 0.6,  0.0, 1.0),
+				1.0
+			))
+			var pw := randf_range(0.60, 1.0) * cs
+			var pd := randf_range(0.60, 1.0) * cs
+			var cx := origin + (col - 0.5) * cs
+			var cz := origin + (row - 0.5) * cs
+			var hw := pw * 0.5
+			var hd := pd * 0.5
+			dim.surface_add_vertex(Vector3(cx - hw, y_dirt_var, cz - hd))
+			dim.surface_add_vertex(Vector3(cx - hw, y_dirt_var, cz + hd))
+			dim.surface_add_vertex(Vector3(cx + hw, y_dirt_var, cz - hd))
+			dim.surface_add_vertex(Vector3(cx + hw, y_dirt_var, cz - hd))
+			dim.surface_add_vertex(Vector3(cx - hw, y_dirt_var, cz + hd))
+			dim.surface_add_vertex(Vector3(cx + hw, y_dirt_var, cz + hd))
+	dim.surface_end()
+	var dirt_var_mi              := MeshInstance3D.new()
+	dirt_var_mi.mesh              = dim
+	var dirt_var_mat             := StandardMaterial3D.new()
+	dirt_var_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	dirt_var_mat.vertex_color_use_as_albedo = true
+	dirt_var_mi.material_override = dirt_var_mat
+	add_child(dirt_var_mi)
+
 	# --- Grass patches ---
-	# ~40% of interior cells receive a randomly sized and slightly offset patch.
+	# Grass is placed only where grass_noise exceeds a threshold (n > 0.15),
+	# which concentrates patches inside discrete clump zones and leaves bare
+	# dirt between them. Within each zone a 34% random check further thins
+	# coverage, giving ~14% total (24% reduced by 40%).
+	#
+	# Each patch is a 14-sided polygon fan. The radius at each vertex is shaped
+	# by a lobe modulation (3–6 lobes, 25–45% amplitude) that produces a
+	# plant-like silhouette, with a small additional roughness term on top.
+	# Independent x/z radii make patches elliptical rather than circular.
+	#
+	# Colour is driven by grass_noise so patches within the same clump zone
+	# share a similar green tone.
 	# All patches are batched into one ImmediateMesh to keep draw calls to one.
 	# Winding is CCW from above so the front face (+Y normal) faces the camera.
+	const GRASS_SIDES := 14
 	var gim    := ImmediateMesh.new()
 	gim.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	gim.surface_set_color(COLOR_FLOOR_GRASS)
 	var y_grass := 0.012
 	for row in range(1, Grid.GRID_SIZE - 1):
 		for col in range(1, Grid.GRID_SIZE - 1):
-			if randf() > 0.40:
+			var n := grass_noise.get_noise_2d(float(col), float(row))
+			# Skip cells outside clump zones entirely — this creates bare gaps.
+			if n < 0.15 or randf() > 0.34:
 				continue
-			var pw := randf_range(0.55, 0.92) * cs
-			var pd := randf_range(0.55, 0.92) * cs
-			var cx := origin + (col - 0.5) * cs + randf_range(-0.12, 0.12) * cs
-			var cz := origin + (row - 0.5) * cs + randf_range(-0.12, 0.12) * cs
-			var hw := pw * 0.5
-			var hd := pd * 0.5
-			# Triangle 1
-			gim.surface_add_vertex(Vector3(cx - hw, y_grass, cz - hd))
-			gim.surface_add_vertex(Vector3(cx - hw, y_grass, cz + hd))
-			gim.surface_add_vertex(Vector3(cx + hw, y_grass, cz - hd))
-			# Triangle 2
-			gim.surface_add_vertex(Vector3(cx + hw, y_grass, cz - hd))
-			gim.surface_add_vertex(Vector3(cx - hw, y_grass, cz + hd))
-			gim.surface_add_vertex(Vector3(cx + hw, y_grass, cz + hd))
+			var v := n * 0.03
+			gim.surface_set_color(Color(
+				clampf(COLOR_FLOOR_GRASS.r + v,        0.0, 1.0),
+				clampf(COLOR_FLOOR_GRASS.g + v * 0.7,  0.0, 1.0),
+				clampf(COLOR_FLOOR_GRASS.b + v,        0.0, 1.0),
+				COLOR_FLOOR_GRASS.a
+			))
+			# Independent x/z radii produce ellipses; max extended 40% for more variety.
+			var rx := randf_range(0.18, 0.91) * cs
+			var rz := randf_range(0.18, 0.91) * cs
+			var cx := origin + (col - 0.5) * cs + randf_range(-0.15, 0.15) * cs
+			var cz := origin + (row - 0.5) * cs + randf_range(-0.15, 0.15) * cs
+			# Lobe parameters vary per patch — gives each clump a distinct plant silhouette.
+			var n_lobes    := randi_range(3, 6)
+			var lobe_amp   := randf_range(0.25, 0.45)
+			var lobe_phase := randf() * TAU
+			for i in range(GRASS_SIDES):
+				var a0 := TAU * float(i)     / float(GRASS_SIDES)
+				var a1 := TAU * float(i + 1) / float(GRASS_SIDES)
+				# Lobe modulation creates plant-like bumps; small roughness term
+				# breaks the smooth cosine curve for a more jagged natural edge.
+				var mod0 := 1.0 + lobe_amp * cos(float(n_lobes) * a0 + lobe_phase) + randf_range(-0.08, 0.08)
+				var mod1 := 1.0 + lobe_amp * cos(float(n_lobes) * a1 + lobe_phase) + randf_range(-0.08, 0.08)
+				gim.surface_add_vertex(Vector3(cx, y_grass, cz))
+				gim.surface_add_vertex(Vector3(cx + rx * mod0 * cos(a0), y_grass, cz + rz * mod0 * sin(a0)))
+				gim.surface_add_vertex(Vector3(cx + rx * mod1 * cos(a1), y_grass, cz + rz * mod1 * sin(a1)))
 	gim.surface_end()
 
 	var grass_mi              := MeshInstance3D.new()
@@ -1217,7 +1366,7 @@ func _spawn_floor() -> void:
 	for kx in range(Grid.GRID_SIZE - 1):   # 30 boundaries across 29 interior columns
 		var x := origin + kx * cs
 		for kz in range(Grid.GRID_SIZE - 2):   # 29 unit segments per line
-			if randf() < 0.55:
+			if randf() < 0.84:
 				continue
 			var z0 := origin + kz * cs
 			lim.surface_add_vertex(Vector3(x, y_line, z0))
@@ -1227,7 +1376,7 @@ func _spawn_floor() -> void:
 	for kz in range(Grid.GRID_SIZE - 1):   # 30 boundaries across 29 interior rows
 		var z := origin + kz * cs
 		for kx in range(Grid.GRID_SIZE - 2):   # 29 unit segments per line
-			if randf() < 0.55:
+			if randf() < 0.84:
 				continue
 			var x0 := origin + kx * cs
 			lim.surface_add_vertex(Vector3(x0, y_line, z))
