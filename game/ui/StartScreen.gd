@@ -21,13 +21,9 @@ const COLOR_BTN_HOVER   := Color(0.30, 0.30, 0.33, 1.0)
 const COLOR_BTN_PRESSED := Color(0.14, 0.14, 0.16, 1.0)
 const COLOR_BTN_BORDER  := Color(0.60, 0.60, 0.65, 1.0)
 
-# Van is scaled to this fraction of viewport width (no height cap — the image
-# aspect ratio means height follows naturally from width).
-const VAN_WIDTH_FRACTION := 0.81
-const VAN_TOP_PAD        := 20.0  # minimum clearance (px) above the van top edge
-
-# The van is centred in the vertical band from the screen top to the slogan.
-const SLOGAN_TOP_ANCHOR  := 0.78  # must match slogan anchor_top below
+# Van scale: 2.0 × (viewport width / image width).
+# The sprite origin is at the image centre, so position = screen centre = exact centre.
+const VAN_WIDTH_FRACTION := 1.62   # = 0.81 × 2  (twice the previous size)
 
 # Tailpipe pixel coordinates in the source image (1536 × 1024).
 # Used to place exhaust clouds at the actual pipe, not the canvas boundary.
@@ -54,20 +50,15 @@ func _build_ui() -> void:
 	add_child(bg)
 
 	# --- Van illustration ---
-	# Scale is driven purely by viewport width (no height cap).
-	# The van is centred horizontally and vertically in the band between the
-	# screen top and the slogan. If the van is too tall to centre without the
-	# top going off-screen, it is nudged down just enough to stay visible.
+	# Sprite2D origin is at the image centre, so placing it at the viewport
+	# centre guarantees the sprite centre lands exactly at the screen centre.
 	var van_tex: Texture2D = load("res://assets/van.png")
 	_van = Sprite2D.new()
-	_van.texture   = van_tex
-	var tex_size   := van_tex.get_size()
-	var scale_f    := (vp.x * VAN_WIDTH_FRACTION) / tex_size.x
-	_van.scale     = Vector2(scale_f, scale_f)
-	var van_half_h    := tex_size.y * scale_f / 2.0
-	var slogan_top_y  := vp.y * SLOGAN_TOP_ANCHOR
-	var desired_cy    := slogan_top_y / 2.0           # ideal centre of available space
-	_van.position     = Vector2(vp.x * 0.5, maxf(desired_cy, van_half_h + VAN_TOP_PAD))
+	_van.texture  = van_tex
+	var tex_size  := van_tex.get_size()
+	var scale_f   := (vp.x * VAN_WIDTH_FRACTION) / tex_size.x
+	_van.scale    = Vector2(scale_f, scale_f)
+	_van.position = Vector2(vp.x * 0.5, vp.y * 0.5)
 	add_child(_van)
 
 	# --- Slogan ---
@@ -78,8 +69,8 @@ func _build_ui() -> void:
 	slogan.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
 	slogan.anchor_left          = 0.10
 	slogan.anchor_right         = 0.90
-	slogan.anchor_top           = 0.78  # must match SLOGAN_TOP_ANCHOR above
-	slogan.anchor_bottom        = 0.86
+	slogan.anchor_top           = 0.80
+	slogan.anchor_bottom        = 0.88
 	slogan.add_theme_font_override("font", UIFonts.flavor())
 	slogan.add_theme_font_size_override("font_size", 26)
 	slogan.add_theme_color_override("font_color", COLOR_SLOGAN)
@@ -89,7 +80,7 @@ func _build_ui() -> void:
 	_start_btn = _make_button("Start Buggin'")
 	_start_btn.anchor_left   = 0.25
 	_start_btn.anchor_right  = 0.48
-	_start_btn.anchor_top    = 0.87
+	_start_btn.anchor_top    = 0.88
 	_start_btn.anchor_bottom = 0.97
 	_start_btn.pressed.connect(_on_start_pressed)
 	add_child(_start_btn)
@@ -97,7 +88,7 @@ func _build_ui() -> void:
 	_quit_btn = _make_button("Bug Out")
 	_quit_btn.anchor_left   = 0.52
 	_quit_btn.anchor_right  = 0.75
-	_quit_btn.anchor_top    = 0.87
+	_quit_btn.anchor_top    = 0.88
 	_quit_btn.anchor_bottom = 0.97
 	_quit_btn.pressed.connect(_on_quit_pressed)
 	add_child(_quit_btn)
