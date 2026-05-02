@@ -29,6 +29,17 @@ static func header() -> Font:
 static func flavor() -> Font:
 	return _load(_FLAVOR_PATH)
 
+static func flavor_bold_italic() -> Font:
+	# Montserrat has no bold-italic file, so synthesize both effects via
+	# FontVariation: embolden thickens strokes; variation_transform skews
+	# glyphs right to mimic italic (y_axis x-component shifts top of each
+	# glyph rightward in screen space where Y increases downward).
+	var fv := FontVariation.new()
+	fv.base_font = _load(_FLAVOR_PATH)
+	fv.variation_embolden = 0.8
+	fv.variation_transform = Transform2D(Vector2(1.0, 0.0), Vector2(-0.2, 1.0), Vector2.ZERO)
+	return fv
+
 
 static func _load(path: String) -> Font:
 	if ResourceLoader.exists(path):

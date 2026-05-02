@@ -22,13 +22,17 @@ const COLOR_BTN_PRESSED := Color(0.14, 0.14, 0.16, 1.0)
 const COLOR_BTN_BORDER  := Color(0.60, 0.60, 0.65, 1.0)
 
 # "Contain" scaling: the van is as large as possible while fully visible.
-# scale = min(screen_w / img_w, screen_h / img_h)  — same as CSS background-size: contain.
+# scale = min(screen_w / REF_W, screen_h / REF_H) — computed against the
+# original 1536×1024 reference dimensions so the van's visual size stays
+# constant even if the PNG file's pixel dimensions change.
+const VAN_REF_W := 1536.0
+const VAN_REF_H := 1024.0
 
-# Tailpipe pixel coordinates in the source image (1536 × 1024).
+# Tailpipe pixel coordinates in the source image (990 × 560).
 # x is the horizontal centre of the exhaust pipe at the rear bumper;
 # y is the pipe exit height (undercarriage, just above the rear bumper bottom).
-const TAILPIPE_IMG_X := 1058.0
-const TAILPIPE_IMG_Y := 648.0
+const TAILPIPE_IMG_X := 875.0
+const TAILPIPE_IMG_Y := 450.0
 
 var _van:       Sprite2D
 var _start_btn: Button
@@ -43,9 +47,8 @@ func _ready() -> void:
 func _on_viewport_resized() -> void:
 	if not is_instance_valid(_van):
 		return
-	var vp       := get_viewport().get_visible_rect().size
-	var tex_size := _van.texture.get_size()
-	var scale_f  := minf(vp.x / tex_size.x, vp.y / tex_size.y)
+	var vp      := get_viewport().get_visible_rect().size
+	var scale_f := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
 	_van.scale    = Vector2(scale_f, scale_f)
 	_van.position = Vector2(vp.x * 0.5, vp.y * 0.5)
 
@@ -69,8 +72,7 @@ func _build_ui() -> void:
 	_van          = Sprite2D.new()
 	_van.texture  = van_tex
 	_van.centered = true
-	var tex_size  := van_tex.get_size()
-	var scale_f   := minf(vp.x / tex_size.x, vp.y / tex_size.y)
+	var scale_f   := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
 	_van.scale    = Vector2(scale_f, scale_f)
 	_van.position = Vector2(vp.x * 0.5, vp.y * 0.5)
 	add_child(_van)
@@ -83,9 +85,9 @@ func _build_ui() -> void:
 	slogan.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
 	slogan.anchor_left          = 0.10
 	slogan.anchor_right         = 0.90
-	slogan.anchor_top           = 0.80
-	slogan.anchor_bottom        = 0.88
-	slogan.add_theme_font_override("font", UIFonts.flavor())
+	slogan.anchor_top           = 0.72
+	slogan.anchor_bottom        = 0.80
+	slogan.add_theme_font_override("font", UIFonts.flavor_bold_italic())
 	slogan.add_theme_font_size_override("font_size", 26)
 	slogan.add_theme_color_override("font_color", COLOR_SLOGAN)
 	add_child(slogan)
@@ -94,16 +96,16 @@ func _build_ui() -> void:
 	_start_btn = _make_button("Start Buggin'")
 	_start_btn.anchor_left   = 0.25
 	_start_btn.anchor_right  = 0.48
-	_start_btn.anchor_top    = 0.88
-	_start_btn.anchor_bottom = 0.97
+	_start_btn.anchor_top    = 0.82
+	_start_btn.anchor_bottom = 0.92
 	_start_btn.pressed.connect(_on_start_pressed)
 	add_child(_start_btn)
 
 	_quit_btn = _make_button("Bug Out")
 	_quit_btn.anchor_left   = 0.52
 	_quit_btn.anchor_right  = 0.75
-	_quit_btn.anchor_top    = 0.88
-	_quit_btn.anchor_bottom = 0.97
+	_quit_btn.anchor_top    = 0.82
+	_quit_btn.anchor_bottom = 0.92
 	_quit_btn.pressed.connect(_on_quit_pressed)
 	add_child(_quit_btn)
 
