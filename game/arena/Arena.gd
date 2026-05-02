@@ -1224,7 +1224,7 @@ uniform float crop_size   = 0.400;
 const float BRIGHTNESS = 0.55;
 
 // 3x3 box blur tap spacing in full-texture UV units.
-const float BLUR_STEP = 0.004;
+const float BLUR_STEP = 0.002;
 
 void fragment() {
 	vec2 uv = crop_offset + UV * crop_size;
