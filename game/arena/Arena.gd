@@ -1210,6 +1210,35 @@ func _draw_cell_glow(im: ImmediateMesh, cell: Vector2i, hs: float, y: float, alp
 ##
 ## Place the source image at:  res://assets/arena/backyard_floor.png
 ## If the file is missing a warning is printed and no floor is drawn.
+##
+## blur_step is in full-texture UV units. At the default 0.008, a ~1080px source
+## image gets roughly a 9-pixel blur radius per tap (5×5 = 25 taps total).
+## Increase for more softening; decrease to show more detail.
+const FLOOR_BLUR_STEP: float = 0.008
+
+# Shader source embedded here so no separate .gdshader file needs to be loaded —
+# avoids a null-shader if Godot hasn't rescanned the project after adding the file.
+const _FLOOR_SHADER_CODE: String = """
+shader_type spatial;
+render_mode unshaded, cull_disabled;
+
+uniform sampler2D floor_texture : source_color, filter_linear, repeat_disable;
+uniform vec2  crop_offset = vec2(0.2, 0.2);
+uniform float crop_size   = 0.283;
+uniform float blur_step   = 0.008;
+
+void fragment() {
+	vec2 uv = crop_offset + UV * crop_size;
+	vec4 color = vec4(0.0);
+	for (int xi = -2; xi <= 2; xi++) {
+		for (int yi = -2; yi <= 2; yi++) {
+			color += texture(floor_texture, uv + vec2(float(xi), float(yi)) * blur_step);
+		}
+	}
+	ALBEDO = (color / 25.0).rgb;
+}
+"""
+
 func _spawn_floor() -> void:
 	var texture := load("res://assets/arena/backyard_floor.png") as Texture2D
 	if texture == null:
@@ -1222,11 +1251,15 @@ func _spawn_floor() -> void:
 	var max_offset  := 1.0 - CROP_SIZE
 	var crop_offset := Vector2(randf() * max_offset, randf() * max_offset)
 
+	var shader := Shader.new()
+	shader.code = _FLOOR_SHADER_CODE
+
 	var mat := ShaderMaterial.new()
-	mat.shader = load("res://arena/arena_floor.gdshader") as Shader
+	mat.shader = shader
 	mat.set_shader_parameter("floor_texture", texture)
 	mat.set_shader_parameter("crop_offset",   crop_offset)
 	mat.set_shader_parameter("crop_size",     CROP_SIZE)
+	mat.set_shader_parameter("blur_step",     FLOOR_BLUR_STEP)
 
 	# Plane sized to the full 31×31 grid. The border-column wall slabs render
 	# on top of the edges; the floor texture shows through the entrance and
