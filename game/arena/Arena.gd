@@ -1220,8 +1220,21 @@ uniform sampler2D floor_texture : source_color, filter_linear, repeat_disable;
 uniform vec2  crop_offset = vec2(0.2, 0.2);
 uniform float crop_size   = 0.400;
 
+// Darkens the floor so game objects read clearly against it.
+const float BRIGHTNESS = 0.55;
+
+// 3x3 box blur tap spacing in full-texture UV units.
+const float BLUR_STEP = 0.004;
+
 void fragment() {
-	ALBEDO = texture(floor_texture, crop_offset + UV * crop_size).rgb;
+	vec2 uv = crop_offset + UV * crop_size;
+	vec4 color = vec4(0.0);
+	for (int xi = -1; xi <= 1; xi++) {
+		for (int yi = -1; yi <= 1; yi++) {
+			color += texture(floor_texture, uv + vec2(float(xi), float(yi)) * BLUR_STEP);
+		}
+	}
+	ALBEDO = (color / 9.0).rgb * BRIGHTNESS;
 }
 """
 
