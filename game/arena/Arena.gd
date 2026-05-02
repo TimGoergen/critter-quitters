@@ -62,10 +62,6 @@ const COLOR_WALL_FILL    := Color(0.72, 0.72, 0.72, 1.0) # light gray wall fill
 const COLOR_WALL_BORDER  := Color(0.25, 0.25, 0.25, 1.0) # dark gray cell border lines
 const COLOR_TRAP_SELECTED := Color(0.90, 0.70, 0.10, 1.0) # gold outline on selected trap
 
-# Backyard arena floor colours — dimmed to ~20% of original brightness, dirt +20% brighter
-const COLOR_FLOOR_DIRT  := Color(0.10, 0.07, 0.05, 1.0)   # dark brown dirt base
-const COLOR_FLOOR_GRASS := Color(0.01, 0.03, 0.01, 0.65)  # dark forest green, semi-transparent (-40% then -35% brightness)
-const COLOR_FLOOR_LINES := Color(0.02, 0.016, 0.008, 0.32)  # barely-visible grid marks (-50% then -20% brightness)
 
 
 # ---------------------------------------------------------------------------
@@ -1207,197 +1203,53 @@ func _draw_cell_glow(im: ImmediateMesh, cell: Vector2i, hs: float, y: float, alp
 # Visual helpers — Phase 1 placeholder geometry
 # ---------------------------------------------------------------------------
 
-## Draws the arena border as 1-cell-wide light gray slabs with dark gray cell
+## Covers the full 31×31 arena grid with a single textured plane.
+## The texture is a large backyard image; a random 8% crop is selected each run
+## and stretched across the floor. A 5×5 blur is applied in the shader to soften
+## fine detail (ant trails, pebbles) so the floor reads as background.
+##
+## Place the source image at:  res://assets/arena/backyard_floor.png
+## If the file is missing a warning is printed and no floor is drawn.
+func _spawn_floor() -> void:
+	var texture := load("res://assets/arena/backyard_floor.png") as Texture2D
+	if texture == null:
+		push_warning("Arena: floor texture not found — expected at res://assets/arena/backyard_floor.png")
+		return
+
+	# 8% of image area = a crop window with side length sqrt(0.08) ≈ 0.283.
+	# A random UV offset places the window anywhere it fits inside the full image.
+	const CROP_SIZE: float = 0.283
+	var max_offset  := 1.0 - CROP_SIZE
+	var crop_offset := Vector2(randf() * max_offset, randf() * max_offset)
+
+	var mat := ShaderMaterial.new()
+	mat.shader = load("res://arena/arena_floor.gdshader") as Shader
+	mat.set_shader_parameter("floor_texture", texture)
+	mat.set_shader_parameter("crop_offset",   crop_offset)
+	mat.set_shader_parameter("crop_size",     CROP_SIZE)
+
+	# Plane sized to the full 31×31 grid. The border-column wall slabs render
+	# on top of the edges; the floor texture shows through the entrance and
+	# exit gap columns.
+	var grid_world := Grid.GRID_SIZE * Grid.CELL_SIZE
+	var plane      := PlaneMesh.new()
+	plane.size      = Vector2(grid_world, grid_world)
+	var mi         := MeshInstance3D.new()
+	mi.mesh         = plane
+	mi.position     = Vector3(0.0, 0.010, 0.0)
+	mi.material_override = mat
+	add_child(mi)
+
+
+## Draws the arena border as 1-cell-wide light-gray slabs with dark-gray cell
 ## border lines, giving a stone-block appearance.
 ##
 ## All four walls sit on the outermost rows/columns of the 31×31 grid:
-##   Top/bottom — rows 0 and 30 (z = ±15.0)
-## Builds the Backyard arena floor: a dirt base, semi-transparent grass patches,
-## and faint broken grid lines. Three mesh instances, one draw call each.
-##
-## Y layer stack (floor sits below all other arena geometry):
-##   0.010  dirt base plane
-##   0.012  grass patches
-##   0.013  grid lines
-func _spawn_floor() -> void:
-	var cs     := Grid.CELL_SIZE
-	var half   := Grid.GRID_SIZE * cs * 0.5   # 15.5
-	# World position of the top-left corner of the interior (col 1, row 1).
-	var origin := -half + cs                   # -14.5
-	var inner  := float(Grid.GRID_SIZE - 2) * cs  # 29.0
-
-	# --- Dirt base ---
-	var floor_mi   := MeshInstance3D.new()
-	var floor_mesh := PlaneMesh.new()
-	floor_mesh.size        = Vector2(inner, inner)
-	floor_mi.mesh          = floor_mesh
-	floor_mi.position      = Vector3(0.0, 0.010, 0.0)
-	var floor_mat          := StandardMaterial3D.new()
-	floor_mat.albedo_color  = COLOR_FLOOR_DIRT
-	floor_mat.shading_mode  = BaseMaterial3D.SHADING_MODE_UNSHADED
-	floor_mi.material_override = floor_mat
-	add_child(floor_mi)
-
-	# Noise generators for spatially coherent color variation.
-	# Low frequency = large clumps; each layer uses an independent seed
-	# so dirt and grass don't mirror each other.
-	var dirt_noise := FastNoiseLite.new()
-	dirt_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	dirt_noise.frequency  = 0.12   # clump size ~8 cells across
-	dirt_noise.seed       = randi()
-
-	var grass_noise := FastNoiseLite.new()
-	grass_noise.noise_type = FastNoiseLite.TYPE_SIMPLEX_SMOOTH
-	grass_noise.frequency  = 0.07   # low frequency = large, well-separated clumps
-	grass_noise.seed       = randi()
-
-	# --- Dirt variation sublayer ---
-	# ~60% of cells get a patch whose colour is driven by dirt_noise, so
-	# adjacent patches share similar tones and form visible brown clumps.
-	var dim        := ImmediateMesh.new()
-	dim.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	var y_dirt_var := 0.011
-	for row in range(1, Grid.GRID_SIZE - 1):
-		for col in range(1, Grid.GRID_SIZE - 1):
-			if randf() > 0.60:
-				continue
-			# noise returns -1..1; scale to a ±0.07 brightness shift
-			var n := dirt_noise.get_noise_2d(float(col), float(row))
-			var v := n * 0.07
-			dim.surface_set_color(Color(
-				clampf(COLOR_FLOOR_DIRT.r + v,        0.0, 1.0),
-				clampf(COLOR_FLOOR_DIRT.g + v * 0.8,  0.0, 1.0),
-				clampf(COLOR_FLOOR_DIRT.b + v * 0.6,  0.0, 1.0),
-				1.0
-			))
-			var pw := randf_range(0.60, 1.0) * cs
-			var pd := randf_range(0.60, 1.0) * cs
-			var cx := origin + (col - 0.5) * cs
-			var cz := origin + (row - 0.5) * cs
-			var hw := pw * 0.5
-			var hd := pd * 0.5
-			dim.surface_add_vertex(Vector3(cx - hw, y_dirt_var, cz - hd))
-			dim.surface_add_vertex(Vector3(cx - hw, y_dirt_var, cz + hd))
-			dim.surface_add_vertex(Vector3(cx + hw, y_dirt_var, cz - hd))
-			dim.surface_add_vertex(Vector3(cx + hw, y_dirt_var, cz - hd))
-			dim.surface_add_vertex(Vector3(cx - hw, y_dirt_var, cz + hd))
-			dim.surface_add_vertex(Vector3(cx + hw, y_dirt_var, cz + hd))
-	dim.surface_end()
-	var dirt_var_mi              := MeshInstance3D.new()
-	dirt_var_mi.mesh              = dim
-	var dirt_var_mat             := StandardMaterial3D.new()
-	dirt_var_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
-	dirt_var_mat.vertex_color_use_as_albedo = true
-	dirt_var_mi.material_override = dirt_var_mat
-	add_child(dirt_var_mi)
-
-	# --- Grass patches ---
-	# Grass is placed only where grass_noise exceeds a threshold (n > 0.15),
-	# which concentrates patches inside discrete clump zones and leaves bare
-	# dirt between them. Within each zone a 34% random check further thins
-	# coverage, giving ~14% total (24% reduced by 40%).
-	#
-	# Each patch is a 14-sided polygon fan. The radius at each vertex is shaped
-	# by a lobe modulation (3–6 lobes, 25–45% amplitude) that produces a
-	# plant-like silhouette, with a small additional roughness term on top.
-	# Independent x/z radii make patches elliptical rather than circular.
-	#
-	# Colour is driven by grass_noise so patches within the same clump zone
-	# share a similar green tone.
-	# All patches are batched into one ImmediateMesh to keep draw calls to one.
-	# Winding is CCW from above so the front face (+Y normal) faces the camera.
-	const GRASS_SIDES := 14
-	var gim    := ImmediateMesh.new()
-	gim.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	var y_grass := 0.012
-	for row in range(1, Grid.GRID_SIZE - 1):
-		for col in range(1, Grid.GRID_SIZE - 1):
-			var n := grass_noise.get_noise_2d(float(col), float(row))
-			# Skip cells outside clump zones entirely — this creates bare gaps.
-			if n < 0.15 or randf() > 0.34:
-				continue
-			var v := n * 0.03
-			gim.surface_set_color(Color(
-				clampf(COLOR_FLOOR_GRASS.r + v,        0.0, 1.0),
-				clampf(COLOR_FLOOR_GRASS.g + v * 0.7,  0.0, 1.0),
-				clampf(COLOR_FLOOR_GRASS.b + v,        0.0, 1.0),
-				COLOR_FLOOR_GRASS.a
-			))
-			# Independent x/z radii produce ellipses; max extended 40% for more variety.
-			var rx := randf_range(0.18, 0.91) * cs
-			var rz := randf_range(0.18, 0.91) * cs
-			var cx := origin + (col - 0.5) * cs + randf_range(-0.15, 0.15) * cs
-			var cz := origin + (row - 0.5) * cs + randf_range(-0.15, 0.15) * cs
-			# Lobe parameters vary per patch — gives each clump a distinct plant silhouette.
-			var n_lobes    := randi_range(3, 6)
-			var lobe_amp   := randf_range(0.25, 0.45)
-			var lobe_phase := randf() * TAU
-			for i in range(GRASS_SIDES):
-				var a0 := TAU * float(i)     / float(GRASS_SIDES)
-				var a1 := TAU * float(i + 1) / float(GRASS_SIDES)
-				# Lobe modulation creates plant-like bumps; small roughness term
-				# breaks the smooth cosine curve for a more jagged natural edge.
-				var mod0 := 1.0 + lobe_amp * cos(float(n_lobes) * a0 + lobe_phase) + randf_range(-0.08, 0.08)
-				var mod1 := 1.0 + lobe_amp * cos(float(n_lobes) * a1 + lobe_phase) + randf_range(-0.08, 0.08)
-				gim.surface_add_vertex(Vector3(cx, y_grass, cz))
-				gim.surface_add_vertex(Vector3(cx + rx * mod0 * cos(a0), y_grass, cz + rz * mod0 * sin(a0)))
-				gim.surface_add_vertex(Vector3(cx + rx * mod1 * cos(a1), y_grass, cz + rz * mod1 * sin(a1)))
-	gim.surface_end()
-
-	var grass_mi              := MeshInstance3D.new()
-	grass_mi.mesh              = gim
-	var grass_mat             := StandardMaterial3D.new()
-	grass_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
-	grass_mat.vertex_color_use_as_albedo = true
-	grass_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
-	grass_mat.cull_mode        = BaseMaterial3D.CULL_DISABLED
-	grass_mi.material_override = grass_mat
-	add_child(grass_mi)
-
-	# --- Broken grid lines ---
-	# Each cell-boundary line is split into unit-length segments. Each segment
-	# has a 55% chance of being skipped, producing a fragmented grid pattern.
-	var lim := ImmediateMesh.new()
-	lim.surface_begin(Mesh.PRIMITIVE_LINES)
-	lim.surface_set_color(COLOR_FLOOR_LINES)
-	var y_line := 0.013
-
-	# Vertical lines at each column boundary (parallel to Z axis).
-	for kx in range(Grid.GRID_SIZE - 1):   # 30 boundaries across 29 interior columns
-		var x := origin + kx * cs
-		for kz in range(Grid.GRID_SIZE - 2):   # 29 unit segments per line
-			if randf() < 0.84:
-				continue
-			var z0 := origin + kz * cs
-			lim.surface_add_vertex(Vector3(x, y_line, z0))
-			lim.surface_add_vertex(Vector3(x, y_line, z0 + cs))
-
-	# Horizontal lines at each row boundary (parallel to X axis).
-	for kz in range(Grid.GRID_SIZE - 1):   # 30 boundaries across 29 interior rows
-		var z := origin + kz * cs
-		for kx in range(Grid.GRID_SIZE - 2):   # 29 unit segments per line
-			if randf() < 0.84:
-				continue
-			var x0 := origin + kx * cs
-			lim.surface_add_vertex(Vector3(x0, y_line, z))
-			lim.surface_add_vertex(Vector3(x0 + cs, y_line, z))
-
-	lim.surface_end()
-
-	var lines_mi              := MeshInstance3D.new()
-	lines_mi.mesh              = lim
-	var lines_mat             := StandardMaterial3D.new()
-	lines_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
-	lines_mat.vertex_color_use_as_albedo = true
-	lines_mi.material_override = lines_mat
-	add_child(lines_mi)
-
-
-##   Left/right — columns 0 and 30 (x = ±15.0, with entrance/exit gaps)
+##   Top/bottom — rows 0 and 30    Left/right — columns 0 and 30
 ##
 ## Placing geometry outside the grid boundary (z = ±15.5) consistently failed
-## to render regardless of mesh type across multiple attempts. Using the
-## outermost grid rows is symmetric with the column approach and renders reliably.
+## to render regardless of mesh type; using the outermost grid rows/columns
+## is symmetric and renders reliably.
 func _spawn_arena_border() -> void:
 	var half := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
 	var cs   := Grid.CELL_SIZE
