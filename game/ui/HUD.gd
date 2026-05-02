@@ -151,7 +151,7 @@ func _build_ui() -> void:
 	top_row.add_child(bucks_row)
 
 	var coin_icon := TextureRect.new()
-	coin_icon.texture             = load("res://assets/bug_buck_coin.svg")
+	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
 	coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	coin_icon.custom_minimum_size = Vector2(34, 34)
@@ -173,13 +173,13 @@ func _build_ui() -> void:
 	center_hbox.add_theme_constant_override("separation", 8)
 	top_row.add_child(center_hbox)
 
-	var inf_label := Label.new()
-	inf_label.text = "INFESTATION"
-	inf_label.add_theme_font_size_override("font_size", 54)
-	inf_label.add_theme_font_override("font", UIFonts.primary_bold())
-	inf_label.add_theme_color_override("font_color", COLOR_INFESTED)
-	inf_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	center_hbox.add_child(inf_label)
+	var inf_icon := TextureRect.new()
+	inf_icon.texture              = load("res://assets/infestation_level.png")
+	inf_icon.stretch_mode         = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	inf_icon.expand_mode          = TextureRect.EXPAND_IGNORE_SIZE
+	inf_icon.custom_minimum_size  = Vector2(54, 54)   # matches the former "INFESTATION" font size
+	inf_icon.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
+	center_hbox.add_child(inf_icon)
 
 	var track := ColorRect.new()
 	track.color                 = COLOR_BAR_BG
