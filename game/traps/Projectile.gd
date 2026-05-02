@@ -370,7 +370,7 @@ func _spawn_coin_burst() -> void:
 	var plane     := PlaneMesh.new()
 	plane.size     = Vector2(coin_size, coin_size)
 	var mat                   := StandardMaterial3D.new()
-	mat.albedo_texture         = load("res://assets/bug_buck_coin.svg")
+	mat.albedo_texture         = load("res://assets/bug_buck_coin.png")
 	mat.shading_mode           = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency           = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.cull_mode              = BaseMaterial3D.CULL_DISABLED
