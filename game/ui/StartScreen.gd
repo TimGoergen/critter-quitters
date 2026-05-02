@@ -21,8 +21,16 @@ const COLOR_BTN_HOVER   := Color(0.30, 0.30, 0.33, 1.0)
 const COLOR_BTN_PRESSED := Color(0.14, 0.14, 0.16, 1.0)
 const COLOR_BTN_BORDER  := Color(0.60, 0.60, 0.65, 1.0)
 
-# The van sprite is sized to this fraction of the viewport width.
-const VAN_WIDTH_FRACTION := 0.81  # 0.62 * 1.3
+# Van is scaled to this fraction of viewport width, capped so it never
+# exceeds VAN_MAX_H_FRACTION of viewport height (prevents top cutoff).
+const VAN_WIDTH_FRACTION  := 0.81
+const VAN_MAX_H_FRACTION  := 0.60
+const VAN_TOP_PAD         := 20.0   # minimum clearance (px) above the van
+
+# Tailpipe pixel coordinates in the source image (1536 × 1024).
+# Used to place exhaust clouds at the actual pipe, not the canvas boundary.
+const TAILPIPE_IMG_X := 942.0
+const TAILPIPE_IMG_Y := 473.0
 
 var _van:       Sprite2D
 var _start_btn: Button
@@ -44,15 +52,19 @@ func _build_ui() -> void:
 	add_child(bg)
 
 	# --- Van illustration ---
-	# The image is centred horizontally at 27% down. It is scaled so its width
-	# equals VAN_WIDTH_FRACTION of the viewport; height scales proportionally.
-	# The van faces left, so the animation drives it further left off screen.
+	# Scale by width first, then clamp so the van never exceeds VAN_MAX_H_FRACTION
+	# of the viewport height. Position so the top edge always has VAN_TOP_PAD
+	# clearance — no more cutoff regardless of screen size or image proportions.
 	var van_tex: Texture2D = load("res://assets/van.png")
 	_van = Sprite2D.new()
-	_van.texture  = van_tex
-	var scale_f   := (vp.x * VAN_WIDTH_FRACTION) / van_tex.get_size().x
-	_van.scale    = Vector2(scale_f, scale_f)
-	_van.position = Vector2(vp.x * 0.5, vp.y * 0.27)
+	_van.texture   = van_tex
+	var tex_size   := van_tex.get_size()
+	var scale_by_w := (vp.x * VAN_WIDTH_FRACTION) / tex_size.x
+	var scale_by_h := (vp.y * VAN_MAX_H_FRACTION) / tex_size.y
+	var scale_f    := minf(scale_by_w, scale_by_h)
+	_van.scale     = Vector2(scale_f, scale_f)
+	var van_half_h := tex_size.y * scale_f / 2.0
+	_van.position  = Vector2(vp.x * 0.5, van_half_h + VAN_TOP_PAD)
 	add_child(_van)
 
 	# --- Slogan ---
@@ -63,8 +75,8 @@ func _build_ui() -> void:
 	slogan.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
 	slogan.anchor_left          = 0.10
 	slogan.anchor_right         = 0.90
-	slogan.anchor_top           = 0.57
-	slogan.anchor_bottom        = 0.69
+	slogan.anchor_top           = 0.67
+	slogan.anchor_bottom        = 0.77
 	slogan.add_theme_font_override("font", UIFonts.flavor())
 	slogan.add_theme_font_size_override("font_size", 26)
 	slogan.add_theme_color_override("font_color", COLOR_SLOGAN)
@@ -74,16 +86,16 @@ func _build_ui() -> void:
 	_start_btn = _make_button("Start Buggin'")
 	_start_btn.anchor_left   = 0.25
 	_start_btn.anchor_right  = 0.48
-	_start_btn.anchor_top    = 0.73
-	_start_btn.anchor_bottom = 0.83
+	_start_btn.anchor_top    = 0.80
+	_start_btn.anchor_bottom = 0.90
 	_start_btn.pressed.connect(_on_start_pressed)
 	add_child(_start_btn)
 
 	_quit_btn = _make_button("Bug Out")
 	_quit_btn.anchor_left   = 0.52
 	_quit_btn.anchor_right  = 0.75
-	_quit_btn.anchor_top    = 0.73
-	_quit_btn.anchor_bottom = 0.83
+	_quit_btn.anchor_top    = 0.80
+	_quit_btn.anchor_bottom = 0.90
 	_quit_btn.pressed.connect(_on_quit_pressed)
 	add_child(_quit_btn)
 
@@ -128,12 +140,13 @@ func _play_van_exit() -> void:
 func _spawn_exhaust_puffs() -> void:
 	# Puffs are added to this CanvasLayer (siblings of the van sprite) so they
 	# stay in place while the van drives left, forming a lingering cloud trail.
-	var van_half_w := _van.texture.get_size().x * _van.scale.x / 2.0
-	var van_half_h := _van.texture.get_size().y * _van.scale.y / 2.0
-	# 0.56 places the origin at the actual van body rear (~78 % of the PNG width
-	# from the left), not at the full canvas edge. Adjust if the image proportions differ.
-	var exhaust_x  := _van.position.x + van_half_w * 0.56
-	var exhaust_y  := _van.position.y + van_half_h * 0.38
+	#
+	# TAILPIPE_IMG_X/Y are the exact pixel coordinates of the tailpipe in the
+	# source image. Subtracting half the image dimensions gives the offset from
+	# the Sprite2D origin (image centre), then multiplied by scale to get world px.
+	var tex_size  := _van.texture.get_size()
+	var exhaust_x := _van.position.x + (TAILPIPE_IMG_X - tex_size.x / 2.0) * _van.scale.x
+	var exhaust_y := _van.position.y + (TAILPIPE_IMG_Y - tex_size.y / 2.0) * _van.scale.y
 	for i: int in 2:
 		var puff        := _ExhaustPuff.new()
 		puff.position   =  Vector2(
