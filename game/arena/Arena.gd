@@ -937,28 +937,17 @@ func _update_grid_highlight() -> void:
 				break
 
 	var opacity_scale := 0.2 if blocked else 1.0
-	const MAX_GLOW_DIST: int = 2
+
+	if _pressing:
+		_grid_highlight.mesh = null
+		return
 
 	var im := ImmediateMesh.new()
 	var hs := Grid.CELL_SIZE * 0.5
 	var y  := 0.08
 
 	im.surface_begin(Mesh.PRIMITIVE_LINES)
-
-	for dr in range(-MAX_GLOW_DIST, 2 + MAX_GLOW_DIST):
-		for dc in range(-MAX_GLOW_DIST, 2 + MAX_GLOW_DIST):
-			var cell := Vector2i(anchor.x + dc, anchor.y + dr)
-			if not _grid.is_in_bounds(cell):
-				continue
-			var dist := _dist_to_footprint(cell, anchor)
-			if dist == 0 or dist > MAX_GLOW_DIST:
-				continue
-			var alpha := 0.56 * opacity_scale * pow(1.0 - float(dist) / float(MAX_GLOW_DIST + 1), 2.5)
-			_draw_cell_glow(im, cell, hs, y, alpha)
-
-	if not _pressing:
-		_draw_2x2_perimeter(im, anchor, hs, y, 0.56 * opacity_scale)
-
+	_draw_2x2_perimeter(im, anchor, hs, y, 0.56 * opacity_scale)
 	im.surface_end()
 	_grid_highlight.mesh = im
 
@@ -972,39 +961,38 @@ func _dist_to_footprint(cell: Vector2i, anchor: Vector2i) -> int:
 	return dx + dy
 
 
+## Returns an electric neon version of the given color: same hue, full saturation,
+## full brightness. Brown becomes electric orange; tan becomes electric yellow; etc.
+func _neon_color(base: Color) -> Color:
+	return Color.from_hsv(base.h, 1.0, 1.0)
+
+
 ## Draws (or redraws) the outline + colour fill for a placed trap.
 ## Glow state is derived from _hovered_trap_anchor / _selected_trap_anchor:
-##   selected → 60% brighter fill + outline;  hovered → 30% brighter;  default → base.
+##   selected → brighter outline;  hovered → medium;  default → base.
 ##
-## Surface 0 — inverted edge-fade fill (TRIANGLES): two-ring triangle fan.
-##   Interior (center → FILL_SPRITE_FRAC) is flat at fill_opaque alpha.
-##   Outer band fades from fill_opaque to transparent at the outline boundary.
+## Surface 0 — solid neon fill (TRIANGLES): flat 20% opacity triangle fan
+##   covering the full footprint at 3% opacity.
 ## Surface 1 — rounded outline (LINES): two concentric inset rounded-corner
 ##   rectangles simulate ~2 px line width.
 func _draw_trap_outline(anchor: Vector2i) -> void:
 	var trap_type: int = _trap_nodes[anchor].get_type()
 	var base: Color    = Trap.STATS[trap_type]["color"]
-
-	const FILL_SPRITE_FRAC: float = 0.10
+	var neon: Color    = _neon_color(base)
 
 	var is_selected := anchor == _selected_trap_anchor
 	var is_hovered  := anchor == _hovered_trap_anchor
 
 	var outline_color: Color
-	var fill_opaque:   Color
-	var fill_clear:    Color
 	if is_selected:
 		outline_color = base.lightened(0.70); outline_color.a = 1.0
-		fill_opaque   = base.lightened(0.60); fill_opaque.a   = 0.60
-		fill_clear    = base.lightened(0.60); fill_clear.a    = 0.0
 	elif is_hovered:
 		outline_color = base.lightened(0.45); outline_color.a = 1.0
-		fill_opaque   = base.lightened(0.35); fill_opaque.a   = 0.50
-		fill_clear    = base.lightened(0.35); fill_clear.a    = 0.0
 	else:
 		outline_color = base.darkened(0.2);   outline_color.a = 0.60
-		fill_opaque   = base;                 fill_opaque.a   = 0.30
-		fill_clear    = base;                 fill_clear.a    = 0.0
+
+	var fill_color := neon
+	fill_color.a   = 0.03
 
 	var hs := Grid.CELL_SIZE * 0.5
 	var cs := Grid.CELL_SIZE
@@ -1023,34 +1011,18 @@ func _draw_trap_outline(anchor: Vector2i) -> void:
 
 	var im := ImmediateMesh.new()
 
-	# --- Surface 0: radial glow fill (two-ring) ---
+	# --- Surface 0: solid neon fill ---
 	var fill_pts := _rounded_rect_pts(min_x, max_x, min_z, max_z, y_fill, CORNER_R, CORNER_SEGS)
 	var center   := Vector3(cx, y_fill, cz)
 
-	# Inner ring at the sprite boundary — fully opaque inside, fades to clear outside.
-	var inner_pts: Array[Vector3] = []
-	for pt: Vector3 in fill_pts:
-		inner_pts.append(center.lerp(pt, FILL_SPRITE_FRAC))
-
 	var n := fill_pts.size()
 	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	# Band 1: center → sprite boundary — flat, fully opaque trap colour
 	for i in range(n):
-		var a: Vector3 = inner_pts[i]
-		var b: Vector3 = inner_pts[(i + 1) % n]
-		im.surface_set_color(fill_opaque); im.surface_add_vertex(center)
-		im.surface_set_color(fill_opaque); im.surface_add_vertex(a)
-		im.surface_set_color(fill_opaque); im.surface_add_vertex(b)
-	# Band 2: sprite boundary → outline — fades from fully opaque to transparent
-	for i in range(n):
-		var ai: Vector3 = inner_pts[i];      var bi: Vector3 = inner_pts[(i + 1) % n]
-		var ao: Vector3 = fill_pts[i];       var bo: Vector3 = fill_pts[(i + 1) % n]
-		im.surface_set_color(fill_opaque); im.surface_add_vertex(ai)
-		im.surface_set_color(fill_opaque); im.surface_add_vertex(bi)
-		im.surface_set_color(fill_clear);  im.surface_add_vertex(ao)
-		im.surface_set_color(fill_opaque); im.surface_add_vertex(bi)
-		im.surface_set_color(fill_clear);  im.surface_add_vertex(bo)
-		im.surface_set_color(fill_clear);  im.surface_add_vertex(ao)
+		var a: Vector3 = fill_pts[i]
+		var b: Vector3 = fill_pts[(i + 1) % n]
+		im.surface_set_color(fill_color); im.surface_add_vertex(center)
+		im.surface_set_color(fill_color); im.surface_add_vertex(a)
+		im.surface_set_color(fill_color); im.surface_add_vertex(b)
 	im.surface_end()
 
 	# --- Surface 1: rounded outline (two inset passes for ~2 px thickness) ---

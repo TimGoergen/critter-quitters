@@ -27,10 +27,14 @@ const COLOR_IMPACT     := Color(1.0, 0.80, 0.15)   # golden burst
 const COLOR_ZAPPER_BOLT  := Color(0.45, 0.80, 1.00)   # electric blue
 const COLOR_ZAPPER_SPARK := Color(0.65, 0.88, 1.00)   # pale blue-white
 
+# Glue Board projectile and impact colour — amber, matching the splatter badge.
+const COLOR_GLUE := Color(0.88, 0.70, 0.18, 0.90)
+
 # Mirror Trap.TrapType int values. Avoid preloading Trap.gd here to prevent
 # a circular dependency — update these if the enum order ever changes.
-const _SNAP_TRAP_TYPE: int = 0
-const _ZAPPER_TYPE:    int = 1
+const _SNAP_TRAP_TYPE:  int = 0
+const _ZAPPER_TYPE:     int = 1
+const _GLUE_BOARD_TYPE: int = 3
 
 
 # ---------------------------------------------------------------------------
@@ -41,7 +45,8 @@ var _target_pos: Vector3
 var _target:     Node3D = null
 var _damage:     float  = 0.0
 var _trap_type:  int    = -1
-var _visual:     Node3D = null   # visual mesh child; rotated each frame for tumble
+var _visual:     Node3D = null          # visual mesh child; rotated on X each frame for tumble
+var _glue_blob:  MeshInstance3D = null  # glue blob mesh; spun on Y axis each frame
 
 
 # ---------------------------------------------------------------------------
@@ -69,6 +74,8 @@ func initialize(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: floa
 func _process(delta: float) -> void:
 	if _visual != null:
 		_visual.rotation_degrees.x += delta * 380.0   # tumble forward as it travels
+	if _glue_blob != null:
+		_glue_blob.rotation_degrees.y += delta * 150.0   # slow spin so the blob shape is visible
 
 	var offset   := _target_pos - global_position
 	var distance := offset.length()
@@ -77,8 +84,11 @@ func _process(delta: float) -> void:
 		var enemy_color  := Color.WHITE
 		if is_instance_valid(_target):
 			enemy_color = _target.get_color()
-			_target.take_damage(_damage)
-			killed = _target.get_hp_fraction() == 0.0
+			# Glue Board deals no damage and we skip take_damage entirely — calling
+			# it with 0 would still trigger the white hit-flash, which is misleading.
+			if _trap_type != _GLUE_BOARD_TYPE:
+				_target.take_damage(_damage)
+				killed = _target.get_hp_fraction() == 0.0
 		_spawn_impact_effect(killed, enemy_color)
 		queue_free()
 		return
@@ -97,6 +107,9 @@ func _spawn_visual() -> void:
 	if _trap_type == _ZAPPER_TYPE:
 		_spawn_zapper_bolt_visual()
 		return
+	if _trap_type == _GLUE_BOARD_TYPE:
+		_spawn_glue_visual()
+		return
 
 	var mi  := MeshInstance3D.new()
 	var box := BoxMesh.new()
@@ -113,35 +126,103 @@ func _spawn_visual() -> void:
 	add_child(mi)
 
 
-## Cheese wedge projectile — a triangular prism (3-segment cylinder) tipped on
-## its side so the wedge profile faces the camera as it tumbles.
-## The cylinder axis runs horizontally (Z = 90° rotation) so the triangular
-## cross-section is what rotates past the viewer, not the flat end caps.
+## Cheese block projectile — a flat rectangular slab with small dark holes on
+## both broad faces (swiss-cheese style). Tumbles forward on the X axis as it
+## travels, so the rectangular profile reads clearly from the top-down camera.
+## Holes are placed on both the top (+Y) and bottom (−Y) faces so they appear
+## as depressions regardless of which face is toward the viewer during the tumble.
 func _spawn_cheese_visual() -> void:
-	var mi             := MeshInstance3D.new()
-	var mesh           := CylinderMesh.new()
-	mesh.radial_segments = 3
-	mesh.top_radius      = Grid.CELL_SIZE * 0.22
-	mesh.bottom_radius   = Grid.CELL_SIZE * 0.22
-	mesh.height          = Grid.CELL_SIZE * 0.40
+	var container := Node3D.new()
 
-	var mat           := StandardMaterial3D.new()
-	mat.albedo_color   = Color(0.95, 0.82, 0.15)
-	mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mi.mesh              = mesh
-	mi.material_override = mat
-	mi.rotation_degrees.z = 90.0   # tip onto side — wedge profile faces viewer
+	var bw := Grid.CELL_SIZE * 0.50
+	var bh := Grid.CELL_SIZE * 0.17
+	var bd := Grid.CELL_SIZE * 0.35
 
-	_visual = mi
-	add_child(mi)
+	var block_mi  := MeshInstance3D.new()
+	var block_box := BoxMesh.new()
+	block_box.size = Vector3(bw, bh, bd)
+	var block_mat  := StandardMaterial3D.new()
+	block_mat.albedo_color     = Color(0.95, 0.82, 0.15)
+	block_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	block_mi.mesh              = block_box
+	block_mi.material_override = block_mat
+	container.add_child(block_mi)
+
+	# Three holes at fixed XZ offsets, mirrored onto both broad faces.
+	var hole_r  := Grid.CELL_SIZE * 0.054
+	var face_y  := bh * 0.5 - hole_r * 0.45   # sphere centre inset so cap pokes through face
+	var hole_xz := [Vector2(-bw * 0.20, -bd * 0.12),
+	                Vector2( bw * 0.18,  bd * 0.16),
+	                Vector2(-bw * 0.04, -bd * 0.26)]
+
+	for yf: float in [1.0, -1.0]:
+		for off: Vector2 in hole_xz:
+			var hmi   := MeshInstance3D.new()
+			var hmesh := SphereMesh.new()
+			hmesh.radius          = hole_r
+			hmesh.height          = hole_r * 2.0
+			hmesh.radial_segments = 8
+			hmesh.rings           = 4
+			var hmat              := StandardMaterial3D.new()
+			hmat.albedo_color      = Color(0.50, 0.34, 0.04)
+			hmat.shading_mode      = BaseMaterial3D.SHADING_MODE_UNSHADED
+			hmi.mesh               = hmesh
+			hmi.material_override  = hmat
+			hmi.position           = Vector3(off.x, yf * face_y, off.y)
+			container.add_child(hmi)
+
+	_visual = container
+	add_child(container)
+
+
+## Glue blob projectile — a flat irregular polygon in the XZ plane that spins
+## slowly on Y so the blobby outline is clearly visible from the top-down camera.
+## Shape is randomised per-projectile so no two shots look identical.
+func _spawn_glue_visual() -> void:
+	_glue_blob          = MeshInstance3D.new()
+	_glue_blob.mesh      = _build_glue_blob_mesh(Grid.CELL_SIZE * 0.20, COLOR_GLUE)
+	_glue_blob.position.y = Grid.CELL_SIZE * 0.02   # float just above ground
+	var mat                       := StandardMaterial3D.new()
+	mat.albedo_color               = Color.WHITE
+	mat.vertex_color_use_as_albedo = true
+	mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode                  = BaseMaterial3D.CULL_DISABLED
+	_glue_blob.material_override   = mat
+	add_child(_glue_blob)
+
+
+## Builds a flat ImmediateMesh polygon on the XZ plane with per-vertex colour.
+## Each of the `segments` radii is independently perturbed so the outline is
+## irregular — blobby rather than circular.
+func _build_glue_blob_mesh(base_r: float, color: Color) -> ImmediateMesh:
+	var im       := ImmediateMesh.new()
+	var segments := 8
+	var pts: Array[Vector3] = []
+	for i in range(segments):
+		var angle := TAU * float(i) / float(segments)
+		var r     := base_r * randf_range(0.60, 1.40)
+		pts.append(Vector3(cos(angle) * r, 0.0, sin(angle) * r))
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(segments):
+		im.surface_set_color(color); im.surface_add_vertex(Vector3.ZERO)
+		im.surface_set_color(color); im.surface_add_vertex(pts[i])
+		im.surface_set_color(color); im.surface_add_vertex(pts[(i + 1) % segments])
+	im.surface_end()
+	return im
 
 
 func _spawn_impact_effect(killed: bool, enemy_color: Color) -> void:
+	if killed:
+		_spawn_coin_burst()
 	if _trap_type == _SNAP_TRAP_TYPE:
 		_spawn_cheese_splat(killed, enemy_color)
 		return
 	if _trap_type == _ZAPPER_TYPE:
 		_spawn_zapper_impact(killed, enemy_color)
+		return
+	if _trap_type == _GLUE_BOARD_TYPE:
+		_spawn_glue_impact(killed, enemy_color)
 		return
 
 	_spawn_particles(8, 0.4, Grid.CELL_SIZE * 1.15, Grid.CELL_SIZE * 2.875, 0.4, 0.7,
@@ -166,32 +247,80 @@ func _spawn_cheese_splat(killed: bool, enemy_color: Color) -> void:
 				Grid.CELL_SIZE * 0.495, enemy_color, true)
 
 
-## Electric bolt: a bright blue sphere with a soft transparent halo.
-## No tumble rotation — it reads more like a contained energy ball.
+## Lightning bolt: a flat zigzag ribbon mesh in the XZ plane, oriented toward
+## the target. The camera is pure top-down, so all bolt detail must be flat —
+## upright geometry only shows its circular cross-section from above.
+## Built from two ImmediateMesh layers: a solid neon-blue core and a wider
+## semi-transparent glow underneath. No tumble — _visual is not set.
 func _spawn_zapper_bolt_visual() -> void:
-	var core_mi   := MeshInstance3D.new()
-	var core_mesh := SphereMesh.new()
-	core_mesh.radius = Grid.CELL_SIZE * 0.14
-	core_mesh.height = Grid.CELL_SIZE * 0.28
-	core_mi.mesh     = core_mesh
-	var core_mat           := StandardMaterial3D.new()
-	core_mat.albedo_color   = COLOR_ZAPPER_BOLT
-	core_mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
-	core_mi.material_override = core_mat
-	add_child(core_mi)
+	var cs := Grid.CELL_SIZE
 
-	# Larger transparent halo gives the bolt a visible glow bloom from above.
-	var halo_mi   := MeshInstance3D.new()
-	var halo_mesh := SphereMesh.new()
-	halo_mesh.radius = Grid.CELL_SIZE * 0.24
-	halo_mesh.height = Grid.CELL_SIZE * 0.48
-	halo_mi.mesh     = halo_mesh
-	var halo_mat           := StandardMaterial3D.new()
-	halo_mat.albedo_color   = Color(COLOR_ZAPPER_BOLT.r, COLOR_ZAPPER_BOLT.g, COLOR_ZAPPER_BOLT.b, 0.30)
-	halo_mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
-	halo_mat.transparency   = BaseMaterial3D.TRANSPARENCY_ALPHA
-	halo_mi.material_override = halo_mat
-	add_child(halo_mi)
+	# Container node rotated once at spawn so the bolt points toward the target.
+	var bolt_node     := Node3D.new()
+	bolt_node.position.y = cs * 0.025   # float just above ground plane
+	var dir           := _target_pos - position
+	dir.y              = 0.0
+	if dir.length() > 0.01:
+		bolt_node.rotation.y = atan2(-dir.z, dir.x)
+
+	# Zigzag waypoints in local space: bolt runs along +X, deflections along Z.
+	var bolt_len := cs * 1.6
+	var pts: Array[Vector2] = [
+		Vector2(0.0,             0.0),
+		Vector2(bolt_len * 0.20, cs * +0.17),
+		Vector2(bolt_len * 0.40, cs * -0.14),
+		Vector2(bolt_len * 0.58, cs * +0.11),
+		Vector2(bolt_len * 0.74, cs * -0.07),
+		Vector2(bolt_len * 0.88, cs * +0.03),
+		Vector2(bolt_len,        0.0),
+	]
+
+	# Solid core — narrow ribbon, fully opaque neon blue.
+	var core_mi              := MeshInstance3D.new()
+	core_mi.mesh              = _build_bolt_ribbon(pts, cs * 0.048)
+	var core_mat             := StandardMaterial3D.new()
+	core_mat.albedo_color     = COLOR_ZAPPER_BOLT
+	core_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	core_mat.cull_mode        = BaseMaterial3D.CULL_DISABLED
+	core_mi.material_override = core_mat
+	bolt_node.add_child(core_mi)
+
+	# Glow layer — wider ribbon, semi-transparent; sits fractionally below
+	# the core to avoid z-fighting with the same XZ plane geometry.
+	var glow_mi              := MeshInstance3D.new()
+	glow_mi.mesh              = _build_bolt_ribbon(pts, cs * 0.15)
+	glow_mi.position.y        = -cs * 0.002
+	var glow_mat             := StandardMaterial3D.new()
+	glow_mat.albedo_color     = Color(COLOR_ZAPPER_BOLT.r, COLOR_ZAPPER_BOLT.g, COLOR_ZAPPER_BOLT.b, 0.28)
+	glow_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow_mat.cull_mode        = BaseMaterial3D.CULL_DISABLED
+	glow_mi.material_override = glow_mat
+	bolt_node.add_child(glow_mi)
+
+	add_child(bolt_node)
+	# _visual intentionally not assigned — zapper bolt does not tumble.
+
+
+## Builds a flat ribbon mesh on the XZ plane following the given 2D waypoints.
+## Each adjacent pair of points produces a quad with half_w on each side of
+## the segment's perpendicular, resulting in a ribbon of constant width.
+func _build_bolt_ribbon(pts: Array[Vector2], half_w: float) -> ImmediateMesh:
+	var im := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(pts.size() - 1):
+		var a    := pts[i]
+		var b    := pts[i + 1]
+		var seg  := (b - a).normalized()
+		var perp := Vector2(-seg.y, seg.x) * half_w
+		var v0   := Vector3(a.x + perp.x, 0.0, a.y + perp.y)
+		var v1   := Vector3(a.x - perp.x, 0.0, a.y - perp.y)
+		var v2   := Vector3(b.x + perp.x, 0.0, b.y + perp.y)
+		var v3   := Vector3(b.x - perp.x, 0.0, b.y - perp.y)
+		im.surface_add_vertex(v0);  im.surface_add_vertex(v1);  im.surface_add_vertex(v2)
+		im.surface_add_vertex(v1);  im.surface_add_vertex(v3);  im.surface_add_vertex(v2)
+	im.surface_end()
+	return im
 
 
 ## Electric impact: fast blue-white sparks with minimal gravity so they scatter
@@ -207,6 +336,51 @@ func _spawn_zapper_impact(killed: bool, enemy_color: Color) -> void:
 	if killed:
 		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
 				Grid.CELL_SIZE * 0.495, enemy_color, true)
+
+
+## Glue splat: a handful of amber chunks scatter outward from the hit point.
+## The actual badge visual is handled by Enemy.gd (_show_glue_splatter), so
+## this effect just confirms the hit with a quick burst of particles.
+func _spawn_glue_impact(killed: bool, enemy_color: Color) -> void:
+	_spawn_particles(5, 0.35, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.6,
+			0.35, 0.70, Grid.CELL_SIZE * 0.16, COLOR_GLUE)
+	if killed:
+		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
+				Grid.CELL_SIZE * 0.495, enemy_color, true)
+
+
+## Scatters a few miniature Bug Bucks coin sprites on enemy death.
+## PlaneMesh is horizontal (XZ plane), so the coin SVG texture faces the
+## top-down camera directly — the graphic reads without any tilting required.
+func _spawn_coin_burst() -> void:
+	var particles              := CPUParticles3D.new()
+	particles.one_shot          = true
+	particles.explosiveness     = 1.0
+	particles.amount            = 4
+	particles.lifetime          = 0.55
+	particles.direction         = Vector3.UP
+	particles.spread            = 180.0
+	particles.initial_velocity_min = Grid.CELL_SIZE * 2.5
+	particles.initial_velocity_max = Grid.CELL_SIZE * 7.0
+	particles.gravity           = Vector3(0.0, -Grid.CELL_SIZE * 9.0, 0.0)
+	particles.scale_amount_min  = 0.80
+	particles.scale_amount_max  = 1.10
+
+	var coin_size := Grid.CELL_SIZE * 0.58
+	var plane     := PlaneMesh.new()
+	plane.size     = Vector2(coin_size, coin_size)
+	var mat                   := StandardMaterial3D.new()
+	mat.albedo_texture         = load("res://assets/bug_buck_coin.svg")
+	mat.shading_mode           = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency           = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat.cull_mode              = BaseMaterial3D.CULL_DISABLED
+	plane.material             = mat
+	particles.mesh             = plane
+
+	get_parent().add_child(particles)
+	particles.global_position  = global_position
+	particles.restart()
+	get_tree().create_timer(particles.lifetime + 0.15).timeout.connect(particles.queue_free)
 
 
 func _spawn_particles(amount: int, lifetime: float, vel_min: float, vel_max: float,

@@ -73,7 +73,7 @@ signal trap_type_selected(type: int)
 ## Starting currency given to the player at the beginning of every run.
 ## Increased by business upgrades purchased with Service Fees.
 ## TODO: tune via playtesting; increase via meta upgrades
-const STARTING_BUG_BUCKS: int = 100
+const STARTING_BUG_BUCKS: int = 1000
 
 ## Total infestation points that fill the bar to 1.0.
 ## TODO: tune via playtesting
