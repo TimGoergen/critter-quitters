@@ -113,6 +113,9 @@ var _path_index: int = 0
 # Reference to the visual mesh so _process can apply the waddle each frame.
 var _visual: MeshInstance3D = null
 
+# Flat shadow quad positioned just above the floor; its basis stays in sync with _visual.
+var _shadow_mi: MeshInstance3D = null
+
 # Accumulated time driving the waddle oscillation.
 var _waddle_time: float = 0.0
 
@@ -322,6 +325,8 @@ func _process(delta: float) -> void:
 			_visual.position.z = 0.0
 			_visual.position.x = sway
 		_visual.basis = _facing_basis(travel_dir)
+		if _shadow_mi != null:
+			_shadow_mi.basis = _visual.basis
 		_walk_time += delta
 		_visual_material.albedo_texture = ANT_FRAMES[int(_walk_time * _move_speed * 3.0) % ANT_FRAMES.size()]
 
@@ -460,18 +465,27 @@ func _spawn_visual(color: Color) -> void:
 	add_child(mesh_instance)
 
 
-## Adds a soft circular drop shadow on the floor beneath the enemy.
-## The shadow is a flat PlaneMesh placed just above the floor (world y = 0.013).
-## Because the enemy root sits at y = 0.25, the local offset is -0.237.
+## Adds a soft drop shadow on the floor beneath the enemy.
+## Uses the ant sprite's alpha channel to define the silhouette, so the shadow
+## reads as the enemy's actual shape rather than a generic blob.
+##
+## QuadMesh is used (same as _visual) so the facing Basis can be applied to keep
+## the shadow oriented with the direction of movement.  The initial Basis is set
+## here and then kept in sync inside _process each frame.
+##
+## The shadow sits just above the floor (world y = 0.013). Because the enemy root
+## is at y = 0.25, the local Y offset is -0.237.
 func _spawn_shadow() -> void:
-	var shadow_mi := MeshInstance3D.new()
-	var plane     := PlaneMesh.new()
-	plane.size     = Vector2(Grid.CELL_SIZE * 1.6, Grid.CELL_SIZE * 1.6)
-	shadow_mi.mesh = plane
+	_shadow_mi      = MeshInstance3D.new()
+	var quad        := QuadMesh.new()
+	quad.size        = Vector2(Grid.CELL_SIZE * 2.1, Grid.CELL_SIZE * 2.1)
+	_shadow_mi.mesh  = quad
 
-	var mat        := ShaderMaterial.new()
-	mat.shader      = SHADOW_SHADER
-	shadow_mi.material_override = mat
+	var mat          := ShaderMaterial.new()
+	mat.shader        = SHADOW_SHADER
+	mat.set_shader_parameter("sprite_texture", ANT_FRAMES[0])
+	_shadow_mi.material_override = mat
 
-	shadow_mi.position.y = 0.013 - 0.25
-	add_child(shadow_mi)
+	_shadow_mi.position.y = 0.013 - 0.25
+	_shadow_mi.basis       = _facing_basis(_target_cell - _current_cell)
+	add_child(_shadow_mi)

@@ -1,16 +1,18 @@
 shader_type spatial;
 render_mode unshaded, cull_disabled, blend_mix, depth_draw_never;
 
-void fragment() {
-	// Remap UV from 0..1 to -1..1 so the origin is the centre of the quad.
-	vec2 uv   = UV * 2.0 - 1.0;
-	float dist = length(uv);
+// The enemy's sprite texture. Its alpha defines the shadow silhouette.
+// hint_default_transparent makes the shadow invisible if no texture is assigned.
+uniform sampler2D sprite_texture : source_color, hint_default_transparent;
 
-	// Full opacity at the centre, fading smoothly to transparent at the edge.
-	// The 0.25 inner threshold keeps the darkest zone small so the shadow looks
-	// soft rather than painted-on.
-	float alpha = (1.0 - smoothstep(0.25, 1.0, dist)) * 0.50;
+void fragment() {
+	float tex_alpha = texture(sprite_texture, UV).a;
+
+	// Remap the alpha so the sprite edge transitions gradually rather than
+	// cutting off hard. A wide ramp (0.0 to 0.8) produces a soft penumbra
+	// around the silhouette even with thin anti-aliased sprite edges.
+	float shadow_alpha = smoothstep(0.0, 0.8, tex_alpha) * 0.42;
 
 	ALBEDO = vec3(0.0);
-	ALPHA  = alpha;
+	ALPHA  = shadow_alpha;
 }

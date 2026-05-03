@@ -27,10 +27,10 @@
 
 extends Node3D
 
-const Grid          = preload("res://arena/Grid.gd")
-const Projectile    = preload("res://traps/Projectile.gd")
-const FogCloud      = preload("res://traps/FogCloud.gd")
-const SHADOW_SHADER = preload("res://assets/shadow.gdshader")
+const Grid               = preload("res://arena/Grid.gd")
+const Projectile         = preload("res://traps/Projectile.gd")
+const FogCloud           = preload("res://traps/FogCloud.gd")
+const SHADOW_RECT_SHADER = preload("res://assets/shadow_rect.gdshader")
 
 
 # ---------------------------------------------------------------------------
@@ -639,18 +639,19 @@ func _spawn_hover_area() -> void:
 	add_child(_hover_area)
 
 
-## Adds a soft circular drop shadow on the floor beneath the trap.
-## The shadow is a flat PlaneMesh placed just above the floor (world y = 0.013).
-## Because the trap root sits at y = 0.25, the local offset is -0.237.
-## The shadow spans the full 2×2 cell footprint with a slight overreach to look natural.
+## Adds a soft rectangular drop shadow on the floor beneath the trap.
+## Uses a rounded-rectangle SDF so the shadow fits the square 2×2 footprint
+## rather than appearing as a circle.  Traps never rotate so no basis sync is needed.
+## The shadow sits just above the floor (world y = 0.013). Because the trap root
+## is at y = 0.25, the local Y offset is -0.237.
 func _spawn_shadow() -> void:
 	var shadow_mi := MeshInstance3D.new()
 	var plane     := PlaneMesh.new()
-	plane.size     = Vector2(Grid.CELL_SIZE * 2.0, Grid.CELL_SIZE * 2.0)
+	plane.size     = Vector2(Grid.CELL_SIZE * 1.9, Grid.CELL_SIZE * 1.9)
 	shadow_mi.mesh = plane
 
 	var mat        := ShaderMaterial.new()
-	mat.shader      = SHADOW_SHADER
+	mat.shader      = SHADOW_RECT_SHADER
 	shadow_mi.material_override = mat
 
 	shadow_mi.position.y = 0.013 - 0.25
