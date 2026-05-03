@@ -11,8 +11,10 @@ uniform sampler2D sprite_texture : source_color;
 uniform vec2 facing_dir = vec2(0.0, 1.0);
 
 void fragment() {
-	// atan(y=dx, x=dz) → angle from +Z axis to movement direction (CCW, radians).
-	float angle = atan(facing_dir.x, facing_dir.y);
+	// atan(y=dx, x=dz) → angle from +Z to movement direction (CCW).
+	// Negated because rotating the sample UV by +θ makes the texture appear rotated
+	// by −θ, so we must negate to get the texture facing the movement direction.
+	float angle = -atan(facing_dir.x, facing_dir.y);
 	float ca    = cos(angle);
 	float sa    = sin(angle);
 
