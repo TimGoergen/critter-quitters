@@ -224,8 +224,9 @@ func _flash_hit() -> void:
 		_hit_tween.kill()
 	var mat: StandardMaterial3D = _visual.material_override
 	_hit_tween = create_tween()
-	_hit_tween.tween_property(mat, "albedo_color", Color.WHITE, 0.04)
-	_hit_tween.tween_property(mat, "albedo_color", _base_color, 0.08)
+	# Overbright multiplier bleaches the colored texture to white; returns to neutral white after.
+	_hit_tween.tween_property(mat, "albedo_color", Color(4.0, 4.0, 4.0, 1.0), 0.04)
+	_hit_tween.tween_property(mat, "albedo_color", Color.WHITE, 0.08)
 
 
 ## Returns current HP as a fraction of max HP (0.0–1.0).
@@ -348,7 +349,9 @@ func _die() -> void:
 
 	var mat: StandardMaterial3D = _visual.material_override
 	var tween := create_tween()
-	tween.tween_property(mat, "albedo_color", Color.WHITE, DEATH_FLASH_DURATION)
+	# Flash overbright then fade to transparent — readable with colored sprites.
+	tween.tween_property(mat, "albedo_color", Color(4.0, 4.0, 4.0, 1.0), DEATH_FLASH_DURATION * 0.35)
+	tween.tween_property(mat, "albedo_color", Color(1.0, 1.0, 1.0, 0.0), DEATH_FLASH_DURATION * 0.65)
 	tween.tween_callback(queue_free)
 
 
@@ -442,7 +445,7 @@ func _build_glue_blob_mesh(base_r: float, color: Color) -> ImmediateMesh:
 
 
 ## Creates the enemy visual as a billboard quad using the ant sprite.
-## The color is darkened so enemies read as distinct from the bright icon.
+## The sprite SVG carries its own baked colors; albedo_color stays white.
 ## Replaced by an ASCII billboard node in Phase 3.
 func _spawn_visual(color: Color) -> void:
 	var mesh_instance := MeshInstance3D.new()
@@ -451,11 +454,11 @@ func _spawn_visual(color: Color) -> void:
 	quad.size  = Vector2(Grid.CELL_SIZE * 2.1, Grid.CELL_SIZE * 2.1)
 	mesh_instance.mesh = quad
 
-	var dark_color := Color(color.r * 0.85, color.g * 0.85, color.b * 0.85, 1.0)
-	_base_color     = dark_color
+	# _base_color is kept for particle effects; the sprite carries its own baked colors.
+	_base_color = color
 
 	var material                  := StandardMaterial3D.new()
-	material.albedo_color          = dark_color
+	material.albedo_color          = Color.WHITE   # do not tint — SVG colors are baked in
 	material.albedo_texture        = ANT_FRAMES[0]
 	material.shading_mode          = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency          = BaseMaterial3D.TRANSPARENCY_ALPHA
