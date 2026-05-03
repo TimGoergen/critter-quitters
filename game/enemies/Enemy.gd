@@ -477,7 +477,7 @@ func _spawn_visual(color: Color) -> void:
 func _spawn_shadow() -> void:
 	_shadow_mi      = MeshInstance3D.new()
 	var plane       := PlaneMesh.new()
-	plane.size       = Vector2(Grid.CELL_SIZE * 2.53, Grid.CELL_SIZE * 2.53)
+	plane.size       = Vector2(Grid.CELL_SIZE * 2.72, Grid.CELL_SIZE * 2.72)
 	_shadow_mi.mesh  = plane
 
 	var mat          := ShaderMaterial.new()
@@ -487,5 +487,5 @@ func _spawn_shadow() -> void:
 	mat.set_shader_parameter("facing_dir", Vector2(float(dir.x), float(dir.y)))
 	_shadow_mi.material_override = mat
 
-	_shadow_mi.position.y = 0.013 - 0.25
+	_shadow_mi.position.y = 0.05 - 0.25
 	add_child(_shadow_mi)

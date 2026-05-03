@@ -1223,18 +1223,9 @@ uniform float crop_size   = 0.400;
 // Darkens the floor so game objects read clearly against it.
 const float BRIGHTNESS = 0.7;
 
-// 3x3 box blur tap spacing in full-texture UV units.
-const float BLUR_STEP = 0.002;
-
 void fragment() {
 	vec2 uv = crop_offset + UV * crop_size;
-	vec4 color = vec4(0.0);
-	for (int xi = -1; xi <= 1; xi++) {
-		for (int yi = -1; yi <= 1; yi++) {
-			color += texture(floor_texture, uv + vec2(float(xi), float(yi)) * BLUR_STEP);
-		}
-	}
-	ALBEDO = (color / 9.0).rgb * BRIGHTNESS;
+	ALBEDO = texture(floor_texture, uv).rgb * BRIGHTNESS;
 }
 """
 

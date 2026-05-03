@@ -30,7 +30,7 @@ void fragment() {
 	float dist      = length(ruv - 0.5) * 2.0;
 	float edge_fade = 1.0 - smoothstep(0.0, 1.0, dist);
 
-	float shadow_alpha = smoothstep(0.0, 0.8, tex_alpha) * edge_fade * 0.40;
+	float shadow_alpha = smoothstep(0.0, 0.8, tex_alpha) * edge_fade * 0.65;
 
 	ALBEDO = vec3(0.0);
 	ALPHA  = shadow_alpha;
