@@ -21,7 +21,7 @@ void fragment() {
 	vec2 ruv = vec2(ca * uv.x - sa * uv.y, sa * uv.x + ca * uv.y) + 0.5;
 
 	float tex_alpha    = texture(sprite_texture, ruv).a;
-	float shadow_alpha = smoothstep(0.0, 0.8, tex_alpha) * 0.55;
+	float shadow_alpha = smoothstep(0.0, 0.8, tex_alpha) * 0.80;
 
 	ALBEDO = vec3(0.0);
 	ALPHA  = shadow_alpha;

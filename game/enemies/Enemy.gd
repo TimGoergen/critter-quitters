@@ -477,7 +477,7 @@ func _spawn_visual(color: Color) -> void:
 func _spawn_shadow() -> void:
 	_shadow_mi      = MeshInstance3D.new()
 	var plane       := PlaneMesh.new()
-	plane.size       = Vector2(Grid.CELL_SIZE * 2.1, Grid.CELL_SIZE * 2.1)
+	plane.size       = Vector2(Grid.CELL_SIZE * 2.8, Grid.CELL_SIZE * 2.8)
 	_shadow_mi.mesh  = plane
 
 	var mat          := ShaderMaterial.new()
