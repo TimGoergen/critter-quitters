@@ -326,7 +326,9 @@ func _process(delta: float) -> void:
 			_visual.position.x = sway
 		_visual.basis = _facing_basis(travel_dir)
 		if _shadow_mi != null:
-			_shadow_mi.basis = _visual.basis
+			(_shadow_mi.material_override as ShaderMaterial).set_shader_parameter(
+				"facing_dir", Vector2(float(travel_dir.x), float(travel_dir.y))
+			)
 		_walk_time += delta
 		_visual_material.albedo_texture = ANT_FRAMES[int(_walk_time * _move_speed * 3.0) % ANT_FRAMES.size()]
 
@@ -466,26 +468,24 @@ func _spawn_visual(color: Color) -> void:
 
 
 ## Adds a soft drop shadow on the floor beneath the enemy.
-## Uses the ant sprite's alpha channel to define the silhouette, so the shadow
-## reads as the enemy's actual shape rather than a generic blob.
-##
-## QuadMesh is used (same as _visual) so the facing Basis can be applied to keep
-## the shadow oriented with the direction of movement.  The initial Basis is set
-## here and then kept in sync inside _process each frame.
+## PlaneMesh is used because it is already horizontal (XZ plane) and requires no
+## basis manipulation.  The facing direction is passed as a shader uniform instead
+## so the shadow silhouette stays aligned with the ant's movement direction.
 ##
 ## The shadow sits just above the floor (world y = 0.013). Because the enemy root
 ## is at y = 0.25, the local Y offset is -0.237.
 func _spawn_shadow() -> void:
 	_shadow_mi      = MeshInstance3D.new()
-	var quad        := QuadMesh.new()
-	quad.size        = Vector2(Grid.CELL_SIZE * 2.1, Grid.CELL_SIZE * 2.1)
-	_shadow_mi.mesh  = quad
+	var plane       := PlaneMesh.new()
+	plane.size       = Vector2(Grid.CELL_SIZE * 2.1, Grid.CELL_SIZE * 2.1)
+	_shadow_mi.mesh  = plane
 
 	var mat          := ShaderMaterial.new()
 	mat.shader        = SHADOW_SHADER
 	mat.set_shader_parameter("sprite_texture", ANT_FRAMES[0])
+	var dir           := _target_cell - _current_cell
+	mat.set_shader_parameter("facing_dir", Vector2(float(dir.x), float(dir.y)))
 	_shadow_mi.material_override = mat
 
 	_shadow_mi.position.y = 0.013 - 0.25
-	_shadow_mi.basis       = _facing_basis(_target_cell - _current_cell)
 	add_child(_shadow_mi)
