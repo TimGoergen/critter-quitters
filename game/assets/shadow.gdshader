@@ -22,8 +22,15 @@ void fragment() {
 	vec2 uv  = UV - 0.5;
 	vec2 ruv = vec2(ca * uv.x - sa * uv.y, sa * uv.x + ca * uv.y) + 0.5;
 
-	float tex_alpha    = texture(sprite_texture, ruv).a;
-	float shadow_alpha = smoothstep(0.0, 0.8, tex_alpha) * 0.40;
+	float tex_alpha = texture(sprite_texture, ruv).a;
+
+	// Radial fade centred on the shadow quad. dist = 0 at centre, 1 at the
+	// quad edge midpoints. Multiplying by this makes the shadow darkest directly
+	// under the entity and fades it to zero at the sprite silhouette boundary.
+	float dist      = length(ruv - 0.5) * 2.0;
+	float edge_fade = 1.0 - smoothstep(0.0, 1.0, dist);
+
+	float shadow_alpha = smoothstep(0.0, 0.8, tex_alpha) * edge_fade * 0.40;
 
 	ALBEDO = vec3(0.0);
 	ALPHA  = shadow_alpha;
