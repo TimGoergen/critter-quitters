@@ -27,9 +27,10 @@
 
 extends Node3D
 
-const Grid       = preload("res://arena/Grid.gd")
-const Projectile = preload("res://traps/Projectile.gd")
-const FogCloud   = preload("res://traps/FogCloud.gd")
+const Grid               = preload("res://arena/Grid.gd")
+const Projectile         = preload("res://traps/Projectile.gd")
+const FogCloud           = preload("res://traps/FogCloud.gd")
+const SHADOW_RECT_SHADER = preload("res://assets/shadow_rect.gdshader")
 
 
 # ---------------------------------------------------------------------------
@@ -638,19 +639,80 @@ func _spawn_hover_area() -> void:
 	add_child(_hover_area)
 
 
+## Draws four thin flat bars forming a rectangular outline around the trap's
+## full 1.9-cell footprint.  Positioned at local y=0.005 so the depth buffer
+## hides the outline wherever the trap body overlaps it, while the border
+## strips that extend beyond the body remain clearly visible from above.
+func _spawn_footprint_outline(color: Color) -> void:
+	var fp        := Grid.CELL_SIZE * 1.9
+	var thickness := fp * 0.04   # thin enough to read as a border line
+	var y         := 0.005       # just above floor, below all trap body elements
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_color = color
+	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	var bar_h    := 0.008           # visually flat; avoids z-fighting with floor
+	var inner_d  := fp - thickness * 2.0   # span for side bars, no corner overlap
+
+	# Top and bottom horizontal bars (full footprint width)
+	for sz: float in [-(fp * 0.5 - thickness * 0.5), fp * 0.5 - thickness * 0.5]:
+		var mi   := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size            = Vector3(fp, bar_h, thickness)
+		mi.mesh              = mesh
+		mi.position          = Vector3(0.0, y, sz)
+		mi.material_override = mat
+		add_child(mi)
+
+	# Left and right vertical bars (inner span only; corners are covered above)
+	for sx: float in [-(fp * 0.5 - thickness * 0.5), fp * 0.5 - thickness * 0.5]:
+		var mi   := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size            = Vector3(thickness, bar_h, inner_d)
+		mi.mesh              = mesh
+		mi.position          = Vector3(sx, y, 0.0)
+		mi.material_override = mat
+		add_child(mi)
+
+
+## Adds a soft rectangular drop shadow on the floor beneath the trap.
+## Uses a rounded-rectangle SDF so the shadow fits the square 2×2 footprint
+## rather than appearing as a circle.  Traps never rotate so no basis sync is needed.
+## The shadow sits just above the floor (world y = 0.013). Because the trap root
+## is at y = 0.25, the local Y offset is -0.237.
+func _spawn_shadow() -> void:
+	var shadow_mi := MeshInstance3D.new()
+	var plane     := PlaneMesh.new()
+	plane.size     = Vector2(Grid.CELL_SIZE * 2.18, Grid.CELL_SIZE * 2.18)
+	shadow_mi.mesh = plane
+
+	var mat        := ShaderMaterial.new()
+	mat.shader      = SHADOW_RECT_SHADER
+	shadow_mi.material_override = mat
+
+	shadow_mi.position.y = 0.05 - 0.25
+	add_child(shadow_mi)
+
+
 ## Creates the trap's placeholder visual. All four trap types get multi-part
 ## procedural meshes matched to their real-world appearance.
 func _spawn_visual(_color: Color) -> void:
+	_spawn_shadow()
 	if _trap_type == TrapType.SNAP_TRAP:
+		_spawn_footprint_outline(Color(0.90, 0.70, 0.38))
 		_spawn_snap_trap_visual()
 		return
 	if _trap_type == TrapType.ZAPPER:
+		_spawn_footprint_outline(Color(0.28, 0.62, 0.96))
 		_spawn_zapper_visual()
 		return
 	if _trap_type == TrapType.FOGGER:
+		_spawn_footprint_outline(Color(0.46, 0.96, 0.38))
 		_spawn_fogger_visual()
 		return
 	if _trap_type == TrapType.GLUE_BOARD:
+		_spawn_footprint_outline(Color(0.96, 0.82, 0.34))
 		_spawn_glue_board_visual()
 		return
 
@@ -677,7 +739,7 @@ func _spawn_glue_board_visual() -> void:
 	base_mi.mesh             = base_mesh
 	base_mi.position.y       = y0
 	var base_mat             := StandardMaterial3D.new()
-	base_mat.albedo_color     = Color(0.70, 0.54, 0.30)
+	base_mat.albedo_color     = Color(0.82, 0.66, 0.36)
 	base_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	base_mi.material_override = base_mat
 	add_child(base_mi)
@@ -687,7 +749,7 @@ func _spawn_glue_board_visual() -> void:
 	# (typically red) showing brand and instruction markings.
 	var tab_w   := fp * 0.096
 	var tab_mat := StandardMaterial3D.new()
-	tab_mat.albedo_color = Color(0.76, 0.11, 0.08)
+	tab_mat.albedo_color = Color(0.92, 0.13, 0.08)
 	tab_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
 	for sx: float in [-(bw * 0.5 - tab_w * 0.5), bw * 0.5 - tab_w * 0.5]:
@@ -708,7 +770,7 @@ func _spawn_glue_board_visual() -> void:
 	glue_mi.mesh             = glue_mesh
 	glue_mi.position.y       = y2
 	var glue_mat             := StandardMaterial3D.new()
-	glue_mat.albedo_color     = Color(0.88, 0.70, 0.18, 0.90)
+	glue_mat.albedo_color     = Color(1.00, 0.82, 0.10, 0.92)
 	glue_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	glue_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	glue_mi.material_override = glue_mat
@@ -742,7 +804,7 @@ func _spawn_snap_trap_visual() -> void:
 	base_mi.mesh   = base_mesh
 	base_mi.position.y = fp * 0.016
 	var base_mat := StandardMaterial3D.new()
-	base_mat.albedo_color = Color(0.52, 0.32, 0.12)
+	base_mat.albedo_color = Color(0.62, 0.40, 0.16)
 	base_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	base_mi.material_override = base_mat
 	add_child(base_mi)
@@ -814,7 +876,7 @@ func _spawn_snap_trap_visual() -> void:
 	_snap_cheese.position         = Vector3(0.0, fp * 0.032 + fp * 0.022 + fp * 0.05, fp * 0.06)
 	_snap_cheese.rotation_degrees.y = 15.0
 	var cheese_mat := StandardMaterial3D.new()
-	cheese_mat.albedo_color = Color(0.95, 0.82, 0.15)
+	cheese_mat.albedo_color = Color(1.00, 0.90, 0.08)
 	cheese_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_snap_cheese.material_override = cheese_mat
 	add_child(_snap_cheese)
@@ -841,7 +903,7 @@ func _spawn_fogger_visual() -> void:
 	body_mi.mesh       = body_mesh
 	body_mi.position.y = fp * 0.18   # centred: bottom at y=0, top at fp*0.36
 	var body_mat := StandardMaterial3D.new()
-	body_mat.albedo_color = Color(0.12, 0.58, 0.22)
+	body_mat.albedo_color = Color(0.12, 0.76, 0.28)
 	body_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	body_mi.material_override = body_mat
 	_fogger_root.add_child(body_mi)
@@ -856,7 +918,7 @@ func _spawn_fogger_visual() -> void:
 	band_mi.mesh       = band_mesh
 	band_mi.position.y = fp * 0.18   # same centre as body
 	var band_mat := StandardMaterial3D.new()
-	band_mat.albedo_color = Color(0.95, 0.88, 0.15)
+	band_mat.albedo_color = Color(1.00, 0.95, 0.05)
 	band_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	band_mi.material_override = band_mat
 	_fogger_root.add_child(band_mi)
@@ -886,7 +948,7 @@ func _spawn_fogger_visual() -> void:
 	shoulder_mi.mesh       = shoulder_mesh
 	shoulder_mi.position.y = fp * 0.405   # sits flush on top of body (fp*0.36 + half fp*0.09)
 	var shoulder_mat := StandardMaterial3D.new()
-	shoulder_mat.albedo_color = Color(0.10, 0.46, 0.18)
+	shoulder_mat.albedo_color = Color(0.10, 0.60, 0.22)
 	shoulder_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	shoulder_mi.material_override = shoulder_mat
 	_fogger_root.add_child(shoulder_mi)
@@ -921,7 +983,7 @@ func _spawn_fogger_visual() -> void:
 	tip_mi.mesh       = tip_mesh
 	tip_mi.position.y = fp * 0.10 + fp * 0.060   # sits on top of stem
 	var tip_mat := StandardMaterial3D.new()
-	tip_mat.albedo_color = Color(0.88, 0.32, 0.08)
+	tip_mat.albedo_color = Color(1.00, 0.38, 0.06)
 	tip_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	tip_mi.material_override = tip_mat
 	_fogger_nozzle.add_child(tip_mi)
@@ -1022,7 +1084,7 @@ func _spawn_zapper_visual() -> void:
 	glow_mesh.size           = Vector3(inner_w * 0.70, frame_h, cd * 0.32)
 	glow_mi.mesh             = glow_mesh
 	var glow_mat             := StandardMaterial3D.new()
-	glow_mat.albedo_color     = Color(0.18, 0.45, 1.00, 0.35)
+	glow_mat.albedo_color     = Color(0.20, 0.60, 1.00, 0.55)
 	glow_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	glow_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	glow_mi.material_override = glow_mat
@@ -1034,7 +1096,7 @@ func _spawn_zapper_visual() -> void:
 	uv_mesh.size             = Vector3(inner_w * 0.62, frame_h, cd * 0.14)
 	uv_mi.mesh               = uv_mesh
 	var uv_mat               := StandardMaterial3D.new()
-	uv_mat.albedo_color       = Color(0.12, 0.55, 1.00)
+	uv_mat.albedo_color       = Color(0.15, 0.72, 1.00)
 	uv_mat.shading_mode       = BaseMaterial3D.SHADING_MODE_UNSHADED
 	uv_mi.material_override   = uv_mat
 	_zapper_uv_light.add_child(uv_mi)

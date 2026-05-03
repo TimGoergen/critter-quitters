@@ -27,7 +27,8 @@
 
 extends Node3D
 
-const Grid = preload("res://arena/Grid.gd")
+const Grid          = preload("res://arena/Grid.gd")
+const SHADOW_SHADER = preload("res://assets/shadow.gdshader")
 
 const ANT_FRAMES: Array[Texture2D] = [
 	preload("res://assets/ant_walk_1.svg"),
@@ -112,6 +113,9 @@ var _path_index: int = 0
 # Reference to the visual mesh so _process can apply the waddle each frame.
 var _visual: MeshInstance3D = null
 
+# Flat shadow quad positioned just above the floor; its basis stays in sync with _visual.
+var _shadow_mi: MeshInstance3D = null
+
 # Accumulated time driving the waddle oscillation.
 var _waddle_time: float = 0.0
 
@@ -175,6 +179,7 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 
 	_base_color = stats["color"]
 	_spawn_visual(_base_color)
+	_spawn_shadow()
 
 
 # ---------------------------------------------------------------------------
@@ -219,8 +224,9 @@ func _flash_hit() -> void:
 		_hit_tween.kill()
 	var mat: StandardMaterial3D = _visual.material_override
 	_hit_tween = create_tween()
-	_hit_tween.tween_property(mat, "albedo_color", Color.WHITE, 0.04)
-	_hit_tween.tween_property(mat, "albedo_color", _base_color, 0.08)
+	# Overbright multiplier bleaches the colored texture to white; returns to neutral white after.
+	_hit_tween.tween_property(mat, "albedo_color", Color(4.0, 4.0, 4.0, 1.0), 0.04)
+	_hit_tween.tween_property(mat, "albedo_color", Color.WHITE, 0.08)
 
 
 ## Returns current HP as a fraction of max HP (0.0–1.0).
@@ -320,6 +326,10 @@ func _process(delta: float) -> void:
 			_visual.position.z = 0.0
 			_visual.position.x = sway
 		_visual.basis = _facing_basis(travel_dir)
+		if _shadow_mi != null:
+			(_shadow_mi.material_override as ShaderMaterial).set_shader_parameter(
+				"facing_dir", Vector2(float(travel_dir.x), float(travel_dir.y))
+			)
 		_walk_time += delta
 		_visual_material.albedo_texture = ANT_FRAMES[int(_walk_time * _move_speed * 3.0) % ANT_FRAMES.size()]
 
@@ -339,7 +349,9 @@ func _die() -> void:
 
 	var mat: StandardMaterial3D = _visual.material_override
 	var tween := create_tween()
-	tween.tween_property(mat, "albedo_color", Color.WHITE, DEATH_FLASH_DURATION)
+	# Flash overbright then fade to transparent — readable with colored sprites.
+	tween.tween_property(mat, "albedo_color", Color(4.0, 4.0, 4.0, 1.0), DEATH_FLASH_DURATION * 0.35)
+	tween.tween_property(mat, "albedo_color", Color(1.0, 1.0, 1.0, 0.0), DEATH_FLASH_DURATION * 0.65)
 	tween.tween_callback(queue_free)
 
 
@@ -433,7 +445,7 @@ func _build_glue_blob_mesh(base_r: float, color: Color) -> ImmediateMesh:
 
 
 ## Creates the enemy visual as a billboard quad using the ant sprite.
-## The color is darkened so enemies read as distinct from the bright icon.
+## The sprite SVG carries its own baked colors; albedo_color stays white.
 ## Replaced by an ASCII billboard node in Phase 3.
 func _spawn_visual(color: Color) -> void:
 	var mesh_instance := MeshInstance3D.new()
@@ -442,11 +454,11 @@ func _spawn_visual(color: Color) -> void:
 	quad.size  = Vector2(Grid.CELL_SIZE * 2.1, Grid.CELL_SIZE * 2.1)
 	mesh_instance.mesh = quad
 
-	var dark_color := Color(color.r * 0.85, color.g * 0.85, color.b * 0.85, 1.0)
-	_base_color     = dark_color
+	# _base_color is kept for particle effects; the sprite carries its own baked colors.
+	_base_color = color
 
 	var material                  := StandardMaterial3D.new()
-	material.albedo_color          = dark_color
+	material.albedo_color          = Color.WHITE   # do not tint — SVG colors are baked in
 	material.albedo_texture        = ANT_FRAMES[0]
 	material.shading_mode          = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency          = BaseMaterial3D.TRANSPARENCY_ALPHA
@@ -456,3 +468,27 @@ func _spawn_visual(color: Color) -> void:
 
 	_visual = mesh_instance
 	add_child(mesh_instance)
+
+
+## Adds a soft drop shadow on the floor beneath the enemy.
+## PlaneMesh is used because it is already horizontal (XZ plane) and requires no
+## basis manipulation.  The facing direction is passed as a shader uniform instead
+## so the shadow silhouette stays aligned with the ant's movement direction.
+##
+## The shadow sits just above the floor (world y = 0.013). Because the enemy root
+## is at y = 0.25, the local Y offset is -0.237.
+func _spawn_shadow() -> void:
+	_shadow_mi      = MeshInstance3D.new()
+	var plane       := PlaneMesh.new()
+	plane.size       = Vector2(Grid.CELL_SIZE * 2.72, Grid.CELL_SIZE * 2.72)
+	_shadow_mi.mesh  = plane
+
+	var mat          := ShaderMaterial.new()
+	mat.shader        = SHADOW_SHADER
+	mat.set_shader_parameter("sprite_texture", ANT_FRAMES[0])
+	var dir           := _target_cell - _current_cell
+	mat.set_shader_parameter("facing_dir", Vector2(float(dir.x), float(dir.y)))
+	_shadow_mi.material_override = mat
+
+	_shadow_mi.position.y = 0.05 - 0.25
+	add_child(_shadow_mi)

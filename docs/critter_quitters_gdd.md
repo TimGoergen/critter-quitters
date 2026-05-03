@@ -1,6 +1,6 @@
 # **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.19 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
+**Version:** Draft v0.20 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
 
 ---
 
@@ -27,6 +27,7 @@
 | v0.17 | Player character named Magee (working name). Wave/Round/Level contract structure confirmed as long-term design target; current prototype remains endless-wave for testing and balancing purposes. |
 | v0.18 | Roguelike perk system confirmed: at the end of each Round, the player is presented with 3 randomly selected temporary perks and picks 1. Perks last for the remainder of the run. |
 | v0.19 | Avatar/character movement mechanic rejected. No player character appears on screen. Camera perspective and top-down placement mechanics are unchanged. Magee exists as a narrative framing device only. Trap repositioning remains the existing Bug Bucks fee model. |
+| v0.20 | Build & deploy pipeline added as Phase 4. Previous phases 4, 4b, 5, 6 renumbered to 5, 5b, 6, 7. Pipeline targets Windows 11 and Android (Pixel 10 Pro XL); GitHub Actions CI, signed artifacts, version-stamped builds. |
 
 ---
 
@@ -590,7 +591,19 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: looks and feels like the game*
 
-### **Phase 4 — Full Game Loop**
+### **Phase 4 — Build & Deploy Pipeline**
+- Automated Godot export — Windows 11 (x86-64) and Android (arm64) builds triggered from GitHub Actions on push to main
+- Windows build: produces a signed .exe installer via Inno Setup or NSIS, uploaded as a GitHub Release artifact
+- Android build: produces a signed .apk/.aab, sideloadable to Pixel 10 Pro XL (arm64-v8a target); Play Store upload deferred to Phase 7
+- Export templates cached in CI to avoid re-downloading on every run
+- Godot project settings verified for each target: Mobile renderer confirmed on Android, Compatibility renderer on Windows
+- Secrets managed via GitHub Actions environment variables: keystore credentials, signing passwords
+- One-command local build script (build.bat / build.sh) mirrors the CI process for developer use
+- Build artefacts version-stamped using git tag or short SHA
+
+*Goal: any push to main produces tested, installable builds for both target devices with no manual steps*
+
+### **Phase 5 — Full Game Loop**
 - Wave composition system — complexity curve, group-based spawning, boss waves
 - All 4 trap types
 - All 5 enemy types
@@ -605,7 +618,7 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 The current prototype uses an endless-wave structure for testing and balancing purposes. The target shipped design groups waves into Rounds (3–5 waves) and Rounds into Levels (Contracts, 5–10 rounds). At the end of each Round, the player picks 1 of 3 randomly offered temporary perks that last for the remainder of the run. Completing a Level (Contract) awards Service Fees for meta progression. The prototype will remain endless until the core loop is balanced and the grouping structure is fully designed.
 
-### **Phase 4b — Meta Progression**
+### **Phase 5b — Meta Progression**
 - Service Fees earned at run end based on performance
 - The Truck hub screen — Start New Job, Upgrades, Stats
 - Equipment upgrade tree
@@ -614,7 +627,7 @@ The current prototype uses an endless-wave structure for testing and balancing p
 
 *Goal: long-term progression loop across runs*
 
-### **Phase 5 — Depth & Polish**
+### **Phase 6 — Depth & Polish**
 - Full upgrade trees and DoT system (fire, ice)
 - Trap unlock progression
 - Store tiers, reroll mechanic
@@ -624,7 +637,7 @@ The current prototype uses an endless-wave structure for testing and balancing p
 
 *Goal: full-featured game*
 
-### **Phase 6 — Platform**
+### **Phase 7 — Platform**
 - Mobile export and touch controls
 - Web export
 - Performance optimisation

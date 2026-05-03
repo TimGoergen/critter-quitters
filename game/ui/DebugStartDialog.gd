@@ -86,7 +86,7 @@ func _build_ui() -> void:
 	y += 10.0
 
 	# Bug Bucks row
-	_field_bucks = _add_field_row(bg, y, "Starting Bug Bucks", str(DEFAULT_BUG_BUCKS), 100, 0)
+	_field_bucks = _add_field_row(bg, y, "Starting Bug Bucks", str(DEFAULT_BUG_BUCKS), 1000, 0)
 	y += 36.0
 
 	# Wave size row
