@@ -13,6 +13,7 @@ extends CanvasLayer
 
 const Trap     = preload("res://traps/Trap.gd")
 const UIFonts  = preload("res://ui/UIFonts.gd")
+const Grid     = preload("res://arena/Grid.gd")
 
 const COLOR_PANEL_BG    := Color(0.08, 0.08, 0.13, 0.88)
 const COLOR_BAR_BG      := Color(0.28, 0.28, 0.28, 1.0)
@@ -235,7 +236,7 @@ func _build_ui() -> void:
 	_countdown_wave_label.anchor_bottom        = 0.30
 	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_wave_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_countdown_wave_label.add_theme_font_size_override("font_size", 62)
+	_countdown_wave_label.add_theme_font_size_override("font_size", 72)
 	_countdown_wave_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
 	_countdown_wave_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
 	_countdown_wave_label.add_theme_constant_override("shadow_offset_x", 2)
@@ -307,6 +308,7 @@ func _build_ui() -> void:
 	_speed_pause_box.add_child(_speed_btn)
 
 	_position_speed_btn()
+	_reposition_countdown_labels()
 
 	_build_run_over_overlay()
 
@@ -425,6 +427,78 @@ func _position_speed_btn() -> void:
 		box.offset_top    = box.offset_bottom - row_h
 
 
+## Returns the fraction of screen width at which the arena's right edge falls.
+## Replicates Arena.gd's camera-fit math so HUD can position labels in the gap.
+func _arena_right_frac() -> float:
+	var vp    := get_viewport().get_visible_rect().size
+	var scr_w := vp.x
+	var scr_h := vp.y
+	if scr_h <= 0.0 or scr_w <= 0.0:
+		return 1.0
+	var landscape := scr_w >= scr_h
+	var bot_add   := SELECTOR_LANDSCAPE_STRIP_H if landscape else SELECTOR_STRIP_H
+	var usable_h  := scr_h - PANEL_H - bot_add
+	if usable_h <= 0.0:
+		return 1.0
+	var arena_world := float(Grid.GRID_SIZE) * Grid.CELL_SIZE + 2.0
+	var cam_size := maxf(
+		arena_world * scr_h / usable_h,
+		arena_world * scr_h / scr_w
+	)
+	# Pixels occupied by the grid itself (excluding the 1-unit margin on each side).
+	var grid_px := float(Grid.GRID_SIZE) * Grid.CELL_SIZE * scr_h / cam_size
+	# Arena is horizontally centred; right edge = centre + half grid width.
+	return (scr_w + grid_px) / (2.0 * scr_w)
+
+
+## Positions the countdown labels and Send Wave Early button.
+## Landscape: in the gap to the right of the arena.
+## Portrait:  upper-centre of the screen (original positions).
+func _reposition_countdown_labels() -> void:
+	var vp        := get_viewport().get_visible_rect().size
+	var landscape := vp.x >= vp.y
+
+	if not landscape:
+		_countdown_wave_label.anchor_left   = 0.0
+		_countdown_wave_label.anchor_right  = 1.0
+		_countdown_wave_label.anchor_top    = 0.15
+		_countdown_wave_label.anchor_bottom = 0.30
+		_countdown_number_label.anchor_left   = 0.0
+		_countdown_number_label.anchor_right  = 1.0
+		_countdown_number_label.anchor_top    = 0.30
+		_countdown_number_label.anchor_bottom = 0.45
+		_send_wave_btn.anchor_left   = 0.30
+		_send_wave_btn.anchor_right  = 0.70
+		_send_wave_btn.anchor_top    = 0.70
+		_send_wave_btn.anchor_bottom = 0.80
+		return
+
+	# Landscape: fill the right-hand gap between the arena and the screen edge.
+	var right := _arena_right_frac()
+
+	# Vertical anchor: content area runs from bottom of the top bar to top of
+	# the speed/pause strip.  lerpf at 0.42 places the block slightly above mid.
+	var top_frac  := PANEL_H / vp.y
+	var bot_frac  := 1.0 - SELECTOR_LANDSCAPE_STRIP_H / vp.y
+	var v_center  := lerpf(top_frac, bot_frac, 0.42)
+
+	_countdown_wave_label.anchor_left   = right
+	_countdown_wave_label.anchor_right  = 1.0
+	_countdown_wave_label.anchor_top    = v_center - 0.11
+	_countdown_wave_label.anchor_bottom = v_center
+
+	_countdown_number_label.anchor_left   = right
+	_countdown_number_label.anchor_right  = 1.0
+	_countdown_number_label.anchor_top    = v_center
+	_countdown_number_label.anchor_bottom = v_center + 0.09
+
+	# "Send Wave Early" sits just below the countdown number.
+	_send_wave_btn.anchor_left   = right
+	_send_wave_btn.anchor_right  = 1.0
+	_send_wave_btn.anchor_top    = v_center + 0.11
+	_send_wave_btn.anchor_bottom = v_center + 0.21
+
+
 func _on_speed_btn_pressed() -> void:
 	_is_fast = not _is_fast
 	Engine.time_scale  = 2.0 if _is_fast else 1.0
@@ -473,6 +547,7 @@ func _is_landscape() -> bool:
 ## Rebuilds the selector panel when the screen flips between landscape and portrait.
 func _on_viewport_resized() -> void:
 	var landscape := _is_landscape()
+	_reposition_countdown_labels()
 	if landscape == _selector_is_landscape:
 		return
 	# Orientation changed — free the old layout and build the new one.
