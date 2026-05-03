@@ -27,9 +27,10 @@
 
 extends Node3D
 
-const Grid       = preload("res://arena/Grid.gd")
-const Projectile = preload("res://traps/Projectile.gd")
-const FogCloud   = preload("res://traps/FogCloud.gd")
+const Grid          = preload("res://arena/Grid.gd")
+const Projectile    = preload("res://traps/Projectile.gd")
+const FogCloud      = preload("res://traps/FogCloud.gd")
+const SHADOW_SHADER = preload("res://assets/shadow.gdshader")
 
 
 # ---------------------------------------------------------------------------
@@ -638,9 +639,28 @@ func _spawn_hover_area() -> void:
 	add_child(_hover_area)
 
 
+## Adds a soft circular drop shadow on the floor beneath the trap.
+## The shadow is a flat PlaneMesh placed just above the floor (world y = 0.013).
+## Because the trap root sits at y = 0.25, the local offset is -0.237.
+## The shadow spans the full 2×2 cell footprint with a slight overreach to look natural.
+func _spawn_shadow() -> void:
+	var shadow_mi := MeshInstance3D.new()
+	var plane     := PlaneMesh.new()
+	plane.size     = Vector2(Grid.CELL_SIZE * 2.0, Grid.CELL_SIZE * 2.0)
+	shadow_mi.mesh = plane
+
+	var mat        := ShaderMaterial.new()
+	mat.shader      = SHADOW_SHADER
+	shadow_mi.material_override = mat
+
+	shadow_mi.position.y = 0.013 - 0.25
+	add_child(shadow_mi)
+
+
 ## Creates the trap's placeholder visual. All four trap types get multi-part
 ## procedural meshes matched to their real-world appearance.
 func _spawn_visual(_color: Color) -> void:
+	_spawn_shadow()
 	if _trap_type == TrapType.SNAP_TRAP:
 		_spawn_snap_trap_visual()
 		return

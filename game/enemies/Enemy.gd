@@ -27,7 +27,8 @@
 
 extends Node3D
 
-const Grid = preload("res://arena/Grid.gd")
+const Grid          = preload("res://arena/Grid.gd")
+const SHADOW_SHADER = preload("res://assets/shadow.gdshader")
 
 const ANT_FRAMES: Array[Texture2D] = [
 	preload("res://assets/ant_walk_1.svg"),
@@ -175,6 +176,7 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 
 	_base_color = stats["color"]
 	_spawn_visual(_base_color)
+	_spawn_shadow()
 
 
 # ---------------------------------------------------------------------------
@@ -456,3 +458,20 @@ func _spawn_visual(color: Color) -> void:
 
 	_visual = mesh_instance
 	add_child(mesh_instance)
+
+
+## Adds a soft circular drop shadow on the floor beneath the enemy.
+## The shadow is a flat PlaneMesh placed just above the floor (world y = 0.013).
+## Because the enemy root sits at y = 0.25, the local offset is -0.237.
+func _spawn_shadow() -> void:
+	var shadow_mi := MeshInstance3D.new()
+	var plane     := PlaneMesh.new()
+	plane.size     = Vector2(Grid.CELL_SIZE * 1.6, Grid.CELL_SIZE * 1.6)
+	shadow_mi.mesh = plane
+
+	var mat        := ShaderMaterial.new()
+	mat.shader      = SHADOW_SHADER
+	shadow_mi.material_override = mat
+
+	shadow_mi.position.y = 0.013 - 0.25
+	add_child(shadow_mi)
