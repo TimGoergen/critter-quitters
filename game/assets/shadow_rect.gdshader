@@ -12,7 +12,7 @@ void fragment() {
 
 	// Negative dist = inside the rounded rect; positive = outside.
 	// Smooth the edge over a small range to produce a soft penumbra.
-	float alpha = (1.0 - smoothstep(-0.10, 0.25, dist)) * 0.75;
+	float alpha = (1.0 - smoothstep(-0.10, 0.25, dist)) * 0.375;
 
 	ALBEDO = vec3(0.0);
 	ALPHA  = alpha;

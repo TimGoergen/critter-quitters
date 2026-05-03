@@ -647,7 +647,7 @@ func _spawn_hover_area() -> void:
 func _spawn_shadow() -> void:
 	var shadow_mi := MeshInstance3D.new()
 	var plane     := PlaneMesh.new()
-	plane.size     = Vector2(Grid.CELL_SIZE * 2.6, Grid.CELL_SIZE * 2.6)
+	plane.size     = Vector2(Grid.CELL_SIZE * 3.38, Grid.CELL_SIZE * 3.38)
 	shadow_mi.mesh = plane
 
 	var mat        := ShaderMaterial.new()
