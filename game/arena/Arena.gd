@@ -1426,72 +1426,96 @@ func _add_dark_smudge_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) ->
 				y, cz + sin(a1) * radius * randf_range(0.55, 1.45)))
 
 
-## Renders a set of wall cells as one batched ImmediateMesh with three surfaces.
-## Used by both _spawn_arena_border (inner ring) and _spawn_outer_border_ring (outer ring)
-## so both walls share the same detail level and visual language.
+## Renders a set of wall cells. Spawns two separate MeshInstance3D nodes:
 ##
-##   Surface 0 — jittered quad fills: each block's four corners are nudged by ±3.5%
-##               of cell width using a per-cell deterministic seed, giving an organic
-##               hand-hewn look. Fill and border share the same seed so outlines match.
-##   Surface 1 — jittered border lines: same corners as the fill.
-##   Surface 2 — surface detail: ~60% of cells carry 1–4 moss patches; ~35% carry
-##               1–2 dark stain smudges. Each is an irregular filled blob.
+##   Solid mesh (TRANSPARENCY_DISABLED) — fills and border lines.
+##     Opaque rendering writes to the depth buffer so the detail mesh above
+##     can depth-test against the blocks correctly. Triangles wind counter-
+##     clockwise from above so normals face the camera without CULL_DISABLED.
+##
+##   Detail mesh (TRANSPARENCY_ALPHA) — moss patches and dark smudges.
+##     Rendered in the transparent pass at Y_DETAIL, above the solid fills.
+##     The filled depth buffer from the solid pass ensures moss always draws
+##     on top of the blocks and is never occluded by other transparent objects
+##     at lower Y values. CULL_DISABLED covers any winding variance in the
+##     triangle fans.
+##
+## Both rings (inner and outer) call this function so they share the same
+## visual treatment and surface detail density.
 func _spawn_wall_ring(cells: Array[Vector2i]) -> void:
 	const Y_FILL:   float = 0.025
 	const Y_BORDER: float = 0.030
-	const Y_DETAIL: float = 0.035
+	const Y_DETAIL: float = 0.040   # above fills; depth-tested against the opaque solid mesh
 	const JITTER:   float = Grid.CELL_SIZE * 0.035
 
-	var im := ImmediateMesh.new()
+	# -----------------------------------------------------------------------
+	# Solid mesh: fills (TRIANGLES) + border lines (LINES)
+	# TRANSPARENCY_DISABLED → opaque pass → depth writes enabled
+	# -----------------------------------------------------------------------
+	var im_solid := ImmediateMesh.new()
 
-	# --- Surface 0: jittered block fills ---
-	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Fills — CCW winding from above (looking down +Y) so the front face faces the camera.
+	# Corner order from _jittered_cell_corners: [TL(0), TR(1), BL(2), BR(3)]
+	# CCW from above: TL→BL→BR and TL→BR→TR
+	im_solid.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	for cell in cells:
 		var color   := _randomised_wall_color()
 		var corners := _jittered_cell_corners(cell, JITTER, Y_FILL)
-		# Quad as two triangles: TL(0),TR(1),BR(3) and TL(0),BR(3),BL(2).
-		im.surface_set_color(color); im.surface_add_vertex(corners[0])
-		im.surface_set_color(color); im.surface_add_vertex(corners[1])
-		im.surface_set_color(color); im.surface_add_vertex(corners[3])
-		im.surface_set_color(color); im.surface_add_vertex(corners[0])
-		im.surface_set_color(color); im.surface_add_vertex(corners[3])
-		im.surface_set_color(color); im.surface_add_vertex(corners[2])
-	im.surface_end()
+		im_solid.surface_set_color(color); im_solid.surface_add_vertex(corners[0])  # TL
+		im_solid.surface_set_color(color); im_solid.surface_add_vertex(corners[2])  # BL
+		im_solid.surface_set_color(color); im_solid.surface_add_vertex(corners[3])  # BR
+		im_solid.surface_set_color(color); im_solid.surface_add_vertex(corners[0])  # TL
+		im_solid.surface_set_color(color); im_solid.surface_add_vertex(corners[3])  # BR
+		im_solid.surface_set_color(color); im_solid.surface_add_vertex(corners[1])  # TR
+	im_solid.surface_end()
 
-	# --- Surface 1: jittered cell border lines ---
-	# Same cell seed in _jittered_cell_corners → same corners as the fill pass.
-	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	# Border lines — same deterministic seed → same corners as the fill pass
+	im_solid.surface_begin(Mesh.PRIMITIVE_LINES)
 	for cell in cells:
 		var corners := _jittered_cell_corners(cell, JITTER, Y_BORDER)
-		im.surface_set_color(COLOR_WALL_BORDER)
-		im.surface_add_vertex(corners[0]); im.surface_add_vertex(corners[1])  # TL→TR
-		im.surface_add_vertex(corners[1]); im.surface_add_vertex(corners[3])  # TR→BR
-		im.surface_add_vertex(corners[3]); im.surface_add_vertex(corners[2])  # BR→BL
-		im.surface_add_vertex(corners[2]); im.surface_add_vertex(corners[0])  # BL→TL
-	im.surface_end()
+		im_solid.surface_set_color(COLOR_WALL_BORDER)
+		im_solid.surface_add_vertex(corners[0]); im_solid.surface_add_vertex(corners[1])  # TL→TR
+		im_solid.surface_add_vertex(corners[1]); im_solid.surface_add_vertex(corners[3])  # TR→BR
+		im_solid.surface_add_vertex(corners[3]); im_solid.surface_add_vertex(corners[2])  # BR→BL
+		im_solid.surface_add_vertex(corners[2]); im_solid.surface_add_vertex(corners[0])  # BL→TL
+	im_solid.surface_end()
 
-	# --- Surface 2: moss patches and dark stain smudges ---
-	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	var mi_solid  := MeshInstance3D.new()
+	mi_solid.mesh  = im_solid
+	var mat_solid := StandardMaterial3D.new()
+	mat_solid.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat_solid.transparency               = BaseMaterial3D.TRANSPARENCY_DISABLED
+	mat_solid.vertex_color_use_as_albedo = true
+	mi_solid.material_override = mat_solid
+	add_child(mi_solid)
+
+	# -----------------------------------------------------------------------
+	# Detail mesh: moss patches and dark smudges
+	# TRANSPARENCY_ALPHA → transparent pass → depth-tested against solid fills
+	# CULL_DISABLED covers any winding variance in the irregular triangle fans
+	# -----------------------------------------------------------------------
+	var im_detail := ImmediateMesh.new()
+	im_detail.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	for cell in cells:
 		if randf() < 0.60:
 			var patch_count := randi_range(1, 4)
 			for _p in range(patch_count):
-				_add_moss_patch_to_surface(im, cell, Y_DETAIL)
+				_add_moss_patch_to_surface(im_detail, cell, Y_DETAIL)
 		if randf() < 0.35:
 			var smudge_count := randi_range(1, 2)
 			for _s in range(smudge_count):
-				_add_dark_smudge_to_surface(im, cell, Y_DETAIL)
-	im.surface_end()
+				_add_dark_smudge_to_surface(im_detail, cell, Y_DETAIL)
+	im_detail.surface_end()
 
-	var mi  := MeshInstance3D.new()
-	mi.mesh  = im
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.vertex_color_use_as_albedo = true
-	mat.cull_mode                  = BaseMaterial3D.CULL_DISABLED
-	mi.material_override = mat
-	add_child(mi)
+	var mi_detail  := MeshInstance3D.new()
+	mi_detail.mesh  = im_detail
+	var mat_detail := StandardMaterial3D.new()
+	mat_detail.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat_detail.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat_detail.vertex_color_use_as_albedo = true
+	mat_detail.cull_mode                  = BaseMaterial3D.CULL_DISABLED
+	mi_detail.material_override = mat_detail
+	add_child(mi_detail)
 
 
 ## Renders the outer ring of wall cells — one grid square thick, surrounding the inner border.
