@@ -216,6 +216,7 @@ func _ready() -> void:
 	_init_path_marker_pool()
 	_spawn_floor()
 	_spawn_arena_border()
+	_spawn_outer_border_ring()
 
 	get_viewport().physics_object_picking = true
 
@@ -1345,18 +1346,118 @@ func _draw_wall_cell_borders(
 
 ## Creates one flat wall fill slab using a PlaneMesh (single upward-facing face,
 ## no depth) to guarantee the fill colour renders cleanly regardless of slab width.
-func _spawn_wall_slab(center: Vector3, size: Vector2) -> void:
+func _spawn_wall_slab(center: Vector3, size: Vector2, color: Color = COLOR_WALL_FILL) -> void:
 	var mi    := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
 	plane.size = size
 	mi.mesh   = plane
 	var mat              := StandardMaterial3D.new()
-	mat.albedo_color      = COLOR_WALL_FILL
+	mat.albedo_color      = color
 	mat.shading_mode      = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency      = BaseMaterial3D.TRANSPARENCY_DISABLED
 	mi.material_override  = mat
 	mi.position           = Vector3(center.x, 0.025, center.z)
 	add_child(mi)
+
+
+## Returns a slightly randomised wall colour for the outer ring.
+## Minor brightness variation suggests age and wear; a small green component
+## suggests moss or plant growth on the exterior wall surface.
+func _randomised_wall_color() -> Color:
+	var brightness := 1.0 + randf_range(-0.08, 0.08)
+	var greenery   := randf_range(0.0, 0.05)
+	return Color(
+		clampf(COLOR_WALL_FILL.r * brightness, 0.0, 1.0),
+		clampf(COLOR_WALL_FILL.g * brightness + greenery, 0.0, 1.0),
+		clampf(COLOR_WALL_FILL.b * brightness, 0.0, 1.0),
+		1.0
+	)
+
+
+## Spawns a 1×1 outer-ring wall cell slab at the given virtual cell position
+## (col or row outside the 0–GRID_SIZE-1 range). Colour is randomised per cell.
+func _spawn_outer_wall_cell(cell: Vector2i) -> void:
+	var center := _cell_to_world(cell)
+	_spawn_wall_slab(
+		Vector3(center.x, 0.0, center.z),
+		Vector2(Grid.CELL_SIZE, Grid.CELL_SIZE),
+		_randomised_wall_color()
+	)
+
+
+## Draws the four border lines of a single outer-ring cell into im.
+func _draw_outer_cell_border(im: ImmediateMesh, cell: Vector2i) -> void:
+	var c  := _cell_to_world(cell)
+	var hs := Grid.CELL_SIZE * 0.5
+	var y  := 0.03
+	im.surface_set_color(COLOR_WALL_BORDER)
+	im.surface_add_vertex(Vector3(c.x - hs, y, c.z - hs))
+	im.surface_add_vertex(Vector3(c.x + hs, y, c.z - hs))
+	im.surface_add_vertex(Vector3(c.x + hs, y, c.z - hs))
+	im.surface_add_vertex(Vector3(c.x + hs, y, c.z + hs))
+	im.surface_add_vertex(Vector3(c.x + hs, y, c.z + hs))
+	im.surface_add_vertex(Vector3(c.x - hs, y, c.z + hs))
+	im.surface_add_vertex(Vector3(c.x - hs, y, c.z + hs))
+	im.surface_add_vertex(Vector3(c.x - hs, y, c.z - hs))
+
+
+## Spawns the second (outer) ring of wall cells, one grid square thick, surrounding
+## the existing inner border. Each cell is an individual slab with per-cell randomised
+## colour to suggest weathering and moss. Border grid lines are drawn on top in one
+## shared ImmediateMesh (same approach as the inner wall lines).
+##
+## The outer ring occupies virtual cell positions col=-1/GRID_SIZE and row=-1/GRID_SIZE —
+## one step beyond the 0-(GRID_SIZE-1) inner grid. The _cell_to_world formula works for
+## these virtual coords without any special casing.
+##
+## Gap rows in the left and right outer columns match the entrance and exit gaps in the
+## inner wall, so enemies can pass through both thicknesses of wall unobstructed.
+func _spawn_outer_border_ring() -> void:
+	var ent_row := GameState.entrance_cell.y
+	var ex_row  := GameState.exit_cell.y
+	var ent_gap := [ent_row - 1, ent_row, ent_row + 1]
+	var ex_gap  := [ex_row  - 1, ex_row,  ex_row  + 1]
+
+	var im := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+
+	# Top outer row: virtual row -1, spans full width including corners (cols -1 to GRID_SIZE).
+	for col in range(-1, Grid.GRID_SIZE + 1):
+		var cell := Vector2i(col, -1)
+		_spawn_outer_wall_cell(cell)
+		_draw_outer_cell_border(im, cell)
+
+	# Bottom outer row: virtual row GRID_SIZE, same full-width span.
+	for col in range(-1, Grid.GRID_SIZE + 1):
+		var cell := Vector2i(col, Grid.GRID_SIZE)
+		_spawn_outer_wall_cell(cell)
+		_draw_outer_cell_border(im, cell)
+
+	# Left outer column: virtual col -1, rows 0 to GRID_SIZE-1 (corners are in top/bottom rows above).
+	for row in range(Grid.GRID_SIZE):
+		if row in ent_gap:
+			continue
+		var cell := Vector2i(-1, row)
+		_spawn_outer_wall_cell(cell)
+		_draw_outer_cell_border(im, cell)
+
+	# Right outer column: virtual col GRID_SIZE, rows 0 to GRID_SIZE-1.
+	for row in range(Grid.GRID_SIZE):
+		if row in ex_gap:
+			continue
+		var cell := Vector2i(Grid.GRID_SIZE, row)
+		_spawn_outer_wall_cell(cell)
+		_draw_outer_cell_border(im, cell)
+
+	im.surface_end()
+
+	var lines     := MeshInstance3D.new()
+	lines.mesh     = im
+	var mat       := StandardMaterial3D.new()
+	mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.vertex_color_use_as_albedo = true
+	lines.material_override = mat
+	add_child(lines)
 
 
 ## Spawns an entrance or exit zone marker: a muted-colour slab spanning `rows`
@@ -1466,7 +1567,7 @@ func _fit_camera_to_grid() -> void:
 	if usable_h <= 0.0 or usable_w <= 0.0:
 		return
 
-	var arena_world := Grid.GRID_SIZE * Grid.CELL_SIZE + 2.0  # +2 = 1-unit margin each side
+	var arena_world := Grid.GRID_SIZE * Grid.CELL_SIZE + 4.0  # +4 keeps a ~1-unit margin beyond the 2-cell-wide outer wall ring
 
 	# With KEEP_HEIGHT, horizontal world coverage = size × (scr_w / scr_h).
 	# For the arena to fit in usable_w pixels: size × (usable_w / scr_h) ≥ arena_world
