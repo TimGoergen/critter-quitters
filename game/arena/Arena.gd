@@ -1374,90 +1374,141 @@ func _randomised_wall_color() -> Color:
 	)
 
 
-## Spawns a 1×1 outer-ring wall cell slab at the given virtual cell position
-## (col or row outside the 0–GRID_SIZE-1 range). Colour is randomised per cell.
-func _spawn_outer_wall_cell(cell: Vector2i) -> void:
-	var center := _cell_to_world(cell)
-	_spawn_wall_slab(
-		Vector3(center.x, 0.0, center.z),
-		Vector2(Grid.CELL_SIZE, Grid.CELL_SIZE),
-		_randomised_wall_color()
-	)
-
-
-## Draws the four border lines of a single outer-ring cell into im.
-func _draw_outer_cell_border(im: ImmediateMesh, cell: Vector2i) -> void:
+## Returns 4 corner positions for a wall cell with a small random jitter on each corner,
+## in [TL, TR, BL, BR] order. Jitter is seeded by cell position so calling this twice
+## for the same cell (once for fills, once for borders) produces identical corners.
+func _jittered_cell_corners(cell: Vector2i, jitter: float, y: float) -> Array[Vector3]:
+	var rng := RandomNumberGenerator.new()
+	# Combine x and y with large primes to avoid collisions at any grid coordinate.
+	rng.seed = (cell.x * 73856093) ^ (cell.y * 19349663) ^ 0xABCD1234
 	var c  := _cell_to_world(cell)
 	var hs := Grid.CELL_SIZE * 0.5
-	var y  := 0.03
-	im.surface_set_color(COLOR_WALL_BORDER)
-	im.surface_add_vertex(Vector3(c.x - hs, y, c.z - hs))
-	im.surface_add_vertex(Vector3(c.x + hs, y, c.z - hs))
-	im.surface_add_vertex(Vector3(c.x + hs, y, c.z - hs))
-	im.surface_add_vertex(Vector3(c.x + hs, y, c.z + hs))
-	im.surface_add_vertex(Vector3(c.x + hs, y, c.z + hs))
-	im.surface_add_vertex(Vector3(c.x - hs, y, c.z + hs))
-	im.surface_add_vertex(Vector3(c.x - hs, y, c.z + hs))
-	im.surface_add_vertex(Vector3(c.x - hs, y, c.z - hs))
+	var corners: Array[Vector3] = []
+	for dz in [-hs, hs]:
+		for dx in [-hs, hs]:
+			corners.append(Vector3(
+				c.x + dx + rng.randf_range(-jitter, jitter),
+				y,
+				c.z + dz + rng.randf_range(-jitter, jitter)
+			))
+	return corners  # order: [TL, TR, BL, BR]
+
+
+## Adds one moss/lichen blob into an already-open TRIANGLES surface.
+## The blob is an irregular filled polygon — random center within the cell,
+## random radius at each perimeter vertex to produce an organic shape.
+func _add_moss_patch_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) -> void:
+	var c      := _cell_to_world(cell)
+	var inset  := Grid.CELL_SIZE * 0.18
+	var hs     := Grid.CELL_SIZE * 0.5
+	var cx     := c.x + randf_range(-(hs - inset), hs - inset)
+	var cz     := c.z + randf_range(-(hs - inset), hs - inset)
+	var center := Vector3(cx, y, cz)
+	var radius := randf_range(0.07, 0.14) * Grid.CELL_SIZE
+	var segs   := randi_range(5, 8)
+	var green  := Color(
+		randf_range(0.07, 0.18),
+		randf_range(0.28, 0.46),
+		randf_range(0.05, 0.14),
+		1.0
+	)
+	# Triangle fan: center → each perimeter edge.
+	# Each perimeter point has its own random radius so the blob is irregular.
+	for i in range(segs):
+		var a0 := (float(i)     / float(segs)) * TAU
+		var a1 := (float(i + 1) / float(segs)) * TAU
+		im.surface_set_color(green)
+		im.surface_add_vertex(center)
+		im.surface_set_color(green)
+		im.surface_add_vertex(Vector3(cx + cos(a0) * radius * randf_range(0.65, 1.35),
+				y, cz + sin(a0) * radius * randf_range(0.65, 1.35)))
+		im.surface_set_color(green)
+		im.surface_add_vertex(Vector3(cx + cos(a1) * radius * randf_range(0.65, 1.35),
+				y, cz + sin(a1) * radius * randf_range(0.65, 1.35)))
 
 
 ## Spawns the second (outer) ring of wall cells, one grid square thick, surrounding
-## the existing inner border. Each cell is an individual slab with per-cell randomised
-## colour to suggest weathering and moss. Border grid lines are drawn on top in one
-## shared ImmediateMesh (same approach as the inner wall lines).
+## the existing inner border. Rendered as one batched ImmediateMesh with three surfaces:
 ##
-## The outer ring occupies virtual cell positions col=-1/GRID_SIZE and row=-1/GRID_SIZE —
-## one step beyond the 0-(GRID_SIZE-1) inner grid. The _cell_to_world formula works for
-## these virtual coords without any special casing.
+##   Surface 0 — jittered quad fills: each block's four corners are nudged by a small
+##               random amount (±3.5% of cell width) so the blocks look hand-hewn rather
+##               than machined. The same seed is used for fill and border so outlines
+##               follow the actual shape.
+##   Surface 1 — jittered border lines: same jittered corners as the fill.
+##   Surface 2 — moss/lichen patches: ~40% of cells carry 1–3 small organic blobs in
+##               varying greens, suggesting biological growth on the exterior wall surface.
 ##
 ## Gap rows in the left and right outer columns match the entrance and exit gaps in the
-## inner wall, so enemies can pass through both thicknesses of wall unobstructed.
+## inner wall so enemies pass through both wall thicknesses unobstructed.
 func _spawn_outer_border_ring() -> void:
 	var ent_row := GameState.entrance_cell.y
 	var ex_row  := GameState.exit_cell.y
 	var ent_gap := [ent_row - 1, ent_row, ent_row + 1]
 	var ex_gap  := [ex_row  - 1, ex_row,  ex_row  + 1]
 
+	var cells: Array[Vector2i] = []
+	for col in range(-1, Grid.GRID_SIZE + 1):
+		cells.append(Vector2i(col, -1))
+		cells.append(Vector2i(col, Grid.GRID_SIZE))
+	for row in range(Grid.GRID_SIZE):
+		if row not in ent_gap:
+			cells.append(Vector2i(-1, row))
+		if row not in ex_gap:
+			cells.append(Vector2i(Grid.GRID_SIZE, row))
+
+	const Y_FILL:   float = 0.025
+	const Y_BORDER: float = 0.030
+	const Y_MOSS:   float = 0.035
+	# 3.5% of cell width — enough to read as irregular stone without looking broken.
+	const JITTER:   float = Grid.CELL_SIZE * 0.035
+
 	var im := ImmediateMesh.new()
-	im.surface_begin(Mesh.PRIMITIVE_LINES)
 
-	# Top outer row: virtual row -1, spans full width including corners (cols -1 to GRID_SIZE).
-	for col in range(-1, Grid.GRID_SIZE + 1):
-		var cell := Vector2i(col, -1)
-		_spawn_outer_wall_cell(cell)
-		_draw_outer_cell_border(im, cell)
-
-	# Bottom outer row: virtual row GRID_SIZE, same full-width span.
-	for col in range(-1, Grid.GRID_SIZE + 1):
-		var cell := Vector2i(col, Grid.GRID_SIZE)
-		_spawn_outer_wall_cell(cell)
-		_draw_outer_cell_border(im, cell)
-
-	# Left outer column: virtual col -1, rows 0 to GRID_SIZE-1 (corners are in top/bottom rows above).
-	for row in range(Grid.GRID_SIZE):
-		if row in ent_gap:
-			continue
-		var cell := Vector2i(-1, row)
-		_spawn_outer_wall_cell(cell)
-		_draw_outer_cell_border(im, cell)
-
-	# Right outer column: virtual col GRID_SIZE, rows 0 to GRID_SIZE-1.
-	for row in range(Grid.GRID_SIZE):
-		if row in ex_gap:
-			continue
-		var cell := Vector2i(Grid.GRID_SIZE, row)
-		_spawn_outer_wall_cell(cell)
-		_draw_outer_cell_border(im, cell)
-
+	# --- Surface 0: jittered block fills ---
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for cell in cells:
+		var color   := _randomised_wall_color()
+		var corners := _jittered_cell_corners(cell, JITTER, Y_FILL)
+		# Quad as two triangles: TL(0),TR(1),BR(3) and TL(0),BR(3),BL(2).
+		im.surface_set_color(color); im.surface_add_vertex(corners[0])
+		im.surface_set_color(color); im.surface_add_vertex(corners[1])
+		im.surface_set_color(color); im.surface_add_vertex(corners[3])
+		im.surface_set_color(color); im.surface_add_vertex(corners[0])
+		im.surface_set_color(color); im.surface_add_vertex(corners[3])
+		im.surface_set_color(color); im.surface_add_vertex(corners[2])
 	im.surface_end()
 
-	var lines     := MeshInstance3D.new()
-	lines.mesh     = im
-	var mat       := StandardMaterial3D.new()
+	# --- Surface 1: jittered cell border lines ---
+	# Same cell seed in _jittered_cell_corners → same corners as the fill pass.
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	for cell in cells:
+		var corners := _jittered_cell_corners(cell, JITTER, Y_BORDER)
+		im.surface_set_color(COLOR_WALL_BORDER)
+		im.surface_add_vertex(corners[0]); im.surface_add_vertex(corners[1])  # TL→TR
+		im.surface_add_vertex(corners[1]); im.surface_add_vertex(corners[3])  # TR→BR
+		im.surface_add_vertex(corners[3]); im.surface_add_vertex(corners[2])  # BR→BL
+		im.surface_add_vertex(corners[2]); im.surface_add_vertex(corners[0])  # BL→TL
+	im.surface_end()
+
+	# --- Surface 2: moss / lichen patches ---
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for cell in cells:
+		if randf() > 0.40:   # roughly 40% of blocks have any moss at all
+			continue
+		var patch_count := randi_range(1, 3)
+		for _p in range(patch_count):
+			_add_moss_patch_to_surface(im, cell, Y_MOSS)
+	im.surface_end()
+
+	var mi  := MeshInstance3D.new()
+	mi.mesh  = im
+	var mat := StandardMaterial3D.new()
 	mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat.vertex_color_use_as_albedo = true
-	lines.material_override = mat
-	add_child(lines)
+	mat.cull_mode                  = BaseMaterial3D.CULL_DISABLED
+	mi.material_override = mat
+	add_child(mi)
 
 
 ## Spawns an entrance or exit zone marker: a muted-colour slab spanning `rows`
