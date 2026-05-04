@@ -188,14 +188,14 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 
 ## Reduces HP by amount. Triggers death if HP reaches zero.
 ## Has no effect if the enemy is already dead.
-func take_damage(amount: float) -> void:
+func take_damage(amount: float, flash_color: Color = Color.WHITE) -> void:
 	if _is_dead:
 		return
 	_current_hp = maxf(_current_hp - amount, 0.0)
 	if _current_hp == 0.0:
 		_die()
 	else:
-		_flash_hit()
+		_flash_hit(flash_color)
 
 
 ## Called by a Glue Board when this enemy enters its range circle.
@@ -217,15 +217,15 @@ func remove_slow_source() -> void:
 
 ## Briefly flashes the enemy white then returns to its base color.
 ## Cancels any in-progress flash so rapid hits don't stack.
-func _flash_hit() -> void:
+func _flash_hit(color: Color) -> void:
 	if _visual == null:
 		return
 	if _hit_tween != null:
 		_hit_tween.kill()
 	var mat: StandardMaterial3D = _visual.material_override
 	_hit_tween = create_tween()
-	# Overbright multiplier bleaches the colored texture to white; returns to neutral white after.
-	_hit_tween.tween_property(mat, "albedo_color", Color(4.0, 4.0, 4.0, 1.0), 0.04)
+	# Overbright tint in the trap's theme color, then return to neutral white.
+	_hit_tween.tween_property(mat, "albedo_color", Color(color.r * 4.0, color.g * 4.0, color.b * 4.0, 1.0), 0.04)
 	_hit_tween.tween_property(mat, "albedo_color", Color.WHITE, 0.08)
 
 

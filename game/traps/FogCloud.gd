@@ -18,7 +18,8 @@ const Grid = preload("res://arena/Grid.gd")
 const EXPAND_SPEED: float = 4.44
 
 const CLOUD_LIFETIME: float = 0.90
-const COLOR_CLOUD := Color(0.68, 0.95, 0.22, 0.02)
+const COLOR_CLOUD      := Color(0.68, 0.95, 0.22, 0.02)
+const COLOR_FOGGER_KILL := Color(0.40, 0.95, 0.25)   # bright green — fogger kill burst
 # Exposed so Trap.gd can compute the batch visual lifetime for the cloud cap timer.
 const PARTICLE_LIFETIME: float = 2.80
 
@@ -79,8 +80,13 @@ func _process(delta: float) -> void:
 		# Hit the enemy when the wave reaches them, but only if they are still
 		# within the original range (enemies that fled the area are not hit).
 		if dist <= _aoe_range and dist <= _cloud_radius:
-			enemy.take_damage(_damage)
+			var hit_pos: Vector3 = enemy.global_position
+			enemy.take_damage(_damage, COLOR_FOGGER_KILL)
 			_hit_enemies.append(enemy)
+			if enemy.get_hp_fraction() == 0.0:
+				_spawn_kill_burst(hit_pos)
+			else:
+				_spawn_hit_particles(hit_pos)
 
 	# Free once the wave has swept the full range — all possible hits are done.
 	if _cloud_radius >= _aoe_range:
@@ -166,6 +172,66 @@ func _spawn_cloud_visual(aoe_range: float) -> void:
 	particles.global_position = global_position
 	particles.restart()
 	get_tree().create_timer(particles.lifetime * 2.0 + 0.20).timeout.connect(particles.queue_free)
+
+
+## Spawns a small green hit burst at pos when the fog wave damages but does not kill.
+func _spawn_hit_particles(pos: Vector3) -> void:
+	var particles              := CPUParticles3D.new()
+	particles.one_shot          = true
+	particles.explosiveness     = 1.0
+	particles.amount            = 5
+	particles.lifetime          = 0.22
+	particles.direction         = Vector3.UP
+	particles.spread            = 180.0
+	particles.initial_velocity_min = Grid.CELL_SIZE * 1.5
+	particles.initial_velocity_max = Grid.CELL_SIZE * 4.5
+	particles.gravity           = Vector3(0.0, -Grid.CELL_SIZE * 10.0, 0.0)
+	particles.scale_amount_min  = 0.30
+	particles.scale_amount_max  = 0.65
+
+	var box    := BoxMesh.new()
+	box.size    = Vector3(Grid.CELL_SIZE * 0.18, Grid.CELL_SIZE * 0.09, Grid.CELL_SIZE * 0.18)
+	var mat                   := StandardMaterial3D.new()
+	mat.albedo_color           = COLOR_FOGGER_KILL
+	mat.shading_mode           = BaseMaterial3D.SHADING_MODE_UNSHADED
+	box.material               = mat
+	particles.mesh             = box
+
+	get_parent().add_child(particles)
+	particles.global_position  = pos
+	particles.restart()
+	get_tree().create_timer(particles.lifetime + 0.15).timeout.connect(particles.queue_free)
+
+
+## Spawns a green explosion burst at pos when the fog wave kills an enemy.
+## Mirrors the kill-burst pattern in Projectile._spawn_particles (round_mesh = true).
+func _spawn_kill_burst(pos: Vector3) -> void:
+	var particles              := CPUParticles3D.new()
+	particles.one_shot          = true
+	particles.explosiveness     = 1.0
+	particles.amount            = 9
+	particles.lifetime          = 0.33
+	particles.direction         = Vector3.UP
+	particles.spread            = 180.0
+	particles.initial_velocity_min = Grid.CELL_SIZE * 5.6
+	particles.initial_velocity_max = Grid.CELL_SIZE * 16.8
+	particles.gravity           = Vector3(0.0, -Grid.CELL_SIZE * 10.0, 0.0)
+	particles.scale_amount_min  = 0.64
+	particles.scale_amount_max  = 1.68
+
+	var sphere    := SphereMesh.new()
+	sphere.radius  = Grid.CELL_SIZE * 0.495 * 0.5
+	sphere.height  = Grid.CELL_SIZE * 0.495
+	var mat                   := StandardMaterial3D.new()
+	mat.albedo_color           = COLOR_FOGGER_KILL
+	mat.shading_mode           = BaseMaterial3D.SHADING_MODE_UNSHADED
+	sphere.material            = mat
+	particles.mesh             = sphere
+
+	get_parent().add_child(particles)
+	particles.global_position  = pos
+	particles.restart()
+	get_tree().create_timer(particles.lifetime + 0.15).timeout.connect(particles.queue_free)
 
 
 ## XZ-plane distance from this cloud's origin to a world position.

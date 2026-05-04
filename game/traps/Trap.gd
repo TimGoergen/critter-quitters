@@ -193,16 +193,20 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 
 
 ## Lightweight setup for placement preview ghosts.
-## Builds the visual only — no combat state, range indicator, or hover area.
+## Builds the visual and range indicator — no combat state or hover area.
 ## Caller should set process_mode = DISABLED before adding to the tree.
 func initialize_preview(trap_type: TrapType) -> void:
 	_is_preview = true
 	_trap_type  = trap_type
+	_range      = STATS[trap_type]["range"]
 	_spawn_visual(STATS[trap_type]["color"])
 
 
 func _ready() -> void:
 	if _is_preview:
+		_spawn_range_indicator()
+		if _range_indicator != null:
+			_range_indicator.visible = true
 		return
 	_spawn_range_indicator()
 	_spawn_hover_area()

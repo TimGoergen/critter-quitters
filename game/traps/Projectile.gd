@@ -28,7 +28,12 @@ const COLOR_ZAPPER_BOLT  := Color(0.45, 0.80, 1.00)   # electric blue
 const COLOR_ZAPPER_SPARK := Color(0.65, 0.88, 1.00)   # pale blue-white
 
 # Glue Board projectile and impact colour — amber, matching the splatter badge.
-const COLOR_GLUE := Color(0.88, 0.70, 0.18, 0.90)
+const COLOR_GLUE      := Color(0.88, 0.70, 0.18, 0.90)
+
+# Kill-burst colours — one per trap type; used for the death explosion particles.
+const COLOR_SNAP_KILL := Color(0.90, 0.70, 0.38)   # warm tan — snap trap theme
+const COLOR_GLUE_KILL := Color(0.88, 0.70, 0.18)   # amber — glue board theme
+# Zapper kill burst reuses COLOR_ZAPPER_SPARK; fogger kills via FogCloud, not Projectile.
 
 # Mirror Trap.TrapType int values. Avoid preloading Trap.gd here to prevent
 # a circular dependency — update these if the enum order ever changes.
@@ -87,7 +92,7 @@ func _process(delta: float) -> void:
 			# Glue Board deals no damage and we skip take_damage entirely — calling
 			# it with 0 would still trigger the white hit-flash, which is misleading.
 			if _trap_type != _GLUE_BOARD_TYPE:
-				_target.take_damage(_damage)
+				_target.take_damage(_damage, _trap_flash_color())
 				killed = _target.get_hp_fraction() == 0.0
 		_spawn_impact_effect(killed, enemy_color)
 		queue_free()
@@ -212,6 +217,15 @@ func _build_glue_blob_mesh(base_r: float, color: Color) -> ImmediateMesh:
 	return im
 
 
+## Returns the hit-flash color for the current trap type.
+func _trap_flash_color() -> Color:
+	match _trap_type:
+		_SNAP_TRAP_TYPE:  return COLOR_SNAP_KILL
+		_ZAPPER_TYPE:     return COLOR_ZAPPER_BOLT
+		_GLUE_BOARD_TYPE: return COLOR_GLUE_KILL
+	return Color.WHITE
+
+
 func _spawn_impact_effect(killed: bool, enemy_color: Color) -> void:
 	if killed:
 		_spawn_coin_burst()
@@ -230,7 +244,7 @@ func _spawn_impact_effect(killed: bool, enemy_color: Color) -> void:
 
 	if killed:
 		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
-				Grid.CELL_SIZE * 0.495, enemy_color, true)
+				Grid.CELL_SIZE * 0.495, COLOR_IMPACT, true)
 
 
 ## Impact effect for a cheese projectile: a flat spray of yellow chunks and a
@@ -244,7 +258,7 @@ func _spawn_cheese_splat(killed: bool, enemy_color: Color) -> void:
 
 	if killed:
 		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
-				Grid.CELL_SIZE * 0.495, enemy_color, true)
+				Grid.CELL_SIZE * 0.495, COLOR_SNAP_KILL, true)
 
 
 ## Lightning bolt: a flat zigzag ribbon mesh in the XZ plane, oriented toward
@@ -335,7 +349,7 @@ func _spawn_zapper_impact(killed: bool, enemy_color: Color) -> void:
 			false, -Grid.CELL_SIZE * 2.0)
 	if killed:
 		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
-				Grid.CELL_SIZE * 0.495, enemy_color, true)
+				Grid.CELL_SIZE * 0.495, COLOR_ZAPPER_SPARK, true)
 
 
 ## Glue splat: a handful of amber chunks scatter outward from the hit point.
@@ -346,7 +360,7 @@ func _spawn_glue_impact(killed: bool, enemy_color: Color) -> void:
 			0.35, 0.70, Grid.CELL_SIZE * 0.16, COLOR_GLUE)
 	if killed:
 		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
-				Grid.CELL_SIZE * 0.495, enemy_color, true)
+				Grid.CELL_SIZE * 0.495, COLOR_GLUE_KILL, true)
 
 
 ## Scatters a few miniature Bug Bucks coin sprites on enemy death.
