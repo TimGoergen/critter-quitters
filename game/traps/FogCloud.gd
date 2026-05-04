@@ -18,7 +18,7 @@ const Grid = preload("res://arena/Grid.gd")
 const EXPAND_SPEED: float = 4.44
 
 const CLOUD_LIFETIME: float = 0.90
-const COLOR_CLOUD := Color(0.40, 0.88, 0.40, 0.05)
+const COLOR_CLOUD := Color(0.68, 0.95, 0.22, 0.02)
 # Exposed so Trap.gd can compute the batch visual lifetime for the cloud cap timer.
 const PARTICLE_LIFETIME: float = 2.80
 
@@ -152,10 +152,9 @@ func _spawn_cloud_visual(aoe_range: float) -> void:
 	sphere.material                 = mat
 	particles.mesh                  = sphere
 
-	# Alpha 0.11 per puff: a single puff is barely visible, but 5–8 overlapping
-	# in the dense centre stack up to ~0.55–0.65 effective opacity — solid enough
-	# to read as a cloud mass without looking painted.
-	var peak := Color(COLOR_CLOUD.r, COLOR_CLOUD.g, COLOR_CLOUD.b, 0.004)
+	# Alpha 0.02 per puff: a single puff is barely visible, but 8–10 overlapping
+	# in the dense centre stack to ~0.18 effective opacity — subtle, wispy cloud.
+	var peak := Color(COLOR_CLOUD.r, COLOR_CLOUD.g, COLOR_CLOUD.b, COLOR_CLOUD.a)
 	var gradient := Gradient.new()
 	gradient.set_color(0, Color(peak.r, peak.g, peak.b, 0.0))
 	gradient.set_color(1, Color(peak.r, peak.g, peak.b, 0.0))

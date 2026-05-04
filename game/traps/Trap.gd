@@ -705,8 +705,7 @@ func _spawn_background(color: Color) -> void:
 	bg_mi.mesh  = plane
 
 	var mat             := StandardMaterial3D.new()
-	# 30% of the original color gives a clearly dark but recognizably-tinted panel.
-	mat.albedo_color     = Color(color.r * 0.30, color.g * 0.30, color.b * 0.30, 0.92)
+	mat.albedo_color     = Color(color.r * 0.65, color.g * 0.65, color.b * 0.65, 0.92)
 	mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	bg_mi.material_override = mat
