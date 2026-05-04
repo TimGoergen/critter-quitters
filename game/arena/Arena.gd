@@ -1264,63 +1264,30 @@ func _spawn_floor() -> void:
 	add_child(mi)
 
 
-## Draws the arena border as 1-cell-wide light-gray slabs with dark-gray cell
-## border lines, giving a stone-block appearance.
-##
-## All four walls sit on the outermost rows/columns of the 31×31 grid:
-##   Top/bottom — rows 0 and 30    Left/right — columns 0 and 30
-##
-## Placing geometry outside the grid boundary (z = ±15.5) consistently failed
-## to render regardless of mesh type; using the outermost grid rows/columns
-## is symmetric and renders reliably.
+## Renders the inner arena border — the outermost row/column ring of the 31×31 grid.
+## Collects the wall cell positions and delegates all geometry to _spawn_wall_ring,
+## which applies jittered block shapes, border lines, and surface detail (moss and
+## dark smudges) consistent with the outer ring.
 func _spawn_arena_border() -> void:
-	var half := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
-	var cs   := Grid.CELL_SIZE
+	var ent_row := GameState.entrance_cell.y
+	var ex_row  := GameState.exit_cell.y
+	var ent_gap := [ent_row - 1, ent_row, ent_row + 1]
+	var ex_gap  := [ex_row  - 1, ex_row,  ex_row  + 1]
 
-	var ent_top := (GameState.entrance_cell.y - 1) * cs - half
-	var ent_bot := (GameState.entrance_cell.y + 2) * cs - half
-	var ex_top  := (GameState.exit_cell.y - 1) * cs - half
-	var ex_bot  := (GameState.exit_cell.y  + 2) * cs - half
+	var cells: Array[Vector2i] = []
+	# Top row (row 0) and bottom row (row GRID_SIZE-1) — full width
+	for col in range(Grid.GRID_SIZE):
+		cells.append(Vector2i(col, 0))
+		cells.append(Vector2i(col, Grid.GRID_SIZE - 1))
+	# Left column (col 0) and right column (col GRID_SIZE-1), rows 1..GRID_SIZE-2.
+	# Rows 0 and GRID_SIZE-1 are already in the top/bottom sets above.
+	for row in range(1, Grid.GRID_SIZE - 1):
+		if row not in ent_gap:
+			cells.append(Vector2i(0, row))
+		if row not in ex_gap:
+			cells.append(Vector2i(Grid.GRID_SIZE - 1, row))
 
-	# --- Fill slabs ---
-	# Top row (row 0) and bottom row (row 30) — full grid width
-	var grid_w := Grid.GRID_SIZE * cs
-	_spawn_wall_slab(Vector3(0.0, 0.0, -half + cs * 0.5), Vector2(grid_w, cs))
-	_spawn_wall_slab(Vector3(0.0, 0.0,  half - cs * 0.5), Vector2(grid_w, cs))
-
-	# Left column (column 0) above and below the entrance gap.
-	# Heights exclude rows 0 and 30, which belong exclusively to the top/bottom slabs.
-	var lup  := ent_top - (-half + cs)
-	var lbot := (half - cs) - ent_bot
-	if lup  > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0, (-half + cs) + lup  * 0.5), Vector2(cs, lup))
-	if lbot > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0,  ent_bot      + lbot * 0.5), Vector2(cs, lbot))
-
-	# Right column (column 30) above and below the exit gap.
-	var rup  := ex_top - (-half + cs)
-	var rbot := (half - cs) - ex_bot
-	if rup  > 0.0: _spawn_wall_slab(Vector3( half - cs * 0.5, 0.0, (-half + cs) + rup  * 0.5), Vector2(cs, rup))
-	if rbot > 0.0: _spawn_wall_slab(Vector3( half - cs * 0.5, 0.0,  ex_bot      + rbot * 0.5), Vector2(cs, rbot))
-
-	# --- Cell border lines for all wall cells ---
-	var im := ImmediateMesh.new()
-	im.surface_begin(Mesh.PRIMITIVE_LINES)
-
-	_draw_wall_cell_borders(im, -half, half,       -half,      -half + cs)  # top row
-	_draw_wall_cell_borders(im, -half, half,        half - cs,  half)       # bottom row
-	if lup  > 0.0: _draw_wall_cell_borders(im, -half, -half + cs, -half + cs, ent_top)
-	if lbot > 0.0: _draw_wall_cell_borders(im, -half, -half + cs,  ent_bot,   half - cs)
-	if rup  > 0.0: _draw_wall_cell_borders(im,  half - cs, half,  -half + cs, ex_top)
-	if rbot > 0.0: _draw_wall_cell_borders(im,  half - cs, half,   ex_bot,    half - cs)
-
-	im.surface_end()
-
-	var lines     := MeshInstance3D.new()
-	lines.mesh     = im
-	var mat       := StandardMaterial3D.new()
-	mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.vertex_color_use_as_albedo = true
-	lines.material_override = mat
-	add_child(lines)
+	_spawn_wall_ring(cells)
 
 
 ## Draws dark gray grid lines at every cell boundary within the given rectangle.
@@ -1399,17 +1366,18 @@ func _jittered_cell_corners(cell: Vector2i, jitter: float, y: float) -> Array[Ve
 ## random radius at each perimeter vertex to produce an organic shape.
 func _add_moss_patch_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) -> void:
 	var c      := _cell_to_world(cell)
-	var inset  := Grid.CELL_SIZE * 0.18
+	var inset  := Grid.CELL_SIZE * 0.15
 	var hs     := Grid.CELL_SIZE * 0.5
 	var cx     := c.x + randf_range(-(hs - inset), hs - inset)
 	var cz     := c.z + randf_range(-(hs - inset), hs - inset)
 	var center := Vector3(cx, y, cz)
-	var radius := randf_range(0.07, 0.14) * Grid.CELL_SIZE
-	var segs   := randi_range(5, 8)
+	var radius := randf_range(0.14, 0.26) * Grid.CELL_SIZE
+	var segs   := randi_range(6, 9)
+	# Saturated mid-green with enough brightness to read clearly against the gray fill.
 	var green  := Color(
-		randf_range(0.07, 0.18),
-		randf_range(0.28, 0.46),
-		randf_range(0.05, 0.14),
+		randf_range(0.04, 0.14),
+		randf_range(0.42, 0.64),
+		randf_range(0.04, 0.16),
 		1.0
 	)
 	# Triangle fan: center → each perimeter edge.
@@ -1420,46 +1388,58 @@ func _add_moss_patch_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) -> 
 		im.surface_set_color(green)
 		im.surface_add_vertex(center)
 		im.surface_set_color(green)
-		im.surface_add_vertex(Vector3(cx + cos(a0) * radius * randf_range(0.65, 1.35),
-				y, cz + sin(a0) * radius * randf_range(0.65, 1.35)))
+		im.surface_add_vertex(Vector3(cx + cos(a0) * radius * randf_range(0.60, 1.40),
+				y, cz + sin(a0) * radius * randf_range(0.60, 1.40)))
 		im.surface_set_color(green)
-		im.surface_add_vertex(Vector3(cx + cos(a1) * radius * randf_range(0.65, 1.35),
-				y, cz + sin(a1) * radius * randf_range(0.65, 1.35)))
+		im.surface_add_vertex(Vector3(cx + cos(a1) * radius * randf_range(0.60, 1.40),
+				y, cz + sin(a1) * radius * randf_range(0.60, 1.40)))
 
 
-## Spawns the second (outer) ring of wall cells, one grid square thick, surrounding
-## the existing inner border. Rendered as one batched ImmediateMesh with three surfaces:
+## Adds one dark stain or smudge blob into an already-open TRIANGLES surface.
+## Simulates water staining, biological growth, or accumulated grime on the wall face.
+## Structurally identical to the moss patch but uses a dark brownish-gray palette.
+func _add_dark_smudge_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) -> void:
+	var c      := _cell_to_world(cell)
+	var inset  := Grid.CELL_SIZE * 0.12
+	var hs     := Grid.CELL_SIZE * 0.5
+	var cx     := c.x + randf_range(-(hs - inset), hs - inset)
+	var cz     := c.z + randf_range(-(hs - inset), hs - inset)
+	var center := Vector3(cx, y, cz)
+	var radius := randf_range(0.10, 0.20) * Grid.CELL_SIZE
+	var segs   := randi_range(5, 8)
+	var dark   := Color(
+		randf_range(0.10, 0.24),
+		randf_range(0.10, 0.22),
+		randf_range(0.06, 0.16),
+		1.0
+	)
+	for i in range(segs):
+		var a0 := (float(i)     / float(segs)) * TAU
+		var a1 := (float(i + 1) / float(segs)) * TAU
+		im.surface_set_color(dark)
+		im.surface_add_vertex(center)
+		im.surface_set_color(dark)
+		im.surface_add_vertex(Vector3(cx + cos(a0) * radius * randf_range(0.55, 1.45),
+				y, cz + sin(a0) * radius * randf_range(0.55, 1.45)))
+		im.surface_set_color(dark)
+		im.surface_add_vertex(Vector3(cx + cos(a1) * radius * randf_range(0.55, 1.45),
+				y, cz + sin(a1) * radius * randf_range(0.55, 1.45)))
+
+
+## Renders a set of wall cells as one batched ImmediateMesh with three surfaces.
+## Used by both _spawn_arena_border (inner ring) and _spawn_outer_border_ring (outer ring)
+## so both walls share the same detail level and visual language.
 ##
-##   Surface 0 — jittered quad fills: each block's four corners are nudged by a small
-##               random amount (±3.5% of cell width) so the blocks look hand-hewn rather
-##               than machined. The same seed is used for fill and border so outlines
-##               follow the actual shape.
-##   Surface 1 — jittered border lines: same jittered corners as the fill.
-##   Surface 2 — moss/lichen patches: ~40% of cells carry 1–3 small organic blobs in
-##               varying greens, suggesting biological growth on the exterior wall surface.
-##
-## Gap rows in the left and right outer columns match the entrance and exit gaps in the
-## inner wall so enemies pass through both wall thicknesses unobstructed.
-func _spawn_outer_border_ring() -> void:
-	var ent_row := GameState.entrance_cell.y
-	var ex_row  := GameState.exit_cell.y
-	var ent_gap := [ent_row - 1, ent_row, ent_row + 1]
-	var ex_gap  := [ex_row  - 1, ex_row,  ex_row  + 1]
-
-	var cells: Array[Vector2i] = []
-	for col in range(-1, Grid.GRID_SIZE + 1):
-		cells.append(Vector2i(col, -1))
-		cells.append(Vector2i(col, Grid.GRID_SIZE))
-	for row in range(Grid.GRID_SIZE):
-		if row not in ent_gap:
-			cells.append(Vector2i(-1, row))
-		if row not in ex_gap:
-			cells.append(Vector2i(Grid.GRID_SIZE, row))
-
+##   Surface 0 — jittered quad fills: each block's four corners are nudged by ±3.5%
+##               of cell width using a per-cell deterministic seed, giving an organic
+##               hand-hewn look. Fill and border share the same seed so outlines match.
+##   Surface 1 — jittered border lines: same corners as the fill.
+##   Surface 2 — surface detail: ~60% of cells carry 1–4 moss patches; ~35% carry
+##               1–2 dark stain smudges. Each is an irregular filled blob.
+func _spawn_wall_ring(cells: Array[Vector2i]) -> void:
 	const Y_FILL:   float = 0.025
 	const Y_BORDER: float = 0.030
-	const Y_MOSS:   float = 0.035
-	# 3.5% of cell width — enough to read as irregular stone without looking broken.
+	const Y_DETAIL: float = 0.035
 	const JITTER:   float = Grid.CELL_SIZE * 0.035
 
 	var im := ImmediateMesh.new()
@@ -1490,14 +1470,17 @@ func _spawn_outer_border_ring() -> void:
 		im.surface_add_vertex(corners[2]); im.surface_add_vertex(corners[0])  # BL→TL
 	im.surface_end()
 
-	# --- Surface 2: moss / lichen patches ---
+	# --- Surface 2: moss patches and dark stain smudges ---
 	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	for cell in cells:
-		if randf() > 0.40:   # roughly 40% of blocks have any moss at all
-			continue
-		var patch_count := randi_range(1, 3)
-		for _p in range(patch_count):
-			_add_moss_patch_to_surface(im, cell, Y_MOSS)
+		if randf() < 0.60:
+			var patch_count := randi_range(1, 4)
+			for _p in range(patch_count):
+				_add_moss_patch_to_surface(im, cell, Y_DETAIL)
+		if randf() < 0.35:
+			var smudge_count := randi_range(1, 2)
+			for _s in range(smudge_count):
+				_add_dark_smudge_to_surface(im, cell, Y_DETAIL)
 	im.surface_end()
 
 	var mi  := MeshInstance3D.new()
@@ -1509,6 +1492,34 @@ func _spawn_outer_border_ring() -> void:
 	mat.cull_mode                  = BaseMaterial3D.CULL_DISABLED
 	mi.material_override = mat
 	add_child(mi)
+
+
+## Renders the outer ring of wall cells — one grid square thick, surrounding the inner border.
+## Collects outer-ring cell positions and delegates all geometry to _spawn_wall_ring,
+## which applies jittered block shapes, border lines, and surface detail consistent
+## with the inner ring.
+##
+## Gap rows in the left and right outer columns match the entrance and exit gaps in the
+## inner wall so enemies pass through both wall thicknesses unobstructed.
+func _spawn_outer_border_ring() -> void:
+	var ent_row := GameState.entrance_cell.y
+	var ex_row  := GameState.exit_cell.y
+	var ent_gap := [ent_row - 1, ent_row, ent_row + 1]
+	var ex_gap  := [ex_row  - 1, ex_row,  ex_row  + 1]
+
+	var cells: Array[Vector2i] = []
+	# Top and bottom outer rows — full width including corner cells
+	for col in range(-1, Grid.GRID_SIZE + 1):
+		cells.append(Vector2i(col, -1))
+		cells.append(Vector2i(col, Grid.GRID_SIZE))
+	# Left and right outer columns — rows 0..GRID_SIZE-1 (corners covered by top/bottom above)
+	for row in range(Grid.GRID_SIZE):
+		if row not in ent_gap:
+			cells.append(Vector2i(-1, row))
+		if row not in ex_gap:
+			cells.append(Vector2i(Grid.GRID_SIZE, row))
+
+	_spawn_wall_ring(cells)
 
 
 ## Spawns an entrance or exit zone marker: a muted-colour slab spanning `rows`
