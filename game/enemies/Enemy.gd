@@ -28,7 +28,7 @@
 extends Node3D
 
 const Grid          = preload("res://arena/Grid.gd")
-const SHADOW_SHADER = preload("res://assets/shadow.gdshader")
+const SHADOW_BLOB_SHADER = preload("res://assets/shadow_blob.gdshader")
 
 const ANT_FRAMES: Array[Texture2D] = [
 	preload("res://assets/ant_walk_1.svg"),
@@ -326,10 +326,6 @@ func _process(delta: float) -> void:
 			_visual.position.z = 0.0
 			_visual.position.x = sway
 		_visual.basis = _facing_basis(travel_dir)
-		if _shadow_mi != null:
-			(_shadow_mi.material_override as ShaderMaterial).set_shader_parameter(
-				"facing_dir", Vector2(float(travel_dir.x), float(travel_dir.y))
-			)
 		_walk_time += delta
 		_visual_material.albedo_texture = ANT_FRAMES[int(_walk_time * _move_speed * 3.0) % ANT_FRAMES.size()]
 
@@ -484,10 +480,7 @@ func _spawn_shadow() -> void:
 	_shadow_mi.mesh  = plane
 
 	var mat          := ShaderMaterial.new()
-	mat.shader        = SHADOW_SHADER
-	mat.set_shader_parameter("sprite_texture", ANT_FRAMES[0])
-	var dir           := _target_cell - _current_cell
-	mat.set_shader_parameter("facing_dir", Vector2(float(dir.x), float(dir.y)))
+	mat.shader        = SHADOW_BLOB_SHADER
 	_shadow_mi.material_override = mat
 
 	_shadow_mi.position.y = 0.05 - 0.25
