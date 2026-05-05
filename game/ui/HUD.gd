@@ -278,10 +278,9 @@ func _build_ui() -> void:
 	# bug-bucks reward amount on the right side independently of the left-side icon + text.
 	_send_wave_btn               = Button.new()
 	_send_wave_btn.text          = ""  # all content is in the child HBoxContainer
-	_send_wave_btn.anchor_left   = 0.30
-	_send_wave_btn.anchor_right  = 0.70
 	_send_wave_btn.anchor_top    = 0.70
 	_send_wave_btn.anchor_bottom = 0.80
+	# Horizontal anchors are set by _reposition_countdown_labels() based on orientation.
 	_send_wave_btn.visible       = false
 	_apply_send_wave_btn_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
@@ -523,10 +522,12 @@ func _reposition_countdown_labels() -> void:
 		_countdown_number_label.anchor_right  = 1.0
 		_countdown_number_label.anchor_top    = 0.30
 		_countdown_number_label.anchor_bottom = 0.45
-		_send_wave_btn.anchor_left   = 0.42
-		_send_wave_btn.anchor_right  = 0.58
+		_send_wave_btn.anchor_left   = 0.10
+		_send_wave_btn.anchor_right  = 0.90
 		_send_wave_btn.anchor_top    = 0.70
 		_send_wave_btn.anchor_bottom = 0.80
+		_send_wave_btn.offset_left   = 0
+		_send_wave_btn.offset_right  = 0
 		return
 
 	# Landscape: fill the right-hand gap between the arena and the screen edge.
@@ -548,14 +549,13 @@ func _reposition_countdown_labels() -> void:
 	_countdown_number_label.anchor_top    = v_center
 	_countdown_number_label.anchor_bottom = v_center + 0.09
 
-	# "Send Wave Early" sits just below the countdown number, centred in the gap.
-	# Width is 40% of the gap (60% reduction from the full-gap span).
-	var gap_half   := (1.0 - right) * 0.20   # 40% of gap / 2
-	var gap_center := (right + 1.0) * 0.5
-	_send_wave_btn.anchor_left   = gap_center - gap_half
-	_send_wave_btn.anchor_right  = gap_center + gap_half
+	# "Send Wave Early" spans the full right-side gap with a small pixel margin.
+	_send_wave_btn.anchor_left   = right
+	_send_wave_btn.anchor_right  = 1.0
 	_send_wave_btn.anchor_top    = v_center + 0.11
 	_send_wave_btn.anchor_bottom = v_center + 0.21
+	_send_wave_btn.offset_left   = MARGIN
+	_send_wave_btn.offset_right  = -MARGIN
 
 
 func _on_speed_btn_pressed() -> void:
