@@ -98,8 +98,9 @@ var _wave_size: int = WAVE_SIZE
 const SPAWN_INTERVAL: float = 0.36     # seconds between each enemy in the wave
 const WAVE_COUNTDOWN: int  = 5         # seconds of countdown before each wave
 
-var _enemies_left_to_spawn: int = 0
-var _countdown_active: bool     = false  # true while between-wave countdown is ticking
+var _enemies_left_to_spawn: int  = 0
+var _countdown_active: bool      = false  # true while between-wave countdown is ticking
+var _seconds_remaining: int      = 0     # last value broadcast during the active countdown
 
 # The path currently drawn as yellow markers. Updated on every grid change
 # and trimmed forward as the enemy advances through cells.
@@ -138,9 +139,10 @@ var _drag_ghosts: Array[Node3D] = []
 var _drag_ghost_outlines: Array[MeshInstance3D] = []
 
 # A single ghost of the selected trap shown at the hover position before pressing.
-# Rebuilt when trap type changes; repositioned on every cursor move.
-var _hover_preview:      Node3D = null
-var _hover_preview_type: int    = -1
+# Rebuilt when trap type or placement validity changes; repositioned on every cursor move.
+var _hover_preview:       Node3D = null
+var _hover_preview_type:  int    = -1
+var _hover_preview_valid: bool   = true
 
 # Reference to the playtest setup dialog while it is open; null after it confirms.
 var _debug_dialog: Node = null
@@ -758,7 +760,8 @@ func _on_enemy_died(enemy: Node3D) -> void:
 ## Increments the wave counter and begins the between-wave countdown.
 func _start_wave() -> void:
 	GameState.current_wave += 1
-	_countdown_active = true
+	_countdown_active    = true
+	_seconds_remaining   = WAVE_COUNTDOWN
 	GameState.set_countdown(WAVE_COUNTDOWN)
 	get_tree().create_timer(1.0).timeout.connect(_on_countdown_tick.bind(WAVE_COUNTDOWN - 1))
 
@@ -767,6 +770,7 @@ func _start_wave() -> void:
 func _on_countdown_tick(seconds_remaining: int) -> void:
 	if not _countdown_active:
 		return
+	_seconds_remaining = seconds_remaining
 	GameState.set_countdown(seconds_remaining)
 	if seconds_remaining > 0:
 		get_tree().create_timer(1.0).timeout.connect(_on_countdown_tick.bind(seconds_remaining - 1))
@@ -798,9 +802,15 @@ func _on_trap_type_changed(_type: int) -> void:
 
 ## Skips any active countdown and starts the wave immediately.
 ## Triggered by the "Send Wave Early" HUD button via GameState.wave_skip_requested.
+## Awards coins based on how many seconds were left, and emits early_wave_bonus_awarded
+## so the HUD can play the particle burst.
 func _on_wave_skip_requested() -> void:
 	if _countdown_active:
 		_countdown_active = false
+		if _seconds_remaining > 0:
+			var bonus := _seconds_remaining * GameState.early_wave_bonus_rate
+			GameState.add_bug_bucks(bonus)
+			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.set_countdown(0)
 		_launch_wave()
 
@@ -990,13 +1000,8 @@ func _update_grid_highlight() -> void:
 		if new_hovered != Vector2i(-1, -1) and _trap_outlines.has(new_hovered):
 			_draw_trap_outline(new_hovered)
 
-	# Show a ghost of the selected trap at the anchor before pressing.
-	# During drag, the drag ghosts serve this role instead.
-	if not _pressing:
-		_update_hover_preview(anchor)
-	else:
-		_hide_hover_preview()
-
+	# Check whether the 2×2 footprint at anchor is buildable before showing the ghost,
+	# so the ghost color can reflect validity without a one-frame lag.
 	var blocked := false
 	for dr in range(2):
 		if blocked:
@@ -1006,6 +1011,13 @@ func _update_grid_highlight() -> void:
 			if s == Grid.CellState.TRAP or s == Grid.CellState.OBSTACLE or s == Grid.CellState.WALL:
 				blocked = true
 				break
+
+	# Show a ghost of the selected trap at the anchor before pressing.
+	# During drag, the drag ghosts serve this role instead.
+	if not _pressing:
+		_update_hover_preview(anchor, not blocked)
+	else:
+		_hide_hover_preview()
 
 	var opacity_scale := 0.2 if blocked else 1.0
 
@@ -1719,13 +1731,16 @@ func _fit_camera_to_grid() -> void:
 
 
 ## Shows (or repositions) the hover preview at the given anchor.
-## Rebuilds if the selected trap type has changed since last build.
-func _update_hover_preview(anchor: Vector2i) -> void:
+## Rebuilds if the selected trap type or placement validity has changed since last build.
+## When valid=false the ghost is rendered gray to signal the location is unbuildable.
+func _update_hover_preview(anchor: Vector2i, valid: bool) -> void:
 	var type := GameState.selected_trap_type
-	if _hover_preview_type != type or _hover_preview == null or not is_instance_valid(_hover_preview):
+	if _hover_preview_type != type or _hover_preview_valid != valid \
+			or _hover_preview == null or not is_instance_valid(_hover_preview):
 		_hide_hover_preview()
-		_hover_preview      = _make_trap_preview(type, 0.35)
-		_hover_preview_type = type
+		_hover_preview       = _make_trap_preview(type, 0.35, valid)
+		_hover_preview_type  = type
+		_hover_preview_valid = valid
 	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 	_hover_preview.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 	_hover_preview.visible  = true
@@ -1738,18 +1753,20 @@ func _hide_hover_preview() -> void:
 
 ## Builds a Trap preview node: full mesh hierarchy, no combat logic, no hover area.
 ## All mesh materials are duplicated and dimmed to alpha so the result reads as a ghost.
-func _make_trap_preview(trap_type: int, alpha: float) -> Node3D:
+## When valid=false, materials are overridden to neutral gray to signal an invalid location.
+func _make_trap_preview(trap_type: int, alpha: float, valid: bool = true) -> Node3D:
 	var preview := Trap.new()
 	preview.process_mode = Node.PROCESS_MODE_DISABLED
 	preview.initialize_preview(trap_type as Trap.TrapType)
-	_apply_ghost_transparency(preview, alpha)
+	_apply_ghost_transparency(preview, alpha, valid)
 	add_child(preview)
 	return preview
 
 
 ## Recursively dims all MeshInstance3D materials in a node subtree.
 ## Duplicates each material so the original asset is not modified.
-func _apply_ghost_transparency(node: Node, alpha: float) -> void:
+## When valid=false, albedo is replaced with neutral gray regardless of the original color.
+func _apply_ghost_transparency(node: Node, alpha: float, valid: bool = true) -> void:
 	for child in node.get_children():
 		if child is MeshInstance3D:
 			var mi := child as MeshInstance3D
@@ -1757,10 +1774,14 @@ func _apply_ghost_transparency(node: Node, alpha: float) -> void:
 				var mat := mi.material_override as StandardMaterial3D
 				if mat != null:
 					mat = mat.duplicate() as StandardMaterial3D
-					mat.albedo_color.a = alpha
+					if valid:
+						mat.albedo_color.a = alpha
+					else:
+						# Gray with same alpha — strips all color to signal invalid placement.
+						mat.albedo_color = Color(0.5, 0.5, 0.5, alpha)
 					mat.transparency   = BaseMaterial3D.TRANSPARENCY_ALPHA
 					mi.material_override = mat
-		_apply_ghost_transparency(child, alpha)
+		_apply_ghost_transparency(child, alpha, valid)
 
 
 ## Creates a MeshInstance3D with a BoxMesh of the given size and colour.

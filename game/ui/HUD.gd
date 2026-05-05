@@ -22,6 +22,7 @@ const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM    := Color(0.60, 0.60, 0.65, 1.0)
 const COLOR_COUNTDOWN        := Color(1.00, 1.00, 1.00, 1.00)
 const COLOR_COUNTDOWN_SHADOW := Color(0.00, 0.00, 0.00, 0.70)
+const COLOR_INCOMING         := Color(0.90, 0.15, 0.15, 1.00)  # red "Incoming!" label
 const COLOR_INFESTED    := Color(0.85, 0.10, 0.10, 1.0)
 const COLOR_OVERLAY_BG  := Color(0.04, 0.02, 0.02, 0.82)
 
@@ -79,8 +80,9 @@ var _infestation_fill:  ColorRect
 var _infestation_label: Label
 var _countdown_wave_label:   Label
 var _countdown_number_label: Label
-var _send_wave_btn:     Button
-var _run_over_overlay:  Control
+var _send_wave_btn:          Button
+var _early_bonus_particles:  CPUParticles2D
+var _run_over_overlay:       Control
 
 var _speed_btn:      Button
 var _pause_btn:      Button
@@ -108,6 +110,7 @@ func _ready() -> void:
 	GameState.infestation_changed.connect(_on_infestation_changed)
 	GameState.wave_changed.connect(_on_wave_changed)
 	GameState.wave_countdown_changed.connect(_on_wave_countdown_changed)
+	GameState.early_wave_bonus_awarded.connect(_on_early_bonus_awarded)
 	GameState.run_ended.connect(_on_run_ended)
 	GameState.trap_type_selected.connect(_on_trap_type_selected)
 	_on_bucks_changed(GameState.bug_bucks)
@@ -229,7 +232,7 @@ func _build_ui() -> void:
 	right_hbox.add_child(restart_btn)
 
 	# --- Countdown splash (upper-centre, hidden by default) ---
-	# Band 0.15–0.30: "WAVE X" — bold, larger
+	# Band 0.15–0.30: "Incoming!" — bold, larger, red
 	_countdown_wave_label = Label.new()
 	_countdown_wave_label.anchor_right         = 1.0
 	_countdown_wave_label.anchor_top           = 0.15
@@ -237,13 +240,15 @@ func _build_ui() -> void:
 	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_wave_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_countdown_wave_label.add_theme_font_size_override("font_size", 72)
-	_countdown_wave_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
+	_countdown_wave_label.add_theme_color_override("font_color", COLOR_INCOMING)
 	_countdown_wave_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
 	_countdown_wave_label.add_theme_constant_override("shadow_offset_x", 2)
 	_countdown_wave_label.add_theme_constant_override("shadow_offset_y", 2)
 	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
 	_countdown_wave_label.visible = false
 	add_child(_countdown_wave_label)
+
+	_build_early_bonus_particles()
 
 	# Band 0.30–0.45: countdown number
 	_countdown_number_label = Label.new()
@@ -273,6 +278,8 @@ func _build_ui() -> void:
 	_send_wave_btn.add_theme_font_override("font", UIFonts.primary())
 	_send_wave_btn.visible        = false
 	_apply_button_style(_send_wave_btn)
+	_send_wave_btn.icon = load("res://assets/uninfested.png") as Texture2D
+	_send_wave_btn.add_theme_constant_override("icon_max_width", 32)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	add_child(_send_wave_btn)
 
@@ -516,6 +523,30 @@ func _on_pause_btn_pressed() -> void:
 
 func _on_send_wave_pressed() -> void:
 	GameState.wave_skip_requested.emit()
+
+
+func _build_early_bonus_particles() -> void:
+	_early_bonus_particles = CPUParticles2D.new()
+	_early_bonus_particles.z_index               = -1    # renders behind all other HUD controls
+	_early_bonus_particles.emitting              = false
+	_early_bonus_particles.one_shot              = true
+	_early_bonus_particles.amount                = 14
+	_early_bonus_particles.lifetime              = 0.85
+	_early_bonus_particles.explosiveness         = 1.0   # all particles fire simultaneously
+	_early_bonus_particles.spread                = 180.0 # full 360° burst
+	_early_bonus_particles.initial_velocity_min  = 250.0
+	_early_bonus_particles.initial_velocity_max  = 450.0
+	_early_bonus_particles.gravity               = Vector2(0.0, 350.0)
+	_early_bonus_particles.scale_amount_min      = 0.5
+	_early_bonus_particles.scale_amount_max      = 0.9
+	_early_bonus_particles.texture               = load("res://assets/bug_buck_coin.png") as Texture2D
+	add_child(_early_bonus_particles)
+
+
+func _on_early_bonus_awarded(_coins: int) -> void:
+	# Position the burst at the button's screen centre so coins appear to fly out from it.
+	_early_bonus_particles.position = _send_wave_btn.get_global_rect().get_center()
+	_early_bonus_particles.restart()
 
 
 func _on_run_ended() -> void:

@@ -57,6 +57,9 @@ signal wave_countdown_changed(seconds_remaining: int)
 ## Emitted when the player requests to skip the countdown and launch the next wave immediately.
 signal wave_skip_requested
 
+## Emitted when the player skips the countdown and receives a coin bonus for the remaining time.
+signal early_wave_bonus_awarded(coins: int)
+
 ## Emitted when the player picks a different trap type to place.
 ## type is an int matching the Trap.TrapType enum — stored as int here to
 ## avoid importing Trap.gd into GameState and creating a circular dependency.
@@ -121,6 +124,10 @@ var exit_cell: Vector2i = Vector2i.ZERO
 ## All types are always available — Bug Bucks cost is the only gate.
 var selected_trap_type: int = 0
 
+## Bug Bucks awarded per second remaining when the player clicks Send Wave Early.
+## Default 2; future meta-upgrades can increase this between runs.
+var early_wave_bonus_rate: int = 2
+
 
 # ---------------------------------------------------------------------------
 # Public methods
@@ -138,6 +145,7 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 	bug_bucks = STARTING_BUG_BUCKS
 	infestation_level = 0.0
 	selected_trap_type = 0
+	early_wave_bonus_rate = 2
 	current_phase = Phase.PLACING
 	run_started.emit()
 	bug_bucks_changed.emit(bug_bucks)
