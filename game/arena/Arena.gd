@@ -52,9 +52,6 @@ const SHOW_PATH_LINE: bool = false
 const HUD_TOP_PX: float = 72.0   # top stats bar (HUD.PANEL_H)
 const HUD_BOT_PX: float = 0.0    # no persistent bottom strip below the selector
 
-# Phase 1 placeholder colours. These are replaced by ASCII billboards in Phase 3.
-const COLOR_ENTRANCE  := Color(0.40, 0.60, 0.42, 1.0)   # muted sage green
-const COLOR_EXIT      := Color(0.62, 0.38, 0.38, 1.0)   # muted dusty red
 const COLOR_TRAP      := Color(0.40, 0.40, 0.80, 1.0)   # blue-grey box
 const COLOR_PATH      := Color(0.80, 0.70, 0.20, 0.5)   # yellow, semi-transparent
 const COLOR_GRID_GLOW    := Color(0.65, 0.90, 1.0)       # cool blue-white for cursor glow
@@ -207,9 +204,9 @@ func _ready() -> void:
 	_pathfinder.initialize(_grid)
 	_pathfinder.path_updated.connect(_on_path_updated)
 
-	# Spawn one elongated marker covering all 3 rows for entrance and exit.
-	_spawn_zone_marker(_spawn_cell,   3, COLOR_ENTRANCE, true)
-	_spawn_zone_marker(_despawn_cell, 3, COLOR_EXIT,     true)
+	# Spawn the cave image at the entrance and exit gaps.
+	_spawn_cave_marker(_spawn_cell)
+	_spawn_cave_marker(_despawn_cell)
 
 	_setup_grid_highlight()
 	_setup_selected_trap_outline()
@@ -1606,44 +1603,35 @@ func _spawn_outer_border_ring() -> void:
 	_spawn_wall_ring(cells)
 
 
-## Spawns an entrance or exit zone marker: a muted-colour slab spanning `rows`
-## cells tall, with a dark directional triangle on top indicating pest flow.
-## Pass arrow_right = true when enemies travel in the +X direction (left→right).
-func _spawn_zone_marker(center_cell: Vector2i, rows: int, color: Color, arrow_right: bool) -> void:
-	var marker := _make_box_mesh_instance(
-		Vector3(Grid.CELL_SIZE * 0.9, 0.05, Grid.CELL_SIZE * rows * 0.9),
-		color
-	)
-	marker.position = _cell_to_world(center_cell)
-	add_child(marker)
+## Spawns the cave entrance/exit image at the gap in the border wall.
+## The image is laid flat in the XZ plane and rotated −90° around Y so the
+## triangular opening apex (image top) faces world +X — the direction enemies travel.
+## center_cell is the outside spawn/despawn cell adjacent to the gap.
+func _spawn_cave_marker(center_cell: Vector2i) -> void:
+	var texture := load("res://assets/arena/enter_exit_cave.png") as Texture2D
 
-	# Filled triangle drawn just above the slab surface, lying flat in the XZ
-	# plane. The tip points in the direction pests are travelling — +X for a
-	# right-pointing arrow, −X for left. Both entrance and exit point right
-	# because enemies always travel left to right on the default layout.
-	var c      := _cell_to_world(center_cell)
-	var sign_x := 1.0 if arrow_right else -1.0
-	var half_z := Grid.CELL_SIZE * float(rows) * 0.40   # base half-height (~80% of zone height)
-	var tip_x  := c.x + sign_x * Grid.CELL_SIZE * 0.30  # tip: 30% of a cell ahead of centre
-	var base_x := c.x - sign_x * Grid.CELL_SIZE * 0.26  # base: 26% of a cell behind centre
-	var y      := 0.06                                   # just above the slab top (slab top ≈ 0.025)
+	var plane    := PlaneMesh.new()
+	# Local X (3 cells) maps to world Z after −90° Y rotation — spans the 3-row gap.
+	# Local Z (2 cells) maps to world X — covers the outside cell and the border column.
+	plane.size = Vector2(Grid.CELL_SIZE * 3.0, Grid.CELL_SIZE * 2.0)
 
-	var im := ImmediateMesh.new()
-	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	im.surface_set_color(Color(0.05, 0.05, 0.05, 1.0))
-	im.surface_add_vertex(Vector3(base_x, y, c.z - half_z))
-	im.surface_add_vertex(Vector3(tip_x,  y, c.z))
-	im.surface_add_vertex(Vector3(base_x, y, c.z + half_z))
-	im.surface_end()
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = texture
+	mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode      = BaseMaterial3D.CULL_DISABLED
 
-	var arrow     := MeshInstance3D.new()
-	arrow.mesh     = im
-	var mat       := StandardMaterial3D.new()
-	mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.vertex_color_use_as_albedo = true
-	mat.cull_mode                  = BaseMaterial3D.CULL_DISABLED  # visible from top-down
-	arrow.material_override = mat
-	add_child(arrow)
+	var mi              := MeshInstance3D.new()
+	mi.mesh              = plane
+	mi.material_override = mat
+
+	var world          := _cell_to_world(center_cell)
+	# Shift 0.5 cells toward the adjacent border column so the quad straddles both
+	# the outside cell and the border gap rather than sitting entirely outside.
+	var border_shift   := 0.5 if center_cell.x < 0 else -0.5
+	mi.position         = Vector3(world.x + border_shift, 0.02, world.z)
+	mi.rotation_degrees = Vector3(0.0, -90.0, 0.0)
+
+	add_child(mi)
 
 
 ## Spawns a Trap node centred on the 2x2 footprint and wires it to the
