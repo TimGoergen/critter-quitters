@@ -1612,8 +1612,8 @@ func _spawn_cave_marker(center_cell: Vector2i) -> void:
 
 	var plane    := PlaneMesh.new()
 	# Local X (3 cells) maps to world Z after −90° Y rotation — spans the 3-row gap.
-	# Local Z (2 cells) maps to world X — covers the outside cell and the border column.
-	plane.size = Vector2(Grid.CELL_SIZE * 3.0, Grid.CELL_SIZE * 2.0)
+	# Local Z (1 cell) maps to world X — covers only the border wall column.
+	plane.size = Vector2(Grid.CELL_SIZE * 3.0, Grid.CELL_SIZE * 1.0)
 
 	var mat := StandardMaterial3D.new()
 	mat.albedo_texture = texture
@@ -1625,9 +1625,9 @@ func _spawn_cave_marker(center_cell: Vector2i) -> void:
 	mi.material_override = mat
 
 	var world          := _cell_to_world(center_cell)
-	# Shift 0.5 cells toward the adjacent border column so the quad straddles both
-	# the outside cell and the border gap rather than sitting entirely outside.
-	var border_shift   := 0.5 if center_cell.x < 0 else -0.5
+	# Shift a full cell toward the border so the quad is centred on the border
+	# column gap cells (the 3×1 wall grid squares), leaving the outside area clear.
+	var border_shift   := 1.0 if center_cell.x < 0 else -1.0
 	mi.position         = Vector3(world.x + border_shift, 0.02, world.z)
 	mi.rotation_degrees = Vector3(0.0, -90.0, 0.0)
 
