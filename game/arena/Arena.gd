@@ -1777,8 +1777,9 @@ func _apply_ghost_transparency(node: Node, alpha: float, valid: bool = true) -> 
 					if valid:
 						mat.albedo_color.a = alpha
 					else:
-						# Gray with same alpha — strips all color to signal invalid placement.
-						mat.albedo_color = Color(0.5, 0.5, 0.5, alpha)
+						# Blend 50% toward mid-gray — desaturates and dims without going fully colorless.
+						mat.albedo_color = mat.albedo_color.lerp(Color(0.5, 0.5, 0.5, mat.albedo_color.a), 0.5)
+						mat.albedo_color.a = alpha
 					mat.transparency   = BaseMaterial3D.TRANSPARENCY_ALPHA
 					mi.material_override = mat
 		_apply_ghost_transparency(child, alpha, valid)
