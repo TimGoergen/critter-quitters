@@ -22,8 +22,15 @@ const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM    := Color(0.60, 0.60, 0.65, 1.0)
 const COLOR_COUNTDOWN        := Color(1.00, 1.00, 1.00, 1.00)
 const COLOR_COUNTDOWN_SHADOW := Color(0.00, 0.00, 0.00, 0.70)
+const COLOR_INCOMING         := Color(0.90, 0.15, 0.15, 1.00)  # red "Incoming!" label
 const COLOR_INFESTED    := Color(0.85, 0.10, 0.10, 1.0)
 const COLOR_OVERLAY_BG  := Color(0.04, 0.02, 0.02, 0.82)
+
+# Send Wave Early button — dark-green palette matching the Uninfested icon outline.
+const COLOR_GREEN_NORMAL  := Color(0.04, 0.25, 0.00, 1.0)
+const COLOR_GREEN_HOVER   := Color(0.07, 0.33, 0.01, 1.0)
+const COLOR_GREEN_PRESSED := Color(0.02, 0.16, 0.00, 1.0)
+const COLOR_GREEN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
 
 # Generic button style — used by Send Wave Early and Restart, not the trap selector.
 const COLOR_BTN_NORMAL  := Color(0.30, 0.30, 0.30, 1.0)
@@ -79,8 +86,10 @@ var _infestation_fill:  ColorRect
 var _infestation_label: Label
 var _countdown_wave_label:   Label
 var _countdown_number_label: Label
-var _send_wave_btn:     Button
-var _run_over_overlay:  Control
+var _send_wave_btn:          Button
+var _send_wave_reward_label: Label
+var _early_bonus_particles:  CPUParticles2D
+var _run_over_overlay:       Control
 
 var _speed_btn:      Button
 var _pause_btn:      Button
@@ -108,6 +117,7 @@ func _ready() -> void:
 	GameState.infestation_changed.connect(_on_infestation_changed)
 	GameState.wave_changed.connect(_on_wave_changed)
 	GameState.wave_countdown_changed.connect(_on_wave_countdown_changed)
+	GameState.early_wave_bonus_awarded.connect(_on_early_bonus_awarded)
 	GameState.run_ended.connect(_on_run_ended)
 	GameState.trap_type_selected.connect(_on_trap_type_selected)
 	_on_bucks_changed(GameState.bug_bucks)
@@ -229,7 +239,7 @@ func _build_ui() -> void:
 	right_hbox.add_child(restart_btn)
 
 	# --- Countdown splash (upper-centre, hidden by default) ---
-	# Band 0.15–0.30: "WAVE X" — bold, larger
+	# Band 0.15–0.30: "Incoming!" — bold, larger, red
 	_countdown_wave_label = Label.new()
 	_countdown_wave_label.anchor_right         = 1.0
 	_countdown_wave_label.anchor_top           = 0.15
@@ -237,13 +247,15 @@ func _build_ui() -> void:
 	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_wave_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_countdown_wave_label.add_theme_font_size_override("font_size", 72)
-	_countdown_wave_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
+	_countdown_wave_label.add_theme_color_override("font_color", COLOR_INCOMING)
 	_countdown_wave_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
 	_countdown_wave_label.add_theme_constant_override("shadow_offset_x", 2)
 	_countdown_wave_label.add_theme_constant_override("shadow_offset_y", 2)
 	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
 	_countdown_wave_label.visible = false
 	add_child(_countdown_wave_label)
+
+	_build_early_bonus_particles()
 
 	# Band 0.30–0.45: countdown number
 	_countdown_number_label = Label.new()
@@ -262,19 +274,63 @@ func _build_ui() -> void:
 	add_child(_countdown_number_label)
 
 	# "Send Wave Early" button — centred in the lower half of the screen (midpoint at y=0.75),
-	# hidden during waves.
-	_send_wave_btn                = Button.new()
-	_send_wave_btn.text           = "Send Wave Early"
-	_send_wave_btn.anchor_left    = 0.30
-	_send_wave_btn.anchor_right   = 0.70
-	_send_wave_btn.anchor_top     = 0.70
-	_send_wave_btn.anchor_bottom  = 0.80
-	_send_wave_btn.add_theme_font_size_override("font_size", 18)
-	_send_wave_btn.add_theme_font_override("font", UIFonts.primary())
-	_send_wave_btn.visible        = false
-	_apply_button_style(_send_wave_btn)
+	# hidden during waves. Content is owned by a child HBoxContainer so we can place the
+	# bug-bucks reward amount on the right side independently of the left-side icon + text.
+	_send_wave_btn               = Button.new()
+	_send_wave_btn.text          = ""  # all content is in the child HBoxContainer
+	_send_wave_btn.anchor_top    = 0.70
+	_send_wave_btn.anchor_bottom = 0.80
+	# Horizontal anchors are set by _reposition_countdown_labels() based on orientation.
+	_send_wave_btn.visible       = false
+	_apply_send_wave_btn_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	add_child(_send_wave_btn)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	btn_row.offset_left  = 20.0   # horizontal padding inside the button
+	btn_row.offset_right = -20.0
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 8)
+	btn_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_send_wave_btn.add_child(btn_row)
+
+	var game_icon := TextureRect.new()
+	game_icon.texture             = load("res://assets/uninfested.png") as Texture2D
+	game_icon.custom_minimum_size = Vector2(32, 32)
+	game_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	game_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	game_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	game_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	btn_row.add_child(game_icon)
+
+	var btn_label := Label.new()
+	btn_label.text                     = "Send Wave Early"
+	btn_label.size_flags_horizontal    = Control.SIZE_EXPAND_FILL
+	btn_label.size_flags_vertical      = Control.SIZE_SHRINK_CENTER
+	btn_label.mouse_filter             = Control.MOUSE_FILTER_IGNORE
+	btn_label.add_theme_font_override("font", UIFonts.primary())
+	btn_label.add_theme_font_size_override("font_size", 18)
+	btn_label.add_theme_color_override("font_color", COLOR_TEXT)
+	btn_row.add_child(btn_label)
+
+	var btn_coin_icon := TextureRect.new()
+	btn_coin_icon.texture             = load("res://assets/bug_buck_coin.png") as Texture2D
+	btn_coin_icon.custom_minimum_size = Vector2(20, 20)
+	btn_coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	btn_coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	btn_coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	btn_coin_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	btn_row.add_child(btn_coin_icon)
+
+	_send_wave_reward_label = Label.new()
+	_send_wave_reward_label.text                  = "0"
+	_send_wave_reward_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_send_wave_reward_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	_send_wave_reward_label.add_theme_font_override("font", UIFonts.primary_bold())
+	_send_wave_reward_label.add_theme_font_size_override("font_size", 16)
+	_send_wave_reward_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
+	btn_row.add_child(_send_wave_reward_label)
 
 	_build_trap_selector()
 
@@ -371,6 +427,7 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 	if seconds_remaining > 0:
 		_countdown_wave_label.text    = "Incoming!"
 		_countdown_number_label.text  = "%d..." % seconds_remaining
+		_send_wave_reward_label.text  = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
 		_countdown_wave_label.visible   = true
 		_countdown_number_label.visible = true
 		_send_wave_btn.visible          = true
@@ -467,10 +524,12 @@ func _reposition_countdown_labels() -> void:
 		_countdown_number_label.anchor_right  = 1.0
 		_countdown_number_label.anchor_top    = 0.30
 		_countdown_number_label.anchor_bottom = 0.45
-		_send_wave_btn.anchor_left   = 0.42
-		_send_wave_btn.anchor_right  = 0.58
+		_send_wave_btn.anchor_left   = 0.10
+		_send_wave_btn.anchor_right  = 0.90
 		_send_wave_btn.anchor_top    = 0.70
 		_send_wave_btn.anchor_bottom = 0.80
+		_send_wave_btn.offset_left   = 0
+		_send_wave_btn.offset_right  = 0
 		return
 
 	# Landscape: fill the right-hand gap between the arena and the screen edge.
@@ -492,14 +551,13 @@ func _reposition_countdown_labels() -> void:
 	_countdown_number_label.anchor_top    = v_center
 	_countdown_number_label.anchor_bottom = v_center + 0.09
 
-	# "Send Wave Early" sits just below the countdown number, centred in the gap.
-	# Width is 40% of the gap (60% reduction from the full-gap span).
-	var gap_half   := (1.0 - right) * 0.20   # 40% of gap / 2
-	var gap_center := (right + 1.0) * 0.5
-	_send_wave_btn.anchor_left   = gap_center - gap_half
-	_send_wave_btn.anchor_right  = gap_center + gap_half
+	# "Send Wave Early" spans the full right-side gap with a small pixel margin.
+	_send_wave_btn.anchor_left   = right
+	_send_wave_btn.anchor_right  = 1.0
 	_send_wave_btn.anchor_top    = v_center + 0.11
 	_send_wave_btn.anchor_bottom = v_center + 0.21
+	_send_wave_btn.offset_left   = MARGIN
+	_send_wave_btn.offset_right  = -MARGIN
 
 
 func _on_speed_btn_pressed() -> void:
@@ -516,6 +574,31 @@ func _on_pause_btn_pressed() -> void:
 
 func _on_send_wave_pressed() -> void:
 	GameState.wave_skip_requested.emit()
+
+
+func _build_early_bonus_particles() -> void:
+	_early_bonus_particles = CPUParticles2D.new()
+	_early_bonus_particles.z_index               = -1    # renders behind all other HUD controls
+	_early_bonus_particles.emitting              = false
+	_early_bonus_particles.one_shot              = true
+	_early_bonus_particles.lifetime              = 0.425
+	_early_bonus_particles.explosiveness         = 1.0   # all particles fire simultaneously
+	_early_bonus_particles.spread                = 180.0 # full 360° burst
+	_early_bonus_particles.initial_velocity_min  = 250.0
+	_early_bonus_particles.initial_velocity_max  = 450.0
+	_early_bonus_particles.gravity               = Vector2(0.0, 350.0)
+	_early_bonus_particles.scale_amount_min      = 0.125  # 25% of original 0.5
+	_early_bonus_particles.scale_amount_max      = 0.225  # 25% of original 0.9
+	_early_bonus_particles.texture               = load("res://assets/bug_buck_coin.png") as Texture2D
+	add_child(_early_bonus_particles)
+
+
+func _on_early_bonus_awarded(coins: int) -> void:
+	# Derive seconds from coins so we can scale the particle count to the reward.
+	var seconds := coins / GameState.early_wave_bonus_rate
+	_early_bonus_particles.amount = max(1, seconds * 4)
+	_early_bonus_particles.position = _send_wave_btn.get_global_rect().get_center()
+	_early_bonus_particles.restart()
 
 
 func _on_run_ended() -> void:
@@ -870,6 +953,23 @@ func _apply_button_style(btn: Button) -> void:
 		var box := StyleBoxFlat.new()
 		box.bg_color           = state[1]
 		box.border_color       = COLOR_BTN_BORDER
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(5)
+		box.content_margin_left   = 12.0
+		box.content_margin_right  = 12.0
+		box.content_margin_top    = 6.0
+		box.content_margin_bottom = 6.0
+		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_color_override("font_color", COLOR_TEXT)
+
+
+# Dark-green style for the Send Wave Early button — background matches the
+# darkest green in the Uninfested icon outline.
+func _apply_send_wave_btn_style(btn: Button) -> void:
+	for state in [["normal", COLOR_GREEN_NORMAL], ["hover", COLOR_GREEN_HOVER], ["pressed", COLOR_GREEN_PRESSED]]:
+		var box := StyleBoxFlat.new()
+		box.bg_color           = state[1]
+		box.border_color       = COLOR_GREEN_BORDER
 		box.set_border_width_all(2)
 		box.set_corner_radius_all(5)
 		box.content_margin_left   = 12.0

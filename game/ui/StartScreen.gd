@@ -158,9 +158,9 @@ func _spawn_exhaust_puffs() -> void:
 	var tex_size  := _van.texture.get_size()
 	var exhaust_x := _van.position.x + (TAILPIPE_IMG_X - tex_size.x / 2.0) * _van.scale.x
 	var exhaust_y := _van.position.y + (TAILPIPE_IMG_Y - tex_size.y / 2.0) * _van.scale.y
-	# 5 puffs per burst, all spawning close to the pipe — they overlap and
+	# 8 puffs per burst, all spawning close to the pipe — they overlap and
 	# merge into a fogger-like cloud mass rather than discrete circles.
-	for i: int in 5:
+	for i: int in 8:
 		var puff        := _ExhaustPuff.new()
 		var angle       := randf() * TAU
 		var dist        := randf_range(0.0, 18.0)
@@ -218,13 +218,30 @@ class _ExhaustPuff extends Node2D:
 	var _radius: float = 8.0
 	var _alpha:  float = 0.0
 
-	const _LIFETIME := 0.90   # grow + hold + fade — must match tween durations below
-	const _DRIFT_PX := 30.0   # upward travel in pixels over the full lifetime
+	# Per-lobe layout: each entry is [offset_frac_x, offset_frac_y, radius_frac].
+	# Fractions of max_radius, generated once at ready so the shape is stable
+	# as the puff animates. A central blob plus irregular satellite bumps gives
+	# the classic fluffy cloud silhouette instead of a smooth circle.
+	var _lobes: Array = []
+
+	const _LIFETIME   := 0.90   # grow + hold + fade — must match tween durations below
+	const _DRIFT_UP   := 35.0   # upward travel in pixels
+	const _DRIFT_LEFT := 18.0   # leftward drift — trails behind the departing van
 
 	func _ready() -> void:
-		# Drift upward slowly over the full lifetime.
+		# Central dominant blob.
+		_lobes.append([0.0, 0.0, 0.72])
+		# Six satellite lobes at irregular angles and distances.
+		for i: int in 6:
+			var angle := TAU * float(i) / 6.0 + randf_range(-0.45, 0.45)
+			var dist  := randf_range(0.26, 0.50)
+			var r     := randf_range(0.36, 0.56)
+			_lobes.append([cos(angle) * dist, sin(angle) * dist, r])
+
+		# Drift upward and slightly left.
+		var dest := Vector2(position.x - _DRIFT_LEFT, position.y - _DRIFT_UP)
 		create_tween() \
-			.tween_property(self, "position:y", position.y - _DRIFT_PX, _LIFETIME) \
+			.tween_property(self, "position", dest, _LIFETIME) \
 			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 		var anim := create_tween()
@@ -243,6 +260,12 @@ class _ExhaustPuff extends Node2D:
 		queue_redraw()
 
 	func _draw() -> void:
-		if _alpha > 0.0:
-			# Low per-puff alpha so stacked puffs merge into a solid-looking mass.
-			draw_circle(Vector2.ZERO, _radius, Color(0.80, 0.80, 0.82, _alpha * 0.18))
+		if _alpha <= 0.0:
+			return
+		# Each lobe is a semi-transparent circle offset from the puff centre.
+		# Low per-lobe alpha (0.07) lets the ~7 lobes across 8 overlapping puffs
+		# stack to ~0.55 effective opacity in the cloud core without looking painted.
+		for lobe: Array in _lobes:
+			var offset := Vector2(float(lobe[0]) * _radius, float(lobe[1]) * _radius)
+			var r: float = float(lobe[2]) * _radius
+			draw_circle(offset, r, Color(0.82, 0.82, 0.85, _alpha * 0.07))

@@ -30,7 +30,7 @@ extends Node3D
 const Grid               = preload("res://arena/Grid.gd")
 const Projectile         = preload("res://traps/Projectile.gd")
 const FogCloud           = preload("res://traps/FogCloud.gd")
-const SHADOW_RECT_SHADER = preload("res://assets/shadow_rect.gdshader")
+const SHADOW_OUTLINE_SHADER = preload("res://assets/shadow_outline.gdshader")
 
 
 # ---------------------------------------------------------------------------
@@ -193,16 +193,20 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 
 
 ## Lightweight setup for placement preview ghosts.
-## Builds the visual only — no combat state, range indicator, or hover area.
+## Builds the visual and range indicator — no combat state or hover area.
 ## Caller should set process_mode = DISABLED before adding to the tree.
 func initialize_preview(trap_type: TrapType) -> void:
 	_is_preview = true
 	_trap_type  = trap_type
+	_range      = STATS[trap_type]["range"]
 	_spawn_visual(STATS[trap_type]["color"])
 
 
 func _ready() -> void:
 	if _is_preview:
+		_spawn_range_indicator()
+		if _range_indicator != null:
+			_range_indicator.visible = true
 		return
 	_spawn_range_indicator()
 	_spawn_hover_area()
@@ -676,43 +680,88 @@ func _spawn_footprint_outline(color: Color) -> void:
 		add_child(mi)
 
 
-## Adds a soft rectangular drop shadow on the floor beneath the trap.
-## Uses a rounded-rectangle SDF so the shadow fits the square 2×2 footprint
-## rather than appearing as a circle.  Traps never rotate so no basis sync is needed.
-## The shadow sits just above the floor (world y = 0.013). Because the trap root
-## is at y = 0.25, the local Y offset is -0.237.
-func _spawn_shadow() -> void:
-	var shadow_mi := MeshInstance3D.new()
-	var plane     := PlaneMesh.new()
-	plane.size     = Vector2(Grid.CELL_SIZE * 2.18, Grid.CELL_SIZE * 2.18)
-	shadow_mi.mesh = plane
+## Adds a rectangular outline shadow matching the footprint boundary.
+## The shadow is transparent at the centre and peaks in opacity right at the
+## boundary line, fading outward beyond it — like a soft halo around the outline.
+## The shadow quad is wider than the footprint so the halo has room to breathe.
+## Sits just above the floor (world y = 0.05); local Y offset is -0.20 because
+## the trap root is at y = 0.25.
+func _spawn_shadow(color: Color) -> void:
+	# Plane is 2.4 cells wide, giving a halo of (2.4 - 1.9) / 2 = 0.25 cells on each
+	# side of the boundary outline.  The shader normalises the gradient over that full
+	# halo space, so the fade is always visible regardless of outer_spread tuning.
+	# To widen or narrow the shadow, change plane_size here.
+	var plane_size := Grid.CELL_SIZE * 2.4
+	var shadow_mi  := MeshInstance3D.new()
+	var plane      := PlaneMesh.new()
+	plane.size      = Vector2(plane_size, plane_size)
+	shadow_mi.mesh  = plane
 
-	var mat        := ShaderMaterial.new()
-	mat.shader      = SHADOW_RECT_SHADER
+	var mat := ShaderMaterial.new()
+	mat.shader = SHADOW_OUTLINE_SHADER
+
+	# boundary_half: UV-space half-extent of the footprint outline, measured from the
+	# quad centre.  The shader uses this to find where the halo starts; the gap between
+	# boundary_half and 0.5 (the quad edge) is the space the gradient fills.
+	var boundary_half := (Grid.CELL_SIZE * 1.9 / plane_size) / 2.0
+	mat.set_shader_parameter("boundary_half", boundary_half)
+	mat.set_shader_parameter("opacity", 0.60)
+	# Darken to ~18% brightness so the tinted halo reads as a shadow.
+	mat.set_shader_parameter("shadow_color", Vector3(color.r * 0.18, color.g * 0.18, color.b * 0.18))
 	shadow_mi.material_override = mat
 
 	shadow_mi.position.y = 0.05 - 0.25
 	add_child(shadow_mi)
 
 
+## Adds a dark, slightly transparent background plate that fills most of the cell.
+## The shadow (larger) bleeds out softly beyond this plate's edges, giving a
+## colored shadow-halo effect.  Sits above the shadow, below all trap geometry.
+func _spawn_background(color: Color) -> void:
+	var bg_mi  := MeshInstance3D.new()
+	var plane  := PlaneMesh.new()
+	plane.size  = Vector2(Grid.CELL_SIZE * 1.85, Grid.CELL_SIZE * 1.85)
+	bg_mi.mesh  = plane
+
+	var mat             := StandardMaterial3D.new()
+	mat.albedo_color     = Color(color.r * 0.65, color.g * 0.65, color.b * 0.65, 0.92)
+	mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
+	bg_mi.material_override = mat
+
+	# Just above the shadow (world y = 0.07) so the shadow peeks out at the edges.
+	bg_mi.position.y = 0.07 - 0.25
+	add_child(bg_mi)
+
+
 ## Creates the trap's placeholder visual. All four trap types get multi-part
 ## procedural meshes matched to their real-world appearance.
 func _spawn_visual(_color: Color) -> void:
-	_spawn_shadow()
+	# Resolve the canonical per-type color once so shadow, background, and
+	# footprint outline all stay in sync.
+	var c: Color
+	match _trap_type:
+		TrapType.SNAP_TRAP:  c = Color(0.90, 0.70, 0.38)
+		TrapType.ZAPPER:     c = Color(0.28, 0.62, 0.96)
+		TrapType.FOGGER:     c = Color(0.46, 0.96, 0.38)
+		TrapType.GLUE_BOARD: c = Color(0.96, 0.82, 0.34)
+		_:                   c = Color(0.80, 0.80, 0.80)
+	_spawn_shadow(c)
+	_spawn_background(c)
 	if _trap_type == TrapType.SNAP_TRAP:
-		_spawn_footprint_outline(Color(0.90, 0.70, 0.38))
+		_spawn_footprint_outline(c)
 		_spawn_snap_trap_visual()
 		return
 	if _trap_type == TrapType.ZAPPER:
-		_spawn_footprint_outline(Color(0.28, 0.62, 0.96))
+		_spawn_footprint_outline(c)
 		_spawn_zapper_visual()
 		return
 	if _trap_type == TrapType.FOGGER:
-		_spawn_footprint_outline(Color(0.46, 0.96, 0.38))
+		_spawn_footprint_outline(c)
 		_spawn_fogger_visual()
 		return
 	if _trap_type == TrapType.GLUE_BOARD:
-		_spawn_footprint_outline(Color(0.96, 0.82, 0.34))
+		_spawn_footprint_outline(c)
 		_spawn_glue_board_visual()
 		return
 
@@ -1078,28 +1127,72 @@ func _spawn_zapper_visual() -> void:
 	_zapper_uv_light.position = Vector3(0.0, yhi + fp * 0.010, 0.0)
 	add_child(_zapper_uv_light)
 
-	# Glow halo — wide semi-transparent box; the soft blue spill visible around the tube.
+	# Silver ring surrounding the central light assembly.  Sits inside the cage bars
+	# and pulses outward with the UV light node during the discharge animation.
+	var ring_mi   := MeshInstance3D.new()
+	var ring_mesh := TorusMesh.new()
+	ring_mesh.inner_radius    = fp * 0.12
+	ring_mesh.outer_radius    = fp * 0.17
+	ring_mi.mesh              = ring_mesh
+	var ring_mat              := StandardMaterial3D.new()
+	ring_mat.albedo_color      = Color(0.78, 0.78, 0.84)
+	ring_mat.shading_mode      = BaseMaterial3D.SHADING_MODE_UNSHADED
+	ring_mi.material_override  = ring_mat
+	_zapper_uv_light.add_child(ring_mi)
+
+	# Soft circular glow — semi-transparent disc that replaces the rectangular
+	# glow halo; the round shape reads better inside the ring.
 	var glow_mi   := MeshInstance3D.new()
-	var glow_mesh := BoxMesh.new()
-	glow_mesh.size           = Vector3(inner_w * 0.70, frame_h, cd * 0.32)
-	glow_mi.mesh             = glow_mesh
-	var glow_mat             := StandardMaterial3D.new()
-	glow_mat.albedo_color     = Color(0.20, 0.60, 1.00, 0.55)
-	glow_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
-	glow_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
-	glow_mi.material_override = glow_mat
+	var glow_mesh := CylinderMesh.new()
+	glow_mesh.top_radius      = fp * 0.11
+	glow_mesh.bottom_radius   = fp * 0.11
+	glow_mesh.height          = fp * 0.004   # nearly flat; just enough to clear z-fighting
+	glow_mesh.radial_segments = 16
+	glow_mi.mesh              = glow_mesh
+	var glow_mat              := StandardMaterial3D.new()
+	glow_mat.albedo_color      = Color(0.20, 0.60, 1.00, 0.55)
+	glow_mat.shading_mode      = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow_mat.transparency      = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow_mi.material_override  = glow_mat
 	_zapper_uv_light.add_child(glow_mi)
 
-	# UV fluorescent tube — solid neon blue bar running the full inner width.
-	var uv_mi   := MeshInstance3D.new()
-	var uv_mesh := BoxMesh.new()
-	uv_mesh.size             = Vector3(inner_w * 0.62, frame_h, cd * 0.14)
-	uv_mi.mesh               = uv_mesh
-	var uv_mat               := StandardMaterial3D.new()
-	uv_mat.albedo_color       = Color(0.15, 0.72, 1.00)
-	uv_mat.shading_mode       = BaseMaterial3D.SHADING_MODE_UNSHADED
-	uv_mi.material_override   = uv_mat
-	_zapper_uv_light.add_child(uv_mi)
+	# Lightning bolt — replaces the rectangular UV tube.  Built as a flat polygon
+	# on the XZ plane so it reads as a bolt silhouette from the top-down camera.
+	var bolt_mi              := MeshInstance3D.new()
+	bolt_mi.mesh              = _build_bolt_mesh(fp * 0.20, Color(0.15, 0.72, 1.00))
+	var bolt_mat             := StandardMaterial3D.new()
+	bolt_mat.albedo_color     = Color.WHITE
+	bolt_mat.vertex_color_use_as_albedo = true
+	bolt_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bolt_mat.cull_mode        = BaseMaterial3D.CULL_DISABLED
+	bolt_mi.material_override  = bolt_mat
+	_zapper_uv_light.add_child(bolt_mi)
+
+
+## Builds a flat lightning bolt polygon on the XZ plane using ImmediateMesh.
+## s is a scale factor — vertex coordinates range ±0.5*s in X and Z.
+## The polygon has 6 vertices with the top-half shifted right and the bottom-half
+## shifted left, creating a clear zigzag at the waist.
+## The fan triangulation from v0 is valid because the interior diagonals all
+## lie inside this particular concave hexagon.
+func _build_bolt_mesh(s: float, color: Color) -> ImmediateMesh:
+	var im  := ImmediateMesh.new()
+	var pts := [
+		Vector3(-0.10 * s, 0.0, -0.50 * s),  # v0 upper-left
+		Vector3( 0.50 * s, 0.0, -0.50 * s),  # v1 upper-right (wide top)
+		Vector3( 0.15 * s, 0.0,  0.00),       # v2 mid-right kink
+		Vector3( 0.10 * s, 0.0,  0.50 * s),  # v3 lower-right
+		Vector3(-0.50 * s, 0.0,  0.50 * s),  # v4 lower-left (wide bottom)
+		Vector3(-0.15 * s, 0.0,  0.00),       # v5 mid-left kink
+	]
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Fan triangulation from v0.
+	for tri in [[0,1,2], [0,2,3], [0,3,4], [0,4,5]]:
+		for vi: int in tri:
+			im.surface_set_color(color)
+			im.surface_add_vertex(pts[vi])
+	im.surface_end()
+	return im
 
 
 ## Plays the fire animation: the UV light node scales outward sharply then

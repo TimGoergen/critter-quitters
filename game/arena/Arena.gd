@@ -52,14 +52,11 @@ const SHOW_PATH_LINE: bool = false
 const HUD_TOP_PX: float = 72.0   # top stats bar (HUD.PANEL_H)
 const HUD_BOT_PX: float = 0.0    # no persistent bottom strip below the selector
 
-# Phase 1 placeholder colours. These are replaced by ASCII billboards in Phase 3.
-const COLOR_ENTRANCE  := Color(0.40, 0.60, 0.42, 1.0)   # muted sage green
-const COLOR_EXIT      := Color(0.62, 0.38, 0.38, 1.0)   # muted dusty red
 const COLOR_TRAP      := Color(0.40, 0.40, 0.80, 1.0)   # blue-grey box
 const COLOR_PATH      := Color(0.80, 0.70, 0.20, 0.5)   # yellow, semi-transparent
 const COLOR_GRID_GLOW    := Color(0.65, 0.90, 1.0)       # cool blue-white for cursor glow
-const COLOR_WALL_FILL    := Color(0.72, 0.72, 0.72, 1.0) # light gray wall fill
-const COLOR_WALL_BORDER  := Color(0.25, 0.25, 0.25, 1.0) # dark gray cell border lines
+const COLOR_WALL_FILL    := Color(0.35, 0.35, 0.35, 1.0) # medium-dark gray wall fill
+const COLOR_WALL_BORDER  := Color(0.12, 0.12, 0.12, 1.0) # very dark gray cell border lines
 const COLOR_TRAP_SELECTED := Color(0.90, 0.70, 0.10, 1.0) # gold outline on selected trap
 
 
@@ -101,8 +98,9 @@ var _wave_size: int = WAVE_SIZE
 const SPAWN_INTERVAL: float = 0.36     # seconds between each enemy in the wave
 const WAVE_COUNTDOWN: int  = 5         # seconds of countdown before each wave
 
-var _enemies_left_to_spawn: int = 0
-var _countdown_active: bool     = false  # true while between-wave countdown is ticking
+var _enemies_left_to_spawn: int  = 0
+var _countdown_active: bool      = false  # true while between-wave countdown is ticking
+var _seconds_remaining: int      = 0     # last value broadcast during the active countdown
 
 # The path currently drawn as yellow markers. Updated on every grid change
 # and trimmed forward as the enemy advances through cells.
@@ -141,9 +139,10 @@ var _drag_ghosts: Array[Node3D] = []
 var _drag_ghost_outlines: Array[MeshInstance3D] = []
 
 # A single ghost of the selected trap shown at the hover position before pressing.
-# Rebuilt when trap type changes; repositioned on every cursor move.
-var _hover_preview:      Node3D = null
-var _hover_preview_type: int    = -1
+# Rebuilt when trap type or placement validity changes; repositioned on every cursor move.
+var _hover_preview:       Node3D = null
+var _hover_preview_type:  int    = -1
+var _hover_preview_valid: bool   = true
 
 # Reference to the playtest setup dialog while it is open; null after it confirms.
 var _debug_dialog: Node = null
@@ -207,15 +206,16 @@ func _ready() -> void:
 	_pathfinder.initialize(_grid)
 	_pathfinder.path_updated.connect(_on_path_updated)
 
-	# Spawn one elongated marker covering all 3 rows for entrance and exit.
-	_spawn_zone_marker(_spawn_cell,   3, COLOR_ENTRANCE, true)
-	_spawn_zone_marker(_despawn_cell, 3, COLOR_EXIT,     true)
+	# Spawn the cave image at the entrance and exit gaps.
+	_spawn_cave_marker(_spawn_cell)
+	_spawn_cave_marker(_despawn_cell)
 
 	_setup_grid_highlight()
 	_setup_selected_trap_outline()
 	_init_path_marker_pool()
 	_spawn_floor()
 	_spawn_arena_border()
+	_spawn_outer_border_ring()
 
 	get_viewport().physics_object_picking = true
 
@@ -760,7 +760,8 @@ func _on_enemy_died(enemy: Node3D) -> void:
 ## Increments the wave counter and begins the between-wave countdown.
 func _start_wave() -> void:
 	GameState.current_wave += 1
-	_countdown_active = true
+	_countdown_active    = true
+	_seconds_remaining   = WAVE_COUNTDOWN
 	GameState.set_countdown(WAVE_COUNTDOWN)
 	get_tree().create_timer(1.0).timeout.connect(_on_countdown_tick.bind(WAVE_COUNTDOWN - 1))
 
@@ -769,6 +770,7 @@ func _start_wave() -> void:
 func _on_countdown_tick(seconds_remaining: int) -> void:
 	if not _countdown_active:
 		return
+	_seconds_remaining = seconds_remaining
 	GameState.set_countdown(seconds_remaining)
 	if seconds_remaining > 0:
 		get_tree().create_timer(1.0).timeout.connect(_on_countdown_tick.bind(seconds_remaining - 1))
@@ -800,9 +802,15 @@ func _on_trap_type_changed(_type: int) -> void:
 
 ## Skips any active countdown and starts the wave immediately.
 ## Triggered by the "Send Wave Early" HUD button via GameState.wave_skip_requested.
+## Awards coins based on how many seconds were left, and emits early_wave_bonus_awarded
+## so the HUD can play the particle burst.
 func _on_wave_skip_requested() -> void:
 	if _countdown_active:
 		_countdown_active = false
+		if _seconds_remaining > 0:
+			var bonus := _seconds_remaining * GameState.early_wave_bonus_rate
+			GameState.add_bug_bucks(bonus)
+			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.set_countdown(0)
 		_launch_wave()
 
@@ -992,13 +1000,8 @@ func _update_grid_highlight() -> void:
 		if new_hovered != Vector2i(-1, -1) and _trap_outlines.has(new_hovered):
 			_draw_trap_outline(new_hovered)
 
-	# Show a ghost of the selected trap at the anchor before pressing.
-	# During drag, the drag ghosts serve this role instead.
-	if not _pressing:
-		_update_hover_preview(anchor)
-	else:
-		_hide_hover_preview()
-
+	# Check whether the 2×2 footprint at anchor is buildable before showing the ghost,
+	# so the ghost color can reflect validity without a one-frame lag.
 	var blocked := false
 	for dr in range(2):
 		if blocked:
@@ -1008,6 +1011,13 @@ func _update_grid_highlight() -> void:
 			if s == Grid.CellState.TRAP or s == Grid.CellState.OBSTACLE or s == Grid.CellState.WALL:
 				blocked = true
 				break
+
+	# Show a ghost of the selected trap at the anchor before pressing.
+	# During drag, the drag ghosts serve this role instead.
+	if not _pressing:
+		_update_hover_preview(anchor, not blocked)
+	else:
+		_hide_hover_preview()
 
 	var opacity_scale := 0.2 if blocked else 1.0
 
@@ -1263,63 +1273,30 @@ func _spawn_floor() -> void:
 	add_child(mi)
 
 
-## Draws the arena border as 1-cell-wide light-gray slabs with dark-gray cell
-## border lines, giving a stone-block appearance.
-##
-## All four walls sit on the outermost rows/columns of the 31×31 grid:
-##   Top/bottom — rows 0 and 30    Left/right — columns 0 and 30
-##
-## Placing geometry outside the grid boundary (z = ±15.5) consistently failed
-## to render regardless of mesh type; using the outermost grid rows/columns
-## is symmetric and renders reliably.
+## Renders the inner arena border — the outermost row/column ring of the 31×31 grid.
+## Collects the wall cell positions and delegates all geometry to _spawn_wall_ring,
+## which applies jittered block shapes, border lines, and surface detail (moss and
+## dark smudges) consistent with the outer ring.
 func _spawn_arena_border() -> void:
-	var half := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
-	var cs   := Grid.CELL_SIZE
+	var ent_row := GameState.entrance_cell.y
+	var ex_row  := GameState.exit_cell.y
+	var ent_gap := [ent_row - 1, ent_row, ent_row + 1]
+	var ex_gap  := [ex_row  - 1, ex_row,  ex_row  + 1]
 
-	var ent_top := (GameState.entrance_cell.y - 1) * cs - half
-	var ent_bot := (GameState.entrance_cell.y + 2) * cs - half
-	var ex_top  := (GameState.exit_cell.y - 1) * cs - half
-	var ex_bot  := (GameState.exit_cell.y  + 2) * cs - half
+	var cells: Array[Vector2i] = []
+	# Top row (row 0) and bottom row (row GRID_SIZE-1) — full width
+	for col in range(Grid.GRID_SIZE):
+		cells.append(Vector2i(col, 0))
+		cells.append(Vector2i(col, Grid.GRID_SIZE - 1))
+	# Left column (col 0) and right column (col GRID_SIZE-1), rows 1..GRID_SIZE-2.
+	# Rows 0 and GRID_SIZE-1 are already in the top/bottom sets above.
+	for row in range(1, Grid.GRID_SIZE - 1):
+		if row not in ent_gap:
+			cells.append(Vector2i(0, row))
+		if row not in ex_gap:
+			cells.append(Vector2i(Grid.GRID_SIZE - 1, row))
 
-	# --- Fill slabs ---
-	# Top row (row 0) and bottom row (row 30) — full grid width
-	var grid_w := Grid.GRID_SIZE * cs
-	_spawn_wall_slab(Vector3(0.0, 0.0, -half + cs * 0.5), Vector2(grid_w, cs))
-	_spawn_wall_slab(Vector3(0.0, 0.0,  half - cs * 0.5), Vector2(grid_w, cs))
-
-	# Left column (column 0) above and below the entrance gap.
-	# Heights exclude rows 0 and 30, which belong exclusively to the top/bottom slabs.
-	var lup  := ent_top - (-half + cs)
-	var lbot := (half - cs) - ent_bot
-	if lup  > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0, (-half + cs) + lup  * 0.5), Vector2(cs, lup))
-	if lbot > 0.0: _spawn_wall_slab(Vector3(-half + cs * 0.5, 0.0,  ent_bot      + lbot * 0.5), Vector2(cs, lbot))
-
-	# Right column (column 30) above and below the exit gap.
-	var rup  := ex_top - (-half + cs)
-	var rbot := (half - cs) - ex_bot
-	if rup  > 0.0: _spawn_wall_slab(Vector3( half - cs * 0.5, 0.0, (-half + cs) + rup  * 0.5), Vector2(cs, rup))
-	if rbot > 0.0: _spawn_wall_slab(Vector3( half - cs * 0.5, 0.0,  ex_bot      + rbot * 0.5), Vector2(cs, rbot))
-
-	# --- Cell border lines for all wall cells ---
-	var im := ImmediateMesh.new()
-	im.surface_begin(Mesh.PRIMITIVE_LINES)
-
-	_draw_wall_cell_borders(im, -half, half,       -half,      -half + cs)  # top row
-	_draw_wall_cell_borders(im, -half, half,        half - cs,  half)       # bottom row
-	if lup  > 0.0: _draw_wall_cell_borders(im, -half, -half + cs, -half + cs, ent_top)
-	if lbot > 0.0: _draw_wall_cell_borders(im, -half, -half + cs,  ent_bot,   half - cs)
-	if rup  > 0.0: _draw_wall_cell_borders(im,  half - cs, half,  -half + cs, ex_top)
-	if rbot > 0.0: _draw_wall_cell_borders(im,  half - cs, half,   ex_bot,    half - cs)
-
-	im.surface_end()
-
-	var lines     := MeshInstance3D.new()
-	lines.mesh     = im
-	var mat       := StandardMaterial3D.new()
-	mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.vertex_color_use_as_albedo = true
-	lines.material_override = mat
-	add_child(lines)
+	_spawn_wall_ring(cells)
 
 
 ## Draws dark gray grid lines at every cell boundary within the given rectangle.
@@ -1345,13 +1322,13 @@ func _draw_wall_cell_borders(
 
 ## Creates one flat wall fill slab using a PlaneMesh (single upward-facing face,
 ## no depth) to guarantee the fill colour renders cleanly regardless of slab width.
-func _spawn_wall_slab(center: Vector3, size: Vector2) -> void:
+func _spawn_wall_slab(center: Vector3, size: Vector2, color: Color = COLOR_WALL_FILL) -> void:
 	var mi    := MeshInstance3D.new()
 	var plane := PlaneMesh.new()
 	plane.size = size
 	mi.mesh   = plane
 	var mat              := StandardMaterial3D.new()
-	mat.albedo_color      = COLOR_WALL_FILL
+	mat.albedo_color      = color
 	mat.shading_mode      = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency      = BaseMaterial3D.TRANSPARENCY_DISABLED
 	mi.material_override  = mat
@@ -1359,44 +1336,313 @@ func _spawn_wall_slab(center: Vector3, size: Vector2) -> void:
 	add_child(mi)
 
 
-## Spawns an entrance or exit zone marker: a muted-colour slab spanning `rows`
-## cells tall, with a dark directional triangle on top indicating pest flow.
-## Pass arrow_right = true when enemies travel in the +X direction (left→right).
-func _spawn_zone_marker(center_cell: Vector2i, rows: int, color: Color, arrow_right: bool) -> void:
-	var marker := _make_box_mesh_instance(
-		Vector3(Grid.CELL_SIZE * 0.9, 0.05, Grid.CELL_SIZE * rows * 0.9),
-		color
+## Returns a randomised wall colour in the medium-dark gray range.
+## Wide brightness variation produces blocks that range from near-charcoal
+## to plain gray, giving the ring a rough, uneven stone appearance.
+func _randomised_wall_color() -> Color:
+	var brightness := 1.0 + randf_range(-0.22, 0.28)
+	return Color(
+		clampf(COLOR_WALL_FILL.r * brightness, 0.0, 1.0),
+		clampf(COLOR_WALL_FILL.g * brightness, 0.0, 1.0),
+		clampf(COLOR_WALL_FILL.b * brightness, 0.0, 1.0),
+		1.0
 	)
-	marker.position = _cell_to_world(center_cell)
-	add_child(marker)
 
-	# Filled triangle drawn just above the slab surface, lying flat in the XZ
-	# plane. The tip points in the direction pests are travelling — +X for a
-	# right-pointing arrow, −X for left. Both entrance and exit point right
-	# because enemies always travel left to right on the default layout.
-	var c      := _cell_to_world(center_cell)
-	var sign_x := 1.0 if arrow_right else -1.0
-	var half_z := Grid.CELL_SIZE * float(rows) * 0.40   # base half-height (~80% of zone height)
-	var tip_x  := c.x + sign_x * Grid.CELL_SIZE * 0.30  # tip: 30% of a cell ahead of centre
-	var base_x := c.x - sign_x * Grid.CELL_SIZE * 0.26  # base: 26% of a cell behind centre
-	var y      := 0.06                                   # just above the slab top (slab top ≈ 0.025)
 
-	var im := ImmediateMesh.new()
-	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	im.surface_set_color(Color(0.05, 0.05, 0.05, 1.0))
-	im.surface_add_vertex(Vector3(base_x, y, c.z - half_z))
-	im.surface_add_vertex(Vector3(tip_x,  y, c.z))
-	im.surface_add_vertex(Vector3(base_x, y, c.z + half_z))
-	im.surface_end()
+## Returns 4 corner positions for a wall cell with a small random jitter on each corner,
+## in [TL, TR, BL, BR] order. Jitter is seeded by cell position so calling this twice
+## for the same cell (once for fills, once for borders) produces identical corners.
+func _jittered_cell_corners(cell: Vector2i, jitter: float, y: float) -> Array[Vector3]:
+	var rng := RandomNumberGenerator.new()
+	# Combine x and y with large primes to avoid collisions at any grid coordinate.
+	rng.seed = (cell.x * 73856093) ^ (cell.y * 19349663) ^ 0xABCD1234
+	var c  := _cell_to_world(cell)
+	var hs := Grid.CELL_SIZE * 0.5
+	var corners: Array[Vector3] = []
+	for dz in [-hs, hs]:
+		for dx in [-hs, hs]:
+			corners.append(Vector3(
+				c.x + dx + rng.randf_range(-jitter, jitter),
+				y,
+				c.z + dz + rng.randf_range(-jitter, jitter)
+			))
+	return corners  # order: [TL, TR, BL, BR]
 
-	var arrow     := MeshInstance3D.new()
-	arrow.mesh     = im
-	var mat       := StandardMaterial3D.new()
-	mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.vertex_color_use_as_albedo = true
-	mat.cull_mode                  = BaseMaterial3D.CULL_DISABLED  # visible from top-down
-	arrow.material_override = mat
-	add_child(arrow)
+
+## Adds one weed clump into an already-open TRIANGLES surface.
+## The clump is an irregular filled polygon — random center within the cell,
+## random radius at each perimeter vertex to produce an organic shape.
+## Roughly 25% of clumps are living (muted olive-green); the rest are dead
+## (earthy brown to tan), giving a neglected, overgrown appearance.
+func _add_weed_patch_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) -> void:
+	var c      := _cell_to_world(cell)
+	var inset  := Grid.CELL_SIZE * 0.15
+	var hs     := Grid.CELL_SIZE * 0.5
+	var cx     := c.x + randf_range(-(hs - inset), hs - inset)
+	var cz     := c.z + randf_range(-(hs - inset), hs - inset)
+	var center := Vector3(cx, y, cz)
+	var radius := randf_range(0.14, 0.28) * Grid.CELL_SIZE
+	var segs   := randi_range(6, 10)
+	var weed_color: Color
+	if randf() < 0.25:
+		# Live weed: muted olive-green
+		weed_color = Color(
+			randf_range(0.18, 0.32),
+			randf_range(0.32, 0.50),
+			randf_range(0.06, 0.16),
+			1.0
+		)
+	else:
+		# Dead weed: earthy brown to dry tan
+		weed_color = Color(
+			randf_range(0.38, 0.58),
+			randf_range(0.24, 0.38),
+			randf_range(0.06, 0.14),
+			1.0
+		)
+	# Triangle fan: center → each perimeter edge.
+	# Each perimeter point has its own random radius so the clump is irregular.
+	for i in range(segs):
+		var a0 := (float(i)     / float(segs)) * TAU
+		var a1 := (float(i + 1) / float(segs)) * TAU
+		im.surface_set_color(weed_color)
+		im.surface_add_vertex(center)
+		im.surface_set_color(weed_color)
+		im.surface_add_vertex(Vector3(cx + cos(a0) * radius * randf_range(0.55, 1.45),
+				y, cz + sin(a0) * radius * randf_range(0.55, 1.45)))
+		im.surface_set_color(weed_color)
+		im.surface_add_vertex(Vector3(cx + cos(a1) * radius * randf_range(0.55, 1.45),
+				y, cz + sin(a1) * radius * randf_range(0.55, 1.45)))
+
+
+## Adds a clump of thin grass blades into an already-open TRIANGLES surface.
+## Each blade is a narrow triangle: wide base at the clump centre, pointed tip
+## angled outward. Multiple blades spread in random directions to read as a
+## tuft of grass rather than a leafy blob.
+func _add_grass_clump_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) -> void:
+	var c     := _cell_to_world(cell)
+	var inset := Grid.CELL_SIZE * 0.20
+	var hs    := Grid.CELL_SIZE * 0.5
+	var cx    := c.x + randf_range(-(hs - inset), hs - inset)
+	var cz    := c.z + randf_range(-(hs - inset), hs - inset)
+	var blade_count := randi_range(4, 8)
+	for _b in range(blade_count):
+		var angle  := randf() * TAU
+		var length := randf_range(0.16, 0.32) * Grid.CELL_SIZE
+		var half_w := randf_range(0.018, 0.042) * Grid.CELL_SIZE
+		# Tip colour is a brighter green; base colour slightly darker/yellower.
+		var tip_green := Color(
+			randf_range(0.10, 0.24),
+			randf_range(0.38, 0.55),
+			randf_range(0.06, 0.14),
+			1.0
+		)
+		var base_green := Color(
+			randf_range(0.20, 0.36),
+			randf_range(0.28, 0.44),
+			randf_range(0.04, 0.12),
+			1.0
+		)
+		var perp   := angle + PI * 0.5
+		var tip    := Vector3(cx + cos(angle) * length, y, cz + sin(angle) * length)
+		var base_l := Vector3(cx + cos(perp) *  half_w, y, cz + sin(perp) *  half_w)
+		var base_r := Vector3(cx + cos(perp) * -half_w, y, cz + sin(perp) * -half_w)
+		im.surface_set_color(base_green); im.surface_add_vertex(base_l)
+		im.surface_set_color(base_green); im.surface_add_vertex(base_r)
+		im.surface_set_color(tip_green);  im.surface_add_vertex(tip)
+
+
+## Adds one dark stain or smudge blob into an already-open TRIANGLES surface.
+## Simulates water staining, biological growth, or accumulated grime on the wall face.
+## Structurally identical to the moss patch but uses a dark brownish-gray palette.
+func _add_dark_smudge_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) -> void:
+	var c      := _cell_to_world(cell)
+	var inset  := Grid.CELL_SIZE * 0.12
+	var hs     := Grid.CELL_SIZE * 0.5
+	var cx     := c.x + randf_range(-(hs - inset), hs - inset)
+	var cz     := c.z + randf_range(-(hs - inset), hs - inset)
+	var center := Vector3(cx, y, cz)
+	var radius := randf_range(0.10, 0.20) * Grid.CELL_SIZE
+	var segs   := randi_range(5, 8)
+	var dark   := Color(
+		randf_range(0.10, 0.24),
+		randf_range(0.10, 0.22),
+		randf_range(0.06, 0.16),
+		1.0
+	)
+	for i in range(segs):
+		var a0 := (float(i)     / float(segs)) * TAU
+		var a1 := (float(i + 1) / float(segs)) * TAU
+		im.surface_set_color(dark)
+		im.surface_add_vertex(center)
+		im.surface_set_color(dark)
+		im.surface_add_vertex(Vector3(cx + cos(a0) * radius * randf_range(0.55, 1.45),
+				y, cz + sin(a0) * radius * randf_range(0.55, 1.45)))
+		im.surface_set_color(dark)
+		im.surface_add_vertex(Vector3(cx + cos(a1) * radius * randf_range(0.55, 1.45),
+				y, cz + sin(a1) * radius * randf_range(0.55, 1.45)))
+
+
+## Renders a set of wall cells. Spawns three MeshInstance3D nodes per ring:
+##
+##   Fill mesh (TRANSPARENCY_ALPHA, CULL_DISABLED) — gray block fills at Y=0.025.
+##   Border mesh (TRANSPARENCY_ALPHA) — dark cell-edge lines at Y=0.030.
+##   Detail mesh (TRANSPARENCY_ALPHA, CULL_DISABLED) — weed clumps and smudges at Y=0.040.
+##
+## All three use TRANSPARENCY_ALPHA. ImmediateMesh vertex colours only render
+## reliably in the transparent pass. The Y offsets (0.025 / 0.030 / 0.040)
+## guarantee the correct back-to-front draw order without depth-write tricks.
+## CULL_DISABLED on fill and detail avoids any back-face culling issues that
+## arise from winding-order precision at this scale.
+##
+## Both rings (inner and outer) call this function so they share the same
+## visual treatment and surface detail density.
+func _spawn_wall_ring(cells: Array[Vector2i]) -> void:
+	const Y_FILL:   float = 0.025
+	const Y_BORDER: float = 0.030
+	const Y_DETAIL: float = 0.040
+	const JITTER:   float = Grid.CELL_SIZE * 0.035
+
+	# -----------------------------------------------------------------------
+	# Fill mesh: one TRIANGLES surface, one MeshInstance — mirrors the setup
+	# used by the detail mesh which is known to render correctly.
+	# -----------------------------------------------------------------------
+	var im_fill := ImmediateMesh.new()
+	im_fill.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for cell in cells:
+		var color   := _randomised_wall_color()
+		var corners := _jittered_cell_corners(cell, JITTER, Y_FILL)
+		# CCW from above: TL→BL→BR and TL→BR→TR (normals face +Y toward camera)
+		im_fill.surface_set_color(color); im_fill.surface_add_vertex(corners[0])  # TL
+		im_fill.surface_set_color(color); im_fill.surface_add_vertex(corners[2])  # BL
+		im_fill.surface_set_color(color); im_fill.surface_add_vertex(corners[3])  # BR
+		im_fill.surface_set_color(color); im_fill.surface_add_vertex(corners[0])  # TL
+		im_fill.surface_set_color(color); im_fill.surface_add_vertex(corners[3])  # BR
+		im_fill.surface_set_color(color); im_fill.surface_add_vertex(corners[1])  # TR
+	im_fill.surface_end()
+
+	var mi_fill  := MeshInstance3D.new()
+	mi_fill.mesh  = im_fill
+	var mat_fill := StandardMaterial3D.new()
+	mat_fill.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat_fill.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat_fill.vertex_color_use_as_albedo = true
+	mat_fill.cull_mode                  = BaseMaterial3D.CULL_DISABLED
+	mi_fill.material_override = mat_fill
+	add_child(mi_fill)
+
+	# -----------------------------------------------------------------------
+	# Border mesh: one LINES surface for the cell-edge grid lines.
+	# -----------------------------------------------------------------------
+	var im_border := ImmediateMesh.new()
+	im_border.surface_begin(Mesh.PRIMITIVE_LINES)
+	for cell in cells:
+		var corners := _jittered_cell_corners(cell, JITTER, Y_BORDER)
+		im_border.surface_set_color(COLOR_WALL_BORDER)
+		im_border.surface_add_vertex(corners[0]); im_border.surface_add_vertex(corners[1])  # TL→TR
+		im_border.surface_add_vertex(corners[1]); im_border.surface_add_vertex(corners[3])  # TR→BR
+		im_border.surface_add_vertex(corners[3]); im_border.surface_add_vertex(corners[2])  # BR→BL
+		im_border.surface_add_vertex(corners[2]); im_border.surface_add_vertex(corners[0])  # BL→TL
+	im_border.surface_end()
+
+	var mi_border  := MeshInstance3D.new()
+	mi_border.mesh  = im_border
+	var mat_border := StandardMaterial3D.new()
+	mat_border.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat_border.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat_border.vertex_color_use_as_albedo = true
+	mi_border.material_override = mat_border
+	add_child(mi_border)
+
+	# -----------------------------------------------------------------------
+	# Detail mesh: moss patches and dark smudges
+	# TRANSPARENCY_ALPHA → transparent pass → depth-tested against solid fills
+	# CULL_DISABLED covers any winding variance in the irregular triangle fans
+	# -----------------------------------------------------------------------
+	var im_detail := ImmediateMesh.new()
+	im_detail.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for cell in cells:
+		if randf() < 0.60:
+			var patch_count := randi_range(1, 4)
+			for _p in range(patch_count):
+				# ~40% grass blades, ~60% weed blobs
+				if randf() < 0.40:
+					_add_grass_clump_to_surface(im_detail, cell, Y_DETAIL)
+				else:
+					_add_weed_patch_to_surface(im_detail, cell, Y_DETAIL)
+		if randf() < 0.35:
+			var smudge_count := randi_range(1, 2)
+			for _s in range(smudge_count):
+				_add_dark_smudge_to_surface(im_detail, cell, Y_DETAIL)
+	im_detail.surface_end()
+
+	var mi_detail  := MeshInstance3D.new()
+	mi_detail.mesh  = im_detail
+	var mat_detail := StandardMaterial3D.new()
+	mat_detail.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat_detail.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat_detail.vertex_color_use_as_albedo = true
+	mat_detail.cull_mode                  = BaseMaterial3D.CULL_DISABLED
+	mi_detail.material_override = mat_detail
+	add_child(mi_detail)
+
+
+## Renders the outer ring of wall cells — one grid square thick, surrounding the inner border.
+## Collects outer-ring cell positions and delegates all geometry to _spawn_wall_ring,
+## which applies jittered block shapes, border lines, and surface detail consistent
+## with the inner ring.
+##
+## Gap rows in the left and right outer columns match the entrance and exit gaps in the
+## inner wall so enemies pass through both wall thicknesses unobstructed.
+func _spawn_outer_border_ring() -> void:
+	var ent_row := GameState.entrance_cell.y
+	var ex_row  := GameState.exit_cell.y
+	var ent_gap := [ent_row - 1, ent_row, ent_row + 1]
+	var ex_gap  := [ex_row  - 1, ex_row,  ex_row  + 1]
+
+	var cells: Array[Vector2i] = []
+	# Top and bottom outer rows — full width including corner cells
+	for col in range(-1, Grid.GRID_SIZE + 1):
+		cells.append(Vector2i(col, -1))
+		cells.append(Vector2i(col, Grid.GRID_SIZE))
+	# Left and right outer columns — rows 0..GRID_SIZE-1 (corners covered by top/bottom above)
+	for row in range(Grid.GRID_SIZE):
+		if row not in ent_gap:
+			cells.append(Vector2i(-1, row))
+		if row not in ex_gap:
+			cells.append(Vector2i(Grid.GRID_SIZE, row))
+
+	_spawn_wall_ring(cells)
+
+
+## Spawns the cave entrance/exit image at the gap in the border wall.
+## The image is laid flat in the XZ plane and rotated −90° around Y so the
+## triangular opening apex (image top) faces world +X — the direction enemies travel.
+## center_cell is the outside spawn/despawn cell adjacent to the gap.
+func _spawn_cave_marker(center_cell: Vector2i) -> void:
+	var texture := load("res://assets/arena/enter_exit_cave.png") as Texture2D
+
+	var plane    := PlaneMesh.new()
+	# Local X (3 cells) maps to world Z after −90° Y rotation — spans the 3-row gap.
+	# Local Z (1 cell) maps to world X — covers only the border wall column.
+	plane.size = Vector2(Grid.CELL_SIZE * 3.0, Grid.CELL_SIZE * 1.0)
+
+	var mat := StandardMaterial3D.new()
+	mat.albedo_texture = texture
+	mat.shading_mode   = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode      = BaseMaterial3D.CULL_DISABLED
+
+	var mi              := MeshInstance3D.new()
+	mi.mesh              = plane
+	mi.material_override = mat
+
+	var world          := _cell_to_world(center_cell)
+	# center_cell is the outer border ring cell — position directly there so the
+	# cave aligns with the outer wall. The inner-wall gap cells remain arena background.
+	mi.position         = Vector3(world.x, 0.02, world.z)
+	mi.rotation_degrees = Vector3(0.0, -90.0, 0.0)
+
+	add_child(mi)
 
 
 ## Spawns a Trap node centred on the 2x2 footprint and wires it to the
@@ -1466,7 +1712,7 @@ func _fit_camera_to_grid() -> void:
 	if usable_h <= 0.0 or usable_w <= 0.0:
 		return
 
-	var arena_world := Grid.GRID_SIZE * Grid.CELL_SIZE + 2.0  # +2 = 1-unit margin each side
+	var arena_world := Grid.GRID_SIZE * Grid.CELL_SIZE + 4.0  # +4 keeps a ~1-unit margin beyond the 2-cell-wide outer wall ring
 
 	# With KEEP_HEIGHT, horizontal world coverage = size × (scr_w / scr_h).
 	# For the arena to fit in usable_w pixels: size × (usable_w / scr_h) ≥ arena_world
@@ -1485,13 +1731,16 @@ func _fit_camera_to_grid() -> void:
 
 
 ## Shows (or repositions) the hover preview at the given anchor.
-## Rebuilds if the selected trap type has changed since last build.
-func _update_hover_preview(anchor: Vector2i) -> void:
+## Rebuilds if the selected trap type or placement validity has changed since last build.
+## When valid=false the ghost is rendered gray to signal the location is unbuildable.
+func _update_hover_preview(anchor: Vector2i, valid: bool) -> void:
 	var type := GameState.selected_trap_type
-	if _hover_preview_type != type or _hover_preview == null or not is_instance_valid(_hover_preview):
+	if _hover_preview_type != type or _hover_preview_valid != valid \
+			or _hover_preview == null or not is_instance_valid(_hover_preview):
 		_hide_hover_preview()
-		_hover_preview      = _make_trap_preview(type, 0.35)
-		_hover_preview_type = type
+		_hover_preview       = _make_trap_preview(type, 0.35, valid)
+		_hover_preview_type  = type
+		_hover_preview_valid = valid
 	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 	_hover_preview.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 	_hover_preview.visible  = true
@@ -1504,18 +1753,20 @@ func _hide_hover_preview() -> void:
 
 ## Builds a Trap preview node: full mesh hierarchy, no combat logic, no hover area.
 ## All mesh materials are duplicated and dimmed to alpha so the result reads as a ghost.
-func _make_trap_preview(trap_type: int, alpha: float) -> Node3D:
+## When valid=false, materials are overridden to neutral gray to signal an invalid location.
+func _make_trap_preview(trap_type: int, alpha: float, valid: bool = true) -> Node3D:
 	var preview := Trap.new()
 	preview.process_mode = Node.PROCESS_MODE_DISABLED
 	preview.initialize_preview(trap_type as Trap.TrapType)
-	_apply_ghost_transparency(preview, alpha)
+	_apply_ghost_transparency(preview, alpha, valid)
 	add_child(preview)
 	return preview
 
 
 ## Recursively dims all MeshInstance3D materials in a node subtree.
 ## Duplicates each material so the original asset is not modified.
-func _apply_ghost_transparency(node: Node, alpha: float) -> void:
+## When valid=false, albedo is replaced with neutral gray regardless of the original color.
+func _apply_ghost_transparency(node: Node, alpha: float, valid: bool = true) -> void:
 	for child in node.get_children():
 		if child is MeshInstance3D:
 			var mi := child as MeshInstance3D
@@ -1523,10 +1774,15 @@ func _apply_ghost_transparency(node: Node, alpha: float) -> void:
 				var mat := mi.material_override as StandardMaterial3D
 				if mat != null:
 					mat = mat.duplicate() as StandardMaterial3D
-					mat.albedo_color.a = alpha
+					if valid:
+						mat.albedo_color.a = alpha
+					else:
+						# Blend 50% toward mid-gray — desaturates and dims without going fully colorless.
+						mat.albedo_color = mat.albedo_color.lerp(Color(0.5, 0.5, 0.5, mat.albedo_color.a), 0.5)
+						mat.albedo_color.a = alpha
 					mat.transparency   = BaseMaterial3D.TRANSPARENCY_ALPHA
 					mi.material_override = mat
-		_apply_ghost_transparency(child, alpha)
+		_apply_ghost_transparency(child, alpha, valid)
 
 
 ## Creates a MeshInstance3D with a BoxMesh of the given size and colour.
