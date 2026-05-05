@@ -30,7 +30,7 @@ extends Node3D
 const Grid               = preload("res://arena/Grid.gd")
 const Projectile         = preload("res://traps/Projectile.gd")
 const FogCloud           = preload("res://traps/FogCloud.gd")
-const SHADOW_BLOB_SHADER = preload("res://assets/shadow_blob.gdshader")
+const SHADOW_OUTLINE_SHADER = preload("res://assets/shadow_outline.gdshader")
 
 
 # ---------------------------------------------------------------------------
@@ -680,18 +680,34 @@ func _spawn_footprint_outline(color: Color) -> void:
 		add_child(mi)
 
 
-## Adds a soft blob shadow tinted with a dark version of the trap's main color.
-## The shadow sits just above the floor (world y = 0.05). Because the trap root
-## is at y = 0.25, the local Y offset is -0.20.
+## Adds a rectangular outline shadow matching the footprint boundary.
+## The shadow is transparent at the centre and peaks in opacity right at the
+## boundary line, fading outward beyond it — like a soft halo around the outline.
+## The shadow quad is wider than the footprint so the halo has room to breathe.
+## Sits just above the floor (world y = 0.05); local Y offset is -0.20 because
+## the trap root is at y = 0.25.
 func _spawn_shadow(color: Color) -> void:
-	var shadow_mi := MeshInstance3D.new()
-	var plane     := PlaneMesh.new()
-	plane.size     = Vector2(Grid.CELL_SIZE * 2.18, Grid.CELL_SIZE * 2.18)
-	shadow_mi.mesh = plane
+	# Plane is wider than the footprint to give the outward halo room to fade.
+	var plane_size := Grid.CELL_SIZE * 2.4
+	var shadow_mi  := MeshInstance3D.new()
+	var plane      := PlaneMesh.new()
+	plane.size      = Vector2(plane_size, plane_size)
+	shadow_mi.mesh  = plane
 
-	var mat        := ShaderMaterial.new()
-	mat.shader      = SHADOW_BLOB_SHADER
-	# Darken to ~18% brightness so the shadow reads as a deep tinted silhouette.
+	var mat := ShaderMaterial.new()
+	mat.shader = SHADOW_OUTLINE_SHADER
+
+	# boundary_half: UV-space half-extent of the footprint outline.
+	# The outline is Grid.CELL_SIZE * 1.9 wide; the plane is plane_size wide.
+	# Dividing by 2.0 converts from full-width fraction to half-extent (centre-origin UV).
+	var boundary_half := (Grid.CELL_SIZE * 1.9 / plane_size) / 2.0
+	mat.set_shader_parameter("boundary_half", boundary_half)
+
+	# outer_spread controls how far the shadow halo extends past the boundary line.
+	# 0.10 UV units ≈ 0.24 world units on a 2.4-cell plane — a soft but readable halo.
+	mat.set_shader_parameter("outer_spread", 0.10)
+
+	# Darken to ~18% brightness so the tinted halo reads as a shadow.
 	mat.set_shader_parameter("shadow_color", Vector3(color.r * 0.18, color.g * 0.18, color.b * 0.18))
 	shadow_mi.material_override = mat
 
