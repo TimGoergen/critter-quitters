@@ -687,8 +687,11 @@ func _spawn_footprint_outline(color: Color) -> void:
 ## Sits just above the floor (world y = 0.05); local Y offset is -0.20 because
 ## the trap root is at y = 0.25.
 func _spawn_shadow(color: Color) -> void:
-	# Plane is wider than the footprint to give the outward halo room to fade.
-	var plane_size := Grid.CELL_SIZE * 2.4
+	# Plane is 3.5 cells wide, giving a halo of (3.5 - 1.9) / 2 = 0.8 cells on each
+	# side of the boundary outline.  The shader normalises the gradient over that full
+	# halo space, so the fade is always visible regardless of outer_spread tuning.
+	# To widen or narrow the shadow, change plane_size here.
+	var plane_size := Grid.CELL_SIZE * 3.5
 	var shadow_mi  := MeshInstance3D.new()
 	var plane      := PlaneMesh.new()
 	plane.size      = Vector2(plane_size, plane_size)
@@ -697,16 +700,12 @@ func _spawn_shadow(color: Color) -> void:
 	var mat := ShaderMaterial.new()
 	mat.shader = SHADOW_OUTLINE_SHADER
 
-	# boundary_half: UV-space half-extent of the footprint outline.
-	# The outline is Grid.CELL_SIZE * 1.9 wide; the plane is plane_size wide.
-	# Dividing by 2.0 converts from full-width fraction to half-extent (centre-origin UV).
+	# boundary_half: UV-space half-extent of the footprint outline, measured from the
+	# quad centre.  The shader uses this to find where the halo starts; the gap between
+	# boundary_half and 0.5 (the quad edge) is the space the gradient fills.
 	var boundary_half := (Grid.CELL_SIZE * 1.9 / plane_size) / 2.0
 	mat.set_shader_parameter("boundary_half", boundary_half)
-
-	# outer_spread controls how far the shadow halo extends past the boundary line.
-	# 0.10 UV units ≈ 0.24 world units on a 2.4-cell plane — a soft but readable halo.
-	mat.set_shader_parameter("outer_spread", 0.10)
-
+	mat.set_shader_parameter("opacity", 0.60)
 	# Darken to ~18% brightness so the tinted halo reads as a shadow.
 	mat.set_shader_parameter("shadow_color", Vector3(color.r * 0.18, color.g * 0.18, color.b * 0.18))
 	shadow_mi.material_override = mat
