@@ -313,14 +313,14 @@ func _build_ui() -> void:
 	btn_label.add_theme_color_override("font_color", COLOR_TEXT)
 	btn_row.add_child(btn_label)
 
-	var coin_icon := TextureRect.new()
-	coin_icon.texture             = load("res://assets/bug_buck_coin.png") as Texture2D
-	coin_icon.custom_minimum_size = Vector2(20, 20)
-	coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	coin_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	btn_row.add_child(coin_icon)
+	var btn_coin_icon := TextureRect.new()
+	btn_coin_icon.texture             = load("res://assets/bug_buck_coin.png") as Texture2D
+	btn_coin_icon.custom_minimum_size = Vector2(20, 20)
+	btn_coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	btn_coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	btn_coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	btn_coin_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	btn_row.add_child(btn_coin_icon)
 
 	_send_wave_reward_label = Label.new()
 	_send_wave_reward_label.text                  = "0"
