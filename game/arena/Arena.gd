@@ -1361,38 +1361,50 @@ func _jittered_cell_corners(cell: Vector2i, jitter: float, y: float) -> Array[Ve
 	return corners  # order: [TL, TR, BL, BR]
 
 
-## Adds one moss/lichen blob into an already-open TRIANGLES surface.
-## The blob is an irregular filled polygon — random center within the cell,
+## Adds one weed clump into an already-open TRIANGLES surface.
+## The clump is an irregular filled polygon — random center within the cell,
 ## random radius at each perimeter vertex to produce an organic shape.
-func _add_moss_patch_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) -> void:
+## Roughly 25% of clumps are living (muted olive-green); the rest are dead
+## (earthy brown to tan), giving a neglected, overgrown appearance.
+func _add_weed_patch_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) -> void:
 	var c      := _cell_to_world(cell)
 	var inset  := Grid.CELL_SIZE * 0.15
 	var hs     := Grid.CELL_SIZE * 0.5
 	var cx     := c.x + randf_range(-(hs - inset), hs - inset)
 	var cz     := c.z + randf_range(-(hs - inset), hs - inset)
 	var center := Vector3(cx, y, cz)
-	var radius := randf_range(0.14, 0.26) * Grid.CELL_SIZE
-	var segs   := randi_range(6, 9)
-	# Saturated mid-green with enough brightness to read clearly against the gray fill.
-	var green  := Color(
-		randf_range(0.04, 0.14),
-		randf_range(0.42, 0.64),
-		randf_range(0.04, 0.16),
-		1.0
-	)
+	var radius := randf_range(0.14, 0.28) * Grid.CELL_SIZE
+	var segs   := randi_range(6, 10)
+	var weed_color: Color
+	if randf() < 0.25:
+		# Live weed: muted olive-green
+		weed_color = Color(
+			randf_range(0.18, 0.32),
+			randf_range(0.32, 0.50),
+			randf_range(0.06, 0.16),
+			1.0
+		)
+	else:
+		# Dead weed: earthy brown to dry tan
+		weed_color = Color(
+			randf_range(0.38, 0.58),
+			randf_range(0.24, 0.38),
+			randf_range(0.06, 0.14),
+			1.0
+		)
 	# Triangle fan: center → each perimeter edge.
-	# Each perimeter point has its own random radius so the blob is irregular.
+	# Each perimeter point has its own random radius so the clump is irregular.
 	for i in range(segs):
 		var a0 := (float(i)     / float(segs)) * TAU
 		var a1 := (float(i + 1) / float(segs)) * TAU
-		im.surface_set_color(green)
+		im.surface_set_color(weed_color)
 		im.surface_add_vertex(center)
-		im.surface_set_color(green)
-		im.surface_add_vertex(Vector3(cx + cos(a0) * radius * randf_range(0.60, 1.40),
-				y, cz + sin(a0) * radius * randf_range(0.60, 1.40)))
-		im.surface_set_color(green)
-		im.surface_add_vertex(Vector3(cx + cos(a1) * radius * randf_range(0.60, 1.40),
-				y, cz + sin(a1) * radius * randf_range(0.60, 1.40)))
+		im.surface_set_color(weed_color)
+		im.surface_add_vertex(Vector3(cx + cos(a0) * radius * randf_range(0.55, 1.45),
+				y, cz + sin(a0) * radius * randf_range(0.55, 1.45)))
+		im.surface_set_color(weed_color)
+		im.surface_add_vertex(Vector3(cx + cos(a1) * radius * randf_range(0.55, 1.45),
+				y, cz + sin(a1) * radius * randf_range(0.55, 1.45)))
 
 
 ## Adds one dark stain or smudge blob into an already-open TRIANGLES surface.
@@ -1428,15 +1440,17 @@ func _add_dark_smudge_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) ->
 
 ## Renders a set of wall cells. Spawns two separate MeshInstance3D nodes:
 ##
-##   Solid mesh (TRANSPARENCY_DISABLED) — fills and border lines.
-##     Opaque rendering writes to the depth buffer so the detail mesh above
-##     can depth-test against the blocks correctly. Triangles wind counter-
-##     clockwise from above so normals face the camera without CULL_DISABLED.
+##   Solid mesh (TRANSPARENCY_ALPHA) — fills and border lines.
+##     Rendered at Y=0.025 with fully opaque vertex colours. Using
+##     TRANSPARENCY_ALPHA (not TRANSPARENCY_DISABLED) because ImmediateMesh
+##     vertex colours only render reliably in the transparent pass. The Y gap
+##     between this mesh (0.025) and the detail mesh (0.040) ensures correct
+##     back-to-front transparent sort order without needing depth writes.
 ##
-##   Detail mesh (TRANSPARENCY_ALPHA) — moss patches and dark smudges.
+##   Detail mesh (TRANSPARENCY_ALPHA) — weed clumps and dark smudges.
 ##     Rendered in the transparent pass at Y_DETAIL, above the solid fills.
-##     The filled depth buffer from the solid pass ensures moss always draws
-##     on top of the blocks and is never occluded by other transparent objects
+##     The filled depth buffer from the solid pass ensures weeds always draw
+##     on top of the blocks and are never occluded by other transparent objects
 ##     at lower Y values. CULL_DISABLED covers any winding variance in the
 ##     triangle fans.
 ##
@@ -1484,7 +1498,11 @@ func _spawn_wall_ring(cells: Array[Vector2i]) -> void:
 	mi_solid.mesh  = im_solid
 	var mat_solid := StandardMaterial3D.new()
 	mat_solid.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat_solid.transparency               = BaseMaterial3D.TRANSPARENCY_DISABLED
+	# TRANSPARENCY_ALPHA so ImmediateMesh vertex colours render correctly.
+	# The two meshes sit at different Y values (0.025 vs 0.040), so Godot's
+	# back-to-front transparent sort guarantees fills draw before detail without
+	# needing opaque depth writes.
+	mat_solid.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mat_solid.vertex_color_use_as_albedo = true
 	mi_solid.material_override = mat_solid
 	add_child(mi_solid)
@@ -1500,7 +1518,7 @@ func _spawn_wall_ring(cells: Array[Vector2i]) -> void:
 		if randf() < 0.60:
 			var patch_count := randi_range(1, 4)
 			for _p in range(patch_count):
-				_add_moss_patch_to_surface(im_detail, cell, Y_DETAIL)
+				_add_weed_patch_to_surface(im_detail, cell, Y_DETAIL)
 		if randf() < 0.35:
 			var smudge_count := randi_range(1, 2)
 			for _s in range(smudge_count):
