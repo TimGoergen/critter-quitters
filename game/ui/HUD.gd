@@ -288,6 +288,8 @@ func _build_ui() -> void:
 
 	var btn_row := HBoxContainer.new()
 	btn_row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	btn_row.offset_left  = 20.0   # horizontal padding inside the button
+	btn_row.offset_right = -20.0
 	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
 	btn_row.add_theme_constant_override("separation", 8)
 	btn_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -579,7 +581,7 @@ func _build_early_bonus_particles() -> void:
 	_early_bonus_particles.z_index               = -1    # renders behind all other HUD controls
 	_early_bonus_particles.emitting              = false
 	_early_bonus_particles.one_shot              = true
-	_early_bonus_particles.lifetime              = 0.85
+	_early_bonus_particles.lifetime              = 0.425
 	_early_bonus_particles.explosiveness         = 1.0   # all particles fire simultaneously
 	_early_bonus_particles.spread                = 180.0 # full 360° burst
 	_early_bonus_particles.initial_velocity_min  = 250.0
@@ -594,8 +596,8 @@ func _build_early_bonus_particles() -> void:
 func _on_early_bonus_awarded(coins: int) -> void:
 	# Derive seconds from coins so we can scale the particle count to the reward.
 	var seconds := coins / GameState.early_wave_bonus_rate
-	# Random count: between 0.4 and 1.0 particles per reward second (ceili keeps minimum ≥ 1).
-	var count := randi_range(ceili(seconds * 0.4), seconds)
+	# Random count: between 1.2 and 3.0 particles per reward second (ceili keeps minimum ≥ 1).
+	var count := randi_range(ceili(seconds * 1.2), seconds * 3)
 	_early_bonus_particles.amount   = max(1, count)
 	_early_bonus_particles.position = _send_wave_btn.get_global_rect().get_center()
 	_early_bonus_particles.restart()
