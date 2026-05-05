@@ -1438,74 +1438,76 @@ func _add_dark_smudge_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) ->
 				y, cz + sin(a1) * radius * randf_range(0.55, 1.45)))
 
 
-## Renders a set of wall cells. Spawns two separate MeshInstance3D nodes:
+## Renders a set of wall cells. Spawns three MeshInstance3D nodes per ring:
 ##
-##   Solid mesh (TRANSPARENCY_ALPHA) — fills and border lines.
-##     Rendered at Y=0.025 with fully opaque vertex colours. Using
-##     TRANSPARENCY_ALPHA (not TRANSPARENCY_DISABLED) because ImmediateMesh
-##     vertex colours only render reliably in the transparent pass. The Y gap
-##     between this mesh (0.025) and the detail mesh (0.040) ensures correct
-##     back-to-front transparent sort order without needing depth writes.
+##   Fill mesh (TRANSPARENCY_ALPHA, CULL_DISABLED) — gray block fills at Y=0.025.
+##   Border mesh (TRANSPARENCY_ALPHA) — dark cell-edge lines at Y=0.030.
+##   Detail mesh (TRANSPARENCY_ALPHA, CULL_DISABLED) — weed clumps and smudges at Y=0.040.
 ##
-##   Detail mesh (TRANSPARENCY_ALPHA) — weed clumps and dark smudges.
-##     Rendered in the transparent pass at Y_DETAIL, above the solid fills.
-##     The filled depth buffer from the solid pass ensures weeds always draw
-##     on top of the blocks and are never occluded by other transparent objects
-##     at lower Y values. CULL_DISABLED covers any winding variance in the
-##     triangle fans.
+## All three use TRANSPARENCY_ALPHA. ImmediateMesh vertex colours only render
+## reliably in the transparent pass. The Y offsets (0.025 / 0.030 / 0.040)
+## guarantee the correct back-to-front draw order without depth-write tricks.
+## CULL_DISABLED on fill and detail avoids any back-face culling issues that
+## arise from winding-order precision at this scale.
 ##
 ## Both rings (inner and outer) call this function so they share the same
 ## visual treatment and surface detail density.
 func _spawn_wall_ring(cells: Array[Vector2i]) -> void:
 	const Y_FILL:   float = 0.025
 	const Y_BORDER: float = 0.030
-	const Y_DETAIL: float = 0.040   # above fills; depth-tested against the opaque solid mesh
+	const Y_DETAIL: float = 0.040
 	const JITTER:   float = Grid.CELL_SIZE * 0.035
 
 	# -----------------------------------------------------------------------
-	# Solid mesh: fills (TRIANGLES) + border lines (LINES)
-	# TRANSPARENCY_DISABLED → opaque pass → depth writes enabled
+	# Fill mesh: one TRIANGLES surface, one MeshInstance — mirrors the setup
+	# used by the detail mesh which is known to render correctly.
 	# -----------------------------------------------------------------------
-	var im_solid := ImmediateMesh.new()
-
-	# Fills — CCW winding from above (looking down +Y) so the front face faces the camera.
-	# Corner order from _jittered_cell_corners: [TL(0), TR(1), BL(2), BR(3)]
-	# CCW from above: TL→BL→BR and TL→BR→TR
-	im_solid.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	var im_fill := ImmediateMesh.new()
+	im_fill.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	for cell in cells:
 		var color   := _randomised_wall_color()
 		var corners := _jittered_cell_corners(cell, JITTER, Y_FILL)
-		im_solid.surface_set_color(color); im_solid.surface_add_vertex(corners[0])  # TL
-		im_solid.surface_set_color(color); im_solid.surface_add_vertex(corners[2])  # BL
-		im_solid.surface_set_color(color); im_solid.surface_add_vertex(corners[3])  # BR
-		im_solid.surface_set_color(color); im_solid.surface_add_vertex(corners[0])  # TL
-		im_solid.surface_set_color(color); im_solid.surface_add_vertex(corners[3])  # BR
-		im_solid.surface_set_color(color); im_solid.surface_add_vertex(corners[1])  # TR
-	im_solid.surface_end()
+		# CCW from above: TL→BL→BR and TL→BR→TR (normals face +Y toward camera)
+		im_fill.surface_set_color(color); im_fill.surface_add_vertex(corners[0])  # TL
+		im_fill.surface_set_color(color); im_fill.surface_add_vertex(corners[2])  # BL
+		im_fill.surface_set_color(color); im_fill.surface_add_vertex(corners[3])  # BR
+		im_fill.surface_set_color(color); im_fill.surface_add_vertex(corners[0])  # TL
+		im_fill.surface_set_color(color); im_fill.surface_add_vertex(corners[3])  # BR
+		im_fill.surface_set_color(color); im_fill.surface_add_vertex(corners[1])  # TR
+	im_fill.surface_end()
 
-	# Border lines — same deterministic seed → same corners as the fill pass
-	im_solid.surface_begin(Mesh.PRIMITIVE_LINES)
+	var mi_fill  := MeshInstance3D.new()
+	mi_fill.mesh  = im_fill
+	var mat_fill := StandardMaterial3D.new()
+	mat_fill.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat_fill.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat_fill.vertex_color_use_as_albedo = true
+	mat_fill.cull_mode                  = BaseMaterial3D.CULL_DISABLED
+	mi_fill.material_override = mat_fill
+	add_child(mi_fill)
+
+	# -----------------------------------------------------------------------
+	# Border mesh: one LINES surface for the cell-edge grid lines.
+	# -----------------------------------------------------------------------
+	var im_border := ImmediateMesh.new()
+	im_border.surface_begin(Mesh.PRIMITIVE_LINES)
 	for cell in cells:
 		var corners := _jittered_cell_corners(cell, JITTER, Y_BORDER)
-		im_solid.surface_set_color(COLOR_WALL_BORDER)
-		im_solid.surface_add_vertex(corners[0]); im_solid.surface_add_vertex(corners[1])  # TL→TR
-		im_solid.surface_add_vertex(corners[1]); im_solid.surface_add_vertex(corners[3])  # TR→BR
-		im_solid.surface_add_vertex(corners[3]); im_solid.surface_add_vertex(corners[2])  # BR→BL
-		im_solid.surface_add_vertex(corners[2]); im_solid.surface_add_vertex(corners[0])  # BL→TL
-	im_solid.surface_end()
+		im_border.surface_set_color(COLOR_WALL_BORDER)
+		im_border.surface_add_vertex(corners[0]); im_border.surface_add_vertex(corners[1])  # TL→TR
+		im_border.surface_add_vertex(corners[1]); im_border.surface_add_vertex(corners[3])  # TR→BR
+		im_border.surface_add_vertex(corners[3]); im_border.surface_add_vertex(corners[2])  # BR→BL
+		im_border.surface_add_vertex(corners[2]); im_border.surface_add_vertex(corners[0])  # BL→TL
+	im_border.surface_end()
 
-	var mi_solid  := MeshInstance3D.new()
-	mi_solid.mesh  = im_solid
-	var mat_solid := StandardMaterial3D.new()
-	mat_solid.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
-	# TRANSPARENCY_ALPHA so ImmediateMesh vertex colours render correctly.
-	# The two meshes sit at different Y values (0.025 vs 0.040), so Godot's
-	# back-to-front transparent sort guarantees fills draw before detail without
-	# needing opaque depth writes.
-	mat_solid.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat_solid.vertex_color_use_as_albedo = true
-	mi_solid.material_override = mat_solid
-	add_child(mi_solid)
+	var mi_border  := MeshInstance3D.new()
+	mi_border.mesh  = im_border
+	var mat_border := StandardMaterial3D.new()
+	mat_border.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat_border.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mat_border.vertex_color_use_as_albedo = true
+	mi_border.material_override = mat_border
+	add_child(mi_border)
 
 	# -----------------------------------------------------------------------
 	# Detail mesh: moss patches and dark smudges
