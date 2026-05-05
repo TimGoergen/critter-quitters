@@ -26,6 +26,12 @@ const COLOR_INCOMING         := Color(0.90, 0.15, 0.15, 1.00)  # red "Incoming!"
 const COLOR_INFESTED    := Color(0.85, 0.10, 0.10, 1.0)
 const COLOR_OVERLAY_BG  := Color(0.04, 0.02, 0.02, 0.82)
 
+# Send Wave Early button — dark-green palette matching the Uninfested icon outline.
+const COLOR_GREEN_NORMAL  := Color(0.04, 0.25, 0.00, 1.0)
+const COLOR_GREEN_HOVER   := Color(0.07, 0.33, 0.01, 1.0)
+const COLOR_GREEN_PRESSED := Color(0.02, 0.16, 0.00, 1.0)
+const COLOR_GREEN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
+
 # Generic button style — used by Send Wave Early and Restart, not the trap selector.
 const COLOR_BTN_NORMAL  := Color(0.30, 0.30, 0.30, 1.0)
 const COLOR_BTN_HOVER   := Color(0.38, 0.38, 0.38, 1.0)
@@ -960,10 +966,6 @@ func _apply_button_style(btn: Button) -> void:
 # Dark-green style for the Send Wave Early button — background matches the
 # darkest green in the Uninfested icon outline.
 func _apply_send_wave_btn_style(btn: Button) -> void:
-	const COLOR_GREEN_NORMAL  := Color(0.04, 0.25, 0.00, 1.0)
-	const COLOR_GREEN_HOVER   := Color(0.07, 0.33, 0.01, 1.0)
-	const COLOR_GREEN_PRESSED := Color(0.02, 0.16, 0.00, 1.0)
-	const COLOR_GREEN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
 	for state in [["normal", COLOR_GREEN_NORMAL], ["hover", COLOR_GREEN_HOVER], ["pressed", COLOR_GREEN_PRESSED]]:
 		var box := StyleBoxFlat.new()
 		box.bg_color           = state[1]
