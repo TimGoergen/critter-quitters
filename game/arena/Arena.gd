@@ -1625,10 +1625,9 @@ func _spawn_cave_marker(center_cell: Vector2i) -> void:
 	mi.material_override = mat
 
 	var world          := _cell_to_world(center_cell)
-	# Shift a full cell toward the border so the quad is centred on the border
-	# column gap cells (the 3×1 wall grid squares), leaving the outside area clear.
-	var border_shift   := 1.0 if center_cell.x < 0 else -1.0
-	mi.position         = Vector3(world.x + border_shift, 0.02, world.z)
+	# center_cell is the outer border ring cell — position directly there so the
+	# cave aligns with the outer wall. The inner-wall gap cells remain arena background.
+	mi.position         = Vector3(world.x, 0.02, world.z)
 	mi.rotation_degrees = Vector3(0.0, -90.0, 0.0)
 
 	add_child(mi)
