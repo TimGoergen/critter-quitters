@@ -530,21 +530,24 @@ func _build_early_bonus_particles() -> void:
 	_early_bonus_particles.z_index               = -1    # renders behind all other HUD controls
 	_early_bonus_particles.emitting              = false
 	_early_bonus_particles.one_shot              = true
-	_early_bonus_particles.amount                = 14
 	_early_bonus_particles.lifetime              = 0.85
 	_early_bonus_particles.explosiveness         = 1.0   # all particles fire simultaneously
 	_early_bonus_particles.spread                = 180.0 # full 360° burst
 	_early_bonus_particles.initial_velocity_min  = 250.0
 	_early_bonus_particles.initial_velocity_max  = 450.0
 	_early_bonus_particles.gravity               = Vector2(0.0, 350.0)
-	_early_bonus_particles.scale_amount_min      = 0.5
-	_early_bonus_particles.scale_amount_max      = 0.9
+	_early_bonus_particles.scale_amount_min      = 0.125  # 25% of original 0.5
+	_early_bonus_particles.scale_amount_max      = 0.225  # 25% of original 0.9
 	_early_bonus_particles.texture               = load("res://assets/bug_buck_coin.png") as Texture2D
 	add_child(_early_bonus_particles)
 
 
-func _on_early_bonus_awarded(_coins: int) -> void:
-	# Position the burst at the button's screen centre so coins appear to fly out from it.
+func _on_early_bonus_awarded(coins: int) -> void:
+	# Derive seconds from coins so we can scale the particle count to the reward.
+	var seconds := coins / GameState.early_wave_bonus_rate
+	# Random count: between 0.4 and 1.0 particles per reward second (ceili keeps minimum ≥ 1).
+	var count := randi_range(ceili(seconds * 0.4), seconds)
+	_early_bonus_particles.amount   = max(1, count)
 	_early_bonus_particles.position = _send_wave_btn.get_global_rect().get_center()
 	_early_bonus_particles.restart()
 
