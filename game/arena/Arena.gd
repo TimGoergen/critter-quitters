@@ -58,8 +58,8 @@ const COLOR_EXIT      := Color(0.62, 0.38, 0.38, 1.0)   # muted dusty red
 const COLOR_TRAP      := Color(0.40, 0.40, 0.80, 1.0)   # blue-grey box
 const COLOR_PATH      := Color(0.80, 0.70, 0.20, 0.5)   # yellow, semi-transparent
 const COLOR_GRID_GLOW    := Color(0.65, 0.90, 1.0)       # cool blue-white for cursor glow
-const COLOR_WALL_FILL    := Color(0.72, 0.72, 0.72, 1.0) # light gray wall fill
-const COLOR_WALL_BORDER  := Color(0.25, 0.25, 0.25, 1.0) # dark gray cell border lines
+const COLOR_WALL_FILL    := Color(0.35, 0.35, 0.35, 1.0) # medium-dark gray wall fill
+const COLOR_WALL_BORDER  := Color(0.12, 0.12, 0.12, 1.0) # very dark gray cell border lines
 const COLOR_TRAP_SELECTED := Color(0.90, 0.70, 0.10, 1.0) # gold outline on selected trap
 
 
@@ -1327,15 +1327,14 @@ func _spawn_wall_slab(center: Vector3, size: Vector2, color: Color = COLOR_WALL_
 	add_child(mi)
 
 
-## Returns a slightly randomised wall colour for the outer ring.
-## Minor brightness variation suggests age and wear; a small green component
-## suggests moss or plant growth on the exterior wall surface.
+## Returns a randomised wall colour in the medium-dark gray range.
+## Wide brightness variation produces blocks that range from near-charcoal
+## to plain gray, giving the ring a rough, uneven stone appearance.
 func _randomised_wall_color() -> Color:
-	var brightness := 1.0 + randf_range(-0.08, 0.08)
-	var greenery   := randf_range(0.0, 0.05)
+	var brightness := 1.0 + randf_range(-0.22, 0.28)
 	return Color(
 		clampf(COLOR_WALL_FILL.r * brightness, 0.0, 1.0),
-		clampf(COLOR_WALL_FILL.g * brightness + greenery, 0.0, 1.0),
+		clampf(COLOR_WALL_FILL.g * brightness, 0.0, 1.0),
 		clampf(COLOR_WALL_FILL.b * brightness, 0.0, 1.0),
 		1.0
 	)
@@ -1405,6 +1404,43 @@ func _add_weed_patch_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) -> 
 		im.surface_set_color(weed_color)
 		im.surface_add_vertex(Vector3(cx + cos(a1) * radius * randf_range(0.55, 1.45),
 				y, cz + sin(a1) * radius * randf_range(0.55, 1.45)))
+
+
+## Adds a clump of thin grass blades into an already-open TRIANGLES surface.
+## Each blade is a narrow triangle: wide base at the clump centre, pointed tip
+## angled outward. Multiple blades spread in random directions to read as a
+## tuft of grass rather than a leafy blob.
+func _add_grass_clump_to_surface(im: ImmediateMesh, cell: Vector2i, y: float) -> void:
+	var c     := _cell_to_world(cell)
+	var inset := Grid.CELL_SIZE * 0.20
+	var hs    := Grid.CELL_SIZE * 0.5
+	var cx    := c.x + randf_range(-(hs - inset), hs - inset)
+	var cz    := c.z + randf_range(-(hs - inset), hs - inset)
+	var blade_count := randi_range(4, 8)
+	for _b in range(blade_count):
+		var angle  := randf() * TAU
+		var length := randf_range(0.16, 0.32) * Grid.CELL_SIZE
+		var half_w := randf_range(0.018, 0.042) * Grid.CELL_SIZE
+		# Tip colour is a brighter green; base colour slightly darker/yellower.
+		var tip_green := Color(
+			randf_range(0.10, 0.24),
+			randf_range(0.38, 0.55),
+			randf_range(0.06, 0.14),
+			1.0
+		)
+		var base_green := Color(
+			randf_range(0.20, 0.36),
+			randf_range(0.28, 0.44),
+			randf_range(0.04, 0.12),
+			1.0
+		)
+		var perp   := angle + PI * 0.5
+		var tip    := Vector3(cx + cos(angle) * length, y, cz + sin(angle) * length)
+		var base_l := Vector3(cx + cos(perp) *  half_w, y, cz + sin(perp) *  half_w)
+		var base_r := Vector3(cx + cos(perp) * -half_w, y, cz + sin(perp) * -half_w)
+		im.surface_set_color(base_green); im.surface_add_vertex(base_l)
+		im.surface_set_color(base_green); im.surface_add_vertex(base_r)
+		im.surface_set_color(tip_green);  im.surface_add_vertex(tip)
 
 
 ## Adds one dark stain or smudge blob into an already-open TRIANGLES surface.
@@ -1520,7 +1556,11 @@ func _spawn_wall_ring(cells: Array[Vector2i]) -> void:
 		if randf() < 0.60:
 			var patch_count := randi_range(1, 4)
 			for _p in range(patch_count):
-				_add_weed_patch_to_surface(im_detail, cell, Y_DETAIL)
+				# ~40% grass blades, ~60% weed blobs
+				if randf() < 0.40:
+					_add_grass_clump_to_surface(im_detail, cell, Y_DETAIL)
+				else:
+					_add_weed_patch_to_surface(im_detail, cell, Y_DETAIL)
 		if randf() < 0.35:
 			var smudge_count := randi_range(1, 2)
 			for _s in range(smudge_count):
