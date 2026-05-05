@@ -687,11 +687,11 @@ func _spawn_footprint_outline(color: Color) -> void:
 ## Sits just above the floor (world y = 0.05); local Y offset is -0.20 because
 ## the trap root is at y = 0.25.
 func _spawn_shadow(color: Color) -> void:
-	# Plane is 3.5 cells wide, giving a halo of (3.5 - 1.9) / 2 = 0.8 cells on each
+	# Plane is 2.4 cells wide, giving a halo of (2.4 - 1.9) / 2 = 0.25 cells on each
 	# side of the boundary outline.  The shader normalises the gradient over that full
 	# halo space, so the fade is always visible regardless of outer_spread tuning.
 	# To widen or narrow the shadow, change plane_size here.
-	var plane_size := Grid.CELL_SIZE * 3.5
+	var plane_size := Grid.CELL_SIZE * 2.4
 	var shadow_mi  := MeshInstance3D.new()
 	var plane      := PlaneMesh.new()
 	plane.size      = Vector2(plane_size, plane_size)
