@@ -724,8 +724,33 @@ func _cell_to_world(cell: Vector2i) -> Vector3:
 # Enemy spawning
 # ---------------------------------------------------------------------------
 
+## Returns which enemy type to spawn for the given wave number.
+## Wave 1 is pure gnats (tutorial difficulty). Every 10th wave is a rat boss wave.
+## New types unlock progressively; gnats phase out after wave 6 as heavier enemies dominate.
+func _enemy_type_for_wave(wave: int) -> Enemy.EnemyType:
+	if wave == 1:
+		return Enemy.EnemyType.GNAT
+	if wave % 10 == 0:
+		return Enemy.EnemyType.RAT
+
+	# Build a weighted pool from all unlocked types.
+	# Appending the same type multiple times controls its spawn weight.
+	var pool: Array[Enemy.EnemyType] = []
+	pool.append_array([Enemy.EnemyType.ANT, Enemy.EnemyType.ANT, Enemy.EnemyType.ANT])
+	if wave <= 6:
+		pool.append_array([Enemy.EnemyType.GNAT, Enemy.EnemyType.GNAT])
+	if wave >= 3:
+		pool.append_array([Enemy.EnemyType.CRICKET, Enemy.EnemyType.CRICKET])
+	if wave >= 5:
+		pool.append_array([Enemy.EnemyType.BEETLE, Enemy.EnemyType.BEETLE])
+	if wave >= 8:
+		pool.append_array([Enemy.EnemyType.COCKROACH, Enemy.EnemyType.COCKROACH, Enemy.EnemyType.COCKROACH])
+
+	return pool[randi() % pool.size()]
+
+
 ## Instantiates one enemy, places it at the entrance, and starts it moving.
-func _spawn_enemy(path: Array[Vector2i]) -> void:
+func _spawn_enemy(path: Array[Vector2i], enemy_type: Enemy.EnemyType) -> void:
 	var enemy: Node3D = Enemy.new()
 
 	# Register before adding to tree so signals are connected before
@@ -736,7 +761,7 @@ func _spawn_enemy(path: Array[Vector2i]) -> void:
 	enemy.cell_advanced.connect(_redraw_path_display)
 
 	add_child(enemy)
-	enemy.initialize(path, Enemy.EnemyType.ANT, GameState.current_wave)
+	enemy.initialize(path, enemy_type, GameState.current_wave)
 
 
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
@@ -841,7 +866,8 @@ func _spawn_next_in_wave() -> void:
 	if grid_path.is_empty():
 		grid_path = _pathfinder.get_current_path()
 	if not grid_path.is_empty():
-		_spawn_enemy(_build_full_path(grid_path, spawn_row))
+		var enemy_type: Enemy.EnemyType = _enemy_type_for_wave(GameState.current_wave)
+		_spawn_enemy(_build_full_path(grid_path, spawn_row), enemy_type)
 	if _enemies_left_to_spawn > 0:
 		get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
 
