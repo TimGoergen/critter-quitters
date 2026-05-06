@@ -516,7 +516,7 @@ func _frames_for_type(enemy_type: EnemyType) -> Array[Texture2D]:
 func _spawn_visual(color: Color) -> void:
 	var mesh_instance := MeshInstance3D.new()
 
-	var quad_cells := VISUAL_QUAD_SIZE[_enemy_type]
+	var quad_cells: float = VISUAL_QUAD_SIZE[_enemy_type]
 	var quad       := QuadMesh.new()
 	quad.size       = Vector2(Grid.CELL_SIZE * quad_cells, Grid.CELL_SIZE * quad_cells)
 	mesh_instance.mesh = quad
@@ -546,7 +546,7 @@ func _spawn_visual(color: Color) -> void:
 ## is at y = 0.25, the local Y offset is -0.237.
 func _spawn_shadow() -> void:
 	_shadow_mi      = MeshInstance3D.new()
-	var shadow_cells := SHADOW_PLANE_SIZE[_enemy_type]
+	var shadow_cells: float = SHADOW_PLANE_SIZE[_enemy_type]
 	var plane        := PlaneMesh.new()
 	plane.size        = Vector2(Grid.CELL_SIZE * shadow_cells, Grid.CELL_SIZE * shadow_cells)
 	_shadow_mi.mesh   = plane
