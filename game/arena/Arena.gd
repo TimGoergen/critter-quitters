@@ -95,7 +95,7 @@ var _active_enemies: Array[Node3D] = []
 # Wave spawning — enemies launch one at a time with a small gap between them.
 const WAVE_SIZE: int = 10   # default; overridden at runtime by the debug start dialog
 var _wave_size: int = WAVE_SIZE
-const SPAWN_INTERVAL: float = 0.36     # seconds between each enemy in the wave
+const SPAWN_INTERVAL: float = 0.36     # delay before the first enemy in a wave; subsequent gaps are per-type
 const WAVE_COUNTDOWN: int  = 5         # seconds of countdown before each wave
 
 var _enemies_left_to_spawn: int  = 0
@@ -724,6 +724,19 @@ func _cell_to_world(cell: Vector2i) -> Vector3:
 # Enemy spawning
 # ---------------------------------------------------------------------------
 
+## Seconds to wait after spawning an enemy of this type before the next one appears.
+## Larger enemies move more slowly and need a longer runway so they don't visually overlap.
+func _spawn_gap_for_type(enemy_type: Enemy.EnemyType) -> float:
+	match enemy_type:
+		Enemy.EnemyType.GNAT:      return 0.28
+		Enemy.EnemyType.ANT:       return 0.45
+		Enemy.EnemyType.CRICKET:   return 0.42
+		Enemy.EnemyType.BEETLE:    return 0.70
+		Enemy.EnemyType.COCKROACH: return 0.80
+		Enemy.EnemyType.RAT:       return 1.50
+	return 0.45
+
+
 ## Returns which enemy type to spawn for the given wave number.
 ## Wave 1 is pure gnats (tutorial difficulty). Every 10th wave is a rat boss wave.
 ## New types unlock progressively; gnats phase out after wave 6 as heavier enemies dominate.
@@ -865,11 +878,13 @@ func _spawn_next_in_wave() -> void:
 	var grid_path       := _find_shortest_exit_path(spawn_grid)
 	if grid_path.is_empty():
 		grid_path = _pathfinder.get_current_path()
+	# Pick type before the path check so the same type drives both the spawn
+	# and the gap timer — even if the path was empty this wave slot is consumed.
+	var enemy_type: Enemy.EnemyType = _enemy_type_for_wave(GameState.current_wave)
 	if not grid_path.is_empty():
-		var enemy_type: Enemy.EnemyType = _enemy_type_for_wave(GameState.current_wave)
 		_spawn_enemy(_build_full_path(grid_path, spawn_row), enemy_type)
 	if _enemies_left_to_spawn > 0:
-		get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
+		get_tree().create_timer(_spawn_gap_for_type(enemy_type)).timeout.connect(_spawn_next_in_wave)
 
 
 ## Runs A* from start to each of the three exit-gap cells and returns
