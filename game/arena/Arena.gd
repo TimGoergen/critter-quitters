@@ -809,7 +809,7 @@ func _start_wave() -> void:
 	_countdown_active    = true
 	_seconds_remaining   = WAVE_COUNTDOWN
 	GameState.set_countdown(WAVE_COUNTDOWN)
-	get_tree().create_timer(1.0).timeout.connect(_on_countdown_tick.bind(WAVE_COUNTDOWN - 1))
+	get_tree().create_timer(1.0, false).timeout.connect(_on_countdown_tick.bind(WAVE_COUNTDOWN - 1))
 
 
 ## Called once per second during the countdown. Fires the wave when it reaches 0.
@@ -819,7 +819,7 @@ func _on_countdown_tick(seconds_remaining: int) -> void:
 	_seconds_remaining = seconds_remaining
 	GameState.set_countdown(seconds_remaining)
 	if seconds_remaining > 0:
-		get_tree().create_timer(1.0).timeout.connect(_on_countdown_tick.bind(seconds_remaining - 1))
+		get_tree().create_timer(1.0, false).timeout.connect(_on_countdown_tick.bind(seconds_remaining - 1))
 	else:
 		_countdown_active = false
 		_launch_wave()
@@ -883,7 +883,7 @@ func _launch_wave() -> void:
 		_enemies_left_to_spawn = _static_spawn_queue.size()
 	else:
 		_enemies_left_to_spawn = _wave_size
-	get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
+	get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
 
 
 ## Spawns one enemy then schedules the next, until the wave is exhausted.
@@ -925,7 +925,7 @@ func _spawn_next_in_wave() -> void:
 			gap = STATIC_GROUP_GAP
 		else:
 			gap = _spawn_gap_for_type(enemy_type)
-		get_tree().create_timer(gap).timeout.connect(_spawn_next_in_wave)
+		get_tree().create_timer(gap, false).timeout.connect(_spawn_next_in_wave)
 
 
 ## Runs A* from start to each of the three exit-gap cells and returns
