@@ -1,11 +1,11 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <!-- Transition: all legs near neutral midpoint -->
-  <path d="M 53 58 Q 38 56 24 54" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
-  <path d="M 52 68 Q 36 68 22 68" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
-  <path d="M 52 78 Q 38 78 24 80" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
-  <path d="M 75 58 Q 90 58 104 60" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
-  <path d="M 76 68 Q 92 68 106 68" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
-  <path d="M 76 78 Q 92 76 106 74" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+  <!-- All legs near neutral midpoint -->
+  <path d="M 53 58 Q 46 57 39 56" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+  <path d="M 52 68 Q 44 68 37 68" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+  <path d="M 52 78 Q 45 78 38 79" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+  <path d="M 75 58 Q 83 58 90 59" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+  <path d="M 76 68 Q 84 68 91 68" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+  <path d="M 76 78 Q 84 77 91 76" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
 
   <!-- Antennae -->
   <path d="M 58 36 Q 50 28 44 22" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
@@ -13,13 +13,17 @@
   <circle cx="44" cy="22" r="3" fill="#2A2430"/>
   <circle cx="84" cy="22" r="3" fill="#2A2430"/>
 
-  <!-- Wings -->
-  <ellipse cx="34" cy="64" rx="26" ry="14" fill="#A0B8D0" opacity="0.45"/>
-  <ellipse cx="94" cy="64" rx="26" ry="14" fill="#A0B8D0" opacity="0.45"/>
-  <line x1="20" y1="60" x2="50" y2="68" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
-  <line x1="20" y1="68" x2="50" y2="62" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
-  <line x1="78" y1="60" x2="108" y2="68" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
-  <line x1="78" y1="68" x2="108" y2="62" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
+  <!-- Wings: flutter-up position — more swept, slightly slimmer, raised a few pixels -->
+  <g transform="rotate(22, 40, 62)">
+    <ellipse cx="40" cy="62" rx="12" ry="6" fill="#A0B8D0" opacity="0.45"/>
+    <line x1="28" y1="62" x2="52" y2="62" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
+    <line x1="31" y1="59" x2="49" y2="66" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
+  </g>
+  <g transform="rotate(-22, 88, 62)">
+    <ellipse cx="88" cy="62" rx="12" ry="6" fill="#A0B8D0" opacity="0.45"/>
+    <line x1="76" y1="62" x2="100" y2="62" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
+    <line x1="79" y1="59" x2="97" y2="66" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
+  </g>
 
   <!-- Body -->
   <ellipse cx="64" cy="72" rx="12" ry="18" fill="#2A2430"/>
