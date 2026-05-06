@@ -14,12 +14,12 @@
   <circle cx="84" cy="22" r="3" fill="#2A2430"/>
 
   <!-- Wings: flutter-up position — more swept, slightly slimmer, raised a few pixels -->
-  <g transform="rotate(22, 40, 62)">
+  <g transform="rotate(-22, 40, 62)">
     <ellipse cx="40" cy="62" rx="12" ry="6" fill="#A0B8D0" opacity="0.45"/>
     <line x1="28" y1="62" x2="52" y2="62" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
     <line x1="31" y1="59" x2="49" y2="66" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
   </g>
-  <g transform="rotate(-22, 88, 62)">
+  <g transform="rotate(22, 88, 62)">
     <ellipse cx="88" cy="62" rx="12" ry="6" fill="#A0B8D0" opacity="0.45"/>
     <line x1="76" y1="62" x2="100" y2="62" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
     <line x1="79" y1="59" x2="97" y2="66" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
