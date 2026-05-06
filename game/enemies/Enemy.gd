@@ -22,6 +22,11 @@
 ##   brief white flash and then frees the node. Movement stops immediately
 ##   on death so the tween plays in place.
 ##
+## HP bar:
+##   A pair of flat quads (background + fill) that lie on the XZ plane and
+##   face the top-down camera. Invisible at full health; appears on the first
+##   hit. Colors match the infestation level bar in HUD.gd.
+##
 ## Usage: instantiate via Arena, then call initialize() before the node
 ## is added to the scene tree.
 
@@ -124,6 +129,14 @@ const ARRIVAL_THRESHOLD: float = 0.05
 ## Duration of the death flash in seconds.
 const DEATH_FLASH_DURATION: float = 0.12
 
+# HP bar — colors match the infestation level bar (COLOR_BAR_BG / COLOR_BAR_FILL in HUD.gd).
+const HP_BAR_BG_COLOR   := Color(0.28, 0.28, 0.28, 1.0)
+const HP_BAR_FILL_COLOR := Color(0.85, 0.22, 0.22, 1.0)
+## Bar width as a fraction of the enemy's visual quad width.
+const HP_BAR_WIDTH_FRACTION: float = 0.65
+## Bar height in world units (CELL_SIZE = 1.0, so this is a thin stripe).
+const HP_BAR_HEIGHT: float = 0.075
+
 ## Speed multiplier applied while at least one Glue Board is in range.
 ## 0.285 = 71.5% slowdown (up 30% from the original 55% slowdown at 0.45).
 const SLOW_FACTOR: float = 0.285
@@ -205,6 +218,12 @@ var _base_color: Color = Color.WHITE
 # Tracks the active hit-flash tween so a second hit cancels the first.
 var _hit_tween: Tween = null
 
+# HP bar — root container and the fill mesh instance whose size changes on each hit.
+var _hp_bar: Node3D = null
+var _hp_bar_fill: MeshInstance3D = null
+# Full bar width in world units, cached so _update_hp_bar() can compute the fill offset.
+var _hp_bar_width: float = 0.0
+
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -238,6 +257,7 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 	_base_color = stats["color"]
 	_spawn_visual(_base_color)
 	_spawn_shadow()
+	_spawn_hp_bar()
 
 
 # ---------------------------------------------------------------------------
@@ -250,6 +270,7 @@ func take_damage(amount: float, flash_color: Color = Color.WHITE) -> void:
 	if _is_dead:
 		return
 	_current_hp = maxf(_current_hp - amount, 0.0)
+	_update_hp_bar()
 	if _current_hp == 0.0:
 		_die()
 	else:
@@ -535,6 +556,68 @@ func _spawn_visual(color: Color) -> void:
 
 	_visual = mesh_instance
 	add_child(mesh_instance)
+
+
+## Creates the floating HP bar — two flat quads (background + fill) lying on the XZ
+## plane so they face the top-down camera. The bar is hidden at full health and shown
+## on the first hit; _update_hp_bar() keeps the fill in sync with _current_hp.
+func _spawn_hp_bar() -> void:
+	_hp_bar_width = VISUAL_QUAD_SIZE[_enemy_type] * Grid.CELL_SIZE * HP_BAR_WIDTH_FRACTION
+
+	_hp_bar            = Node3D.new()
+	_hp_bar.position.y = 0.08   # float above the sprite (enemy root is at world y = 0.25)
+	_hp_bar.visible    = false  # only visible when HP drops below maximum
+	add_child(_hp_bar)
+
+	# Basis that lies a QuadMesh flat on the XZ plane facing world +Y (the camera).
+	# QuadMesh default: local XY plane, normal = +Z. This basis maps:
+	#   local X → world X  (bar width runs east–west)
+	#   local Y → world –Z (bar height runs into the scene)
+	#   local Z → world +Y (normal faces camera)
+	var flat_basis := Basis(Vector3(1, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0))
+
+	# Background track — full bar width, dark grey.
+	var bg_quad        := QuadMesh.new()
+	bg_quad.size        = Vector2(_hp_bar_width, HP_BAR_HEIGHT)
+	var bg_mi          := MeshInstance3D.new()
+	bg_mi.mesh          = bg_quad
+	bg_mi.basis         = flat_basis
+	var bg_mat         := StandardMaterial3D.new()
+	bg_mat.albedo_color = HP_BAR_BG_COLOR
+	bg_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bg_mi.material_override = bg_mat
+	_hp_bar.add_child(bg_mi)
+
+	# Fill bar — starts at full width; _update_hp_bar() shrinks it from the right.
+	# Raised by 0.005 world units so it always renders in front of the background quad.
+	var fill_quad        := QuadMesh.new()
+	fill_quad.size        = Vector2(_hp_bar_width, HP_BAR_HEIGHT)
+	_hp_bar_fill          = MeshInstance3D.new()
+	_hp_bar_fill.mesh     = fill_quad
+	_hp_bar_fill.basis    = flat_basis
+	_hp_bar_fill.position.y = 0.005
+	var fill_mat         := StandardMaterial3D.new()
+	fill_mat.albedo_color = HP_BAR_FILL_COLOR
+	fill_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_hp_bar_fill.material_override = fill_mat
+	_hp_bar.add_child(_hp_bar_fill)
+
+
+## Shows or hides the HP bar and updates the fill to reflect current health.
+## Called from take_damage() on every hit.
+func _update_hp_bar() -> void:
+	if _hp_bar == null:
+		return
+	var fraction := get_hp_fraction()
+	_hp_bar.visible = fraction < 1.0
+	if not _hp_bar.visible:
+		return
+	# Shrink the fill quad to match remaining HP.
+	var fill_width := _hp_bar_width * fraction
+	(_hp_bar_fill.mesh as QuadMesh).size.x = fill_width
+	# Shift the fill center so its left edge stays pinned to the background's left edge.
+	# The bar's width axis is world X, so position.x is the correct lever here.
+	_hp_bar_fill.position.x = -(_hp_bar_width - fill_width) * 0.5
 
 
 ## Adds a soft drop shadow on the floor beneath the enemy.

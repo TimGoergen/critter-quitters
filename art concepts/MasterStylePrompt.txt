@@ -1,0 +1,44 @@
+
+# Master Style Prompt for Critter Quitters art assets
+
+## Purpose
+
+This style prompt will be used to generate a variety of different art assets with consistent visual designs to be used in a tower defense mobile game with a Pest Control theme.  They will all have consistent art and visual styles to help define game identity.  The images will fall into a few different types - Arena Maps, Traps, Enemies, UI.
+
+The basic premise of the gameplay loop is that each round is in a rectangular arena that has no obstacles.  enemies enter on the left and exit on the right.  they will always find the shortest path to the exit.  the goal is to place towers that attack them but also function as physical obstacles that delay their progress through the arena.
+
+## Image Style
+
+Art Style: High-detail CGI-inspired cartoon aesthetic. The look should be a hybrid of classic 2D animation and modern, richly textured 3D rendering.
+
+Every image should be a top-down view of a particular place, object, item or thing.  
+
+Color & Shading: Use a vibrant, highly saturated color palette. Apply flat cell-shading but include micro-shadows and subtle color gradients within the foliage and dirt to create a sense of depth and "ambient occlusion." Shadows should be deep and well-defined, especially where grass meets dirt.
+
+Technical Constraints: Perspective must be strictly top-down (birds-eye). No characters or insects (clean map only). High-resolution, crisp edges, and a polished, professional game-asset finish.
+
+## Image Type - Arena Map
+
+Any image that is an Arena Map should be a large 4000px by 4000px image from a top-down perspective that can be used as the background for the arena.  They will resemble locations where bugs might live, such as forests, backyards, walls, basements, utility rooms.  There should be no insects in the image because the game itself will have insect objects moving around.
+
+Arena map images are used by the application by zooming into to a small subset of the image and using that zoomed in area as the background, which helps provide a somewhat random feel to the background visuals.
+
+Line Work: Utilize thick, clean black outlines for all major environmental shapes (grass patches, large rocks, paths). Incorporate thinner internal detail lines to define individual grass blades, soil ridges, and bark texture on twigs.
+
+Texture Density: High density of environmental "scatter." Include many small pebbles, varied soil tones, scattered twigs, and layered clovers.
+
+Foliage: Grass should appear as lush, overlapping tufts with varying heights and shades of green to simulate a thick lawn.
+
+## Image Type - Traps
+
+These are relatively small images, roughtly 50px by 50px, that resemble pest controls tools and supplies.  The image should be rendered on a transparent background, and each trap should have 5 different versions so that the game can use them for animation.
+
+## Image Type - Enemies
+
+These are relatively small images, roughtly 50px by 50px, that resemble pests and insects.  The image should be rendered on a transparent background, and each enemy should have 5 different versions so that the game can use them for animation.
+
+## Image Type - UI
+
+These are images that could be different sizes, and will be used for icons, logos, themes, buttons or obstacles in either the UI or the game.  The image should be rendered on a transparent background.  They are not expected to be animated in the game.
+
+
