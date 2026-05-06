@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Group A back; Group B forward (opposite of frame 1) -->
+  <path d="M 53 58 Q 38 62 26 68" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+  <path d="M 52 68 Q 36 64 24 60" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+  <path d="M 52 78 Q 38 74 26 70" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+  <path d="M 75 58 Q 90 54 102 50" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+  <path d="M 76 68 Q 92 72 106 76" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+  <path d="M 76 78 Q 92 82 106 88" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+
+  <!-- Antennae -->
+  <path d="M 58 36 Q 50 28 44 22" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+  <path d="M 70 36 Q 78 28 84 22" stroke="#1A1820" stroke-width="2.0" stroke-linecap="round" fill="none"/>
+  <circle cx="44" cy="22" r="3" fill="#2A2430"/>
+  <circle cx="84" cy="22" r="3" fill="#2A2430"/>
+
+  <!-- Wings -->
+  <ellipse cx="34" cy="64" rx="26" ry="14" fill="#A0B8D0" opacity="0.45"/>
+  <ellipse cx="94" cy="64" rx="26" ry="14" fill="#A0B8D0" opacity="0.45"/>
+  <line x1="20" y1="60" x2="50" y2="68" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
+  <line x1="20" y1="68" x2="50" y2="62" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
+  <line x1="78" y1="60" x2="108" y2="68" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
+  <line x1="78" y1="68" x2="108" y2="62" stroke="#506070" stroke-width="0.8" opacity="0.60"/>
+
+  <!-- Body -->
+  <ellipse cx="64" cy="72" rx="12" ry="18" fill="#2A2430"/>
+  <ellipse cx="64" cy="65" rx="8" ry="2.5" fill="#3A3448" opacity="0.60"/>
+  <ellipse cx="64" cy="75" rx="9" ry="2.5" fill="#3A3448" opacity="0.60"/>
+  <ellipse cx="64" cy="84" rx="7" ry="2" fill="#3A3448" opacity="0.60"/>
+  <ellipse cx="60" cy="60" rx="4" ry="2.5" fill="white" opacity="0.22"/>
+
+  <!-- Head -->
+  <circle cx="64" cy="46" r="12" fill="#2A2430"/>
+  <ellipse cx="59" cy="40" rx="4.5" ry="3" fill="white" opacity="0.22"/>
+
+  <!-- Eyes -->
+  <circle cx="55" cy="46" r="6" fill="#880000"/>
+  <circle cx="73" cy="46" r="6" fill="#880000"/>
+  <circle cx="53" cy="44" r="2" fill="white" opacity="0.80"/>
+  <circle cx="71" cy="44" r="2" fill="white" opacity="0.80"/>
+</svg>

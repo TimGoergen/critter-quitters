@@ -36,25 +36,74 @@ const ANT_FRAMES: Array[Texture2D] = [
 	preload("res://assets/ant_walk_3.svg"),
 	preload("res://assets/ant_walk_4.svg"),
 ]
+const GNAT_FRAMES: Array[Texture2D] = [
+	preload("res://assets/gnat_walk_1.svg"),
+	preload("res://assets/gnat_walk_2.svg"),
+	preload("res://assets/gnat_walk_3.svg"),
+	preload("res://assets/gnat_walk_4.svg"),
+]
+const CRICKET_FRAMES: Array[Texture2D] = [
+	preload("res://assets/cricket_walk_1.svg"),
+	preload("res://assets/cricket_walk_2.svg"),
+	preload("res://assets/cricket_walk_3.svg"),
+	preload("res://assets/cricket_walk_4.svg"),
+]
+const BEETLE_FRAMES: Array[Texture2D] = [
+	preload("res://assets/beetle_walk_1.svg"),
+	preload("res://assets/beetle_walk_2.svg"),
+	preload("res://assets/beetle_walk_3.svg"),
+	preload("res://assets/beetle_walk_4.svg"),
+]
+const COCKROACH_FRAMES: Array[Texture2D] = [
+	preload("res://assets/cockroach_walk_1.svg"),
+	preload("res://assets/cockroach_walk_2.svg"),
+	preload("res://assets/cockroach_walk_3.svg"),
+	preload("res://assets/cockroach_walk_4.svg"),
+]
+const RAT_FRAMES: Array[Texture2D] = [
+	preload("res://assets/rat_walk_1.svg"),
+	preload("res://assets/rat_walk_2.svg"),
+	preload("res://assets/rat_walk_3.svg"),
+	preload("res://assets/rat_walk_4.svg"),
+]
 
 
 # ---------------------------------------------------------------------------
 # Enemy type
 # ---------------------------------------------------------------------------
 
-enum EnemyType { ANT, CRICKET, BEETLE, COCKROACH, RAT }
+enum EnemyType { ANT, GNAT, CRICKET, BEETLE, COCKROACH, RAT }
 
 ## Per-type stat table. All numeric values are placeholders — tuned via playtesting.
 ##   hp            — starting (and maximum) hit points
 ##   speed         — movement speed in cells per second
 ##   infestation   — Infestation Level increase when this pest reaches the exit
-##   color         — placeholder cylinder colour (replaced by ASCII billboard in Phase 3)
+##   color         — used only for kill-burst particle color
 const STATS := {
-	EnemyType.ANT:       { "hp": 10,  "speed": 2.55, "infestation": 1,  "bounty": 10, "color": Color(0.85, 0.35, 0.15) },
-	EnemyType.CRICKET:   { "hp":  8,  "speed": 4.25, "infestation": 1,  "bounty": 2,  "color": Color(0.50, 0.80, 0.20) },
-	EnemyType.BEETLE:    { "hp": 40,  "speed": 1.275,"infestation": 3,  "bounty": 2,  "color": Color(0.20, 0.40, 0.80) },
-	EnemyType.COCKROACH: { "hp": 80,  "speed": 0.85, "infestation": 5,  "bounty": 2,  "color": Color(0.55, 0.30, 0.10) },
-	EnemyType.RAT:       { "hp": 200, "speed": 0.595,"infestation": 10, "bounty": 2,  "color": Color(0.70, 0.65, 0.60) },
+	EnemyType.ANT:       { "hp": 10,  "speed": 2.55,  "infestation": 1,  "bounty": 10, "color": Color(0.85, 0.35, 0.15) },
+	EnemyType.GNAT:      { "hp":  5,  "speed": 5.80,  "infestation": 1,  "bounty": 8,  "color": Color(0.16, 0.14, 0.19) },
+	EnemyType.CRICKET:   { "hp":  8,  "speed": 4.25,  "infestation": 1,  "bounty": 2,  "color": Color(0.35, 0.55, 0.12) },
+	EnemyType.BEETLE:    { "hp": 40,  "speed": 1.275, "infestation": 3,  "bounty": 2,  "color": Color(0.10, 0.22, 0.50) },
+	EnemyType.COCKROACH: { "hp": 80,  "speed": 0.85,  "infestation": 5,  "bounty": 2,  "color": Color(0.48, 0.21, 0.06) },
+	EnemyType.RAT:       { "hp": 200, "speed": 0.595, "infestation": 10, "bounty": 2,  "color": Color(0.56, 0.53, 0.50) },
+}
+
+# Visual quad size and shadow size vary by type so larger enemies read bigger on screen.
+const VISUAL_QUAD_SIZE: Dictionary = {
+	EnemyType.ANT:       2.10,
+	EnemyType.GNAT:      1.60,
+	EnemyType.CRICKET:   1.90,
+	EnemyType.BEETLE:    2.40,
+	EnemyType.COCKROACH: 2.60,
+	EnemyType.RAT:       3.20,
+}
+const SHADOW_PLANE_SIZE: Dictionary = {
+	EnemyType.ANT:       2.72,
+	EnemyType.GNAT:      2.10,
+	EnemyType.CRICKET:   2.50,
+	EnemyType.BEETLE:    3.10,
+	EnemyType.COCKROACH: 3.40,
+	EnemyType.RAT:       4.20,
 }
 
 
@@ -100,6 +149,12 @@ signal cell_advanced
 # Private state
 # ---------------------------------------------------------------------------
 
+# Enemy type stored so visual and shadow setup can look up per-type sizes and frames.
+var _enemy_type: EnemyType = EnemyType.ANT
+
+# Walk frame set for this enemy — assigned in initialize() based on type.
+var _walk_frames: Array[Texture2D] = []
+
 # The last cell centre the enemy fully arrived at.
 var _current_cell: Vector2i = Vector2i.ZERO
 
@@ -138,7 +193,7 @@ var _slow_source_count: int = 0
 # freed when the last one is removed.
 var _glue_splatter: Node3D = null
 
-# Accumulated walk time used to index into ANT_FRAMES.
+# Accumulated walk time used to index into _walk_frames.
 var _walk_time: float = 0.0
 
 # Stored so _process can swap the walk frame without rebuilding the material.
@@ -160,6 +215,9 @@ var _hit_tween: Tween = null
 func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType.ANT, wave: int = 1) -> void:
 	if initial_path.size() < 2:
 		return
+
+	_enemy_type    = enemy_type
+	_walk_frames   = _frames_for_type(enemy_type)
 
 	var stats          = STATS[enemy_type]
 	_move_speed        = stats["speed"]
@@ -327,7 +385,7 @@ func _process(delta: float) -> void:
 			_visual.position.x = sway
 		_visual.basis = _facing_basis(travel_dir)
 		_walk_time += delta
-		_visual_material.albedo_texture = ANT_FRAMES[int(_walk_time * _move_speed * 3.0) % ANT_FRAMES.size()]
+		_visual_material.albedo_texture = _walk_frames[int(_walk_time * _move_speed * 3.0) % _walk_frames.size()]
 
 
 # ---------------------------------------------------------------------------
@@ -440,14 +498,27 @@ func _build_glue_blob_mesh(base_r: float, color: Color) -> ImmediateMesh:
 	return im
 
 
-## Creates the enemy visual as a billboard quad using the ant sprite.
-## The sprite SVG carries its own baked colors; albedo_color stays white.
-## Replaced by an ASCII billboard node in Phase 3.
+## Returns the walk-frame array for the given enemy type.
+func _frames_for_type(enemy_type: EnemyType) -> Array[Texture2D]:
+	match enemy_type:
+		EnemyType.ANT:       return ANT_FRAMES
+		EnemyType.GNAT:      return GNAT_FRAMES
+		EnemyType.CRICKET:   return CRICKET_FRAMES
+		EnemyType.BEETLE:    return BEETLE_FRAMES
+		EnemyType.COCKROACH: return COCKROACH_FRAMES
+		EnemyType.RAT:       return RAT_FRAMES
+	return ANT_FRAMES
+
+
+## Creates the enemy visual as a billboard quad using the per-type sprite.
+## Each SVG carries its own baked colors; albedo_color stays white.
+## Quad size scales with enemy type so larger enemies read bigger on screen.
 func _spawn_visual(color: Color) -> void:
 	var mesh_instance := MeshInstance3D.new()
 
-	var quad  := QuadMesh.new()
-	quad.size  = Vector2(Grid.CELL_SIZE * 2.1, Grid.CELL_SIZE * 2.1)
+	var quad_cells := VISUAL_QUAD_SIZE[_enemy_type]
+	var quad       := QuadMesh.new()
+	quad.size       = Vector2(Grid.CELL_SIZE * quad_cells, Grid.CELL_SIZE * quad_cells)
 	mesh_instance.mesh = quad
 
 	# _base_color is kept for particle effects; the sprite carries its own baked colors.
@@ -455,7 +526,7 @@ func _spawn_visual(color: Color) -> void:
 
 	var material                  := StandardMaterial3D.new()
 	material.albedo_color          = Color.WHITE   # do not tint — SVG colors are baked in
-	material.albedo_texture        = ANT_FRAMES[0]
+	material.albedo_texture        = _walk_frames[0]
 	material.shading_mode          = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency          = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mesh_instance.material_override = material
@@ -475,9 +546,10 @@ func _spawn_visual(color: Color) -> void:
 ## is at y = 0.25, the local Y offset is -0.237.
 func _spawn_shadow() -> void:
 	_shadow_mi      = MeshInstance3D.new()
-	var plane       := PlaneMesh.new()
-	plane.size       = Vector2(Grid.CELL_SIZE * 2.72, Grid.CELL_SIZE * 2.72)
-	_shadow_mi.mesh  = plane
+	var shadow_cells := SHADOW_PLANE_SIZE[_enemy_type]
+	var plane        := PlaneMesh.new()
+	plane.size        = Vector2(Grid.CELL_SIZE * shadow_cells, Grid.CELL_SIZE * shadow_cells)
+	_shadow_mi.mesh   = plane
 
 	var mat          := ShaderMaterial.new()
 	mat.shader        = SHADOW_BLOB_SHADER

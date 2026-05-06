@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Transition: Group A returning to neutral, Group B returning to neutral -->
+  <path d="M 52 37 Q 36 34 22 30" stroke="#3A5010" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 47 50 Q 32 52 18 54" stroke="#3A5010" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 76 37 Q 90 40 104 42" stroke="#3A5010" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 81 50 Q 96 50 110 50" stroke="#3A5010" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 26 76 Q 16 70 10 66" stroke="#3A5010" stroke-width="3.0" stroke-linecap="round" fill="none"/>
+  <path d="M 102 76 Q 112 80 116 84" stroke="#3A5010" stroke-width="3.0" stroke-linecap="round" fill="none"/>
+
+  <!-- Antennae -->
+  <path d="M 58 18 Q 40 8 16 2" stroke="#3A5010" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M 70 18 Q 88 8 112 2" stroke="#3A5010" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <circle cx="16" cy="2" r="4.5" fill="#88CC22"/>
+  <circle cx="112" cy="2" r="4.5" fill="#88CC22"/>
+
+  <!-- Large hind femora -->
+  <ellipse cx="40" cy="76" rx="15" ry="10" fill="#3A6010"/>
+  <ellipse cx="88" cy="76" rx="15" ry="10" fill="#3A6010"/>
+  <ellipse cx="36" cy="72" rx="5" ry="3" fill="white" opacity="0.15"/>
+  <ellipse cx="84" cy="72" rx="5" ry="3" fill="white" opacity="0.15"/>
+
+  <!-- Abdomen -->
+  <ellipse cx="64" cy="88" rx="19" ry="27" fill="#5A8C20"/>
+  <ellipse cx="64" cy="79" rx="16" ry="3.5" fill="#3A6010" opacity="0.50"/>
+  <ellipse cx="64" cy="91" rx="17" ry="3.5" fill="#3A6010" opacity="0.50"/>
+  <ellipse cx="64" cy="104" rx="12" ry="2.5" fill="#3A6010" opacity="0.50"/>
+  <ellipse cx="58" cy="74" rx="5" ry="3" fill="white" opacity="0.18"/>
+
+  <!-- Pronotum -->
+  <ellipse cx="64" cy="44" rx="18" ry="12" fill="#4A7818"/>
+  <ellipse cx="59" cy="38" rx="5" ry="3" fill="white" opacity="0.15"/>
+
+  <!-- Head -->
+  <circle cx="64" cy="25" r="10" fill="#3A6010"/>
+  <ellipse cx="59" cy="20" rx="4" ry="2.5" fill="white" opacity="0.18"/>
+
+  <!-- Compound eyes -->
+  <circle cx="58" cy="23" r="3.5" fill="#CC8800"/>
+  <circle cx="70" cy="23" r="3.5" fill="#CC8800"/>
+  <circle cx="57" cy="22" r="1.4" fill="white" opacity="0.80"/>
+  <circle cx="69" cy="22" r="1.4" fill="white" opacity="0.80"/>
+</svg>

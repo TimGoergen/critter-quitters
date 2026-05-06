@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Legs drawn first so body overlaps at attachment points -->
+  <!-- Group A (L-front, R-mid, L-hindtip) forward; Group B (R-front, L-mid, R-hindtip) back -->
+  <path d="M 52 37 Q 38 26 24 16" stroke="#3A5010" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 47 50 Q 32 48 18 46" stroke="#3A5010" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 76 37 Q 90 46 102 56" stroke="#3A5010" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <path d="M 81 50 Q 96 54 108 58" stroke="#3A5010" stroke-width="3.5" stroke-linecap="round" fill="none"/>
+  <!-- Hind tibiae: extend from the large femora, one forward and one back -->
+  <path d="M 26 76 Q 16 62 12 50" stroke="#3A5010" stroke-width="3.0" stroke-linecap="round" fill="none"/>
+  <path d="M 102 76 Q 112 90 116 102" stroke="#3A5010" stroke-width="3.0" stroke-linecap="round" fill="none"/>
+
+  <!-- Antennae: very long sweeping lines — cricket antennae are longer than the body -->
+  <path d="M 58 18 Q 40 8 16 2" stroke="#3A5010" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <path d="M 70 18 Q 88 8 112 2" stroke="#3A5010" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+  <circle cx="16" cy="2" r="4.5" fill="#88CC22"/>
+  <circle cx="112" cy="2" r="4.5" fill="#88CC22"/>
+
+  <!-- Large hind femora: the cricket's signature silhouette — bulgy hind thighs -->
+  <ellipse cx="40" cy="76" rx="15" ry="10" fill="#3A6010"/>
+  <ellipse cx="88" cy="76" rx="15" ry="10" fill="#3A6010"/>
+  <ellipse cx="36" cy="72" rx="5" ry="3" fill="white" opacity="0.15"/>
+  <ellipse cx="84" cy="72" rx="5" ry="3" fill="white" opacity="0.15"/>
+
+  <!-- Abdomen: oval with three segmentation bands and a specular highlight -->
+  <ellipse cx="64" cy="88" rx="19" ry="27" fill="#5A8C20"/>
+  <ellipse cx="64" cy="79" rx="16" ry="3.5" fill="#3A6010" opacity="0.50"/>
+  <ellipse cx="64" cy="91" rx="17" ry="3.5" fill="#3A6010" opacity="0.50"/>
+  <ellipse cx="64" cy="104" rx="12" ry="2.5" fill="#3A6010" opacity="0.50"/>
+  <ellipse cx="58" cy="74" rx="5" ry="3" fill="white" opacity="0.18"/>
+
+  <!-- Pronotum: the wide thorax shield characteristic of crickets -->
+  <ellipse cx="64" cy="44" rx="18" ry="12" fill="#4A7818"/>
+  <ellipse cx="59" cy="38" rx="5" ry="3" fill="white" opacity="0.15"/>
+
+  <!-- Head -->
+  <circle cx="64" cy="25" r="10" fill="#3A6010"/>
+  <ellipse cx="59" cy="20" rx="4" ry="2.5" fill="white" opacity="0.18"/>
+
+  <!-- Compound eyes: amber, with white glints -->
+  <circle cx="58" cy="23" r="3.5" fill="#CC8800"/>
+  <circle cx="70" cy="23" r="3.5" fill="#CC8800"/>
+  <circle cx="57" cy="22" r="1.4" fill="white" opacity="0.80"/>
+  <circle cx="69" cy="22" r="1.4" fill="white" opacity="0.80"/>
+</svg>
