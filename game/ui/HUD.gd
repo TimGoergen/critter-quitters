@@ -126,18 +126,18 @@ func _ready() -> void:
 	_on_infestation_changed(GameState.infestation_level)
 	_on_wave_changed(GameState.current_wave)
 	get_viewport().size_changed.connect(_on_viewport_resized)
-	# After the first layout pass all four control buttons have their natural widths.
-	# Pin every button to the widest one so they stay uniform even when the pause
-	# label switches from "▮▮" to the narrower "▶".
+	# After the first layout pass, synchronise buttons in two pairs:
+	#   narrow pair — pause and exit share the wider of the two
+	#   wide pair   — restart and speed share the wider of the two
+	# This keeps the visual grouping: short action buttons on one side,
+	# longer labels on the other.
 	await get_tree().process_frame
-	var max_w: float = maxf(_exit_btn.size.x,
-			maxf(_restart_btn.size.x,
-			maxf(_pause_btn.size.x, _speed_btn.size.x)))
-	var locked := Vector2(max_w, 0.0)
-	_exit_btn.custom_minimum_size    = locked
-	_restart_btn.custom_minimum_size = locked
-	_pause_btn.custom_minimum_size   = locked
-	_speed_btn.custom_minimum_size   = locked
+	var narrow_w := maxf(_pause_btn.size.x, _exit_btn.size.x)
+	var wide_w   := maxf(_restart_btn.size.x, _speed_btn.size.x)
+	_pause_btn.custom_minimum_size   = Vector2(narrow_w, 0.0)
+	_exit_btn.custom_minimum_size    = Vector2(narrow_w, 0.0)
+	_restart_btn.custom_minimum_size = Vector2(wide_w,   0.0)
+	_speed_btn.custom_minimum_size   = Vector2(wide_w,   0.0)
 
 
 func _build_ui() -> void:
