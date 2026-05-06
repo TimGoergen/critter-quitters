@@ -93,6 +93,8 @@ var _run_over_overlay:       Control
 
 var _speed_btn:      Button
 var _pause_btn:      Button
+var _exit_btn:       Button
+var _restart_btn:    Button
 var _speed_pause_box: HBoxContainer  # wraps both buttons; repositioned on orientation change
 var _is_fast:        bool = false
 var _is_paused:      bool = false
@@ -124,10 +126,18 @@ func _ready() -> void:
 	_on_infestation_changed(GameState.infestation_level)
 	_on_wave_changed(GameState.current_wave)
 	get_viewport().size_changed.connect(_on_viewport_resized)
-	# Lock the pause button width after the first layout pass so it stays the
-	# same size when the label switches from "▮▮" to the narrower "▶".
+	# After the first layout pass all four control buttons have their natural widths.
+	# Pin every button to the widest one so they stay uniform even when the pause
+	# label switches from "▮▮" to the narrower "▶".
 	await get_tree().process_frame
-	_pause_btn.custom_minimum_size = _pause_btn.size
+	var max_w: float = maxf(_exit_btn.size.x,
+			maxf(_restart_btn.size.x,
+			maxf(_pause_btn.size.x, _speed_btn.size.x)))
+	var locked := Vector2(max_w, 0.0)
+	_exit_btn.custom_minimum_size    = locked
+	_restart_btn.custom_minimum_size = locked
+	_pause_btn.custom_minimum_size   = locked
+	_speed_btn.custom_minimum_size   = locked
 
 
 func _build_ui() -> void:
@@ -226,21 +236,21 @@ func _build_ui() -> void:
 	right_hbox.add_theme_constant_override("separation", 6)
 	top_row.add_child(right_hbox)
 
-	var exit_btn := Button.new()
-	exit_btn.text = "EXIT"
-	exit_btn.add_theme_font_size_override("font_size", 21)
-	exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(exit_btn)
-	exit_btn.pressed.connect(_on_exit_pressed)
-	right_hbox.add_child(exit_btn)
+	_exit_btn = Button.new()
+	_exit_btn.text = "EXIT"
+	_exit_btn.add_theme_font_size_override("font_size", 21)
+	_exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_gold_button_style(_exit_btn)
+	_exit_btn.pressed.connect(_on_exit_pressed)
+	right_hbox.add_child(_exit_btn)
 
-	var restart_btn := Button.new()
-	restart_btn.text = "RESTART"
-	restart_btn.add_theme_font_size_override("font_size", 21)
-	restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(restart_btn)
-	restart_btn.pressed.connect(_on_restart_pressed)
-	right_hbox.add_child(restart_btn)
+	_restart_btn = Button.new()
+	_restart_btn.text = "RESTART"
+	_restart_btn.add_theme_font_size_override("font_size", 21)
+	_restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_gold_button_style(_restart_btn)
+	_restart_btn.pressed.connect(_on_restart_pressed)
+	right_hbox.add_child(_restart_btn)
 
 	# --- Countdown splash (upper-centre, hidden by default) ---
 	# Band 0.15–0.30: "Incoming!" — bold, larger, red
