@@ -124,6 +124,10 @@ func _ready() -> void:
 	_on_infestation_changed(GameState.infestation_level)
 	_on_wave_changed(GameState.current_wave)
 	get_viewport().size_changed.connect(_on_viewport_resized)
+	# Lock the pause button width after the first layout pass so it stays the
+	# same size when the label switches from "▮▮" to the narrower "▶".
+	await get_tree().process_frame
+	_pause_btn.custom_minimum_size = _pause_btn.size
 
 
 func _build_ui() -> void:
