@@ -344,13 +344,9 @@ func _build_ui() -> void:
 
 	_pause_btn = Button.new()
 	_pause_btn.text = "▮▮"
-	_pause_btn.add_theme_font_size_override("font_size", 15)
+	_pause_btn.add_theme_font_size_override("font_size", 21)
 	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_icon_button_style(_pause_btn)
-	# Fix both axes so neither icon state can change the button's footprint.
-	# Width 44 is safely above "▮▮" at 15 px + margins; SIZE_FILL delegates
-	# height to the container so glyph metric differences are irrelevant.
-	_pause_btn.custom_minimum_size  = Vector2(44, 0)
+	_apply_gold_button_style(_pause_btn)
 	_pause_btn.size_flags_vertical  = Control.SIZE_FILL
 	_pause_btn.pressed.connect(_on_pause_btn_pressed)
 	_speed_pause_box.add_child(_pause_btn)
@@ -468,8 +464,9 @@ func _position_speed_btn() -> void:
 	box.anchor_top    = 1.0
 	box.anchor_bottom = 1.0
 	# 400px is well beyond the combined button widths; ALIGNMENT_END right-justifies the
-	# buttons so the speed toggle is always flush with the right screen edge.
-	box.offset_right  = 0
+	# buttons so the speed toggle sits MARGIN pixels from the right screen edge,
+	# matching the margin_right of the top panel that EXIT and RESTART live in.
+	box.offset_right  = -MARGIN
 	box.offset_left   = -400
 
 	if _selector_is_landscape:

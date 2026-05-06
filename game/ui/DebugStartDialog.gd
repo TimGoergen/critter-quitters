@@ -8,13 +8,13 @@ extends CanvasLayer
 
 ## Emitted when the player presses Start. Arena connects here to apply
 ## the values and then begin the first wave countdown.
-signal confirmed(bug_bucks: int, wave_size: int)
+signal confirmed(bug_bucks: int, wave_size: int, static_enemies: bool)
 
 const DEFAULT_BUG_BUCKS: int = 1000
 const DEFAULT_WAVE_SIZE:  int = 10
 
 const PANEL_W: float = 300.0
-const PANEL_H: float = 178.0
+const PANEL_H: float = 216.0
 const PADDING: float = 14.0
 
 const COLOR_BG      := Color(0.04, 0.28, 0.28, 0.95)
@@ -32,9 +32,10 @@ const COLOR_FIELD_BORDER := Color(0.20, 0.55, 0.55, 1.0)
 const UIFonts = preload("res://ui/UIFonts.gd")
 const HUD     = preload("res://ui/HUD.gd")
 
-var _field_bucks: LineEdit = null
-var _field_waves: LineEdit = null
-var _panel_rect:  Rect2    = Rect2()
+var _field_bucks:  LineEdit  = null
+var _field_waves:  LineEdit  = null
+var _check_static: CheckBox  = null
+var _panel_rect:   Rect2     = Rect2()
 
 
 func _ready() -> void:
@@ -91,6 +92,28 @@ func _build_ui() -> void:
 
 	# Wave size row
 	_field_waves = _add_field_row(bg, y, "Enemies per Wave", str(DEFAULT_WAVE_SIZE), 100, 1)
+	y += 36.0
+
+	# Static enemies toggle — when on, each wave spawns 3 of every enemy type for visual review
+	var static_row := HBoxContainer.new()
+	static_row.position            = Vector2(PADDING, y)
+	static_row.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, 28.0)
+	static_row.add_theme_constant_override("separation", 4)
+	bg.add_child(static_row)
+
+	var static_lbl := Label.new()
+	static_lbl.text                  = "Static Enemies (review mode)"
+	static_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	static_lbl.add_theme_font_size_override("font_size", 13)
+	static_lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	static_lbl.add_theme_font_override("font", UIFonts.primary())
+	static_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+	static_row.add_child(static_lbl)
+
+	_check_static = CheckBox.new()
+	_check_static.button_pressed = false
+	_check_static.add_theme_font_override("font", UIFonts.primary())
+	static_row.add_child(_check_static)
 	y += 36.0
 
 	# Divider
@@ -192,7 +215,7 @@ func _on_start_pressed() -> void:
 	var waves := int(_field_waves.text) if _field_waves.text.is_valid_int() else DEFAULT_WAVE_SIZE
 	bucks = maxi(bucks, 0)
 	waves = maxi(waves, 1)
-	confirmed.emit(bucks, waves)
+	confirmed.emit(bucks, waves, _check_static.button_pressed)
 	queue_free()
 
 

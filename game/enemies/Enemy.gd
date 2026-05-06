@@ -85,19 +85,19 @@ enum EnemyType { ANT, GNAT, CRICKET, BEETLE, COCKROACH, RAT }
 ##   infestation   — Infestation Level increase when this pest reaches the exit
 ##   color         — used only for kill-burst particle color
 const STATS := {
-	EnemyType.ANT:       { "hp": 10,  "speed": 2.55,  "infestation": 1,  "bounty": 10, "color": Color(0.85, 0.35, 0.15) },
-	EnemyType.GNAT:      { "hp":  5,  "speed": 5.80,  "infestation": 1,  "bounty": 8,  "color": Color(0.16, 0.14, 0.19) },
-	EnemyType.CRICKET:   { "hp":  8,  "speed": 4.25,  "infestation": 1,  "bounty": 2,  "color": Color(0.35, 0.55, 0.12) },
-	EnemyType.BEETLE:    { "hp": 40,  "speed": 1.275, "infestation": 3,  "bounty": 2,  "color": Color(0.10, 0.22, 0.50) },
-	EnemyType.COCKROACH: { "hp": 80,  "speed": 0.85,  "infestation": 5,  "bounty": 2,  "color": Color(0.48, 0.21, 0.06) },
-	EnemyType.RAT:       { "hp": 200, "speed": 0.595, "infestation": 10, "bounty": 2,  "color": Color(0.56, 0.53, 0.50) },
+	EnemyType.ANT:       { "hp": 10,  "speed": 2.5,  "infestation": 1.0, "bounty": 10, "color": Color(0.85, 0.35, 0.15) },
+	EnemyType.GNAT:      { "hp":  5,  "speed": 5.6,  "infestation": 0.5, "bounty": 5,  "color": Color(0.16, 0.14, 0.19) },
+	EnemyType.CRICKET:   { "hp": 12,  "speed": 3.2,  "infestation": 1.0, "bounty": 15, "color": Color(0.35, 0.55, 0.12) },
+	EnemyType.BEETLE:    { "hp": 25,  "speed": 1.5,  "infestation": 3.0, "bounty": 15, "color": Color(0.10, 0.22, 0.50) },
+	EnemyType.COCKROACH: { "hp": 80,  "speed": 1.0,  "infestation": 5.0, "bounty": 25, "color": Color(0.48, 0.21, 0.06) },
+	EnemyType.RAT:       { "hp": 200, "speed": 0.6,  "infestation": 10.0,"bounty": 50, "color": Color(0.56, 0.53, 0.50) },
 }
 
 # Visual quad size and shadow size vary by type so larger enemies read bigger on screen.
 const VISUAL_QUAD_SIZE: Dictionary = {
-	EnemyType.ANT:       2.10,
+	EnemyType.ANT:       2.0,
 	EnemyType.GNAT:      1.60,
-	EnemyType.CRICKET:   1.90,
+	EnemyType.CRICKET:   1.8,
 	EnemyType.BEETLE:    2.40,
 	EnemyType.COCKROACH: 2.60,
 	EnemyType.RAT:       3.20,
@@ -116,11 +116,17 @@ const SHADOW_PLANE_SIZE: Dictionary = {
 # Constants
 # ---------------------------------------------------------------------------
 
-## Waddle oscillation rate in radians/second.
-const WADDLE_SPEED: float = 24.0
+## Waddle oscillation in radians per cell of travel.
+## Derived so one full waddle cycle equals one animation cycle:
+##   anim cycle = 4 frames / (speed × 3.0 fps-per-speed) = 4/(3×speed) seconds
+##   waddle period = 2π / (WADDLE_RADS_PER_CELL × speed)
+##   setting equal → WADDLE_RADS_PER_CELL = 3π/2
+## Result: left-sway and right-sway each land on a frame transition.
+const WADDLE_RADS_PER_CELL: float = 3.0 * PI / 2.0
 
-## Lateral sway distance in world units.
-const WADDLE_OFFSET: float = 0.03
+## Lateral sway as a fraction of the enemy's visual quad size.
+## Scaled so the gnat's sway matches its original tuned value (~0.03 world units).
+const WADDLE_OFFSET_FRACTION: float = 0.02
 
 ## How close (in world units) the enemy must be to a cell centre before
 ## it is considered to have arrived and advances to the next cell.
@@ -185,13 +191,17 @@ var _visual: MeshInstance3D = null
 var _shadow_mi: MeshInstance3D = null
 
 # Accumulated time driving the waddle oscillation.
-var _waddle_time: float = 0.0
+var _waddle_time:   float = 0.0
+# Effective radians/second — WADDLE_RADS_PER_CELL × speed, set in initialize().
+var _waddle_speed:  float = WADDLE_RADS_PER_CELL
+# Effective sway amplitude in world units — WADDLE_OFFSET_FRACTION × visual size, set in initialize().
+var _waddle_offset: float = WADDLE_OFFSET_FRACTION
 
 # Per-instance stats set from STATS at initialize() time.
 var _move_speed: float = 0.0
 var _max_hp: float = 0.0
 var _current_hp: float = 0.0
-var _infestation_damage: int = 0
+var _infestation_damage: float = 0.0
 
 # Set to true when _die() is called; stops movement and prevents re-entry.
 var _is_dead: bool = false
@@ -241,6 +251,8 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 	var stats          = STATS[enemy_type]
 	_move_speed        = stats["speed"]
 	_base_move_speed   = _move_speed
+	_waddle_speed      = WADDLE_RADS_PER_CELL * _move_speed
+	_waddle_offset     = WADDLE_OFFSET_FRACTION * VISUAL_QUAD_SIZE[enemy_type] * Grid.CELL_SIZE
 	_max_hp            = wave * 1.02 + stats["hp"]
 	_current_hp        = _max_hp
 	_infestation_damage = stats["infestation"]
@@ -314,7 +326,7 @@ func get_hp_fraction() -> float:
 
 
 ## Returns the Infestation Level damage this pest deals on exit.
-func get_infestation_damage() -> int:
+func get_infestation_damage() -> float:
 	return _infestation_damage
 
 
@@ -396,7 +408,7 @@ func _process(delta: float) -> void:
 
 	if _visual != null:
 		_waddle_time += delta
-		var sway       := sin(_waddle_time * WADDLE_SPEED) * WADDLE_OFFSET
+		var sway       := sin(_waddle_time * _waddle_speed) * _waddle_offset
 		var travel_dir := _target_cell - _current_cell
 		if travel_dir.x != 0:
 			_visual.position.x = 0.0
@@ -565,7 +577,11 @@ func _spawn_hp_bar() -> void:
 	_hp_bar_width = VISUAL_QUAD_SIZE[_enemy_type] * Grid.CELL_SIZE * HP_BAR_WIDTH_FRACTION
 
 	_hp_bar            = Node3D.new()
-	_hp_bar.position.y = 0.08   # float above the sprite (enemy root is at world y = 0.25)
+	_hp_bar.position.y = 0.08   # small Y lift keeps it above the floor in the depth buffer
+	# In the top-down orthographic view, screen-up = world -Z.
+	# Offset by half the visual quad so the bar sits just above the sprite edge
+	# regardless of whether the enemy is moving horizontally or vertically.
+	_hp_bar.position.z = -(VISUAL_QUAD_SIZE[_enemy_type] * Grid.CELL_SIZE * 0.5 + 0.15)
 	_hp_bar.visible    = false  # only visible when HP drops below maximum
 	add_child(_hp_bar)
 

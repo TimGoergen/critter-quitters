@@ -1,13 +1,15 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <!-- 4-limbed mammal gait: left-front + right-rear extended forward; others back -->
-  <!-- Left-front leg -->
-  <path d="M 44 46 Q 30 34 20 24" stroke="#706860" stroke-width="4.0" stroke-linecap="round" fill="none"/>
-  <!-- Left-back leg -->
-  <path d="M 40 104 Q 28 116 18 124" stroke="#706860" stroke-width="4.0" stroke-linecap="round" fill="none"/>
-  <!-- Right-front leg (back position) -->
-  <path d="M 84 46 Q 96 56 104 66" stroke="#706860" stroke-width="4.0" stroke-linecap="round" fill="none"/>
-  <!-- Right-back leg (forward position) -->
-  <path d="M 88 104 Q 102 94 112 84" stroke="#706860" stroke-width="4.0" stroke-linecap="round" fill="none"/>
+  <!-- 4-limbed mammal gait: left-front + right-rear forward; right-front + left-rear back -->
+  <!-- Start points are inside the body ellipse so the body covers the root;
+       only the tip past the body edge is visible, giving a barely-peeking-out look. -->
+  <!-- Left-front leg (forward: angled toward head) -->
+  <path d="M 50 54 Q 44 51 38 48" stroke="#706860" stroke-width="8.0" stroke-linecap="round" fill="none"/>
+  <!-- Left-back leg (back: angled toward tail) -->
+  <path d="M 50 100 Q 44 104 38 108" stroke="#706860" stroke-width="8.0" stroke-linecap="round" fill="none"/>
+  <!-- Right-front leg (back: angled toward tail) -->
+  <path d="M 78 54 Q 84 57 90 60" stroke="#706860" stroke-width="8.0" stroke-linecap="round" fill="none"/>
+  <!-- Right-back leg (forward: angled toward head) -->
+  <path d="M 78 100 Q 84 96 90 92" stroke="#706860" stroke-width="8.0" stroke-linecap="round" fill="none"/>
 
   <!-- Tail: thin curved line from base of body, with slight left-wiggle this frame -->
   <path d="M 64 116 Q 76 122 80 128" stroke="#C09888" stroke-width="2.0" stroke-linecap="round" fill="none"/>
@@ -20,9 +22,6 @@
   <ellipse cx="60" cy="85" rx="16" ry="4" fill="#706860" opacity="0.30"/>
   <ellipse cx="66" cy="100" rx="14" ry="3.5" fill="#706860" opacity="0.25"/>
 
-  <!-- Body specular highlight -->
-  <ellipse cx="50" cy="62" rx="10" ry="6" fill="white" opacity="0.22"/>
-
   <!-- Head: large and round, slightly distinct from body -->
   <circle cx="64" cy="28" r="22" fill="#908880"/>
 
@@ -33,11 +32,11 @@
   <ellipse cx="64" cy="11" rx="6" ry="5" fill="#E8A090"/>
   <circle cx="64" cy="8" r="2.5" fill="#C06878"/>
 
-  <!-- Ears: pink ovals visible from above, at sides of head -->
-  <ellipse cx="44" cy="26" rx="9" ry="8" fill="#C87080"/>
-  <ellipse cx="84" cy="26" rx="9" ry="8" fill="#C87080"/>
-  <ellipse cx="44" cy="26" rx="5" ry="4.5" fill="#E8A0A8" opacity="0.60"/>
-  <ellipse cx="84" cy="26" rx="5" ry="4.5" fill="#E8A0A8" opacity="0.60"/>
+  <!-- Ears: flat ovals angled backwards (long axis tilted toward the body), darker inner spot -->
+  <ellipse cx="44" cy="26" rx="10" ry="5" fill="#C87080" transform="rotate(-35, 44, 26)"/>
+  <ellipse cx="84" cy="26" rx="10" ry="5" fill="#C87080" transform="rotate(35, 84, 26)"/>
+  <ellipse cx="44" cy="26" rx="5" ry="2.5" fill="#884050" transform="rotate(-35, 44, 26)"/>
+  <ellipse cx="84" cy="26" rx="5" ry="2.5" fill="#884050" transform="rotate(35, 84, 26)"/>
 
   <!-- Eyes: very small, dark, beady -->
   <circle cx="56" cy="26" r="3" fill="#201818"/>

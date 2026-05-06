@@ -1,9 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
-  <!-- Transition: legs shifting from frame 3 back toward frame 1 positions -->
-  <path d="M 44 46 Q 32 52 22 58" stroke="#706860" stroke-width="4.0" stroke-linecap="round" fill="none"/>
-  <path d="M 40 104 Q 28 114 18 122" stroke="#706860" stroke-width="4.0" stroke-linecap="round" fill="none"/>
-  <path d="M 84 46 Q 96 52 106 58" stroke="#706860" stroke-width="4.0" stroke-linecap="round" fill="none"/>
-  <path d="M 88 104 Q 100 114 110 122" stroke="#706860" stroke-width="4.0" stroke-linecap="round" fill="none"/>
+  <!-- Transition: legs returning from frame 3 toward frame 1; slight lean toward diagonal A -->
+  <!-- Left-front leg (beginning to angle forward) -->
+  <path d="M 50 54 Q 44 52 38 50" stroke="#706860" stroke-width="8.0" stroke-linecap="round" fill="none"/>
+  <!-- Left-back leg (slight back lean) -->
+  <path d="M 50 100 Q 44 103 38 106" stroke="#706860" stroke-width="8.0" stroke-linecap="round" fill="none"/>
+  <!-- Right-front leg (slight back lean) -->
+  <path d="M 78 54 Q 84 56 90 58" stroke="#706860" stroke-width="8.0" stroke-linecap="round" fill="none"/>
+  <!-- Right-back leg (beginning to angle forward) -->
+  <path d="M 78 100 Q 84 97 90 95" stroke="#706860" stroke-width="8.0" stroke-linecap="round" fill="none"/>
 
   <!-- Tail: slight right-wiggle returning to center -->
   <path d="M 64 116 Q 70 122 74 128" stroke="#C09888" stroke-width="2.0" stroke-linecap="round" fill="none"/>
@@ -13,8 +17,6 @@
   <ellipse cx="64" cy="68" rx="18" ry="5" fill="#706860" opacity="0.35"/>
   <ellipse cx="60" cy="85" rx="16" ry="4" fill="#706860" opacity="0.30"/>
   <ellipse cx="66" cy="100" rx="14" ry="3.5" fill="#706860" opacity="0.25"/>
-  <ellipse cx="50" cy="62" rx="10" ry="6" fill="white" opacity="0.22"/>
-
   <!-- Head -->
   <circle cx="64" cy="28" r="22" fill="#908880"/>
   <ellipse cx="52" cy="18" rx="9" ry="5.5" fill="white" opacity="0.22"/>
@@ -24,10 +26,10 @@
   <circle cx="64" cy="8" r="2.5" fill="#C06878"/>
 
   <!-- Ears -->
-  <ellipse cx="44" cy="26" rx="9" ry="8" fill="#C87080"/>
-  <ellipse cx="84" cy="26" rx="9" ry="8" fill="#C87080"/>
-  <ellipse cx="44" cy="26" rx="5" ry="4.5" fill="#E8A0A8" opacity="0.60"/>
-  <ellipse cx="84" cy="26" rx="5" ry="4.5" fill="#E8A0A8" opacity="0.60"/>
+  <ellipse cx="44" cy="26" rx="10" ry="5" fill="#C87080" transform="rotate(-35, 44, 26)"/>
+  <ellipse cx="84" cy="26" rx="10" ry="5" fill="#C87080" transform="rotate(35, 84, 26)"/>
+  <ellipse cx="44" cy="26" rx="5" ry="2.5" fill="#884050" transform="rotate(-35, 44, 26)"/>
+  <ellipse cx="84" cy="26" rx="5" ry="2.5" fill="#884050" transform="rotate(35, 84, 26)"/>
 
   <!-- Eyes -->
   <circle cx="56" cy="26" r="3" fill="#201818"/>
