@@ -29,6 +29,13 @@ static func header() -> Font:
 static func flavor() -> Font:
 	return _load(_FLAVOR_PATH)
 
+static func flavor_bold() -> Font:
+	# Montserrat has no bold file, so synthesize via FontVariation embolden.
+	var fv := FontVariation.new()
+	fv.base_font = _load(_FLAVOR_PATH)
+	fv.variation_embolden = 0.8
+	return fv
+
 static func flavor_bold_italic() -> Font:
 	# Montserrat has no bold-italic file, so synthesize both effects via
 	# FontVariation: embolden thickens strokes; variation_transform skews
