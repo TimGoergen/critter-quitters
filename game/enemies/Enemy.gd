@@ -90,7 +90,7 @@ const STATS := {
 	EnemyType.CRICKET:   { "hp": 12,  "speed": 3.2,  "infestation": 1.0, "bounty": 15, "color": Color(0.35, 0.55, 0.12) },
 	EnemyType.BEETLE:    { "hp": 25,  "speed": 1.5,  "infestation": 3.0, "bounty": 15, "color": Color(0.10, 0.22, 0.50) },
 	EnemyType.COCKROACH: { "hp": 80,  "speed": 1.0,  "infestation": 5.0, "bounty": 25, "color": Color(0.48, 0.21, 0.06) },
-	EnemyType.RAT:       { "hp": 200, "speed": 0.6,  "infestation": 10.0,"bounty": 50, "color": Color(0.56, 0.53, 0.50) },
+	EnemyType.RAT:       { "hp": 200, "speed": 0.6,  "infestation": 10.0,"bounty": 50, "color": Color(0.42, 0.41, 0.40) },
 }
 
 # Visual quad size and shadow size vary by type so larger enemies read bigger on screen.
@@ -135,13 +135,17 @@ const ARRIVAL_THRESHOLD: float = 0.05
 ## Duration of the death flash in seconds.
 const DEATH_FLASH_DURATION: float = 0.12
 
+## Albedo multiplier applied to all enemy sprites so they read clearly against a dark background.
+## Values above 1.0 are valid in HDR (Forward+) and lift mid-tone SVG colors toward full white.
+const SPRITE_BRIGHTNESS: float = 2.2
+
 # HP bar — colors match the infestation level bar (COLOR_BAR_BG / COLOR_BAR_FILL in HUD.gd).
 const HP_BAR_BG_COLOR   := Color(0.28, 0.28, 0.28, 1.0)
 const HP_BAR_FILL_COLOR := Color(0.85, 0.22, 0.22, 1.0)
 ## Bar width as a fraction of the enemy's visual quad width.
 const HP_BAR_WIDTH_FRACTION: float = 0.65
 ## Bar height in world units (CELL_SIZE = 1.0, so this is a thin stripe).
-const HP_BAR_HEIGHT: float = 0.075
+const HP_BAR_HEIGHT: float = 0.3
 
 ## Speed multiplier applied while at least one Glue Board is in range.
 ## 0.285 = 71.5% slowdown (up 30% from the original 55% slowdown at 0.45).
@@ -315,9 +319,9 @@ func _flash_hit(color: Color) -> void:
 		_hit_tween.kill()
 	var mat: StandardMaterial3D = _visual.material_override
 	_hit_tween = create_tween()
-	# Overbright tint in the trap's theme color, then return to neutral white.
+	# Overbright tint in the trap's theme color, then return to the sprite's boosted base brightness.
 	_hit_tween.tween_property(mat, "albedo_color", Color(color.r * 4.0, color.g * 4.0, color.b * 4.0, 1.0), 0.04)
-	_hit_tween.tween_property(mat, "albedo_color", Color.WHITE, 0.08)
+	_hit_tween.tween_property(mat, "albedo_color", Color(SPRITE_BRIGHTNESS, SPRITE_BRIGHTNESS, SPRITE_BRIGHTNESS, 1.0), 0.08)
 
 
 ## Returns current HP as a fraction of max HP (0.0–1.0).
@@ -558,7 +562,7 @@ func _spawn_visual(color: Color) -> void:
 	_base_color = color
 
 	var material                  := StandardMaterial3D.new()
-	material.albedo_color          = Color.WHITE   # do not tint — SVG colors are baked in
+	material.albedo_color          = Color(SPRITE_BRIGHTNESS, SPRITE_BRIGHTNESS, SPRITE_BRIGHTNESS, 1.0)
 	material.albedo_texture        = _walk_frames[0]
 	material.shading_mode          = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency          = BaseMaterial3D.TRANSPARENCY_ALPHA

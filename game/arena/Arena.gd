@@ -218,8 +218,9 @@ func _ready() -> void:
 	_pathfinder.path_updated.connect(_on_path_updated)
 
 	# Spawn the cave image at the entrance and exit gaps.
-	_spawn_cave_marker(_spawn_cell)
-	_spawn_cave_marker(_despawn_cell)
+	# Entrance is rotated 180° relative to the exit so the image reads correctly for each side.
+	_spawn_cave_marker(_spawn_cell,   90.0)
+	_spawn_cave_marker(_despawn_cell, -90.0)
 
 	_setup_grid_highlight()
 	_setup_selected_trap_outline()
@@ -643,9 +644,19 @@ func _on_path_updated(new_path: Array[Vector2i]) -> void:
 	var best_exit: Vector2i = new_path.back()
 	for enemy in _active_enemies:
 		var current: Vector2i = enemy.get_current_cell()
-		# If the enemy is still in the outside approach cell, A* must start
-		# from the entrance (first in-bounds cell) to stay within the grid.
-		var from: Vector2i = current if _grid.is_in_bounds(current) else GameState.entrance_cell
+		var from: Vector2i
+		if _grid.is_in_bounds(current):
+			from = current
+		else:
+			# Enemy is still approaching from outside. Use the cell it is actually
+			# heading toward (its entrance-gap row) rather than GameState.entrance_cell,
+			# which is always row 15 and may have been trapped. Routing from the wrong
+			# row produces a grid_path that skips the enemy's real target, causing
+			# update_path() to fall back to new_path[1] — which can be a trap cell.
+			var entry: Vector2i = enemy.get_target_cell()
+			if not _grid.is_in_bounds(entry) or not _grid.is_passable(entry):
+				continue  # entrance cell is blocked; skip until the next recalculation
+			from = entry
 		var grid_path := _pathfinder.find_path_from(from, best_exit)
 		if grid_path.is_empty():
 			continue
@@ -1698,10 +1709,10 @@ func _spawn_outer_border_ring() -> void:
 
 
 ## Spawns the cave entrance/exit image at the gap in the border wall.
-## The image is laid flat in the XZ plane and rotated −90° around Y so the
-## triangular opening apex (image top) faces world +X — the direction enemies travel.
+## rotation_y controls orientation: −90° for the exit (apex faces world +X),
+## +90° for the entrance (image flipped 180° so it reads correctly from that side).
 ## center_cell is the outside spawn/despawn cell adjacent to the gap.
-func _spawn_cave_marker(center_cell: Vector2i) -> void:
+func _spawn_cave_marker(center_cell: Vector2i, rotation_y: float) -> void:
 	var texture := load("res://assets/arena/enter_exit_cave.png") as Texture2D
 
 	var plane    := PlaneMesh.new()
@@ -1722,7 +1733,7 @@ func _spawn_cave_marker(center_cell: Vector2i) -> void:
 	# center_cell is the outer border ring cell — position directly there so the
 	# cave aligns with the outer wall. The inner-wall gap cells remain arena background.
 	mi.position         = Vector3(world.x, 0.02, world.z)
-	mi.rotation_degrees = Vector3(0.0, -90.0, 0.0)
+	mi.rotation_degrees = Vector3(0.0, rotation_y, 0.0)
 
 	add_child(mi)
 
