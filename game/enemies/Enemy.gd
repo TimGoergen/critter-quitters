@@ -135,9 +135,17 @@ const ARRIVAL_THRESHOLD: float = 0.05
 ## Duration of the death flash in seconds.
 const DEATH_FLASH_DURATION: float = 0.12
 
-## Albedo multiplier applied to all enemy sprites so they read clearly against a dark background.
-## Values above 1.0 are valid in HDR (Forward+) and lift mid-tone SVG colors toward full white.
-const SPRITE_BRIGHTNESS: float = 2.2
+## Albedo multiplier applied to enemy sprites to lift them against a dark background.
+## Values above 1.0 boost saturation and brightness. The rat stays at 1.0 because its
+## identity is a muted gray — the boost would wash it to white.
+const SPRITE_BRIGHTNESS: Dictionary = {
+	EnemyType.ANT:       2.2,
+	EnemyType.GNAT:      2.2,
+	EnemyType.CRICKET:   2.2,
+	EnemyType.BEETLE:    2.2,
+	EnemyType.COCKROACH: 2.2,
+	EnemyType.RAT:       1.0,
+}
 
 # HP bar — colors match the infestation level bar (COLOR_BAR_BG / COLOR_BAR_FILL in HUD.gd).
 const HP_BAR_BG_COLOR   := Color(0.28, 0.28, 0.28, 1.0)
@@ -229,6 +237,9 @@ var _visual_material: StandardMaterial3D = null
 # Base color for this enemy type — stored so the hit flash can return to it.
 var _base_color: Color = Color.WHITE
 
+# Per-instance copy of SPRITE_BRIGHTNESS for this enemy type — set in initialize().
+var _sprite_brightness: float = 2.2
+
 # Tracks the active hit-flash tween so a second hit cancels the first.
 var _hit_tween: Tween = null
 
@@ -270,7 +281,8 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 	global_position   = _cell_to_world(_current_cell)
 	global_position.y = 0.25
 
-	_base_color = stats["color"]
+	_base_color        = stats["color"]
+	_sprite_brightness = SPRITE_BRIGHTNESS[enemy_type]
 	_spawn_visual(_base_color)
 	_spawn_shadow()
 	_spawn_hp_bar()
@@ -321,7 +333,7 @@ func _flash_hit(color: Color) -> void:
 	_hit_tween = create_tween()
 	# Overbright tint in the trap's theme color, then return to the sprite's boosted base brightness.
 	_hit_tween.tween_property(mat, "albedo_color", Color(color.r * 4.0, color.g * 4.0, color.b * 4.0, 1.0), 0.04)
-	_hit_tween.tween_property(mat, "albedo_color", Color(SPRITE_BRIGHTNESS, SPRITE_BRIGHTNESS, SPRITE_BRIGHTNESS, 1.0), 0.08)
+	_hit_tween.tween_property(mat, "albedo_color", Color(_sprite_brightness, _sprite_brightness, _sprite_brightness, 1.0), 0.08)
 
 
 ## Returns current HP as a fraction of max HP (0.0–1.0).
@@ -562,7 +574,7 @@ func _spawn_visual(color: Color) -> void:
 	_base_color = color
 
 	var material                  := StandardMaterial3D.new()
-	material.albedo_color          = Color(SPRITE_BRIGHTNESS, SPRITE_BRIGHTNESS, SPRITE_BRIGHTNESS, 1.0)
+	material.albedo_color          = Color(_sprite_brightness, _sprite_brightness, _sprite_brightness, 1.0)
 	material.albedo_texture        = _walk_frames[0]
 	material.shading_mode          = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency          = BaseMaterial3D.TRANSPARENCY_ALPHA

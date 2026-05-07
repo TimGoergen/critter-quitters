@@ -1,25 +1,27 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <!-- Opposite diagonal: right-front + left-rear forward; left-front + right-rear back -->
   <!-- Right-front leg (forward: angled toward head) -->
-  <path d="M 78 54 Q 84 51 90 48" stroke="#706860" stroke-width="8.0" stroke-linecap="round" fill="none"/>
+  <path d="M 78 54 Q 84 51 90 48" stroke="#606060" stroke-width="8.0" stroke-linecap="round" fill="none"/>
   <!-- Right-back leg (back: angled toward tail) -->
-  <path d="M 78 100 Q 84 104 90 108" stroke="#706860" stroke-width="8.0" stroke-linecap="round" fill="none"/>
+  <path d="M 78 100 Q 84 104 90 108" stroke="#606060" stroke-width="8.0" stroke-linecap="round" fill="none"/>
   <!-- Left-front leg (back: angled toward tail) -->
-  <path d="M 50 54 Q 44 57 38 60" stroke="#706860" stroke-width="8.0" stroke-linecap="round" fill="none"/>
+  <path d="M 50 54 Q 44 57 38 60" stroke="#606060" stroke-width="8.0" stroke-linecap="round" fill="none"/>
   <!-- Left-back leg (forward: angled toward head) -->
-  <path d="M 50 100 Q 44 96 38 92" stroke="#706860" stroke-width="8.0" stroke-linecap="round" fill="none"/>
+  <path d="M 50 100 Q 44 96 38 92" stroke="#606060" stroke-width="8.0" stroke-linecap="round" fill="none"/>
 
   <!-- Tail: slight right-wiggle this frame -->
   <path d="M 64 116 Q 52 122 48 128" stroke="#C09888" stroke-width="2.0" stroke-linecap="round" fill="none"/>
 
   <!-- Body -->
-  <ellipse cx="64" cy="78" rx="28" ry="38" fill="#908880"/>
-  <ellipse cx="64" cy="68" rx="18" ry="5" fill="#706860" opacity="0.35"/>
-  <ellipse cx="60" cy="85" rx="16" ry="4" fill="#706860" opacity="0.30"/>
-  <ellipse cx="66" cy="100" rx="14" ry="3.5" fill="#706860" opacity="0.25"/>
+  <ellipse cx="64" cy="78" rx="28" ry="38" fill="#8C8C8C"/>
+  <ellipse cx="64" cy="68" rx="18" ry="5" fill="#3C3C3C" opacity="0.50"/>
+  <ellipse cx="60" cy="85" rx="16" ry="4" fill="#3C3C3C" opacity="0.45"/>
+  <ellipse cx="66" cy="100" rx="14" ry="3.5" fill="#3C3C3C" opacity="0.40"/>
   <!-- Head -->
-  <circle cx="64" cy="28" r="22" fill="#908880"/>
-  <ellipse cx="52" cy="18" rx="9" ry="5.5" fill="white" opacity="0.22"/>
+  <circle cx="64" cy="28" r="22" fill="#8C8C8C"/>
+  <ellipse cx="52" cy="18" rx="9" ry="5.5" fill="white" opacity="0.42"/>
+  <!-- Body back highlight: lighter upper-back suggesting top-down light -->
+  <ellipse cx="64" cy="66" rx="18" ry="10" fill="white" opacity="0.16"/>
 
   <!-- Snout -->
   <ellipse cx="64" cy="11" rx="6" ry="5" fill="#E8A090"/>
