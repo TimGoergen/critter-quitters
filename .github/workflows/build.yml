@@ -9,6 +9,9 @@
 #   ANDROID_KEYSTORE_PASS    — keystore and key password
 #
 # To update the Godot version: change GODOT_VERSION below and clear the Actions cache.
+# NOTE: We use the standard (non-Mono) Godot binary even though the editor is Mono.
+#       The Mono binary blocks Android export with "C#/.NET is experimental"; the game
+#       is pure GDScript so the standard binary exports identically and avoids that check.
 
 name: Build & Deploy
 
@@ -52,22 +55,22 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.local/bin/godot
+            ~/.local/godot-ci/
             ~/.local/share/godot/export_templates/
-          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_CHANNEL }}-mono
+          # Bump this suffix if the cached state ever becomes corrupt
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_CHANNEL }}-v4
 
       - name: Download Godot Linux headless binary
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           BASE="https://github.com/godotengine/godot/releases/download"
           VER="${GODOT_VERSION}-${GODOT_CHANNEL}"
-          # Godot 4.5+ uses underscores in the arch suffix (linux_x86_64 not linux.x86_64)
-          ZIP="Godot_v${VER}_mono_linux_x86_64.zip"
-          wget "${BASE}/${VER}/${ZIP}" -O /tmp/godot.zip
+          ZIP="Godot_v${VER}_mono_linux.x86_64.zip"
+          wget -q "${BASE}/${VER}/${ZIP}" -O /tmp/godot.zip
           mkdir -p ~/.local/bin
           unzip -q /tmp/godot.zip -d /tmp/godot_extract/
-          # Binary inside the zip uses the same underscore naming
-          mv /tmp/godot_extract/Godot_v*_x86_64 ~/.local/bin/godot
+          # The zip contains one binary named with the full version string; rename for convenience
+          mv /tmp/godot_extract/Godot_v*.x86_64 ~/.local/bin/godot
           chmod +x ~/.local/bin/godot
 
       - name: Download Godot export templates
@@ -75,21 +78,29 @@ jobs:
         run: |
           BASE="https://github.com/godotengine/godot/releases/download"
           VER="${GODOT_VERSION}-${GODOT_CHANNEL}"
-          TPZ="Godot_v${VER}_mono_export_templates.tpz"
+          TPZ="Godot_v${VER}_export_templates.tpz"
           wget -q "${BASE}/${VER}/${TPZ}" -O /tmp/templates.tpz
           # The directory name must exactly match the version string the Godot editor uses
-          TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_CHANNEL}.mono"
+          TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_CHANNEL}"
           mkdir -p "$TEMPLATES_DIR"
           # .tpz is a renamed zip; templates live inside a "templates/" subdirectory within it
           unzip -q /tmp/templates.tpz -d /tmp/templates_extract/
           cp -r /tmp/templates_extract/templates/* "$TEMPLATES_DIR/"
 
-      - name: Add Godot to PATH
-        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
       - name: Decode Android release keystore
+        env:
+          # Pass via env var rather than inline expansion to avoid shell-escaping issues
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > build/android_release.keystore
+          mkdir -p build
+          python3 -c "
+          import base64, os
+          data = os.environ['KEYSTORE_B64']
+          # Strip BOM (﻿) that PowerShell adds, plus any other non-ASCII or whitespace
+          data = data.encode('ascii', errors='ignore').decode()
+          data = ''.join(data.split())
+          open('build/android_release.keystore', 'wb').write(base64.b64decode(data))
+          "
 
       - name: Inject Android keystore password into export presets
         # Uses Python to avoid shell-escaping problems with special characters in the password
@@ -108,16 +119,47 @@ jobs:
           open(path, "w").write(content)
           EOF
 
+      - name: Diagnose template and SDK environment
+        run: |
+          echo "=== Export templates dir ==="
+          ls -la ~/.local/share/godot/export_templates/ 2>/dev/null || echo "MISSING: export_templates dir"
+          echo "=== 4.5.1.stable templates ==="
+          ls -la ~/.local/share/godot/export_templates/4.5.1.stable/ 2>/dev/null || echo "MISSING: 4.5.1.stable dir"
+          echo "=== Android SDK build-tools ==="
+          ls /usr/local/lib/android/sdk/build-tools/ 2>/dev/null || echo "MISSING: build-tools"
+          echo "=== JAVA_HOME ==="
+          echo "$JAVA_HOME"
+
+      - name: Configure Godot editor settings
+        # Godot reads this file for the Android SDK path; the runner has the SDK pre-installed
+        run: |
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-4.5.tres << 'SETTINGS'
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "/usr/local/lib/android/sdk"
+          SETTINGS
+          echo "=== Editor settings written ==="
+          cat ~/.config/godot/editor_settings-4.5.tres
+
       - name: Create output directory
         run: mkdir -p dist
 
       - name: Export — Windows Desktop
         working-directory: game
-        run: godot --headless --export-release "Windows Desktop" "../dist/critter_quitters_win.exe"
+        run: |
+          GODOT="$HOME/.local/godot-ci/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          "$GODOT" --headless --export-release "Windows Desktop" "../dist/critter_quitters_win.exe"
 
       - name: Export — Android APK
         working-directory: game
-        run: godot --headless --export-release "Android" "../dist/critter_quitters.apk"
+        env:
+          # ubuntu-latest has Android SDK at this path; Godot uses it for apksigner
+          ANDROID_HOME: /usr/local/lib/android/sdk
+        run: |
+          GODOT="$HOME/.local/godot-ci/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
+          "$GODOT" --headless --verbose --export-release "Android" "../dist/critter_quitters.apk"
 
       - name: Stamp version into filenames
         run: |

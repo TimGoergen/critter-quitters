@@ -1,0 +1,15 @@
+The Play/Pause button should have equal height for all values that it displays, and the gamespeed button should ahve the same height.  
+
+the gamespeed button is being improved to better communicate with the player what would happen if they click it.  When the game starts, teh button defaults to showing a single triangle pointed to the right, left aligned, equal in height to the standard.
+  right-aligned on the button will be the current gamespeed multiplier, communicated as "1X" or "2X" at the same height as all other text on this button.  If the user clicks this button, the gamespeed will
+  toggle to the other speed option: the game starts at 1x speed, and each click of the toggle changes it back and forth between 1x and 2x.  when the gamespeed is 1, then the icon shape will be two triangles
+  that have no horizontal space between them.
+  
+  
+the gamespeed button needs to change.  the multiplier label should be left aligned on the button, and the triangle-based icon should be right aligned.  when the game is in 1x speed, then icon will be two triangular shapes pointed to the right, with no space between them, which is a visual indicator that when the button is clicked the game will change to 2x speed.  when the game is in 2x speed, the icon will be a single triangle pointed to the right, which is a visual indicator that when the button is clicked the game will change to 1x speed.
+
+
+i want to build a repeatable process that will compile the game project into an executable that can be played on windows, and also into an apk file or some other option for deploying the game to my phone.  i also want to automate the process of pushing the game to my phone.
+
+
+bz4mU9t8Em86gkrJztFb
