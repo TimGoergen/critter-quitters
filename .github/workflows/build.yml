@@ -178,6 +178,12 @@ jobs:
           ANDROID_HOME: /usr/local/lib/android/sdk
           KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
         run: |
+          # The ubuntu-latest runner auto-generates ~/.android/debug.keystore. Godot detects
+          # this at runtime and sets the debug keystore path internally, then fails with a
+          # blank error when debug_keystore_user/pass are unset (Godot 4.5 issue #109551).
+          # Removing it forces Godot to see an empty path, satisfying the "none set" branch.
+          rm -f ~/.android/debug.keystore
+
           # Disable Godot's built-in signing so the export proceeds past the config check
           python3 -c "
           path = 'export_presets.cfg'
