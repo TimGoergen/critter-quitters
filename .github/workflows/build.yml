@@ -20,7 +20,7 @@ name: Build & Deploy
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'feature/**']
   workflow_dispatch:
 
 env:
@@ -245,6 +245,7 @@ jobs:
   windows-installer:
     name: Windows Installer
     needs: export
+    if: github.ref == 'refs/heads/main'
     runs-on: windows-latest
 
     steps:
@@ -286,6 +287,7 @@ jobs:
   release:
     name: Publish Release
     needs: [export, windows-installer]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write   # required to create releases and upload assets
