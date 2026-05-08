@@ -259,11 +259,13 @@ jobs:
           $sha     = "${{ needs.export.outputs.sha }}"
           $version = "0.0.$sha"
           $srcExe  = (Get-ChildItem "dist\critter_quitters_*_win.exe" | Select-Object -First 1).FullName
+          # ISCC resolves OutputDir relative to the .iss file (build\), so pass an absolute path.
+          $outputDir = (Resolve-Path "dist").Path
 
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
             "/DAppVersion=$version" `
             "/DSourceExe=$srcExe" `
-            "/DOutputDir=dist" `
+            "/DOutputDir=$outputDir" `
             "/DOutputFilename=critter_quitters_setup_$sha" `
             "build\setup.iss"
 
