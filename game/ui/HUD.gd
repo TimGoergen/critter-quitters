@@ -402,7 +402,7 @@ func _build_ui() -> void:
 	_speed_mult_lbl.offset_left          = 12.0
 	_speed_mult_lbl.offset_right         = -12.0
 	_speed_mult_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_speed_mult_lbl.add_theme_font_size_override("font_size", 21)
+	_speed_mult_lbl.add_theme_font_size_override("font_size", 24)
 	_speed_mult_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
 	_speed_btn.add_child(_speed_mult_lbl)
 
@@ -419,7 +419,7 @@ func _build_ui() -> void:
 	_speed_icon_lbl.offset_left          = 12.0
 	_speed_icon_lbl.offset_right         = -12.0
 	_speed_icon_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_speed_icon_lbl.add_theme_font_size_override("font_size", 21)
+	_speed_icon_lbl.add_theme_font_size_override("font_size", 24)
 	_speed_icon_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
 	_speed_btn.add_child(_speed_icon_lbl)
 
@@ -1065,7 +1065,7 @@ class _PauseBarIcon extends Control:
 
 	func _draw() -> void:
 		var bar_w := size.x * 0.13
-		var gap   := size.x * 0.14
+		var gap   := size.x * 0.091  # 0.14 × 0.65 — reduced by 35%
 		# Use the font-derived cap height when available so bars visually match the
 		# ▶ / ▶▶ characters on the speed button; fall back to a size.y fraction otherwise.
 		var bar_h := target_height if target_height > 0.0 else size.y * 0.52
