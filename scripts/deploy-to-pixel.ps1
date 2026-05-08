@@ -12,11 +12,9 @@
 # Usage:
 #   .\deploy-to-pixel.ps1                     # installs the latest release
 #   .\deploy-to-pixel.ps1 -Tag build-abc1234  # installs a specific build tag
-#   .\deploy-to-pixel.ps1 -Device 192.168.x.x:PORT  # target a specific device
 
 param(
-    [string]$Tag    = "",
-    [string]$Device = ""   # ADB serial (e.g. 192.168.86.34:12345); required when multiple devices are connected
+    [string]$Tag = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -83,21 +81,9 @@ if (-not $DeviceLines) {
     exit 1
 }
 
-# If multiple devices are connected, require the caller to specify one.
-$Serials = @($DeviceLines | ForEach-Object { ($_ -split '\s+')[0] })
-if ($Serials.Count -gt 1 -and $Device -eq "") {
-    Remove-Item $TmpDir -Recurse -Force
-    Write-Host ""
-    Write-Host "Multiple ADB devices found - specify one with -Device:"
-    $Serials | ForEach-Object { Write-Host "  $_" }
-    Write-Host ""
-    Write-Host "Example:  .\deploy-to-pixel.ps1 -Device $($Serials[0])"
-    exit 1
-}
-
-$DeviceFlag  = if ($Device -ne "") { @("-s", $Device) } else { @() }
-$DeviceLabel = if ($Device -ne "") { $Device } else { $Serials[0] }
-Write-Host "ADB device: $DeviceLabel"
+$Serial = @($DeviceLines | ForEach-Object { ($_ -split '\s+')[0] })[0]
+Write-Host "ADB device: $Serial"
+$DeviceFlag = @("-s", $Serial)
 
 # --- Install APK -----------------------------------------------------------
 Write-Host "Installing $($ApkFile.Name)..."
