@@ -89,7 +89,9 @@ jobs:
 
       - name: Decode Android release keystore
         run: |
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > build/android_release.keystore
+          mkdir -p build
+          # tr strips any \r\n that Windows/PowerShell may have introduced into the secret value
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | tr -d '\r\n' | base64 -d > build/android_release.keystore
 
       - name: Inject Android keystore password into export presets
         # Uses Python to avoid shell-escaping problems with special characters in the password
