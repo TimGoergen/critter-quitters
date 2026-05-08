@@ -119,6 +119,17 @@ jobs:
           open(path, "w").write(content)
           EOF
 
+      - name: Configure Godot editor settings
+        # Godot reads this file for the Android SDK path; the runner has the SDK pre-installed
+        run: |
+          mkdir -p ~/.config/godot
+          cat > ~/.config/godot/editor_settings-4.5.tres << 'SETTINGS'
+          [gd_resource type="EditorSettings" format=3]
+
+          [resource]
+          export/android/android_sdk_path = "/usr/local/lib/android/sdk"
+          SETTINGS
+
       - name: Create output directory
         run: mkdir -p dist
 
