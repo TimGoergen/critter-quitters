@@ -52,26 +52,27 @@ jobs:
         uses: actions/cache@v4
         with:
           path: |
-            ~/.local/bin/godot
+            ~/.local/godot-ci/
             ~/.local/share/godot/export_templates/
-          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_CHANNEL }}-mono-v2
+          # Bump this suffix if the cached state ever becomes corrupt
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_CHANNEL }}-mono-v3
 
       - name: Download Godot Linux headless binary
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           BASE="https://github.com/godotengine/godot/releases/download"
           VER="${GODOT_VERSION}-${GODOT_CHANNEL}"
-          # Godot 4.5+ uses underscores in the arch suffix (linux_x86_64 not linux.x86_64)
+          # The zip filename uses underscores: linux_x86_64
           ZIP="Godot_v${VER}_mono_linux_x86_64.zip"
           wget "${BASE}/${VER}/${ZIP}" -O /tmp/godot.zip
-          mkdir -p ~/.local/bin
           unzip -q /tmp/godot.zip -d /tmp/godot_extract/
-          # Use the exact expected binary name — no glob, no ambiguity
-          BINARY="Godot_v${VER}_mono_linux_x86_64"
-          # Remove any stale entry at the destination before moving
-          rm -rf ~/.local/bin/godot
-          mv "/tmp/godot_extract/${BINARY}" ~/.local/bin/godot
-          chmod +x ~/.local/bin/godot
+          # The zip extracts to a directory with the same name as the zip (minus .zip).
+          # The actual binary inside that directory still uses a period: linux.x86_64
+          EXTRACT_DIR="Godot_v${VER}_mono_linux_x86_64"
+          BINARY_FILE="Godot_v${VER}_mono_linux.x86_64"
+          rm -rf ~/.local/godot-ci
+          mv "/tmp/godot_extract/${EXTRACT_DIR}" ~/.local/godot-ci
+          chmod +x ~/.local/godot-ci/${BINARY_FILE}
 
       - name: Download Godot export templates
         if: steps.cache.outputs.cache-hit != 'true'
@@ -124,11 +125,15 @@ jobs:
 
       - name: Export — Windows Desktop
         working-directory: game
-        run: ~/.local/bin/godot --headless --export-release "Windows Desktop" "../dist/critter_quitters_win.exe"
+        run: |
+          GODOT="$HOME/.local/godot-ci/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_mono_linux.x86_64"
+          "$GODOT" --headless --export-release "Windows Desktop" "../dist/critter_quitters_win.exe"
 
       - name: Export — Android APK
         working-directory: game
-        run: ~/.local/bin/godot --headless --export-release "Android" "../dist/critter_quitters.apk"
+        run: |
+          GODOT="$HOME/.local/godot-ci/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_mono_linux.x86_64"
+          "$GODOT" --headless --export-release "Android" "../dist/critter_quitters.apk"
 
       - name: Stamp version into filenames
         run: |
