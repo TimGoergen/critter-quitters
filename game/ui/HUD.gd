@@ -98,6 +98,7 @@ var _restart_btn:    Button
 var _speed_pause_box: HBoxContainer  # wraps both buttons; repositioned on orientation change
 var _is_fast:        bool = false
 var _is_paused:      bool = false
+var _pause_bar_icon: Control  # drawn pause bars; hidden when button shows ▶ to resume
 
 var _selector_buttons: Array[Button] = []
 # Root node of the current selector layout — freed and rebuilt on orientation change.
@@ -357,13 +358,18 @@ func _build_ui() -> void:
 	add_child(_speed_pause_box)
 
 	_pause_btn = Button.new()
-	_pause_btn.text = "▮▮"
+	_pause_btn.text = ""  # icon is drawn by _pause_bar_icon child; no text in run state
 	_pause_btn.add_theme_font_size_override("font_size", 21)
 	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_pause_btn)
 	_pause_btn.size_flags_vertical  = Control.SIZE_FILL
 	_pause_btn.pressed.connect(_on_pause_btn_pressed)
 	_speed_pause_box.add_child(_pause_btn)
+
+	_pause_bar_icon = _PauseBarIcon.new()
+	_pause_bar_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_pause_bar_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pause_btn.add_child(_pause_bar_icon)
 
 	_speed_btn = Button.new()
 	_speed_btn.text = "▶▶ 1x"
@@ -580,7 +586,12 @@ func _on_speed_btn_pressed() -> void:
 func _on_pause_btn_pressed() -> void:
 	_is_paused = not _is_paused
 	get_tree().paused = _is_paused
-	_pause_btn.text   = "▶" if _is_paused else "▮▮"
+	if _is_paused:
+		_pause_btn.text = "▶"
+		_pause_bar_icon.hide()
+	else:
+		_pause_btn.text = ""
+		_pause_bar_icon.show()
 
 
 func _on_send_wave_pressed() -> void:
@@ -616,7 +627,8 @@ func _on_run_ended() -> void:
 	Engine.time_scale = 1.0
 	# Clear any player-initiated pause so the run-over overlay owns the paused state cleanly.
 	_is_paused      = false
-	_pause_btn.text = "▮▮"
+	_pause_btn.text = ""
+	_pause_bar_icon.show()
 	_run_over_overlay.visible = true
 	get_tree().paused = true
 
@@ -989,3 +1001,26 @@ func _apply_send_wave_btn_style(btn: Button) -> void:
 		box.content_margin_bottom = 6.0
 		btn.add_theme_stylebox_override(state[0], box)
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
+
+
+# ---------------------------------------------------------------------------
+# Pause icon
+# ---------------------------------------------------------------------------
+
+## Draws two thin vertical bars to form a pause symbol.
+## Using _draw() rather than a Unicode block character gives exact control over
+## bar width and gap — the ▮▮ glyph was too thick and too widely spaced.
+class _PauseBarIcon extends Control:
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	func _draw() -> void:
+		var bar_w := size.x * 0.13           # thin bars (≈ half the visual weight of ▮)
+		var gap   := size.x * 0.14           # gap between the two bars
+		var bar_h := size.y * 0.52           # bars occupy roughly the font cap-height zone
+		var x0    := (size.x - bar_w * 2.0 - gap) * 0.5
+		var y0    := (size.y - bar_h) * 0.5
+		var color := Color(0.08, 0.05, 0.00) # matches COLOR_GOLD_TEXT
+		draw_rect(Rect2(x0,               y0, bar_w, bar_h), color)
+		draw_rect(Rect2(x0 + bar_w + gap, y0, bar_w, bar_h), color)

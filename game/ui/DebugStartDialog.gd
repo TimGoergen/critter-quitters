@@ -17,17 +17,17 @@ const PANEL_W: float = 300.0
 const PANEL_H: float = 216.0
 const PADDING: float = 14.0
 
-const COLOR_BG      := Color(0.04, 0.28, 0.28, 0.95)
-const COLOR_OUTLINE := Color(0.20, 0.55, 0.55, 1.0)
+const COLOR_BG      := Color(0.02, 0.12, 0.00, 0.95)
+const COLOR_OUTLINE := Color(0.22, 0.60, 0.04, 1.0)
 const COLOR_TEXT    := Color(0.90, 0.90, 0.90, 1.0)
-const COLOR_TEXT_DIM := Color(0.65, 0.80, 0.80, 1.0)
-const COLOR_DIVIDER := Color(0.15, 0.45, 0.45, 1.0)
-const COLOR_BTN_NORMAL  := Color(0.06, 0.22, 0.22, 1.0)
-const COLOR_BTN_HOVER   := Color(0.10, 0.32, 0.32, 1.0)
-const COLOR_BTN_PRESSED := Color(0.03, 0.15, 0.15, 1.0)
-const COLOR_BTN_BORDER  := Color(0.20, 0.55, 0.55, 1.0)
-const COLOR_FIELD_BG    := Color(0.02, 0.18, 0.18, 1.0)
-const COLOR_FIELD_BORDER := Color(0.20, 0.55, 0.55, 1.0)
+const COLOR_TEXT_DIM := Color(0.55, 0.78, 0.50, 1.0)
+const COLOR_DIVIDER := Color(0.06, 0.22, 0.01, 1.0)
+const COLOR_BTN_NORMAL  := Color(0.01, 0.07, 0.00, 1.0)
+const COLOR_BTN_HOVER   := Color(0.03, 0.14, 0.01, 1.0)
+const COLOR_BTN_PRESSED := Color(0.01, 0.04, 0.00, 1.0)
+const COLOR_BTN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
+const COLOR_FIELD_BG    := Color(0.01, 0.06, 0.00, 1.0)
+const COLOR_FIELD_BORDER := Color(0.22, 0.60, 0.04, 1.0)
 
 const UIFonts = preload("res://ui/UIFonts.gd")
 const HUD     = preload("res://ui/HUD.gd")
@@ -87,11 +87,11 @@ func _build_ui() -> void:
 	y += 10.0
 
 	# Bug Bucks row
-	_field_bucks = _add_field_row(bg, y, "Starting Bug Bucks", str(DEFAULT_BUG_BUCKS), 1000, 0)
+	_field_bucks = _add_field_row(bg, y, "Starting Bug Bucks", str(DEFAULT_BUG_BUCKS), 2500, 0)
 	y += 36.0
 
 	# Wave size row
-	_field_waves = _add_field_row(bg, y, "Enemies per Wave", str(DEFAULT_WAVE_SIZE), 100, 1)
+	_field_waves = _add_field_row(bg, y, "Enemies per Wave", str(DEFAULT_WAVE_SIZE), 10, 1)
 	y += 36.0
 
 	# Static enemies toggle — when on, each wave spawns 3 of every enemy type for visual review
