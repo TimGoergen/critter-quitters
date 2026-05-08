@@ -84,9 +84,6 @@ jobs:
           unzip -q /tmp/templates.tpz -d /tmp/templates_extract/
           cp -r /tmp/templates_extract/templates/* "$TEMPLATES_DIR/"
 
-      - name: Add Godot to PATH
-        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
-
       - name: Decode Android release keystore
         env:
           # Pass via env var rather than inline expansion to avoid shell-escaping issues
@@ -124,11 +121,11 @@ jobs:
 
       - name: Export — Windows Desktop
         working-directory: game
-        run: godot --headless --export-release "Windows Desktop" "../dist/critter_quitters_win.exe"
+        run: ~/.local/bin/godot --headless --export-release "Windows Desktop" "../dist/critter_quitters_win.exe"
 
       - name: Export — Android APK
         working-directory: game
-        run: godot --headless --export-release "Android" "../dist/critter_quitters.apk"
+        run: ~/.local/bin/godot --headless --export-release "Android" "../dist/critter_quitters.apk"
 
       - name: Stamp version into filenames
         run: |
