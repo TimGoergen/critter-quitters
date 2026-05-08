@@ -177,7 +177,13 @@ jobs:
           print('Godot signing disabled')
           "
           GODOT="$HOME/.local/godot-ci/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
-          "$GODOT" --headless --export-release "Android" "../dist/critter_quitters_raw.apk"
+          # Redirect stderr to file; cat -A shows raw bytes so ANSI codes don't hide the error
+          "$GODOT" --headless --export-release "Android" "../dist/critter_quitters_raw.apk" 2>/tmp/godot_stderr.txt; GODOT_EXIT=$?
+          if [ $GODOT_EXIT -ne 0 ]; then
+            echo "=== Godot raw stderr (ANSI-stripped errors/warnings) ==="
+            cat -A /tmp/godot_stderr.txt | grep -i "config\|error\|warn\|android\|keystore\|sdk\|jdk\|platform\|tools" || cat -A /tmp/godot_stderr.txt | tail -30
+            exit $GODOT_EXIT
+          fi
           # Sign the exported APK with apksigner from the Android build-tools
           BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools/" | sort -V | tail -1)
           "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" sign \
