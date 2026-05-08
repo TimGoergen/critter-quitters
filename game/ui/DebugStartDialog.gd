@@ -22,11 +22,11 @@ const COLOR_OUTLINE := Color(0.22, 0.60, 0.04, 1.0)
 const COLOR_TEXT    := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM := Color(0.55, 0.78, 0.50, 1.0)
 const COLOR_DIVIDER := Color(0.06, 0.22, 0.01, 1.0)
-const COLOR_BTN_NORMAL  := Color(0.01, 0.07, 0.00, 1.0)
+const COLOR_BTN_NORMAL  := Color(0.02, 0.15, 0.00, 1.0)
 const COLOR_BTN_HOVER   := Color(0.07, 0.32, 0.02, 1.0)
-const COLOR_BTN_PRESSED := Color(0.01, 0.04, 0.00, 1.0)
+const COLOR_BTN_PRESSED := Color(0.01, 0.10, 0.00, 1.0)
 const COLOR_BTN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
-const COLOR_FIELD_BG    := Color(0.01, 0.06, 0.00, 1.0)
+const COLOR_FIELD_BG    := Color(0.02, 0.14, 0.00, 1.0)
 const COLOR_FIELD_BORDER := Color(0.22, 0.60, 0.04, 1.0)
 
 const UIFonts = preload("res://ui/UIFonts.gd")
@@ -48,14 +48,22 @@ func _build_ui() -> void:
 	var px := (vp.x - PANEL_W) * 0.5
 	var py := (vp.y - PANEL_H) * 0.5
 
+	# Fullscreen darkening overlay — covers the arena behind the dialog.
+	# Added first so it renders beneath the panel and border.
+	var overlay       := ColorRect.new()
+	overlay.anchor_right  = 1.0
+	overlay.anchor_bottom = 1.0
+	overlay.color = Color(0.0, 0.02, 0.0, 0.60)
+	add_child(overlay)
+
 	# Store the full panel rect (including border) for outside-click detection.
-	_panel_rect = Rect2(Vector2(px - 2.0, py - 2.0), Vector2(PANEL_W + 4.0, PANEL_H + 4.0))
+	_panel_rect = Rect2(Vector2(px - 4.0, py - 4.0), Vector2(PANEL_W + 8.0, PANEL_H + 8.0))
 
 	# Outline border
 	var border       := ColorRect.new()
 	border.color      = COLOR_OUTLINE
-	border.position   = Vector2(px - 2.0, py - 2.0)
-	border.size       = Vector2(PANEL_W + 4.0, PANEL_H + 4.0)
+	border.position   = Vector2(px - 4.0, py - 4.0)
+	border.size       = Vector2(PANEL_W + 8.0, PANEL_H + 8.0)
 	add_child(border)
 
 	# Background
@@ -72,7 +80,7 @@ func _build_ui() -> void:
 	var lbl_title := Label.new()
 	lbl_title.text     = "Playtest Setup"
 	lbl_title.position = Vector2(PADDING, y)
-	lbl_title.add_theme_font_size_override("font_size", 20)
+	lbl_title.add_theme_font_size_override("font_size", 24)
 	lbl_title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	lbl_title.add_theme_font_override("font", UIFonts.header())
 	bg.add_child(lbl_title)
@@ -131,9 +139,9 @@ func _build_ui() -> void:
 	btn.position           = Vector2(PADDING, y)
 	btn.custom_minimum_size = Vector2(inner_w, 32.0)
 	btn.add_theme_font_size_override("font_size", 15)
-	btn.add_theme_font_override("font", UIFonts.primary())
+	btn.add_theme_font_override("font", UIFonts.primary_bold())
 	btn.pressed.connect(_on_start_pressed)
-	_style_button(btn)
+	_style_start_button(btn)
 	bg.add_child(btn)
 
 
@@ -220,6 +228,28 @@ func _on_start_pressed() -> void:
 	queue_free()
 
 
+func _style_start_button(btn: Button) -> void:
+	# Darker background than the panel (COLOR_BG = 0.04, 0.22, 0.00) and a 4px
+	# border — doubled from the standard 2px — to give the Start button more weight.
+	var colors: Array = [
+		["normal",  Color(0.02, 0.15, 0.00, 1.0)],
+		["hover",   COLOR_BTN_HOVER],
+		["pressed", COLOR_BTN_PRESSED],
+	]
+	for state: Array in colors:
+		var box := StyleBoxFlat.new()
+		box.bg_color           = state[1]
+		box.border_color       = COLOR_BTN_BORDER
+		box.set_border_width_all(4)
+		box.set_corner_radius_all(4)
+		box.content_margin_left   = 8.0
+		box.content_margin_right  = 8.0
+		box.content_margin_top    = 4.0
+		box.content_margin_bottom = 4.0
+		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_color_override("font_color", COLOR_TEXT)
+
+
 func _style_button(btn: Button) -> void:
 	for state: Array in [["normal", COLOR_BTN_NORMAL], ["hover", COLOR_BTN_HOVER], ["pressed", COLOR_BTN_PRESSED]]:
 		var box := StyleBoxFlat.new()
@@ -236,14 +266,15 @@ func _style_button(btn: Button) -> void:
 
 
 func _style_checkbox(cb: CheckBox) -> void:
-	# Normal and pressed states: fully transparent so only Godot's built-in
-	# checkbox icon is visible against the panel background.
+	# Normal/pressed: dim green border always visible so the control has a clear boundary.
 	for state: String in ["normal", "pressed"]:
 		var box := StyleBoxFlat.new()
-		box.bg_color = Color(0.0, 0.0, 0.0, 0.0)
-		box.set_border_width_all(0)
+		box.bg_color     = Color(0.0, 0.0, 0.0, 0.0)
+		box.border_color = Color(0.10, 0.35, 0.02, 1.0)
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(4)
 		cb.add_theme_stylebox_override(state, box)
-	# Hover: bright green border around the full control to signal interactivity.
+	# Hover: full-brightness outline signals interactivity.
 	var hover_box := StyleBoxFlat.new()
 	hover_box.bg_color     = Color(0.0, 0.0, 0.0, 0.0)
 	hover_box.border_color = COLOR_OUTLINE
