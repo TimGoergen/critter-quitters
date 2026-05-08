@@ -334,12 +334,24 @@ jobs:
     name: Deploy to Firebase
     needs: export
     runs-on: ubuntu-latest
-    # Skip gracefully when Firebase secrets have not been configured yet.
-    # Secrets evaluate to "" when absent, so this comparison is safe.
-    if: ${{ secrets.FIREBASE_APP_ID != '' }}
+    # No job-level `if` here: GitHub Actions cannot access secrets in job-level
+    # if conditions (they are evaluated before secrets are injected). Instead,
+    # the first step checks and sets an output flag; all subsequent steps are
+    # conditioned on that flag so the job exits cleanly when Firebase is not set up.
 
     steps:
+      - name: Check Firebase configured
+        id: check
+        run: |
+          if [ -n "${{ secrets.FIREBASE_APP_ID }}" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "FIREBASE_APP_ID not set — skipping Firebase deploy"
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Download Android APK artifact
+        if: steps.check.outputs.configured == 'true'
         uses: actions/download-artifact@v4
         with:
           name: android-apk
@@ -348,12 +360,14 @@ jobs:
       - name: Resolve APK path
         # The artifact contains exactly one file; resolve it so the Firebase action
         # receives a concrete path rather than a glob (which it does not support).
+        if: steps.check.outputs.configured == 'true'
         id: apk
         run: |
           APK=$(ls dist/*.apk | head -1)
           echo "path=$APK" >> "$GITHUB_OUTPUT"
 
       - name: Upload to Firebase App Distribution
+        if: steps.check.outputs.configured == 'true'
         uses: wzieba/Firebase-Distribution-Github-Action@v1
         with:
           appId: ${{ secrets.FIREBASE_APP_ID }}
