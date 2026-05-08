@@ -5,8 +5,11 @@
 # then creates a GitHub pre-release tagged with the short commit SHA.
 #
 # Required GitHub Secrets (Settings > Secrets and variables > Actions):
-#   ANDROID_KEYSTORE_BASE64  — base64-encoded keystore file (see setup instructions in README)
-#   ANDROID_KEYSTORE_PASS    — keystore and key password
+#   ANDROID_KEYSTORE_BASE64      — base64-encoded keystore file (see setup instructions in README)
+#   ANDROID_KEYSTORE_PASS        — keystore and key password
+#   FIREBASE_APP_ID              — Firebase Android App ID (e.g. 1:123456789:android:abcdef)
+#                                  Leave unset to skip Firebase deployment.
+#   FIREBASE_SERVICE_ACCOUNT_KEY — Service account JSON with Firebase App Distribution Admin role
 #
 # To update the Godot version: change GODOT_VERSION below and clear the Actions cache.
 # NOTE: We use the standard (non-Mono) Godot binary even though the editor is Mono.
@@ -307,3 +310,54 @@ jobs:
           files: |
             release-files/windows-installer/*.exe
             release-files/android-apk/*.apk
+
+  # ── Job 4: Push APK to Firebase App Distribution ────────────────────────────
+  # Uploads the signed APK to Firebase so the registered Pixel tester receives
+  # an install/update notification automatically after each build.
+  #
+  # This job is skipped when FIREBASE_APP_ID is not set, so the rest of the
+  # pipeline continues to work while Firebase is being configured.
+  #
+  # One-time setup (see Firebase console at console.firebase.google.com):
+  #   1. Create a Firebase project and register the Android app
+  #      (package name: com.timgoergen.critterquitters).
+  #   2. Enable App Distribution in the Firebase console.
+  #   3. Add goergen.tim@gmail.com as a tester, create a group named "testers".
+  #   4. Accept the tester invitation on your Pixel — install Firebase App Tester
+  #      (or use the direct download link in the invitation email).
+  #   5. In the Firebase project: IAM > Service Accounts > create a new account,
+  #      grant it the "Firebase App Distribution Admin" role, then download its JSON key.
+  #   6. Add two GitHub secrets (Settings > Secrets > Actions):
+  #        FIREBASE_APP_ID              — from Firebase console > Project Settings > Your apps
+  #        FIREBASE_SERVICE_ACCOUNT_KEY — the full contents of the downloaded JSON key file
+  firebase-deploy:
+    name: Deploy to Firebase
+    needs: export
+    runs-on: ubuntu-latest
+    # Skip gracefully when Firebase secrets have not been configured yet.
+    # Secrets evaluate to "" when absent, so this comparison is safe.
+    if: ${{ secrets.FIREBASE_APP_ID != '' }}
+
+    steps:
+      - name: Download Android APK artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-apk
+          path: dist/
+
+      - name: Resolve APK path
+        # The artifact contains exactly one file; resolve it so the Firebase action
+        # receives a concrete path rather than a glob (which it does not support).
+        id: apk
+        run: |
+          APK=$(ls dist/*.apk | head -1)
+          echo "path=$APK" >> "$GITHUB_OUTPUT"
+
+      - name: Upload to Firebase App Distribution
+        uses: wzieba/Firebase-Distribution-Github-Action@v1
+        with:
+          appId: ${{ secrets.FIREBASE_APP_ID }}
+          serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
+          groups: testers
+          file: ${{ steps.apk.outputs.path }}
+          releaseNotes: "Build ${{ needs.export.outputs.sha }} — ${{ github.sha }}"
