@@ -92,6 +92,8 @@ var _early_bonus_particles:  CPUParticles2D
 var _run_over_overlay:       Control
 
 var _speed_btn:      Button
+var _speed_mult_lbl: Label   # "1x" / "2x" — left side of speed button
+var _speed_icon_lbl: Label   # "▶▶" / "▶"  — right side of speed button
 var _pause_btn:      Button
 var _exit_btn:       Button
 var _restart_btn:    Button
@@ -135,9 +137,9 @@ func _ready() -> void:
 	await get_tree().process_frame
 	var narrow_w := maxf(_pause_btn.size.x, _exit_btn.size.x)
 	var wide_w   := maxf(_restart_btn.size.x, _speed_btn.size.x)
-	# Speed button always has text so its height is a stable anchor; lock both
-	# speed and pause to that value so neither resizes when pause toggles between
-	# the drawn bars (empty text) and the ▶ resume character.
+	# Speed button's height is a stable anchor (font metrics apply even with empty text);
+	# lock both speed and pause to that value so neither resizes when their displayed
+	# content changes.
 	var ctrl_h   := _speed_btn.size.y
 	_pause_btn.custom_minimum_size   = Vector2(narrow_w, ctrl_h)
 	_exit_btn.custom_minimum_size    = Vector2(narrow_w, 0.0)
@@ -376,12 +378,47 @@ func _build_ui() -> void:
 	_pause_btn.add_child(_pause_bar_icon)
 
 	_speed_btn = Button.new()
-	_speed_btn.text = "▶▶ 1x"
+	_speed_btn.text = ""  # content is two child labels: multiplier left, icon right
 	_speed_btn.add_theme_font_size_override("font_size", 21)
 	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_speed_btn)
 	_speed_btn.pressed.connect(_on_speed_btn_pressed)
 	_speed_pause_box.add_child(_speed_btn)
+
+	# Both labels share the same full-rect anchor; horizontal_alignment puts each
+	# on its own side.  Offsets match the button's content_margin_left/right (12px).
+	_speed_mult_lbl = Label.new()
+	_speed_mult_lbl.text                 = "1x"
+	_speed_mult_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_speed_mult_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_speed_mult_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	_speed_mult_lbl.anchor_left          = 0.0
+	_speed_mult_lbl.anchor_right         = 1.0
+	_speed_mult_lbl.anchor_top           = 0.0
+	_speed_mult_lbl.anchor_bottom        = 1.0
+	_speed_mult_lbl.offset_left          = 12.0
+	_speed_mult_lbl.offset_right         = -12.0
+	_speed_mult_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	_speed_mult_lbl.add_theme_font_size_override("font_size", 21)
+	_speed_mult_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
+	_speed_btn.add_child(_speed_mult_lbl)
+
+	# At 1x: ▶▶ (two triangles = will go faster).  At 2x: ▶ (one = will slow down).
+	_speed_icon_lbl = Label.new()
+	_speed_icon_lbl.text                 = "▶▶"
+	_speed_icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_speed_icon_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_speed_icon_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	_speed_icon_lbl.anchor_left          = 0.0
+	_speed_icon_lbl.anchor_right         = 1.0
+	_speed_icon_lbl.anchor_top           = 0.0
+	_speed_icon_lbl.anchor_bottom        = 1.0
+	_speed_icon_lbl.offset_left          = 12.0
+	_speed_icon_lbl.offset_right         = -12.0
+	_speed_icon_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	_speed_icon_lbl.add_theme_font_size_override("font_size", 21)
+	_speed_icon_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
+	_speed_btn.add_child(_speed_icon_lbl)
 
 	_position_speed_btn()
 	_reposition_countdown_labels()
@@ -583,8 +620,9 @@ func _reposition_countdown_labels() -> void:
 
 func _on_speed_btn_pressed() -> void:
 	_is_fast = not _is_fast
-	Engine.time_scale  = 2.0 if _is_fast else 1.0
-	_speed_btn.text    = "▶▶ 2x" if _is_fast else "▶▶ 1x"
+	Engine.time_scale       = 2.0 if _is_fast else 1.0
+	_speed_mult_lbl.text    = "2x" if _is_fast else "1x"
+	_speed_icon_lbl.text    = "▶"  if _is_fast else "▶▶"
 
 
 func _on_pause_btn_pressed() -> void:
