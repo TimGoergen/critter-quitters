@@ -130,9 +130,12 @@ jobs:
 
       - name: Export — Android APK
         working-directory: game
+        env:
+          # ubuntu-latest has Android SDK at this path; Godot uses it for apksigner
+          ANDROID_HOME: /usr/local/lib/android/sdk
         run: |
           GODOT="$HOME/.local/godot-ci/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
-          "$GODOT" --headless --export-release "Android" "../dist/critter_quitters.apk"
+          "$GODOT" --headless --verbose --export-release "Android" "../dist/critter_quitters.apk"
 
       - name: Stamp version into filenames
         run: |
