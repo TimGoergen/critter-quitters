@@ -215,6 +215,7 @@ jobs:
             --key-pass "pass:$CLEAN_PASS" \
             --out ../dist/critter_quitters.apk \
             ../dist/critter_quitters_raw.apk
+          rm ../dist/critter_quitters_raw.apk
 
       - name: Stamp version into filenames
         run: |
