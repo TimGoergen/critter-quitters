@@ -88,10 +88,16 @@ jobs:
         run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
       - name: Decode Android release keystore
+        env:
+          # Pass via env var rather than inline expansion to avoid shell-escaping issues
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
           mkdir -p build
-          # tr strips any \r\n that Windows/PowerShell may have introduced into the secret value
-          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | tr -d '\r\n' | base64 -d > build/android_release.keystore
+          python3 -c "
+          import base64, os
+          data = ''.join(os.environ['KEYSTORE_B64'].split())  # strip all whitespace
+          open('build/android_release.keystore', 'wb').write(base64.b64decode(data))
+          "
 
       - name: Inject Android keystore password into export presets
         # Uses Python to avoid shell-escaping problems with special characters in the password
