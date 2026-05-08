@@ -66,8 +66,9 @@ jobs:
           wget "${BASE}/${VER}/${ZIP}" -O /tmp/godot.zip
           mkdir -p ~/.local/bin
           unzip -q /tmp/godot.zip -d /tmp/godot_extract/
-          # Binary inside the zip uses the same underscore naming
-          mv /tmp/godot_extract/Godot_v*_x86_64 ~/.local/bin/godot
+          # Use the exact expected binary name — no glob, no ambiguity
+          BINARY="Godot_v${VER}_mono_linux_x86_64"
+          mv "/tmp/godot_extract/${BINARY}" ~/.local/bin/godot
           chmod +x ~/.local/bin/godot
 
       - name: Download Godot export templates
