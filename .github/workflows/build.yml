@@ -1,0 +1,208 @@
+# Build & Deploy pipeline for Critter Quitters Pest Control.
+#
+# Triggered on every push to main and on manual runs.
+# Produces a Windows installer (.exe via Inno Setup) and a signed Android APK,
+# then creates a GitHub pre-release tagged with the short commit SHA.
+#
+# Required GitHub Secrets (Settings > Secrets and variables > Actions):
+#   ANDROID_KEYSTORE_BASE64  — base64-encoded keystore file (see setup instructions in README)
+#   ANDROID_KEYSTORE_PASS    — keystore and key password
+#
+# To update the Godot version: change GODOT_VERSION below and clear the Actions cache.
+
+name: Build & Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+env:
+  GODOT_VERSION: "4.5.1"
+  GODOT_CHANNEL: "stable"
+
+jobs:
+  # ── Job 1: Export both targets using the Godot Linux headless binary ─────────
+  # Linux can cross-export to Windows and Android; no Windows runner needed here.
+  export:
+    name: Export (Windows + Android)
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.version.outputs.sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Compute short SHA for version stamping
+        id: version
+        run: |
+          SHA="${GITHUB_SHA:0:7}"
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Set up Java 17
+        # Required for Android APK signing (Godot calls apksigner/jarsigner internally)
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: temurin
+
+      - name: Restore Godot binary and export templates from cache
+        id: cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/bin/godot
+            ~/.local/share/godot/export_templates/
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_CHANNEL }}-mono
+
+      - name: Download Godot Linux headless binary
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          BASE="https://github.com/godotengine/godot/releases/download"
+          VER="${GODOT_VERSION}-${GODOT_CHANNEL}"
+          ZIP="Godot_v${VER}_mono_linux.x86_64.zip"
+          wget -q "${BASE}/${VER}/${ZIP}" -O /tmp/godot.zip
+          mkdir -p ~/.local/bin
+          unzip -q /tmp/godot.zip -d /tmp/godot_extract/
+          # The zip contains one binary named with the full version string; rename for convenience
+          mv /tmp/godot_extract/Godot_v*.x86_64 ~/.local/bin/godot
+          chmod +x ~/.local/bin/godot
+
+      - name: Download Godot export templates
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          BASE="https://github.com/godotengine/godot/releases/download"
+          VER="${GODOT_VERSION}-${GODOT_CHANNEL}"
+          TPZ="Godot_v${VER}_mono_export_templates.tpz"
+          wget -q "${BASE}/${VER}/${TPZ}" -O /tmp/templates.tpz
+          # The directory name must exactly match the version string the Godot editor uses
+          TEMPLATES_DIR="$HOME/.local/share/godot/export_templates/${GODOT_VERSION}.${GODOT_CHANNEL}.mono"
+          mkdir -p "$TEMPLATES_DIR"
+          # .tpz is a renamed zip; templates live inside a "templates/" subdirectory within it
+          unzip -q /tmp/templates.tpz -d /tmp/templates_extract/
+          cp -r /tmp/templates_extract/templates/* "$TEMPLATES_DIR/"
+
+      - name: Add Godot to PATH
+        run: echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+
+      - name: Decode Android release keystore
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > build/android_release.keystore
+
+      - name: Inject Android keystore password into export presets
+        # Uses Python to avoid shell-escaping problems with special characters in the password
+        env:
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+        run: |
+          python3 - <<'EOF'
+          import os
+          path = "game/export_presets.cfg"
+          content = open(path).read()
+          password = os.environ["KEYSTORE_PASS"]
+          content = content.replace(
+              'keystore/release_password=""',
+              f'keystore/release_password="{password}"'
+          )
+          open(path, "w").write(content)
+          EOF
+
+      - name: Create output directory
+        run: mkdir -p dist
+
+      - name: Export — Windows Desktop
+        working-directory: game
+        run: godot --headless --export-release "Windows Desktop" "../dist/critter_quitters_win.exe"
+
+      - name: Export — Android APK
+        working-directory: game
+        run: godot --headless --export-release "Android" "../dist/critter_quitters.apk"
+
+      - name: Stamp version into filenames
+        run: |
+          SHA="${{ steps.version.outputs.sha }}"
+          mv dist/critter_quitters_win.exe  "dist/critter_quitters_${SHA}_win.exe"
+          mv dist/critter_quitters.apk      "dist/critter_quitters_${SHA}.apk"
+
+      - name: Upload Windows exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-exe
+          path: dist/critter_quitters_*_win.exe
+          if-no-files-found: error
+
+      - name: Upload Android APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: dist/critter_quitters_*.apk
+          if-no-files-found: error
+
+  # ── Job 2: Wrap Windows exe in Inno Setup installer ──────────────────────────
+  # Inno Setup 6 is pre-installed on GitHub Windows runners.
+  windows-installer:
+    name: Windows Installer
+    needs: export
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Windows exe artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-exe
+          path: dist\
+
+      - name: Build installer with Inno Setup
+        shell: pwsh
+        run: |
+          $sha     = "${{ needs.export.outputs.sha }}"
+          $version = "0.0.$sha"
+          $srcExe  = (Get-ChildItem "dist\critter_quitters_*_win.exe" | Select-Object -First 1).FullName
+
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            "/DAppVersion=$version" `
+            "/DSourceExe=$srcExe" `
+            "/DOutputDir=dist" `
+            "/DOutputFilename=critter_quitters_setup_$sha" `
+            "build\setup.iss"
+
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload Windows installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-installer
+          path: dist\critter_quitters_setup_*.exe
+          if-no-files-found: error
+
+  # ── Job 3: Publish GitHub pre-release with both artifacts ────────────────────
+  release:
+    name: Publish Release
+    needs: [export, windows-installer]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write   # required to create releases and upload assets
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-files/
+
+      - name: Create GitHub pre-release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "build-${{ needs.export.outputs.sha }}"
+          name: "Build ${{ needs.export.outputs.sha }}"
+          prerelease: true
+          body: |
+            Automated build from commit ${{ github.sha }}.
+
+            **Install — Windows:** run `critter_quitters_setup_*.exe`
+            **Install — Android:** enable "Install from unknown sources" on your Pixel, then install `critter_quitters_*.apk`
+          files: |
+            release-files/windows-installer/*.exe
+            release-files/android-apk/*.apk
