@@ -202,13 +202,17 @@ jobs:
             cat -A /tmp/godot_out.txt | tail -50
             exit $GODOT_EXIT
           fi
+          # Strip non-ASCII and non-printable characters from the password before signing.
+          # GitHub secrets can gain a BOM or stray bytes from copy-paste tools, which causes
+          # Java's PKCS12 implementation to reject the password ("Password is not ASCII").
+          CLEAN_PASS=$(printf '%s' "$KEYSTORE_PASS" | tr -cd '[:print:]')
           # Sign the exported APK with apksigner from the Android build-tools
           BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools/" | sort -V | tail -1)
           "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" sign \
             --ks ../build/android_release.keystore \
             --ks-key-alias critter_quitters \
-            --ks-pass "pass:$KEYSTORE_PASS" \
-            --key-pass "pass:$KEYSTORE_PASS" \
+            --ks-pass "pass:$CLEAN_PASS" \
+            --key-pass "pass:$CLEAN_PASS" \
             --out ../dist/critter_quitters.apk \
             ../dist/critter_quitters_raw.apk
 
