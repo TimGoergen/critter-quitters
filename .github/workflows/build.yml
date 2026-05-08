@@ -61,12 +61,13 @@ jobs:
         run: |
           BASE="https://github.com/godotengine/godot/releases/download"
           VER="${GODOT_VERSION}-${GODOT_CHANNEL}"
-          ZIP="Godot_v${VER}_mono_linux.x86_64.zip"
-          wget -q "${BASE}/${VER}/${ZIP}" -O /tmp/godot.zip
+          # Godot 4.5+ uses underscores in the arch suffix (linux_x86_64 not linux.x86_64)
+          ZIP="Godot_v${VER}_mono_linux_x86_64.zip"
+          wget "${BASE}/${VER}/${ZIP}" -O /tmp/godot.zip
           mkdir -p ~/.local/bin
           unzip -q /tmp/godot.zip -d /tmp/godot_extract/
-          # The zip contains one binary named with the full version string; rename for convenience
-          mv /tmp/godot_extract/Godot_v*.x86_64 ~/.local/bin/godot
+          # Binary inside the zip uses the same underscore naming
+          mv /tmp/godot_extract/Godot_v*_x86_64 ~/.local/bin/godot
           chmod +x ~/.local/bin/godot
 
       - name: Download Godot export templates
