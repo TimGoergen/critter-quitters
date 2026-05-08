@@ -19,10 +19,6 @@ config/icon="res://assets/icon.svg"
 
 GameState="*res://core/GameState.gd"
 
-[dotnet]
-
-project/assembly_name="Critter Quitters Pest Control"
-
 [rendering]
 
 renderer/rendering_method="mobile"
