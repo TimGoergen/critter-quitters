@@ -119,6 +119,17 @@ jobs:
           open(path, "w").write(content)
           EOF
 
+      - name: Diagnose template and SDK environment
+        run: |
+          echo "=== Export templates dir ==="
+          ls -la ~/.local/share/godot/export_templates/ 2>/dev/null || echo "MISSING: export_templates dir"
+          echo "=== 4.5.1.stable templates ==="
+          ls -la ~/.local/share/godot/export_templates/4.5.1.stable/ 2>/dev/null || echo "MISSING: 4.5.1.stable dir"
+          echo "=== Android SDK build-tools ==="
+          ls /usr/local/lib/android/sdk/build-tools/ 2>/dev/null || echo "MISSING: build-tools"
+          echo "=== JAVA_HOME ==="
+          echo "$JAVA_HOME"
+
       - name: Configure Godot editor settings
         # Godot reads this file for the Android SDK path; the runner has the SDK pre-installed
         run: |
@@ -129,6 +140,8 @@ jobs:
           [resource]
           export/android/android_sdk_path = "/usr/local/lib/android/sdk"
           SETTINGS
+          echo "=== Editor settings written ==="
+          cat ~/.config/godot/editor_settings-4.5.tres
 
       - name: Create output directory
         run: mkdir -p dist
