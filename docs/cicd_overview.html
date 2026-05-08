@@ -212,6 +212,115 @@
   </header>
 
 
+  <!-- ═══════════════════════════════════════════════════════ 0. OVERVIEW -->
+  <h2>Overview</h2>
+
+  <p>
+    This document describes the automated process that takes the game's source code and
+    produces installable software for two platforms: a <strong>Windows desktop installer</strong>
+    and a <strong>signed Android APK</strong>. It covers how builds are triggered, what happens
+    during a build, where the finished files end up, and how to get them onto a device.
+  </p>
+
+  <p>
+    The game being built is <strong>Critter Quitters Pest Control</strong>, a tower defense game
+    developed in <strong>Godot 4</strong>. Godot is a game engine — think of it as the
+    equivalent of Unity or Unreal. It is responsible for taking the game's scripts and assets
+    and producing a runnable executable for each target platform. The source code, along with
+    all project configuration and the pipeline definition itself, lives in a
+    <strong>GitHub repository</strong>.
+  </p>
+
+  <h3>The problem this pipeline solves</h3>
+
+  <p>
+    Manually exporting a game from Godot, signing the Android APK, wrapping the Windows binary
+    in an installer, and distributing the results is a multi-step process that is easy to do
+    inconsistently. The pipeline automates the entire sequence so that a single action — pushing
+    code to the <code>main</code> branch — produces finished, correctly signed, versioned
+    installer files without any manual steps. Every build is identical in structure to every
+    other build.
+  </p>
+
+  <h3>What happens from code push to device</h3>
+
+  <!-- Flow diagram -->
+  <div style="margin: 28px 0; overflow-x: auto;">
+    <div style="display: flex; align-items: center; gap: 0; min-width: 640px;">
+
+      <div style="flex:1; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:14px 12px; text-align:center;">
+        <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#64748b; margin-bottom:6px;">Developer</div>
+        <div style="font-size:13px; font-weight:600; color:#1e3a8a;">Push code to<br>GitHub main</div>
+      </div>
+
+      <div style="color:#94a3b8; font-size:18px; padding:0 10px;">&#9654;</div>
+
+      <div style="flex:1; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:14px 12px; text-align:center;">
+        <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#64748b; margin-bottom:6px;">GitHub Actions</div>
+        <div style="font-size:13px; font-weight:600; color:#166534;">Godot exports game<br>for Windows &amp; Android</div>
+      </div>
+
+      <div style="color:#94a3b8; font-size:18px; padding:0 10px;">&#9654;</div>
+
+      <div style="flex:1; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:14px 12px; text-align:center;">
+        <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#64748b; margin-bottom:6px;">GitHub Actions</div>
+        <div style="font-size:13px; font-weight:600; color:#166534;">Signs APK<br>Builds installer</div>
+      </div>
+
+      <div style="color:#94a3b8; font-size:18px; padding:0 10px;">&#9654;</div>
+
+      <div style="flex:1; background:#fefce8; border:1px solid #fde68a; border-radius:8px; padding:14px 12px; text-align:center;">
+        <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#64748b; margin-bottom:6px;">Output</div>
+        <div style="font-size:13px; font-weight:600; color:#92400e;">GitHub Release<br>(versioned download)</div>
+      </div>
+
+      <div style="color:#94a3b8; font-size:18px; padding:0 10px;">&#9654;</div>
+
+      <div style="flex:1; background:#fdf4ff; border:1px solid #e9d5ff; border-radius:8px; padding:14px 12px; text-align:center;">
+        <div style="font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:0.6px; color:#64748b; margin-bottom:6px;">Install</div>
+        <div style="font-size:13px; font-weight:600; color:#6b21a8;">Run installer (Windows)<br>ADB script (Android)</div>
+      </div>
+
+    </div>
+  </div>
+
+  <p>
+    The build runs entirely on temporary cloud virtual machines provided by GitHub — nothing
+    needs to be installed or running on the developer's machine for the build itself to happen.
+    The whole process takes roughly 5–8 minutes. The result is a
+    <strong>GitHub Release</strong>: a versioned, permanent download page in the repository
+    containing two files — a Windows setup installer and a signed Android APK — tagged with
+    the short commit hash of the code that produced them (e.g., <code>build-c2ad952</code>).
+  </p>
+
+  <h3>Installing the build</h3>
+
+  <p>
+    <strong>Windows:</strong> Download <code>critter_quitters_setup_*.exe</code> from the
+    GitHub Releases page and run it. It installs the game like any standard Windows application.
+  </p>
+  <p>
+    <strong>Android (Pixel 10 Pro XL):</strong> A PowerShell script —
+    <code>scripts/deploy-to-pixel.ps1</code> — automates the entire process. It downloads the
+    latest APK from the GitHub Release and pushes it directly to the connected Pixel over WiFi
+    using ADB (Android Debug Bridge), the standard Android developer tool for communicating with
+    a device from a PC. The device needs to be on the same WiFi network and have
+    <em>Wireless Debugging</em> enabled. See <strong>section 9</strong> for setup instructions.
+  </p>
+  <p>
+    A future enhancement (Job 4 in the pipeline, not yet active) will use
+    <strong>Firebase App Distribution</strong> to push new builds to the Pixel automatically as
+    a notification, without needing to run the script manually.
+  </p>
+
+  <div class="callout note">
+    <strong>Scope of this document</strong>
+    This document describes the build and deployment pipeline only. It does not cover the
+    game's design, code structure, or development workflow. For those, see the
+    Game Design Document (<code>docs/critter_quitters_gdd.md</code>).
+  </div>
+
+
   <!-- ═══════════════════════════════════════════════════════ 1. PLATFORM -->
   <h2>1. The Platform: GitHub Actions</h2>
 
