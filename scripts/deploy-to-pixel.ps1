@@ -4,7 +4,7 @@
 #
 # Prerequisites:
 #   - gh CLI authenticated (already configured at C:\Program Files\GitHub CLI\gh.exe)
-#   - Android Platform Tools (adb.exe) — download from:
+#   - Android Platform Tools (adb.exe) - download from:
 #     https://developer.android.com/tools/releases/platform-tools
 #     Common install location: %LOCALAPPDATA%\Android\Sdk\platform-tools\
 #   - USB debugging OR Wireless debugging enabled on the Pixel
@@ -12,9 +12,11 @@
 # Usage:
 #   .\deploy-to-pixel.ps1                     # installs the latest release
 #   .\deploy-to-pixel.ps1 -Tag build-abc1234  # installs a specific build tag
+#   .\deploy-to-pixel.ps1 -Device 192.168.x.x:PORT  # target a specific device
 
 param(
-    [string]$Tag = ""
+    [string]$Tag    = "",
+    [string]$Device = ""   # ADB serial (e.g. 192.168.86.34:12345); required when multiple devices are connected
 )
 
 $ErrorActionPreference = "Stop"
@@ -24,7 +26,8 @@ $GhCli     = "C:\Program Files\GitHub CLI\gh.exe"
 
 # --- Locate adb.exe -------------------------------------------------------
 # Check PATH first, then the standard Android Studio SDK location.
-$AdbPath = (Get-Command adb -ErrorAction SilentlyContinue)?.Source
+$AdbCmd  = Get-Command adb -ErrorAction SilentlyContinue
+$AdbPath = if ($AdbCmd) { $AdbCmd.Source } else { $null }
 if (-not $AdbPath) {
     $SdkAdb = "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe"
     if (Test-Path $SdkAdb) {
@@ -32,16 +35,7 @@ if (-not $AdbPath) {
     }
 }
 if (-not $AdbPath) {
-    Write-Error @"
-adb.exe not found in PATH or %LOCALAPPDATA%\Android\Sdk\platform-tools\.
-
-Download Android Platform Tools from:
-  https://developer.android.com/tools/releases/platform-tools
-
-Then either:
-  - Add the platform-tools folder to your system PATH, OR
-  - Install Android Studio (it includes the SDK automatically).
-"@
+    Write-Error "adb.exe not found. Download Android Platform Tools from https://developer.android.com/tools/releases/platform-tools and place adb.exe in %LOCALAPPDATA%\Android\Sdk\platform-tools\"
     exit 1
 }
 Write-Host "Using adb: $AdbPath"
@@ -82,24 +76,32 @@ $DeviceLines = & $AdbPath devices 2>&1 | Select-String "^\S+\s+device$"
 if (-not $DeviceLines) {
     Remove-Item $TmpDir -Recurse -Force
     Write-Host ""
-    Write-Host "No ADB device detected. Options:"
-    Write-Host "  USB:  Connect Pixel via USB cable with USB debugging enabled."
-    Write-Host "        Settings > Developer options > USB debugging"
-    Write-Host ""
-    Write-Host "  WiFi: Settings > Developer options > Wireless debugging"
-    Write-Host "        Tap 'Pair device with pairing code', then run:"
-    Write-Host "          adb pair <ip>:<pairing-port>"
-    Write-Host "        After pairing, connect with:"
-    Write-Host "          adb connect <ip>:<listen-port>"
-    Write-Host ""
-    Write-Host "Then re-run this script."
+    Write-Host "No ADB device detected."
+    Write-Host "  USB:  Connect Pixel via USB with USB debugging enabled (Settings > Developer options)."
+    Write-Host "  WiFi: Settings > Developer options > Wireless debugging > Pair device with pairing code."
+    Write-Host "        Run: adb pair <ip>:<port>  then  adb connect <ip>:<port>"
     exit 1
 }
-Write-Host "ADB device found."
+
+# If multiple devices are connected, require the caller to specify one.
+$Serials = @($DeviceLines | ForEach-Object { ($_ -split '\s+')[0] })
+if ($Serials.Count -gt 1 -and $Device -eq "") {
+    Remove-Item $TmpDir -Recurse -Force
+    Write-Host ""
+    Write-Host "Multiple ADB devices found - specify one with -Device:"
+    $Serials | ForEach-Object { Write-Host "  $_" }
+    Write-Host ""
+    Write-Host "Example:  .\deploy-to-pixel.ps1 -Device $($Serials[0])"
+    exit 1
+}
+
+$DeviceFlag  = if ($Device -ne "") { @("-s", $Device) } else { @() }
+$DeviceLabel = if ($Device -ne "") { $Device } else { $Serials[0] }
+Write-Host "ADB device: $DeviceLabel"
 
 # --- Install APK -----------------------------------------------------------
 Write-Host "Installing $($ApkFile.Name)..."
-& $AdbPath install -r $ApkFile.FullName
+& $AdbPath @DeviceFlag install -r $ApkFile.FullName
 if ($LASTEXITCODE -ne 0) {
     Remove-Item $TmpDir -Recurse -Force
     Write-Error "adb install failed (exit code $LASTEXITCODE)"
@@ -108,4 +110,4 @@ if ($LASTEXITCODE -ne 0) {
 
 Remove-Item $TmpDir -Recurse -Force
 Write-Host ""
-Write-Host "Installed successfully. Launch 'Critter Quitters Pest Control' on your Pixel."
+Write-Host "Installed successfully. Launch Critter Quitters Pest Control on your Pixel."
