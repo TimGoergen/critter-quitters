@@ -164,6 +164,24 @@ jobs:
       - name: Create output directory
         run: mkdir -p dist
 
+      - name: Diagnose Android export environment
+        # Temporary diagnostic step — remove once Android export is working.
+        run: |
+          echo "=== Export templates ==="
+          ls -la ~/.local/share/godot/export_templates/4.5.1.stable/ | grep -i android || echo "(no android templates found)"
+          echo ""
+          echo "=== Editor settings ==="
+          cat ~/.config/godot/editor_settings-4.5.tres 2>/dev/null || echo "(file not found)"
+          echo ""
+          echo "=== ~/.android/ contents ==="
+          ls -la ~/.android/ 2>/dev/null || echo "(directory not found)"
+          echo ""
+          echo "=== Android SDK build-tools ==="
+          ls /usr/local/lib/android/sdk/build-tools/ 2>/dev/null || echo "(not found)"
+          echo ""
+          echo "=== export_presets.cfg Android section ==="
+          sed -n '/\[preset\.1\]/,/^\[/p' game/export_presets.cfg
+
       - name: Export — Windows Desktop
         working-directory: game
         run: |
