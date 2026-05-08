@@ -17,13 +17,13 @@ const PANEL_W: float = 300.0
 const PANEL_H: float = 216.0
 const PADDING: float = 14.0
 
-const COLOR_BG      := Color(0.02, 0.12, 0.00, 0.95)
+const COLOR_BG      := Color(0.04, 0.22, 0.00, 0.95)
 const COLOR_OUTLINE := Color(0.22, 0.60, 0.04, 1.0)
 const COLOR_TEXT    := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM := Color(0.55, 0.78, 0.50, 1.0)
 const COLOR_DIVIDER := Color(0.06, 0.22, 0.01, 1.0)
 const COLOR_BTN_NORMAL  := Color(0.01, 0.07, 0.00, 1.0)
-const COLOR_BTN_HOVER   := Color(0.03, 0.14, 0.01, 1.0)
+const COLOR_BTN_HOVER   := Color(0.07, 0.32, 0.02, 1.0)
 const COLOR_BTN_PRESSED := Color(0.01, 0.04, 0.00, 1.0)
 const COLOR_BTN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
 const COLOR_FIELD_BG    := Color(0.01, 0.06, 0.00, 1.0)
@@ -113,6 +113,7 @@ func _build_ui() -> void:
 	_check_static = CheckBox.new()
 	_check_static.button_pressed = false
 	_check_static.add_theme_font_override("font", UIFonts.primary())
+	_style_checkbox(_check_static)
 	static_row.add_child(_check_static)
 	y += 36.0
 
@@ -232,6 +233,23 @@ func _style_button(btn: Button) -> void:
 		box.content_margin_bottom = 4.0
 		btn.add_theme_stylebox_override(state[0], box)
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
+
+
+func _style_checkbox(cb: CheckBox) -> void:
+	# Normal and pressed states: fully transparent so only Godot's built-in
+	# checkbox icon is visible against the panel background.
+	for state: String in ["normal", "pressed"]:
+		var box := StyleBoxFlat.new()
+		box.bg_color = Color(0.0, 0.0, 0.0, 0.0)
+		box.set_border_width_all(0)
+		cb.add_theme_stylebox_override(state, box)
+	# Hover: bright green border around the full control to signal interactivity.
+	var hover_box := StyleBoxFlat.new()
+	hover_box.bg_color     = Color(0.0, 0.0, 0.0, 0.0)
+	hover_box.border_color = COLOR_OUTLINE
+	hover_box.set_border_width_all(2)
+	hover_box.set_corner_radius_all(4)
+	cb.add_theme_stylebox_override("hover", hover_box)
 
 
 func _style_field(field: LineEdit) -> void:
