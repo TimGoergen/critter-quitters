@@ -44,9 +44,11 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
-	var vp := get_viewport().get_visible_rect().size
-	var px := (vp.x - PANEL_W) * 0.5
-	var py := (vp.y - PANEL_H) * 0.5
+	var vp      := get_viewport().get_visible_rect().size
+	# Centre in the arena zone (between the HUD side panels), not the full viewport.
+	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
+	var px       := arena_cx - PANEL_W * 0.5
+	var py       := (vp.y - PANEL_H) * 0.5
 
 	# Fullscreen darkening overlay — covers the arena behind the dialog.
 	# Added first so it renders beneath the panel and border.
@@ -208,13 +210,19 @@ func covers_point(screen_pos: Vector2) -> bool:
 
 
 func _input(event: InputEvent) -> void:
+	var pos   := Vector2.ZERO
+	var fired := false
 	if event is InputEventMouseButton and event.pressed:
-		# Let clicks on the trap selector through so the player can pick a trap
-		# before starting without the click also dismissing the dialog.
-		var vp:          Vector2 = get_viewport().get_visible_rect().size
-		var selector_h: float   = HUD.SELECTOR_LANDSCAPE_STRIP_H if vp.x >= vp.y else HUD.SELECTOR_STRIP_H
-		var in_selector: bool   = event.position.y >= vp.y - selector_h
-		if not _panel_rect.has_point(event.position) and not in_selector:
+		pos = event.position
+		fired = true
+	elif event is InputEventScreenTouch and event.pressed:
+		pos = event.position
+		fired = true
+	if fired:
+		# Let taps on the left HUD panel through so the player can change trap
+		# type before starting without the tap also dismissing the dialog.
+		var in_left_panel := pos.x < HUD.LEFT_PANEL_W
+		if not _panel_rect.has_point(pos) and not in_left_panel:
 			get_viewport().set_input_as_handled()
 			_on_start_pressed()
 

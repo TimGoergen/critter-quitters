@@ -23,6 +23,10 @@ GameState="*res://core/GameState.gd"
 
 project/assembly_name="Critter Quitters Pest Control"
 
+[display]
+
+window/handheld/orientation=2
+
 [rendering]
 
 renderer/rendering_method="mobile"

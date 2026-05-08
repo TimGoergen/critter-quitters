@@ -1,11 +1,15 @@
 ## TrapUpgradePanel.gd
 ## Appears when the player taps a placed trap. Shows current stats and
-## presents one upgrade button per stat (Damage, Range, Fire Rate).
+## presents one upgrade button per stat (Damage, Range, Fire Rate), plus
+## a SELL button at the bottom that refunds 70% of the trap's purchase price.
 ##
 ## Each stat upgrades independently up to Trap.MAX_UPGRADE_LEVEL (3) times.
 ## The cost for the next upgrade of each stat is shown on its button.
 ## A button shows "MAX" and is disabled when that stat is fully upgraded.
 ## A button is also disabled when the player cannot afford it.
+##
+## Panel dimensions are derived from the viewport at build time so the
+## touch targets scale appropriately across phone screen sizes.
 ##
 ## process_mode is ALWAYS so the panel stays interactive while the game
 ## tree is paused (which Arena does while this panel is open).
@@ -13,27 +17,31 @@
 extends CanvasLayer
 
 signal closed
+signal sell_requested   # Arena connects this to _on_sell_trap_requested(anchor)
 
-const PANEL_W:  float = 272.0
-const PANEL_H:  float = 208.0
+const HUD      = preload("res://ui/HUD.gd")
+const UIFonts  = preload("res://ui/UIFonts.gd")
+
+# Smallest acceptable touch target height. Scales up with the viewport.
+const MIN_BTN_H: float = 48.0
+
 const PADDING:  float = 10.0
-const BTN_H:    float = 28.0
 const BORDER_W: float = 2.0
-const HUD_BOT:  float = 38.0   # keep in sync with HUD.gd bottom bar height
 
-const COLOR_BG         := Color(0.04, 0.28, 0.28, 0.90)
-const COLOR_OUTLINE    := Color(0.20, 0.55, 0.55, 1.0)
-const COLOR_DIVIDER    := Color(0.15, 0.45, 0.45, 1.0)
-const COLOR_TEXT       := Color(0.90, 0.90, 0.90, 1.0)
-const COLOR_TEXT_DIM   := Color(0.65, 0.80, 0.80, 1.0)
+const COLOR_BG          := Color(0.04, 0.28, 0.28, 0.90)
+const COLOR_OUTLINE     := Color(0.20, 0.55, 0.55, 1.0)
+const COLOR_DIVIDER     := Color(0.15, 0.45, 0.45, 1.0)
+const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
+const COLOR_TEXT_DIM    := Color(0.65, 0.80, 0.80, 1.0)
 const COLOR_BTN_NORMAL  := Color(0.06, 0.22, 0.22, 1.0)
 const COLOR_BTN_HOVER   := Color(0.10, 0.32, 0.32, 1.0)
 const COLOR_BTN_PRESSED := Color(0.03, 0.15, 0.15, 1.0)
 const COLOR_BTN_BORDER  := Color(0.20, 0.55, 0.55, 1.0)
 const COLOR_BTN_MAX     := Color(0.08, 0.18, 0.18, 1.0)   # dimmed when maxed
+const COLOR_BTN_SELL    := Color(0.28, 0.10, 0.06, 1.0)   # red-toned sell button
+const COLOR_BTN_SELL_HOVER   := Color(0.38, 0.14, 0.08, 1.0)
+const COLOR_BTN_SELL_PRESSED := Color(0.18, 0.06, 0.04, 1.0)
 const COLOR_STARS       := Color(0.85, 0.72, 0.10, 1.0)
-
-const UIFonts = preload("res://ui/UIFonts.gd")
 
 
 # ---------------------------------------------------------------------------
@@ -52,9 +60,10 @@ var _lbl_range:        Label = null
 var _lbl_range_stars:  Label = null
 var _lbl_rate:         Label = null
 var _lbl_rate_stars:   Label = null
-var _btn_a:      Button    = null   # Damage
-var _btn_b:      Button    = null   # Range
-var _btn_c:      Button    = null   # Fire Rate
+var _btn_a:      Button    = null   # Damage upgrade
+var _btn_b:      Button    = null   # Range upgrade
+var _btn_c:      Button    = null   # Fire Rate upgrade
+var _btn_sell:   Button    = null   # Sell trap (70% refund)
 
 
 # ---------------------------------------------------------------------------
@@ -77,39 +86,51 @@ func initialize(trap: Node) -> void:
 # ---------------------------------------------------------------------------
 
 func _build_ui() -> void:
-	var vp := get_viewport().get_visible_rect().size
-	var px := (vp.x - PANEL_W) * 0.5
-	var py := vp.y - PANEL_H - HUD_BOT - 10.0
+	var vp      := get_viewport().get_visible_rect().size
 
-	# Store the full panel rect (including border) for outside-click detection.
-	_panel_rect = Rect2(Vector2(px - BORDER_W, py - BORDER_W), Vector2(PANEL_W + BORDER_W * 2.0, PANEL_H + BORDER_W * 2.0))
+	# Panel dimensions scale with the viewport so touch targets remain comfortable
+	# at any phone screen size.
+	var panel_w := maxf(300.0, vp.x * 0.50)
+	var panel_h := vp.y * 0.65
+	var btn_h   := maxf(MIN_BTN_H, panel_h / 10.0)
+
+	# Centre the panel in the arena zone (the space between the two HUD panels).
+	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
+	var px       := arena_cx - panel_w * 0.5
+	var py       := (vp.y - panel_h) * 0.5
+
+	# Store the full panel rect (including border) for outside-tap detection.
+	_panel_rect = Rect2(
+		Vector2(px - BORDER_W, py - BORDER_W),
+		Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
+	)
 
 	# Outline border — rendered behind the background rect.
 	_border          = ColorRect.new()
 	_border.color    = COLOR_OUTLINE
 	_border.position = Vector2(px - BORDER_W, py - BORDER_W)
-	_border.size     = Vector2(PANEL_W + BORDER_W * 2.0, PANEL_H + BORDER_W * 2.0)
+	_border.size     = Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
 	add_child(_border)
 
 	# Background panel
 	_bg          = ColorRect.new()
 	_bg.color    = COLOR_BG
 	_bg.position = Vector2(px, py)
-	_bg.size     = Vector2(PANEL_W, PANEL_H)
+	_bg.size     = Vector2(panel_w, panel_h)
 	add_child(_bg)
 
-	var inner_w := PANEL_W - PADDING * 2.0
+	var inner_w := panel_w - PADDING * 2.0
 	var y       := PADDING
 
 	# --- Header: trap name | close button ---
 	var header := HBoxContainer.new()
 	header.position            = Vector2(PADDING, y)
-	header.custom_minimum_size = Vector2(inner_w, 22.0)
+	header.custom_minimum_size = Vector2(inner_w, 36.0)
 	_bg.add_child(header)
 
 	_lbl_title = Label.new()
 	_lbl_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_lbl_title.add_theme_font_size_override("font_size", 15)
+	_lbl_title.add_theme_font_size_override("font_size", 16)
 	_lbl_title.add_theme_color_override("font_color", COLOR_TEXT)
 	_lbl_title.add_theme_font_override("font", UIFonts.flavor())
 	header.add_child(_lbl_title)
@@ -120,44 +141,58 @@ func _build_ui() -> void:
 	_apply_button_style(btn_close, false)
 	header.add_child(btn_close)
 
-	y += 28.0
+	y += 42.0
 
 	# --- Current stats ---
 	# Each row is an HBoxContainer: value label expands to fill, stars label
 	# is right-aligned — this keeps the three star columns vertically aligned.
-	var dmg_row := _add_stat_row(y)
+	var dmg_row := _add_stat_row(y, inner_w)
 	_lbl_damage       = _make_stat_value_label()
 	_lbl_damage_stars = _make_stat_stars_label()
 	dmg_row.add_child(_lbl_damage)
 	dmg_row.add_child(_lbl_damage_stars)
-	y += 18.0
+	y += 22.0
 
-	var rng_row := _add_stat_row(y)
+	var rng_row := _add_stat_row(y, inner_w)
 	_lbl_range       = _make_stat_value_label()
 	_lbl_range_stars = _make_stat_stars_label()
 	rng_row.add_child(_lbl_range)
 	rng_row.add_child(_lbl_range_stars)
-	y += 18.0
+	y += 22.0
 
-	var rate_row := _add_stat_row(y)
+	var rate_row := _add_stat_row(y, inner_w)
 	_lbl_rate       = _make_stat_value_label()
 	_lbl_rate_stars = _make_stat_stars_label()
 	rate_row.add_child(_lbl_rate)
 	rate_row.add_child(_lbl_rate_stars)
-	y += 18.0
+	y += 22.0
 
 	# --- Horizontal divider ---
-	_add_divider(y)
-	y += 7.0
+	_add_divider(y, inner_w)
+	y += 8.0
 
 	# --- Upgrade buttons ---
-	_btn_a = _add_upgrade_button(y); y += BTN_H + 4.0
-	_btn_b = _add_upgrade_button(y); y += BTN_H + 4.0
-	_btn_c = _add_upgrade_button(y)
+	_btn_a = _add_upgrade_button(y, inner_w, btn_h); y += btn_h + 5.0
+	_btn_b = _add_upgrade_button(y, inner_w, btn_h); y += btn_h + 5.0
+	_btn_c = _add_upgrade_button(y, inner_w, btn_h); y += btn_h + 5.0
 
 	_btn_a.pressed.connect(_on_btn_a)
 	_btn_b.pressed.connect(_on_btn_b)
 	_btn_c.pressed.connect(_on_btn_c)
+
+	# --- Divider before sell ---
+	_add_divider(y, inner_w)
+	y += 8.0
+
+	# --- Sell button ---
+	_btn_sell = Button.new()
+	_btn_sell.position            = Vector2(PADDING, y)
+	_btn_sell.custom_minimum_size = Vector2(inner_w, btn_h)
+	_btn_sell.add_theme_font_size_override("font_size", 14)
+	_btn_sell.add_theme_font_override("font", UIFonts.primary())
+	_apply_sell_button_style(_btn_sell)
+	_bg.add_child(_btn_sell)
+	_btn_sell.pressed.connect(_on_btn_sell)
 
 
 # ---------------------------------------------------------------------------
@@ -208,6 +243,10 @@ func _refresh() -> void:
 			"Fire Rate  %.2f → %.2f /s" % [_trap.get_shots_per_sec(), _trap.get_shots_per_sec_after_upgrade()]
 		)
 
+	# Show current sell value on the SELL button.
+	var sell_value := int(_trap.get_cost() * 0.70)
+	_btn_sell.text = "SELL   +$%d" % sell_value
+
 
 ## Updates one upgrade button: sets text, cost suffix, disabled state, and dim style.
 func _refresh_button(btn: Button, maxed: bool, cost: int, label: String) -> void:
@@ -225,11 +264,19 @@ func _refresh_button(btn: Button, maxed: bool, cost: int, label: String) -> void
 # Button handlers
 # ---------------------------------------------------------------------------
 
+## Closes the panel when the player taps outside it (on either mouse or touch).
 func _input(event: InputEvent) -> void:
+	var pos   := Vector2.ZERO
+	var fired := false
 	if event is InputEventMouseButton and event.pressed:
-		if not _panel_rect.has_point(event.position):
-			get_viewport().set_input_as_handled()
-			_on_close()
+		pos = event.position
+		fired = true
+	elif event is InputEventScreenTouch and event.pressed:
+		pos = event.position
+		fired = true
+	if fired and not _panel_rect.has_point(pos):
+		get_viewport().set_input_as_handled()
+		_on_close()
 
 
 func _on_btn_a() -> void:
@@ -256,6 +303,13 @@ func _on_btn_c() -> void:
 	_trap.apply_fire_rate_upgrade()
 
 
+func _on_btn_sell() -> void:
+	# Signal Arena to refund the player and remove the trap from the grid.
+	# Arena handles both the Bug Bucks credit and the node cleanup.
+	sell_requested.emit()
+	# _on_close is not called here — Arena's handler calls queue_free() on us.
+
+
 func _on_close() -> void:
 	if GameState.bug_bucks_changed.is_connected(_on_bug_bucks_changed):
 		GameState.bug_bucks_changed.disconnect(_on_bug_bucks_changed)
@@ -271,10 +325,10 @@ func _on_bug_bucks_changed(_amount: int) -> void:
 # UI helpers
 # ---------------------------------------------------------------------------
 
-func _add_stat_row(y: float) -> HBoxContainer:
+func _add_stat_row(y: float, inner_w: float) -> HBoxContainer:
 	var row := HBoxContainer.new()
 	row.position            = Vector2(PADDING, y)
-	row.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, 16.0)
+	row.custom_minimum_size = Vector2(inner_w, 18.0)
 	_bg.add_child(row)
 	return row
 
@@ -294,10 +348,10 @@ func _make_stat_stars_label() -> Label:
 	return lbl
 
 
-func _add_upgrade_button(y: float) -> Button:
+func _add_upgrade_button(y: float, inner_w: float, btn_h: float) -> Button:
 	var btn               := Button.new()
 	btn.position           = Vector2(PADDING, y)
-	btn.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, BTN_H)
+	btn.custom_minimum_size = Vector2(inner_w, btn_h)
 	btn.add_theme_font_size_override("font_size", 13)
 	btn.add_theme_font_override("font", UIFonts.primary())
 	_apply_button_style(btn, false)
@@ -310,20 +364,20 @@ func _stars(level: int) -> String:
 	return "★".repeat(level) + "☆".repeat(3 - level)
 
 
-func _add_divider(y: float) -> void:
+func _add_divider(y: float, inner_w: float) -> void:
 	var line     := ColorRect.new()
 	line.color    = COLOR_DIVIDER
 	line.position = Vector2(PADDING, y)
-	line.size     = Vector2(PANEL_W - PADDING * 2.0, 1.0)
+	line.size     = Vector2(inner_w, 1.0)
 	_bg.add_child(line)
 
 
 ## Applies the correct button style. maxed=true uses a dimmer palette to signal
 ## the stat is fully upgraded rather than just unaffordable.
 func _apply_button_style(btn: Button, maxed: bool) -> void:
-	var normal  := COLOR_BTN_MAX    if maxed else COLOR_BTN_NORMAL
-	var hover   := COLOR_BTN_MAX    if maxed else COLOR_BTN_HOVER
-	var pressed := COLOR_BTN_MAX    if maxed else COLOR_BTN_PRESSED
+	var normal  := COLOR_BTN_MAX if maxed else COLOR_BTN_NORMAL
+	var hover   := COLOR_BTN_MAX if maxed else COLOR_BTN_HOVER
+	var pressed := COLOR_BTN_MAX if maxed else COLOR_BTN_PRESSED
 	for state: Array in [["normal", normal], ["hover", hover], ["pressed", pressed]]:
 		var box := StyleBoxFlat.new()
 		box.bg_color           = state[1]
@@ -332,7 +386,27 @@ func _apply_button_style(btn: Button, maxed: bool) -> void:
 		box.set_corner_radius_all(4)
 		box.content_margin_left   = 8.0
 		box.content_margin_right  = 8.0
-		box.content_margin_top    = 3.0
-		box.content_margin_bottom = 3.0
+		box.content_margin_top    = 4.0
+		box.content_margin_bottom = 4.0
+		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_color_override("font_color", COLOR_TEXT)
+
+
+## Applies the sell button's red-toned style (distinct from upgrade buttons).
+func _apply_sell_button_style(btn: Button) -> void:
+	for state: Array in [
+		["normal",  COLOR_BTN_SELL],
+		["hover",   COLOR_BTN_SELL_HOVER],
+		["pressed", COLOR_BTN_SELL_PRESSED],
+	]:
+		var box := StyleBoxFlat.new()
+		box.bg_color           = state[1]
+		box.border_color       = COLOR_BTN_BORDER
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(4)
+		box.content_margin_left   = 8.0
+		box.content_margin_right  = 8.0
+		box.content_margin_top    = 4.0
+		box.content_margin_bottom = 4.0
 		btn.add_theme_stylebox_override(state[0], box)
 	btn.add_theme_color_override("font_color", COLOR_TEXT)

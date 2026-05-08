@@ -11,11 +11,8 @@
 ## rendering is Phase 3 work.
 ##
 ## Placement model:
-##   Press and drag draws a line of ghost traps from the press origin to the
-##   cursor. Release commits them in order from origin to end; traps that
-##   cannot be afforded are skipped (cost validation is a stub until the
-##   currency system exists). Right-click cancels the drag without placing.
-##   Right-click outside a drag removes the trap under the cursor.
+##   Tap an empty cell to place one trap there. Drag to pan the camera when
+##   zoomed in. Right-click (dev / desktop only) removes the trap under the cursor.
 ##
 ## Coordinate conventions:
 ##   Grid  — Vector2i(col, row), origin top-left, col = X, row = Z
@@ -45,19 +42,12 @@ const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
 # the path visualisation is a debug aid; it clutters the arena during normal play.
 const SHOW_PATH_LINE: bool = false
 
-# Fixed HUD heights in screen pixels — must match the corresponding constants in HUD.gd.
-# The selector strip is added to HUD_BOT_PX per orientation (see _fit_camera_to_grid).
-# Infestation bar moved to the top panel, so HUD_BOT_PX is now 0 — the selector
-# sits directly at the screen's bottom edge with no additional strip below it.
-const HUD_TOP_PX: float = 72.0   # top stats bar (HUD.PANEL_H)
-const HUD_BOT_PX: float = 0.0    # no persistent bottom strip below the selector
-
-const COLOR_TRAP      := Color(0.40, 0.40, 0.80, 1.0)   # blue-grey box
-const COLOR_PATH      := Color(0.80, 0.70, 0.20, 0.5)   # yellow, semi-transparent
-const COLOR_GRID_GLOW    := Color(0.65, 0.90, 1.0)       # cool blue-white for cursor glow
-const COLOR_WALL_FILL    := Color(0.35, 0.35, 0.35, 1.0) # medium-dark gray wall fill
-const COLOR_WALL_BORDER  := Color(0.12, 0.12, 0.12, 1.0) # very dark gray cell border lines
-const COLOR_TRAP_SELECTED := Color(0.90, 0.70, 0.10, 1.0) # gold outline on selected trap
+const COLOR_TRAP         := Color(0.40, 0.40, 0.80, 1.0)   # blue-grey box
+const COLOR_PATH         := Color(0.80, 0.70, 0.20, 0.5)   # yellow, semi-transparent
+const COLOR_GRID_GLOW    := Color(0.65, 0.90, 1.0)         # cool blue-white for cursor glow
+const COLOR_WALL_FILL    := Color(0.58, 0.56, 0.52, 1.0)   # light warm stone wall fill
+const COLOR_WALL_BORDER  := Color(0.28, 0.27, 0.25, 1.0)   # medium warm gray cell border lines
+const COLOR_TRAP_SELECTED := Color(0.90, 0.70, 0.10, 1.0)  # gold outline on selected trap
 
 
 
@@ -117,12 +107,7 @@ var _static_spawn_queue:  Array[Enemy.EnemyType] = []
 # and trimmed forward as the enemy advances through cells.
 var _display_path: Array[Vector2i] = []
 
-# Grid highlight — a single ImmediateMesh rebuilt each time the hover cell changes.
-var _grid_highlight: MeshInstance3D = null
-var _hover_cell: Vector2i = Vector2i(-1, -1)
-
 # Gold perimeter drawn around the 2×2 footprint of the currently open upgrade panel.
-# Separate node from _grid_highlight so cursor movement does not clear it.
 var _selected_trap_outline: MeshInstance3D = null
 
 # Per-placed-trap inset perimeter outlines. Redrawn when hover or selection state changes.
@@ -141,19 +126,21 @@ var _selected_trap: Node = null
 # True while the panel is the reason the tree is paused, so close knows to unpause.
 var _panel_paused: bool = false
 
-# Drag placement state — press starts, drag extends a line of ghost traps,
-# release commits them in order; right-click cancels without placing.
-var _pressing: bool = false
-var _drag_origin: Vector2i = Vector2i(-1, -1)
-var _drag_anchors: Array[Vector2i] = []
-var _drag_ghosts: Array[Node3D] = []
-var _drag_ghost_outlines: Array[MeshInstance3D] = []
+# Touch input state machine — classifies a finger gesture as either a tap or a drag.
+enum TouchState { IDLE, PENDING_CLASSIFY, DRAGGING }
+var _touch_state:    TouchState = TouchState.IDLE
+var _touch_down_pos: Vector2    = Vector2.ZERO   # screen position where the finger landed
+var _touch_last_pos: Vector2    = Vector2.ZERO   # most recent drag position
+const DRAG_THRESHOLD_PX: float  = 15.0           # movement before classifying as drag
 
-# A single ghost of the selected trap shown at the hover position before pressing.
-# Rebuilt when trap type or placement validity changes; repositioned on every cursor move.
-var _hover_preview:       Node3D = null
-var _hover_preview_type:  int    = -1
-var _hover_preview_valid: bool   = true
+# Camera zoom — two discrete levels: overview (full-arena fit) and zoomed-in (2×).
+enum ZoomState { OVERVIEW, ZOOMED_IN }
+var _zoom_state:           ZoomState = ZoomState.OVERVIEW
+var _overview_camera_size: float     = 0.0   # camera.size at the overview level; set by _fit_camera_to_grid
+var _camera_base_h_offset: float     = 0.0   # h_offset that centres the arena between the two panels
+var _pan_world_pos:         Vector2  = Vector2.ZERO   # current camera XZ pan offset (world units)
+var _arena_world_half:      float    = 0.0   # half the grid world size; used for pan clamping
+var _followed_enemy:        Node3D   = null  # non-null while enemy-follow mode is active
 
 # Reference to the playtest setup dialog while it is open; null after it confirms.
 var _debug_dialog: Node = null
@@ -222,7 +209,6 @@ func _ready() -> void:
 	_spawn_cave_marker(_spawn_cell,   90.0)
 	_spawn_cave_marker(_despawn_cell, -90.0)
 
-	_setup_grid_highlight()
 	_setup_selected_trap_outline()
 	_init_path_marker_pool()
 	_spawn_floor()
@@ -235,9 +221,16 @@ func _ready() -> void:
 	add_child(HUD.new())
 	GameState.wave_skip_requested.connect(_on_wave_skip_requested)
 	GameState.run_ended.connect(_close_upgrade_panel)
+	GameState.run_ended.connect(_on_run_ended_camera)
 	GameState.trap_type_selected.connect(_on_trap_type_changed)
+	GameState.zoom_toggle_requested.connect(_toggle_zoom)
+	# Release enemy follow when a new wave launches (countdown expires).
+	GameState.wave_countdown_changed.connect(func(sec: int) -> void:
+		if sec == 0:
+			_followed_enemy = null
+	)
 
-	# Size the camera to fit the arena inside the non-HUD portion of the screen,
+	# Size the camera to fit the arena inside the usable area between side panels,
 	# and re-fit whenever the window is resized.
 	_fit_camera_to_grid()
 	get_viewport().size_changed.connect(_fit_camera_to_grid)
@@ -253,138 +246,115 @@ func _ready() -> void:
 # Input
 # ---------------------------------------------------------------------------
 
-## _input fires for every event, even those already consumed by GUI controls.
-## We use it only to suppress the reticle when the mouse is over the dialog,
-## because the dialog's Control nodes consume mouse-motion events before
-## _unhandled_input can see them, leaving the reticle frozen.
-func _input(event: InputEvent) -> void:
-	if not (event is InputEventMouseMotion):
-		return
-	if _debug_dialog == null or not is_instance_valid(_debug_dialog):
-		return
-	if not (_debug_dialog as DebugStartDialog).covers_point(event.position):
-		return
-	_hover_cell = Vector2i(-1, -1)
-	_grid_highlight.mesh = null
-	_hide_hover_preview()
-
-
 func _unhandled_input(event: InputEvent) -> void:
-	# Mouse motion always updates the reticle — even while paused — so the hover
-	# preview stays live during the debug dialog, upgrade panel, or player pause.
-	if event is InputEventMouseMotion:
-		var cell := _screen_to_grid(event.position)
-		if cell != _hover_cell:
-			_hover_cell = cell
-			_update_grid_highlight()
-			if _pressing and not get_tree().paused:
-				_update_drag_ghosts(cell)
-		return
-
-	# All placement and removal actions are blocked while the tree is paused.
-	if get_tree().paused:
-		return
-
-	# Mobile: a second finger tap while dragging cancels the placement.
 	if event is InputEventScreenTouch:
-		if event.pressed and event.index > 0 and _pressing:
-			_cancel_drag_placement()
+		if event.index != 0:
+			return   # ignore second finger
+		if event.pressed:
+			_touch_state    = TouchState.PENDING_CLASSIFY
+			_touch_down_pos = event.position
+			_touch_last_pos = event.position
+		else:
+			if _touch_state == TouchState.PENDING_CLASSIFY:
+				_handle_tap(_touch_down_pos)
+			_touch_state = TouchState.IDLE
 		return
 
+	if event is InputEventScreenDrag:
+		if event.index != 0:
+			return
+		_touch_last_pos = event.position
+		if _touch_state == TouchState.PENDING_CLASSIFY:
+			if event.position.distance_to(_touch_down_pos) >= DRAG_THRESHOLD_PX:
+				_touch_state = TouchState.DRAGGING
+		if _touch_state == TouchState.DRAGGING:
+			# Drag pans the camera only when zoomed in and not following an enemy.
+			if _zoom_state == ZoomState.ZOOMED_IN and _followed_enemy == null:
+				var vp          := get_viewport().get_visible_rect().size
+				var world_per_px := _camera.size / vp.y
+				_apply_pan(_pan_world_pos - event.relative * world_per_px)
+		return
+
+	# Keep right-click removal and keyboard shortcuts for desktop/dev use.
 	if event is InputEventKey:
 		if event.pressed and not event.echo:
 			_handle_key(event.keycode)
 		return
 
-	if not event is InputEventMouseButton:
+	if event is InputEventMouseButton and event.pressed:
+		var cell := _screen_to_grid(event.position)
+		if event.button_index == MOUSE_BUTTON_RIGHT:
+			_try_remove_trap(cell)
+
+
+# ---------------------------------------------------------------------------
+# Touch dispatch
+# ---------------------------------------------------------------------------
+
+## Dispatches a confirmed tap (finger lifted without crossing DRAG_THRESHOLD_PX).
+func _handle_tap(screen_pos: Vector2) -> void:
+	# Enemy tap takes priority — enemies sit above the floor plane.
+	var tapped_enemy := _find_enemy_near_screen(screen_pos, 40.0)
+	if tapped_enemy != null:
+		_handle_enemy_tap(tapped_enemy)
 		return
 
-	var cell := _screen_to_grid(event.position)
+	var cell := _screen_to_grid(screen_pos)
 
-	match event.button_index:
-		MOUSE_BUTTON_LEFT:
-			if event.pressed:
-				if _is_in_arena(cell):
-					if _trap_anchors.has(cell):
-						# Tapping a placed trap opens the upgrade panel for it.
-						_open_upgrade_panel(_trap_anchors[cell])
-					else:
-						_close_upgrade_panel()
-						_start_drag_placement(cell)
-			else:
-				if _pressing:
-					_commit_drag_placement()
-		MOUSE_BUTTON_RIGHT:
-			if event.pressed:
-				if _pressing:
-					_cancel_drag_placement()
-				else:
-					_try_remove_trap(cell)
+	# Tap on a placed trap → center camera (if zoomed) and open upgrade panel.
+	if _trap_anchors.has(cell):
+		if _zoom_state == ZoomState.ZOOMED_IN:
+			_followed_enemy = null
+			var wp := _cell_to_world(_trap_anchors[cell])
+			_apply_pan(Vector2(wp.x, wp.z))
+		_open_upgrade_panel(_trap_anchors[cell])
+		return
+
+	# Tap on an empty arena cell → place trap if affordable and not obstructed.
+	if not get_tree().paused and _is_in_arena(cell):
+		_close_upgrade_panel()
+		if _can_afford_trap():
+			var anchor := _clamp_to_anchor(cell)
+			var cells  := _get_trap_cells(anchor)
+			if not cells.is_empty() and not _footprint_overlaps_enemy(cells):
+				_try_place_trap(anchor)
+
+
+## Returns the nearest active enemy whose projected screen position is within
+## max_dist_px of screen_pos, or null if none qualifies.
+func _find_enemy_near_screen(screen_pos: Vector2, max_dist_px: float) -> Node3D:
+	var best: Node3D = null
+	var best_dist := max_dist_px
+	for enemy in _active_enemies:
+		if not is_instance_valid(enemy):
+			continue
+		var projected := _camera.unproject_position(enemy.global_position)
+		var d := projected.distance_to(screen_pos)
+		if d < best_dist:
+			best_dist = d
+			best = enemy
+	return best
+
+
+## Handles a tap on an enemy: zooms in and follows, or cancels follow.
+func _handle_enemy_tap(enemy: Node3D) -> void:
+	if _zoom_state == ZoomState.OVERVIEW:
+		# Zoom in and begin following this enemy.
+		_zoom_state = ZoomState.ZOOMED_IN
+		_camera.size = _overview_camera_size * 0.5
+		_followed_enemy = enemy
+		GameState.zoom_state_changed.emit(true)
+	elif _followed_enemy == enemy:
+		# Tap the same enemy again → back to overview.
+		_toggle_zoom()
+	else:
+		# Switch follow to this new enemy (stay zoomed).
+		_followed_enemy = enemy
 
 
 # ---------------------------------------------------------------------------
-# Drag placement
+# Placement
 # ---------------------------------------------------------------------------
-
-## Called on press. Records the origin and immediately shows the first ghost.
-func _start_drag_placement(cell: Vector2i) -> void:
-	_hide_hover_preview()
-	_pressing    = true
-	_drag_origin = _clamp_to_anchor(cell)
-	_update_drag_ghosts(cell)
-
-
-## Rebuilds the ghost line from origin to the current cursor cell.
-## Only cells that are individually buildable get a ghost — ghosts at
-## positions blocked by existing traps or walls are silently skipped.
-func _update_drag_ghosts(target: Vector2i) -> void:
-	_clear_drag_ghosts()
-	_drag_anchors = _compute_drag_anchors(_drag_origin, _clamp_to_anchor(target))
-	for anchor in _drag_anchors:
-		var cells := _get_trap_cells(anchor)
-		if cells.is_empty():
-			continue
-		var buildable := true
-		for cell in cells:
-			if not _grid.is_buildable(cell):
-				buildable = false
-				break
-		if not buildable:
-			continue
-		var ghost := _make_trap_preview(GameState.selected_trap_type, 0.45)
-		var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
-		ghost.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
-		_drag_ghosts.append(ghost)
-		_drag_ghost_outlines.append(_make_drag_outline(anchor))
-
-
-## On release, commits anchors in order from origin to end.
-## Stops at the first anchor that cannot be afforded or whose footprint
-## overlaps an active enemy — that anchor and all after it are skipped.
-## TODO: wire _can_afford_trap() to the currency system once it exists.
-func _commit_drag_placement() -> void:
-	_pressing = false
-	_clear_drag_ghosts()
-	for anchor in _drag_anchors:
-		if not _can_afford_trap():
-			break
-		var cells := _get_trap_cells(anchor)
-		if _footprint_overlaps_enemy(cells):
-			break
-		if not _try_place_trap(anchor):
-			break
-	_drag_anchors.clear()
-	_drag_origin = Vector2i(-1, -1)
-
-
-## Cancels the drag without placing any traps.
-## Triggered by right-click (desktop) or second-finger tap (mobile).
-func _cancel_drag_placement() -> void:
-	_pressing = false
-	_clear_drag_ghosts()
-	_drag_anchors.clear()
-	_drag_origin = Vector2i(-1, -1)
-
 
 ## Returns true if the player can afford one more trap of the currently selected type.
 func _can_afford_trap() -> bool:
@@ -400,105 +370,6 @@ func _footprint_overlaps_enemy(cells: Array[Vector2i]) -> bool:
 		if enemy.get_target_cell() in cells:
 			return true
 	return false
-
-
-## Returns a sequence of 2x2 trap anchor cells from origin toward target.
-##
-## Anchors step exactly 2 cells along the dominant axis per trap, with
-## the minor axis scaled proportionally. This keeps consecutive 2x2
-## footprints touching with no gaps. The last trap advances only once the
-## cursor is far enough to fit another full footprint.
-func _compute_drag_anchors(origin: Vector2i, target: Vector2i) -> Array[Vector2i]:
-	var dir      := target - origin
-	var dominant := maxi(abs(dir.x), abs(dir.y))
-
-	if dominant == 0:
-		return [origin]
-
-	var n := dominant / 2 + 1
-
-	var anchors: Array[Vector2i] = []
-	for i in range(n):
-		var t   := float(i * 2) / float(dominant)
-		var pos := Vector2(origin) + Vector2(dir) * t
-		anchors.append(Vector2i(roundi(pos.x), roundi(pos.y)))
-	return anchors
-
-
-## Frees all ghost nodes and their outlines from the current drag line.
-func _clear_drag_ghosts() -> void:
-	for ghost in _drag_ghosts:
-		ghost.queue_free()
-	_drag_ghosts.clear()
-	for outline in _drag_ghost_outlines:
-		outline.queue_free()
-	_drag_ghost_outlines.clear()
-
-
-## Builds and returns an outline MeshInstance3D for a drag-preview ghost.
-## Mirrors _draw_trap_outline but uses hovered brightness (no placed trap exists yet)
-## and returns a fresh node rather than updating _trap_outlines.
-func _make_drag_outline(anchor: Vector2i) -> MeshInstance3D:
-	var trap_type: int  = GameState.selected_trap_type
-	var base: Color     = Trap.STATS[trap_type]["color"]
-	var outline_color: Color = base.lightened(0.45)
-	outline_color.a = 1.0
-	var fill_color := _neon_color(base)
-	fill_color.a = 0.03
-
-	var hs := Grid.CELL_SIZE * 0.5
-	var cs := Grid.CELL_SIZE
-	var c  := _cell_to_world(anchor)
-
-	var min_x := c.x - hs;       var max_x := c.x + hs + cs
-	var min_z := c.z - hs;       var max_z := c.z + hs + cs
-	var cx    := (min_x + max_x) * 0.5
-	var cz    := (min_z + max_z) * 0.5
-
-	const CORNER_R:    float = 0.15
-	const CORNER_SEGS: int   = 5
-	var y_fill    := 0.03
-	var y_outline := 0.06
-
-	var im := ImmediateMesh.new()
-
-	var fill_pts := _rounded_rect_pts(min_x, max_x, min_z, max_z, y_fill, CORNER_R, CORNER_SEGS)
-	var center   := Vector3(cx, y_fill, cz)
-	var n := fill_pts.size()
-	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	for i in range(n):
-		var a: Vector3 = fill_pts[i]
-		var b: Vector3 = fill_pts[(i + 1) % n]
-		im.surface_set_color(fill_color); im.surface_add_vertex(center)
-		im.surface_set_color(fill_color); im.surface_add_vertex(a)
-		im.surface_set_color(fill_color); im.surface_add_vertex(b)
-	im.surface_end()
-
-	im.surface_begin(Mesh.PRIMITIVE_LINES)
-	for inset: float in [0.04, 0.08]:
-		var r: float = maxf(CORNER_R - inset, 0.0)
-		var pts := _rounded_rect_pts(
-			min_x + inset, max_x - inset,
-			min_z + inset, max_z - inset,
-			y_outline, r, CORNER_SEGS
-		)
-		for i in range(pts.size()):
-			var a: Vector3 = pts[i]
-			var b: Vector3 = pts[(i + 1) % pts.size()]
-			im.surface_set_color(outline_color); im.surface_add_vertex(a)
-			im.surface_set_color(outline_color); im.surface_add_vertex(b)
-	im.surface_end()
-
-	var mi  := MeshInstance3D.new()
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.vertex_color_use_as_albedo = true
-	mat.cull_mode                  = BaseMaterial3D.CULL_DISABLED
-	mi.material_override = mat
-	add_child(mi)
-	mi.mesh = im
-	return mi
 
 
 func _try_place_trap(anchor: Vector2i) -> bool:
@@ -547,12 +418,20 @@ func _try_remove_trap(cell: Vector2i) -> void:
 
 
 ## Opens the upgrade panel for the trap at anchor, closing any existing panel first.
+## When zoomed in, centers the camera on the trap before opening the panel.
 func _open_upgrade_panel(anchor: Vector2i) -> void:
 	_close_upgrade_panel()
 	if not _trap_nodes.has(anchor):
 		return
+
+	if _zoom_state == ZoomState.ZOOMED_IN:
+		_followed_enemy = null
+		var wp := _cell_to_world(anchor)
+		_apply_pan(Vector2(wp.x, wp.z))
+
 	var panel := TrapUpgradePanel.new()
 	panel.closed.connect(_on_upgrade_panel_closed)
+	panel.sell_requested.connect(_on_sell_trap_requested.bind(anchor))
 	add_child(panel)
 	panel.initialize(_trap_nodes[anchor])
 	_upgrade_panel  = panel
@@ -564,6 +443,28 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 		_draw_trap_outline(anchor)
 	get_tree().paused = true
 	_panel_paused = true
+
+
+## Sells the trap at anchor (70% refund) and closes the upgrade panel.
+func _on_sell_trap_requested(anchor: Vector2i) -> void:
+	_close_upgrade_panel()
+	_try_remove_trap_by_anchor(anchor)
+
+
+## Removes the trap at anchor and refunds 70% of its cost.
+func _try_remove_trap_by_anchor(anchor: Vector2i) -> void:
+	if _trap_nodes.has(anchor):
+		GameState.add_bug_bucks(int(_trap_nodes[anchor].get_cost() * 0.7))
+		_trap_nodes[anchor].queue_free()
+		_trap_nodes.erase(anchor)
+	if _trap_outlines.has(anchor):
+		_trap_outlines[anchor].queue_free()
+		_trap_outlines.erase(anchor)
+	if _hovered_trap_anchor == anchor:
+		_hovered_trap_anchor = Vector2i(-1, -1)
+	for c in _get_trap_cells(anchor):
+		_grid.remove_trap(c)
+		_trap_anchors.erase(c)
 
 
 ## Closes and frees the upgrade panel if one is open, then unpauses if we paused.
@@ -849,13 +750,8 @@ func _on_debug_confirmed(bug_bucks: int, wave_size: int, static_enemies: bool) -
 	_start_wave()
 
 
-## Clears the hover preview whenever the selected trap type changes so the
-## next cursor move spawns a fresh ghost matching the new selection.
 func _on_trap_type_changed(_type: int) -> void:
-	if _hover_preview != null and is_instance_valid(_hover_preview):
-		_hover_preview.queue_free()
-	_hover_preview      = null
-	_hover_preview_type = -1
+	pass   # reserved for future type-change side effects
 
 
 ## Skips any active countdown and starts the wave immediately.
@@ -1029,18 +925,6 @@ func _hide_selected_trap_outline() -> void:
 		_selected_trap_outline.mesh = null
 
 
-## Creates the MeshInstance3D used for the cursor grid glow.
-## The material uses vertex colours so each line segment can have its own alpha.
-func _setup_grid_highlight() -> void:
-	_grid_highlight = MeshInstance3D.new()
-	var mat := StandardMaterial3D.new()
-	mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency              = BaseMaterial3D.TRANSPARENCY_ALPHA
-	mat.vertex_color_use_as_albedo = true
-	_grid_highlight.material_override = mat
-	add_child(_grid_highlight)
-
-
 ## Returns the anchor cell clamped so its 2x2 footprint stays fully in bounds.
 ## Clicking on the last column or row would otherwise produce an OOB footprint.
 func _clamp_to_anchor(cell: Vector2i) -> Vector2i:
@@ -1058,74 +942,6 @@ func _clamp_to_anchor(cell: Vector2i) -> Vector2i:
 func _is_in_arena(cell: Vector2i) -> bool:
 	return cell.x >= -1 and cell.x <= Grid.GRID_SIZE \
 		and cell.y >= -1 and cell.y <= Grid.GRID_SIZE
-
-
-## Rebuilds the grid glow mesh for the current hover cell.
-## Each cell's alpha is derived from its Manhattan distance to the nearest
-## cell in the 2x2 footprint — cells right against the trap are brightest,
-## fading smoothly outward for up to MAX_GLOW_DIST cells.
-##
-## The reticle always draws at the clamped anchor — the same position that
-## placement will use if the player clicks now — so the visual is always
-## consistent with what will happen.
-##
-## Visibility rules:
-##   Cursor outside the arena border (x/y beyond ±1 of grid edge) → hidden
-##   Footprint contains a TRAP or OBSTACLE                         → 20% opacity
-##   Footprint is clear (EMPTY / ENTRANCE / EXIT only)             → 100% opacity
-func _update_grid_highlight() -> void:
-	if not _is_in_arena(_hover_cell):
-		_grid_highlight.mesh = null
-		_hide_hover_preview()
-		return
-
-	var anchor := _clamp_to_anchor(_hover_cell)
-
-	# Swap trap outline between neutral and neon as the cursor enters/leaves footprints.
-	var new_hovered: Vector2i = Vector2i(-1, -1)
-	if _trap_anchors.has(_hover_cell):
-		new_hovered = _trap_anchors[_hover_cell]
-	if new_hovered != _hovered_trap_anchor:
-		var prev_hovered := _hovered_trap_anchor
-		_hovered_trap_anchor = new_hovered   # update before drawing so state checks are correct
-		if prev_hovered != Vector2i(-1, -1) and _trap_outlines.has(prev_hovered):
-			_draw_trap_outline(prev_hovered)
-		if new_hovered != Vector2i(-1, -1) and _trap_outlines.has(new_hovered):
-			_draw_trap_outline(new_hovered)
-
-	# Check whether the 2×2 footprint at anchor is buildable before showing the ghost,
-	# so the ghost color can reflect validity without a one-frame lag.
-	var blocked := false
-	for dr in range(2):
-		if blocked:
-			break
-		for dc in range(2):
-			var s := _grid.get_cell(Vector2i(anchor.x + dc, anchor.y + dr))
-			if s == Grid.CellState.TRAP or s == Grid.CellState.OBSTACLE or s == Grid.CellState.WALL:
-				blocked = true
-				break
-
-	# Show a ghost of the selected trap at the anchor before pressing.
-	# During drag, the drag ghosts serve this role instead.
-	if not _pressing:
-		_update_hover_preview(anchor, not blocked)
-	else:
-		_hide_hover_preview()
-
-	var opacity_scale := 0.2 if blocked else 1.0
-
-	if _pressing:
-		_grid_highlight.mesh = null
-		return
-
-	var im := ImmediateMesh.new()
-	var hs := Grid.CELL_SIZE * 0.5
-	var y  := 0.08
-
-	im.surface_begin(Mesh.PRIMITIVE_LINES)
-	_draw_2x2_perimeter(im, anchor, hs, y, 0.56 * opacity_scale)
-	im.surface_end()
-	_grid_highlight.mesh = im
 
 
 ## Returns the Manhattan distance from cell to the nearest cell in the
@@ -1777,71 +1593,82 @@ func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
 	return cells
 
 
-## Sizes and centres the orthographic camera so the arena fills the usable
-## screen area — the portion not covered by HUD panels or the trap selector.
-##
-## The selector now sits at the bottom in both orientations, so the arena
-## always uses the full screen width.
-##   Landscape — HUD.SELECTOR_LANDSCAPE_STRIP_H (single row of buttons).
-##   Portrait  — HUD.SELECTOR_STRIP_H (2×2 grid of buttons).
-##
-## With KEEP_HEIGHT (Godot default), camera.size is the total world height
-## covered by the full viewport. We inflate it until the arena fits in both
-## the vertical and horizontal extents of the usable area, then apply
-## v_offset to shift the camera's aim to the centre of the usable area.
+## Sizes and positions the orthographic camera so the arena fills the space
+## between the left and right HUD panels, with ARENA_MARGIN_PX of breathing room
+## on all sides.  Stores the resulting size as _overview_camera_size for zoom logic.
 ##
 ## v_offset sign convention for this top-down camera (local Y = world −Z):
 ##   positive → aim shifts toward world −Z → origin appears lower on screen.
 func _fit_camera_to_grid() -> void:
 	var vp       := get_viewport().get_visible_rect().size
-	var scr_w    := vp.x
-	var scr_h    := vp.y
-	var landscape := scr_w >= scr_h
-
-	var bot_add_px := HUD.SELECTOR_LANDSCAPE_STRIP_H if landscape else HUD.SELECTOR_STRIP_H
-
-	var usable_h := scr_h - HUD_TOP_PX - HUD_BOT_PX - bot_add_px
-	var usable_w := scr_w
+	var usable_w := vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W
+	var usable_h := vp.y - HUD.ARENA_MARGIN_PX * 2.0
 	if usable_h <= 0.0 or usable_w <= 0.0:
 		return
 
-	var arena_world := Grid.GRID_SIZE * Grid.CELL_SIZE + 4.0  # +4 keeps a ~1-unit margin beyond the 2-cell-wide outer wall ring
+	# +8 keeps a generous margin beyond the 2-cell-wide outer wall ring on all sides.
+	var arena_world := Grid.GRID_SIZE * Grid.CELL_SIZE + 8.0
 
-	# With KEEP_HEIGHT, horizontal world coverage = size × (scr_w / scr_h).
-	# For the arena to fit in usable_w pixels: size × (usable_w / scr_h) ≥ arena_world
-	# → size ≥ arena_world × (scr_h / usable_w).
-	var size_for_height := arena_world * scr_h / usable_h
-	var size_for_width  := arena_world * scr_h / usable_w
-	_camera.size = maxf(size_for_height, size_for_width)
+	# With KEEP_HEIGHT, horizontal world coverage = size × (vp.x / vp.y).
+	# For the arena to fit usable_w pixels wide: size × (usable_w / vp.y) ≥ arena_world.
+	var size_for_height  := arena_world * vp.y / usable_h
+	var size_for_width   := arena_world * vp.y / usable_w
+	_overview_camera_size = maxf(size_for_height, size_for_width)
+	_arena_world_half     = (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
 
-	var world_per_px := _camera.size / scr_h
+	if _zoom_state == ZoomState.OVERVIEW:
+		_camera.size = _overview_camera_size
 
-	# Arena is horizontally centred on screen; no h_offset needed.
-	_camera.h_offset = 0.0
-	var top_total := float(HUD_TOP_PX)
-	var bot_total := HUD_BOT_PX + bot_add_px
-	_camera.v_offset = ((top_total - bot_total) / 2.0) * world_per_px
-
-
-## Shows (or repositions) the hover preview at the given anchor.
-## Rebuilds if the selected trap type or placement validity has changed since last build.
-## When valid=false the ghost is rendered gray to signal the location is unbuildable.
-func _update_hover_preview(anchor: Vector2i, valid: bool) -> void:
-	var type := GameState.selected_trap_type
-	if _hover_preview_type != type or _hover_preview_valid != valid \
-			or _hover_preview == null or not is_instance_valid(_hover_preview):
-		_hide_hover_preview()
-		_hover_preview       = _make_trap_preview(type, 0.35, valid)
-		_hover_preview_type  = type
-		_hover_preview_valid = valid
-	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
-	_hover_preview.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
-	_hover_preview.visible  = true
+	# Shift the camera centre to the midpoint of the usable horizontal band.
+	var world_per_px     := _overview_camera_size / vp.y
+	var h_center_px      := HUD.LEFT_PANEL_W + usable_w * 0.5
+	_camera_base_h_offset = (h_center_px - vp.x * 0.5) * world_per_px
+	_camera.h_offset      = _camera_base_h_offset
+	_camera.v_offset      = 0.0
 
 
-func _hide_hover_preview() -> void:
-	if _hover_preview != null and is_instance_valid(_hover_preview):
-		_hover_preview.visible = false
+## Each frame: track the followed enemy's position when in enemy-follow mode.
+func _process(_delta: float) -> void:
+	if _followed_enemy != null and is_instance_valid(_followed_enemy):
+		var p := _followed_enemy.global_position
+		_apply_pan(Vector2(p.x, p.z))
+
+
+## Toggles between OVERVIEW and ZOOMED_IN camera levels.
+## ZOOMED_IN is 2× magnification (half the overview camera.size), with panning enabled.
+func _toggle_zoom() -> void:
+	if _zoom_state == ZoomState.OVERVIEW:
+		_zoom_state     = ZoomState.ZOOMED_IN
+		_camera.size    = _overview_camera_size * 0.5
+		_pan_world_pos  = Vector2.ZERO
+		_apply_pan(_pan_world_pos)
+	else:
+		_zoom_state      = ZoomState.OVERVIEW
+		_followed_enemy  = null
+		_camera.size     = _overview_camera_size
+		_camera.h_offset = _camera_base_h_offset
+		_camera.v_offset = 0.0
+	GameState.zoom_state_changed.emit(_zoom_state == ZoomState.ZOOMED_IN)
+
+
+## Pans the camera to pos (world XZ), clamped so the arena never scrolls off-screen.
+func _apply_pan(pos: Vector2) -> void:
+	var vp            := get_viewport().get_visible_rect().size
+	var world_per_px  := _camera.size / vp.y
+	var visible_half_w := (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * world_per_px * 0.5
+	var visible_half_h := (vp.y - HUD.ARENA_MARGIN_PX * 2.0) * world_per_px * 0.5
+	var cx := clampf(pos.x, -_arena_world_half + visible_half_w, _arena_world_half - visible_half_w)
+	var cz := clampf(pos.y, -_arena_world_half + visible_half_h, _arena_world_half - visible_half_h)
+	_pan_world_pos   = Vector2(cx, cz)
+	_camera.h_offset = _camera_base_h_offset + cx
+	_camera.v_offset = -cz
+
+
+## Resets camera to overview when a run ends.
+func _on_run_ended_camera() -> void:
+	_followed_enemy = null
+	if _zoom_state == ZoomState.ZOOMED_IN:
+		_toggle_zoom()
 
 
 ## Builds a Trap preview node: full mesh hierarchy, no combat logic, no hover area.
