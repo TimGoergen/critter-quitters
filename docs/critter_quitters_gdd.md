@@ -1,6 +1,6 @@
-# **Critter Quitters Pest Control — Game Design Document**
+﻿# **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.21 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
+**Version:** Draft v0.22 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
 
 ---
 
@@ -29,6 +29,8 @@
 | v0.19 | Avatar/character movement mechanic rejected. No player character appears on screen. Camera perspective and top-down placement mechanics are unchanged. Magee exists as a narrative framing device only. Trap repositioning remains the existing Bug Bucks fee model. |
 | v0.20 | Build & deploy pipeline added as Phase 4. Previous phases 4, 4b, 5, 6 renumbered to 5, 5b, 6, 7. Pipeline targets Windows 11 and Android (Pixel 10 Pro XL); GitHub Actions CI, signed artifacts, version-stamped builds. |
 | v0.21 | Sprite art migration added as Phase 5. Previous phases 5, 5b, 6, 7 renumbered to 6, 6b, 7, 8. |
+| v0.22 | Mobile UI rework added as Phase 5. Previous phases 5, 6, 6b, 7, 8 renumbered to 6, 7, 7b, 8, 9. |
+| v0.23 | Phase 3 marked complete. All outstanding items cancelled as covered by Phase 6. |
 
 ---
 
@@ -580,22 +582,22 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: first playable loop*
 
-### **Phase 3 — Visual Style** *(In progress)*
+### **Phase 3 — Visual Style** ✓ Complete
 - ✓ Enemy walk/waddle animation — Ant has a 4-frame SVG sprite walk cycle with directional facing and side-to-side waddle
 - ✓ Enemy hit reaction — brief white flash on hit; white flash then queue_free on death
 - ✓ Snap Trap procedural placeholder visual — portrait mousetrap shape with animated kill bar and cheese wedge; to be replaced by illustrated Sprite3D
 - ✓ Snap Trap projectile — tumbling cheese wedge with cheese-splat impact particles
-- ✗ Sprite3D art for all enemies (Ant SVG placeholder only; Cricket, Beetle, Cockroach, Rat still use colored cylinders)
-- ✗ Sprite3D art for all traps (Snap Trap uses procedural mesh; Zapper, Fogger, Glue Board use colored boxes)
-- ✗ Procedural animated background system
-- ✗ Basic per-element color palette
+- ~~✗ Sprite3D art for all enemies (Ant SVG placeholder only; Cricket, Beetle, Cockroach, Rat still use colored cylinders)~~ — cancelled; covered by Phase 6
+- ~~✗ Sprite3D art for all traps (Snap Trap uses procedural mesh; Zapper, Fogger, Glue Board use colored boxes)~~ — cancelled; covered by Phase 6
+- ~~✗ Procedural animated background system~~ — cancelled; covered by Phase 6
+- ~~✗ Basic per-element color palette~~ — cancelled; deferred to Phase 6
 
 *Goal: looks and feels like the game*
 
 ### **Phase 4 — Build & Deploy Pipeline**
 - Automated Godot export — Windows 11 (x86-64) and Android (arm64) builds triggered from GitHub Actions on push to main
 - Windows build: produces a signed .exe installer via Inno Setup or NSIS, uploaded as a GitHub Release artifact
-- Android build: produces a signed .apk/.aab, sideloadable to Pixel 10 Pro XL (arm64-v8a target); Play Store upload deferred to Phase 7
+- Android build: produces a signed .apk/.aab, sideloadable to Pixel 10 Pro XL (arm64-v8a target); Play Store upload deferred to Phase 9
 - Export templates cached in CI to avoid re-downloading on every run
 - Godot project settings verified for each target: Mobile renderer confirmed on Android, Compatibility renderer on Windows
 - Secrets managed via GitHub Actions environment variables: keystore credentials, signing passwords
@@ -604,7 +606,16 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: any push to main produces tested, installable builds for both target devices with no manual steps*
 
-### **Phase 5 — Sprite Art Migration**
+### **Phase 5 — Mobile UI Rework**
+- HUD layout adapted for portrait and landscape aspect ratios — element placement, sizing, and anchoring tested on mobile screen dimensions
+- Touch-friendly tap targets throughout — buttons, trap icons, and interactive elements meet minimum size guidelines
+- Trap placement UI reworked for touch — evaluate radial/panel approach vs. tap-to-select and tap-to-place; confirm drag behaviour
+- Store and upgrade panels redesigned for small screens — readable at mobile resolution, scrollable where needed
+- Font sizing and text readability verified on mobile display density
+
+*Goal: the UI works correctly and comfortably on a phone screen*
+
+### **Phase 6 — Sprite Art Migration**
 - Illustrated Sprite3D art for all 5 enemies: Ant (replace SVG placeholder), Cricket, Beetle, Cockroach, Rat
 - Illustrated Sprite3D art for all 4 traps: Snap Trap (replace procedural mesh), Zapper, Fogger, Glue Board
 - Per-element color palette finalized across all sprites
@@ -612,7 +623,7 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: all gameplay-visible assets are illustrated sprites; no colored cylinders, boxes, or placeholder meshes remain*
 
-### **Phase 6 — Full Game Loop**
+### **Phase 7 — Full Game Loop**
 - Wave composition system — complexity curve, group-based spawning, boss waves
 - All 4 trap types
 - All 5 enemy types
@@ -623,11 +634,11 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: complete playable game from start to run-end*
 
-### **Prototype note (Phase 6)**
+### **Prototype note (Phase 7)**
 
 The current prototype uses an endless-wave structure for testing and balancing purposes. The target shipped design groups waves into Rounds (3–5 waves) and Rounds into Levels (Contracts, 5–10 rounds). At the end of each Round, the player picks 1 of 3 randomly offered temporary perks that last for the remainder of the run. Completing a Level (Contract) awards Service Fees for meta progression. The prototype will remain endless until the core loop is balanced and the grouping structure is fully designed.
 
-### **Phase 6b — Meta Progression**
+### **Phase 7b — Meta Progression**
 - Service Fees earned at run end based on performance
 - The Truck hub screen — Start New Job, Upgrades, Stats
 - Equipment upgrade tree
@@ -636,7 +647,7 @@ The current prototype uses an endless-wave structure for testing and balancing p
 
 *Goal: long-term progression loop across runs*
 
-### **Phase 7 — Depth & Polish**
+### **Phase 8 — Depth & Polish**
 - Full upgrade trees and DoT system (fire, ice)
 - Trap unlock progression
 - Store tiers, reroll mechanic
@@ -646,7 +657,7 @@ The current prototype uses an endless-wave structure for testing and balancing p
 
 *Goal: full-featured game*
 
-### **Phase 8 — Platform**
+### **Phase 9 — Platform**
 - Mobile export and touch controls
 - Web export
 - Performance optimisation
