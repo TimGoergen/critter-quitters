@@ -54,7 +54,7 @@ jobs:
           path: |
             ~/.local/bin/godot
             ~/.local/share/godot/export_templates/
-          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_CHANNEL }}-mono
+          key: godot-${{ env.GODOT_VERSION }}-${{ env.GODOT_CHANNEL }}-mono-v2
 
       - name: Download Godot Linux headless binary
         if: steps.cache.outputs.cache-hit != 'true'
@@ -68,6 +68,8 @@ jobs:
           unzip -q /tmp/godot.zip -d /tmp/godot_extract/
           # Use the exact expected binary name — no glob, no ambiguity
           BINARY="Godot_v${VER}_mono_linux_x86_64"
+          # Remove any stale entry at the destination before moving
+          rm -rf ~/.local/bin/godot
           mv "/tmp/godot_extract/${BINARY}" ~/.local/bin/godot
           chmod +x ~/.local/bin/godot
 
