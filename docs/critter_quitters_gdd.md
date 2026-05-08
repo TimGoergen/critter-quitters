@@ -1,6 +1,6 @@
 # **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.20 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
+**Version:** Draft v0.21 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
 
 ---
 
@@ -28,6 +28,7 @@
 | v0.18 | Roguelike perk system confirmed: at the end of each Round, the player is presented with 3 randomly selected temporary perks and picks 1. Perks last for the remainder of the run. |
 | v0.19 | Avatar/character movement mechanic rejected. No player character appears on screen. Camera perspective and top-down placement mechanics are unchanged. Magee exists as a narrative framing device only. Trap repositioning remains the existing Bug Bucks fee model. |
 | v0.20 | Build & deploy pipeline added as Phase 4. Previous phases 4, 4b, 5, 6 renumbered to 5, 5b, 6, 7. Pipeline targets Windows 11 and Android (Pixel 10 Pro XL); GitHub Actions CI, signed artifacts, version-stamped builds. |
+| v0.21 | Sprite art migration added as Phase 5. Previous phases 5, 5b, 6, 7 renumbered to 6, 6b, 7, 8. |
 
 ---
 
@@ -603,7 +604,15 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: any push to main produces tested, installable builds for both target devices with no manual steps*
 
-### **Phase 5 — Full Game Loop**
+### **Phase 5 — Sprite Art Migration**
+- Illustrated Sprite3D art for all 5 enemies: Ant (replace SVG placeholder), Cricket, Beetle, Cockroach, Rat
+- Illustrated Sprite3D art for all 4 traps: Snap Trap (replace procedural mesh), Zapper, Fogger, Glue Board
+- Per-element color palette finalized across all sprites
+- Procedural animated background system
+
+*Goal: all gameplay-visible assets are illustrated sprites; no colored cylinders, boxes, or placeholder meshes remain*
+
+### **Phase 6 — Full Game Loop**
 - Wave composition system — complexity curve, group-based spawning, boss waves
 - All 4 trap types
 - All 5 enemy types
@@ -614,11 +623,11 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: complete playable game from start to run-end*
 
-### **Prototype note**
+### **Prototype note (Phase 6)**
 
 The current prototype uses an endless-wave structure for testing and balancing purposes. The target shipped design groups waves into Rounds (3–5 waves) and Rounds into Levels (Contracts, 5–10 rounds). At the end of each Round, the player picks 1 of 3 randomly offered temporary perks that last for the remainder of the run. Completing a Level (Contract) awards Service Fees for meta progression. The prototype will remain endless until the core loop is balanced and the grouping structure is fully designed.
 
-### **Phase 5b — Meta Progression**
+### **Phase 6b — Meta Progression**
 - Service Fees earned at run end based on performance
 - The Truck hub screen — Start New Job, Upgrades, Stats
 - Equipment upgrade tree
@@ -627,7 +636,7 @@ The current prototype uses an endless-wave structure for testing and balancing p
 
 *Goal: long-term progression loop across runs*
 
-### **Phase 6 — Depth & Polish**
+### **Phase 7 — Depth & Polish**
 - Full upgrade trees and DoT system (fire, ice)
 - Trap unlock progression
 - Store tiers, reroll mechanic
@@ -637,7 +646,7 @@ The current prototype uses an endless-wave structure for testing and balancing p
 
 *Goal: full-featured game*
 
-### **Phase 7 — Platform**
+### **Phase 8 — Platform**
 - Mobile export and touch controls
 - Web export
 - Performance optimisation

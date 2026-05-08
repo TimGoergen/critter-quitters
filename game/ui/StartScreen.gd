@@ -87,7 +87,7 @@ func _build_ui() -> void:
 	slogan.anchor_right         = 0.90
 	slogan.anchor_top           = 0.72
 	slogan.anchor_bottom        = 0.80
-	slogan.add_theme_font_override("font", UIFonts.flavor_bold_italic())
+	slogan.add_theme_font_override("font", UIFonts.flavor_bold())
 	slogan.add_theme_font_size_override("font_size", 26)
 	slogan.add_theme_color_override("font_color", COLOR_SLOGAN)
 	add_child(slogan)
@@ -131,18 +131,22 @@ func _play_van_exit() -> void:
 	# Drive the van fully off the left edge of the screen.
 	var target_x := -(van_scaled_w / 2.0)
 
-	# Spawn a burst every ~0.07 s across the full 1.1 s drive-off. Higher
-	# frequency than before so the cloud builds up to fogger-like density.
-	# Each callback reads _van.position at fire time, so the spawn point
-	# tracks the current rear position naturally.
-	for i: int in 15:
+	# Schedule bursts at even *position* intervals by inverting the cubic ease-in
+	# curve (pos = t^3 → t = pos^(1/3)). Without this correction, even time
+	# intervals produce clumps at the start where the van is slow and gaps at
+	# the end where it accelerates.
+	const DRIVE_DURATION := 1.1
+	const BURST_COUNT    := 13
+	for i: int in BURST_COUNT:
 		if i == 0:
 			_spawn_exhaust_puffs()
 		else:
-			get_tree().create_timer(i * 0.075).timeout.connect(_spawn_exhaust_puffs)
+			var pos_frac := float(i) / float(BURST_COUNT - 1)
+			var delay    := pow(pos_frac, 1.0 / 3.0) * DRIVE_DURATION
+			get_tree().create_timer(delay).timeout.connect(_spawn_exhaust_puffs)
 
 	var tween := create_tween()
-	tween.tween_property(_van, "position:x", target_x, 1.1) \
+	tween.tween_property(_van, "position:x", target_x, DRIVE_DURATION) \
 		.set_ease(Tween.EASE_IN) \
 		.set_trans(Tween.TRANS_CUBIC)
 	tween.tween_callback(_on_van_exited)
@@ -224,7 +228,7 @@ class _ExhaustPuff extends Node2D:
 	# the classic fluffy cloud silhouette instead of a smooth circle.
 	var _lobes: Array = []
 
-	const _LIFETIME   := 0.90   # grow + hold + fade — must match tween durations below
+	const _LIFETIME   := 0.99   # grow + hold + fade — must match tween durations below
 	const _DRIFT_UP   := 35.0   # upward travel in pixels
 	const _DRIFT_LEFT := 18.0   # leftward drift — trails behind the departing van
 
@@ -245,9 +249,9 @@ class _ExhaustPuff extends Node2D:
 			.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
 
 		var anim := create_tween()
-		anim.tween_method(_grow, 0.0, 1.0, 0.15)   # quick bloom
-		anim.tween_interval(0.25)                    # hold at full size
-		anim.tween_method(_fade, 1.0, 0.0, 0.50)   # dissolve
+		anim.tween_method(_grow, 0.0, 1.0, 0.165)   # quick bloom
+		anim.tween_interval(0.275)                   # hold at full size
+		anim.tween_method(_fade, 1.0, 0.0, 0.55)   # dissolve
 		anim.tween_callback(queue_free)
 
 	func _grow(t: float) -> void:
@@ -256,7 +260,10 @@ class _ExhaustPuff extends Node2D:
 		queue_redraw()
 
 	func _fade(t: float) -> void:
-		_alpha = t
+		_alpha  = t
+		# Continue expanding during dissolve — puffs drift outward as they vanish.
+		# t runs 1.0 → 0.0, so radius runs max_radius → max_radius * 1.8.
+		_radius = lerp(max_radius * 1.8, max_radius, t)
 		queue_redraw()
 
 	func _draw() -> void:

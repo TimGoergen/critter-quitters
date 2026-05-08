@@ -95,12 +95,23 @@ var _active_enemies: Array[Node3D] = []
 # Wave spawning — enemies launch one at a time with a small gap between them.
 const WAVE_SIZE: int = 10   # default; overridden at runtime by the debug start dialog
 var _wave_size: int = WAVE_SIZE
-const SPAWN_INTERVAL: float = 0.36     # seconds between each enemy in the wave
+const SPAWN_INTERVAL: float = 0.36     # delay before the first enemy in a wave; subsequent gaps are per-type
+# Minimum desired clear space (in cells) between consecutive enemies of the same type.
+# The actual gap time is derived from this value and the enemy's speed + visual size,
+# so slow/large enemies automatically get longer waits than fast/small ones.
+const SPAWN_GAP_CELLS: float = 0.4
 const WAVE_COUNTDOWN: int  = 5         # seconds of countdown before each wave
 
 var _enemies_left_to_spawn: int  = 0
 var _countdown_active: bool      = false  # true while between-wave countdown is ticking
 var _seconds_remaining: int      = 0     # last value broadcast during the active countdown
+
+# Static enemy review mode — when true, each wave spawns 3 of every enemy type
+# in order instead of using normal wave composition. Toggled at startup via DebugStartDialog.
+const STATIC_GROUP_SIZE: int  = 3
+const STATIC_GROUP_GAP: float = 1.5   # seconds of pause between each enemy type group
+var _static_enemies_mode: bool                   = false
+var _static_spawn_queue:  Array[Enemy.EnemyType] = []
 
 # The path currently drawn as yellow markers. Updated on every grid change
 # and trimmed forward as the enemy advances through cells.
@@ -207,8 +218,9 @@ func _ready() -> void:
 	_pathfinder.path_updated.connect(_on_path_updated)
 
 	# Spawn the cave image at the entrance and exit gaps.
-	_spawn_cave_marker(_spawn_cell)
-	_spawn_cave_marker(_despawn_cell)
+	# Entrance is rotated 180° relative to the exit so the image reads correctly for each side.
+	_spawn_cave_marker(_spawn_cell,   90.0)
+	_spawn_cave_marker(_despawn_cell, -90.0)
 
 	_setup_grid_highlight()
 	_setup_selected_trap_outline()
@@ -632,9 +644,19 @@ func _on_path_updated(new_path: Array[Vector2i]) -> void:
 	var best_exit: Vector2i = new_path.back()
 	for enemy in _active_enemies:
 		var current: Vector2i = enemy.get_current_cell()
-		# If the enemy is still in the outside approach cell, A* must start
-		# from the entrance (first in-bounds cell) to stay within the grid.
-		var from: Vector2i = current if _grid.is_in_bounds(current) else GameState.entrance_cell
+		var from: Vector2i
+		if _grid.is_in_bounds(current):
+			from = current
+		else:
+			# Enemy is still approaching from outside. Use the cell it is actually
+			# heading toward (its entrance-gap row) rather than GameState.entrance_cell,
+			# which is always row 15 and may have been trapped. Routing from the wrong
+			# row produces a grid_path that skips the enemy's real target, causing
+			# update_path() to fall back to new_path[1] — which can be a trap cell.
+			var entry: Vector2i = enemy.get_target_cell()
+			if not _grid.is_in_bounds(entry) or not _grid.is_passable(entry):
+				continue  # entrance cell is blocked; skip until the next recalculation
+			from = entry
 		var grid_path := _pathfinder.find_path_from(from, best_exit)
 		if grid_path.is_empty():
 			continue
@@ -724,8 +746,43 @@ func _cell_to_world(cell: Vector2i) -> Vector3:
 # Enemy spawning
 # ---------------------------------------------------------------------------
 
+## Seconds to wait after spawning an enemy before the next one appears.
+## Derived from the enemy's visual size and movement speed so there is always
+## at least SPAWN_GAP_CELLS of clear air between consecutive enemies —
+## slow/large enemies automatically get a much longer gap than fast/small ones.
+func _spawn_gap_for_type(enemy_type: Enemy.EnemyType) -> float:
+	var speed: float      = Enemy.STATS[enemy_type]["speed"]
+	var visual_size: float = Enemy.VISUAL_QUAD_SIZE[enemy_type]
+	return (visual_size + SPAWN_GAP_CELLS) / speed
+
+
+## Returns which enemy type to spawn for the given wave number.
+## Wave 1 is pure gnats (tutorial difficulty). Every 10th wave is a rat boss wave.
+## New types unlock progressively; gnats phase out after wave 6 as heavier enemies dominate.
+func _enemy_type_for_wave(wave: int) -> Enemy.EnemyType:
+	if wave == 1:
+		return Enemy.EnemyType.GNAT
+	if wave % 10 == 0:
+		return Enemy.EnemyType.RAT
+
+	# Build a weighted pool from all unlocked types.
+	# Appending the same type multiple times controls its spawn weight.
+	var pool: Array[Enemy.EnemyType] = []
+	pool.append_array([Enemy.EnemyType.ANT, Enemy.EnemyType.ANT, Enemy.EnemyType.ANT])
+	if wave <= 6:
+		pool.append_array([Enemy.EnemyType.GNAT, Enemy.EnemyType.GNAT, Enemy.EnemyType.GNAT])
+	if wave >= 3:
+		pool.append_array([Enemy.EnemyType.CRICKET, Enemy.EnemyType.CRICKET])
+	if wave >= 5:
+		pool.append_array([Enemy.EnemyType.BEETLE, Enemy.EnemyType.BEETLE])
+	if wave >= 8:
+		pool.append_array([Enemy.EnemyType.COCKROACH, Enemy.EnemyType.COCKROACH, Enemy.EnemyType.COCKROACH])
+
+	return pool[randi() % pool.size()]
+
+
 ## Instantiates one enemy, places it at the entrance, and starts it moving.
-func _spawn_enemy(path: Array[Vector2i]) -> void:
+func _spawn_enemy(path: Array[Vector2i], enemy_type: Enemy.EnemyType) -> void:
 	var enemy: Node3D = Enemy.new()
 
 	# Register before adding to tree so signals are connected before
@@ -736,7 +793,7 @@ func _spawn_enemy(path: Array[Vector2i]) -> void:
 	enemy.cell_advanced.connect(_redraw_path_display)
 
 	add_child(enemy)
-	enemy.initialize(path, Enemy.EnemyType.ANT, GameState.current_wave)
+	enemy.initialize(path, enemy_type, GameState.current_wave)
 
 
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
@@ -763,7 +820,7 @@ func _start_wave() -> void:
 	_countdown_active    = true
 	_seconds_remaining   = WAVE_COUNTDOWN
 	GameState.set_countdown(WAVE_COUNTDOWN)
-	get_tree().create_timer(1.0).timeout.connect(_on_countdown_tick.bind(WAVE_COUNTDOWN - 1))
+	get_tree().create_timer(1.0, false).timeout.connect(_on_countdown_tick.bind(WAVE_COUNTDOWN - 1))
 
 
 ## Called once per second during the countdown. Fires the wave when it reaches 0.
@@ -773,7 +830,7 @@ func _on_countdown_tick(seconds_remaining: int) -> void:
 	_seconds_remaining = seconds_remaining
 	GameState.set_countdown(seconds_remaining)
 	if seconds_remaining > 0:
-		get_tree().create_timer(1.0).timeout.connect(_on_countdown_tick.bind(seconds_remaining - 1))
+		get_tree().create_timer(1.0, false).timeout.connect(_on_countdown_tick.bind(seconds_remaining - 1))
 	else:
 		_countdown_active = false
 		_launch_wave()
@@ -784,9 +841,10 @@ func _handle_key(_keycode: int) -> void:
 
 
 ## Receives the confirmed playtest values from DebugStartDialog and starts the run.
-func _on_debug_confirmed(bug_bucks: int, wave_size: int) -> void:
-	_wave_size = wave_size
-	GameState.bug_bucks = bug_bucks
+func _on_debug_confirmed(bug_bucks: int, wave_size: int, static_enemies: bool) -> void:
+	_wave_size            = wave_size
+	_static_enemies_mode  = static_enemies
+	GameState.bug_bucks   = bug_bucks
 	GameState.bug_bucks_changed.emit(bug_bucks)
 	_start_wave()
 
@@ -815,10 +873,28 @@ func _on_wave_skip_requested() -> void:
 		_launch_wave()
 
 
-## Begins spawning WAVE_SIZE enemies, one every SPAWN_INTERVAL seconds.
+## Begins spawning enemies for the wave.
+## In static mode, builds a fixed queue of 3 × each enemy type in ascending tier order
+## so every type is visible for review regardless of the current wave number.
+## In normal mode, spawns _wave_size enemies using the usual random composition.
 func _launch_wave() -> void:
-	_enemies_left_to_spawn = _wave_size
-	get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
+	if _static_enemies_mode:
+		_static_spawn_queue.clear()
+		var types: Array[Enemy.EnemyType] = [
+			Enemy.EnemyType.GNAT,
+			Enemy.EnemyType.ANT,
+			Enemy.EnemyType.CRICKET,
+			Enemy.EnemyType.BEETLE,
+			Enemy.EnemyType.COCKROACH,
+			Enemy.EnemyType.RAT,
+		]
+		for t: Enemy.EnemyType in types:
+			for _i in STATIC_GROUP_SIZE:
+				_static_spawn_queue.append(t)
+		_enemies_left_to_spawn = _static_spawn_queue.size()
+	else:
+		_enemies_left_to_spawn = _wave_size
+	get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
 
 
 ## Spawns one enemy then schedules the next, until the wave is exhausted.
@@ -840,10 +916,27 @@ func _spawn_next_in_wave() -> void:
 	var grid_path       := _find_shortest_exit_path(spawn_grid)
 	if grid_path.is_empty():
 		grid_path = _pathfinder.get_current_path()
+	# Pick type before the path check so the same type drives both the spawn
+	# and the gap timer — even if the path was empty this wave slot is consumed.
+	var enemy_type: Enemy.EnemyType
+	if _static_enemies_mode:
+		enemy_type = _static_spawn_queue.pop_front()
+	else:
+		enemy_type = _enemy_type_for_wave(GameState.current_wave)
+
 	if not grid_path.is_empty():
-		_spawn_enemy(_build_full_path(grid_path, spawn_row))
+		_spawn_enemy(_build_full_path(grid_path, spawn_row), enemy_type)
+
 	if _enemies_left_to_spawn > 0:
-		get_tree().create_timer(SPAWN_INTERVAL).timeout.connect(_spawn_next_in_wave)
+		# In static mode, use a longer pause when the next enemy is a different type.
+		# Within the same group, use the normal per-type gap.
+		var gap: float
+		if _static_enemies_mode and not _static_spawn_queue.is_empty() \
+				and _static_spawn_queue[0] != enemy_type:
+			gap = STATIC_GROUP_GAP
+		else:
+			gap = _spawn_gap_for_type(enemy_type)
+		get_tree().create_timer(gap, false).timeout.connect(_spawn_next_in_wave)
 
 
 ## Runs A* from start to each of the three exit-gap cells and returns
@@ -1616,10 +1709,10 @@ func _spawn_outer_border_ring() -> void:
 
 
 ## Spawns the cave entrance/exit image at the gap in the border wall.
-## The image is laid flat in the XZ plane and rotated −90° around Y so the
-## triangular opening apex (image top) faces world +X — the direction enemies travel.
+## rotation_y controls orientation: −90° for the exit (apex faces world +X),
+## +90° for the entrance (image flipped 180° so it reads correctly from that side).
 ## center_cell is the outside spawn/despawn cell adjacent to the gap.
-func _spawn_cave_marker(center_cell: Vector2i) -> void:
+func _spawn_cave_marker(center_cell: Vector2i, rotation_y: float) -> void:
 	var texture := load("res://assets/arena/enter_exit_cave.png") as Texture2D
 
 	var plane    := PlaneMesh.new()
@@ -1640,7 +1733,7 @@ func _spawn_cave_marker(center_cell: Vector2i) -> void:
 	# center_cell is the outer border ring cell — position directly there so the
 	# cave aligns with the outer wall. The inner-wall gap cells remain arena background.
 	mi.position         = Vector3(world.x, 0.02, world.z)
-	mi.rotation_degrees = Vector3(0.0, -90.0, 0.0)
+	mi.rotation_degrees = Vector3(0.0, rotation_y, 0.0)
 
 	add_child(mi)
 

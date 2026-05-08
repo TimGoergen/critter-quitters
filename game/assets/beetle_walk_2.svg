@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Transition: legs at neutral midpoint, extending straight to the sides -->
+  <path d="M 37 52 Q 27 50 20 48" stroke="#2A3A60" stroke-width="3.0" stroke-linecap="round" fill="none"/>
+  <path d="M 36 74 Q 24 74 16 74" stroke="#2A3A60" stroke-width="3.0" stroke-linecap="round" fill="none"/>
+  <path d="M 37 96 Q 27 96 20 96" stroke="#2A3A60" stroke-width="3.0" stroke-linecap="round" fill="none"/>
+  <path d="M 91 52 Q 100 50 108 50" stroke="#2A3A60" stroke-width="3.0" stroke-linecap="round" fill="none"/>
+  <path d="M 92 74 Q 102 74 112 74" stroke="#2A3A60" stroke-width="3.0" stroke-linecap="round" fill="none"/>
+  <path d="M 91 96 Q 100 96 108 96" stroke="#2A3A60" stroke-width="3.0" stroke-linecap="round" fill="none"/>
+
+  <!-- Head -->
+  <circle cx="64" cy="18" r="8" fill="#0F1A40"/>
+  <circle cx="60" cy="16" r="2" fill="#CC1100"/>
+  <circle cx="68" cy="16" r="2" fill="#CC1100"/>
+
+  <!-- Pronotum -->
+  <ellipse cx="64" cy="34" rx="20" ry="10" fill="#0F2255"/>
+  <ellipse cx="58" cy="28" rx="7" ry="3.5" fill="white" opacity="0.20"/>
+
+  <!-- Elytra -->
+  <ellipse cx="64" cy="82" rx="28" ry="44" fill="#1A3880"/>
+  <ellipse cx="80" cy="82" rx="10" ry="40" fill="#2A5AA0" opacity="0.50"/>
+  <ellipse cx="48" cy="58" rx="12" ry="8" fill="white" opacity="0.28"/>
+  <line x1="64" y1="42" x2="64" y2="122" stroke="#0F2255" stroke-width="2.0"/>
+  <polygon points="58,42 70,42 64,52" fill="#0F2255"/>
+</svg>

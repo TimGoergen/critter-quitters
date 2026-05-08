@@ -93,6 +93,8 @@ var _run_over_overlay:       Control
 
 var _speed_btn:      Button
 var _pause_btn:      Button
+var _exit_btn:       Button
+var _restart_btn:    Button
 var _speed_pause_box: HBoxContainer  # wraps both buttons; repositioned on orientation change
 var _is_fast:        bool = false
 var _is_paused:      bool = false
@@ -124,6 +126,18 @@ func _ready() -> void:
 	_on_infestation_changed(GameState.infestation_level)
 	_on_wave_changed(GameState.current_wave)
 	get_viewport().size_changed.connect(_on_viewport_resized)
+	# After the first layout pass, synchronise buttons in two pairs:
+	#   narrow pair — pause and exit share the wider of the two
+	#   wide pair   — restart and speed share the wider of the two
+	# This keeps the visual grouping: short action buttons on one side,
+	# longer labels on the other.
+	await get_tree().process_frame
+	var narrow_w := maxf(_pause_btn.size.x, _exit_btn.size.x)
+	var wide_w   := maxf(_restart_btn.size.x, _speed_btn.size.x)
+	_pause_btn.custom_minimum_size   = Vector2(narrow_w, 0.0)
+	_exit_btn.custom_minimum_size    = Vector2(narrow_w, 0.0)
+	_restart_btn.custom_minimum_size = Vector2(wide_w,   0.0)
+	_speed_btn.custom_minimum_size   = Vector2(wide_w,   0.0)
 
 
 func _build_ui() -> void:
@@ -222,21 +236,21 @@ func _build_ui() -> void:
 	right_hbox.add_theme_constant_override("separation", 6)
 	top_row.add_child(right_hbox)
 
-	var exit_btn := Button.new()
-	exit_btn.text = "EXIT"
-	exit_btn.add_theme_font_size_override("font_size", 21)
-	exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(exit_btn)
-	exit_btn.pressed.connect(_on_exit_pressed)
-	right_hbox.add_child(exit_btn)
+	_exit_btn = Button.new()
+	_exit_btn.text = "EXIT"
+	_exit_btn.add_theme_font_size_override("font_size", 21)
+	_exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_gold_button_style(_exit_btn)
+	_exit_btn.pressed.connect(_on_exit_pressed)
+	right_hbox.add_child(_exit_btn)
 
-	var restart_btn := Button.new()
-	restart_btn.text = "RESTART"
-	restart_btn.add_theme_font_size_override("font_size", 21)
-	restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(restart_btn)
-	restart_btn.pressed.connect(_on_restart_pressed)
-	right_hbox.add_child(restart_btn)
+	_restart_btn = Button.new()
+	_restart_btn.text = "RESTART"
+	_restart_btn.add_theme_font_size_override("font_size", 21)
+	_restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_gold_button_style(_restart_btn)
+	_restart_btn.pressed.connect(_on_restart_pressed)
+	right_hbox.add_child(_restart_btn)
 
 	# --- Countdown splash (upper-centre, hidden by default) ---
 	# Band 0.15–0.30: "Incoming!" — bold, larger, red
@@ -344,13 +358,9 @@ func _build_ui() -> void:
 
 	_pause_btn = Button.new()
 	_pause_btn.text = "▮▮"
-	_pause_btn.add_theme_font_size_override("font_size", 15)
+	_pause_btn.add_theme_font_size_override("font_size", 21)
 	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_icon_button_style(_pause_btn)
-	# Fix both axes so neither icon state can change the button's footprint.
-	# Width 44 is safely above "▮▮" at 15 px + margins; SIZE_FILL delegates
-	# height to the container so glyph metric differences are irrelevant.
-	_pause_btn.custom_minimum_size  = Vector2(44, 0)
+	_apply_gold_button_style(_pause_btn)
 	_pause_btn.size_flags_vertical  = Control.SIZE_FILL
 	_pause_btn.pressed.connect(_on_pause_btn_pressed)
 	_speed_pause_box.add_child(_pause_btn)
@@ -468,8 +478,9 @@ func _position_speed_btn() -> void:
 	box.anchor_top    = 1.0
 	box.anchor_bottom = 1.0
 	# 400px is well beyond the combined button widths; ALIGNMENT_END right-justifies the
-	# buttons so the speed toggle is always flush with the right screen edge.
-	box.offset_right  = 0
+	# buttons so the speed toggle sits MARGIN pixels from the right screen edge,
+	# matching the margin_right of the top panel that EXIT and RESTART live in.
+	box.offset_right  = -MARGIN
 	box.offset_left   = -400
 
 	if _selector_is_landscape:

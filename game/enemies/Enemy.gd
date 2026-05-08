@@ -22,6 +22,11 @@
 ##   brief white flash and then frees the node. Movement stops immediately
 ##   on death so the tween plays in place.
 ##
+## HP bar:
+##   A pair of flat quads (background + fill) that lie on the XZ plane and
+##   face the top-down camera. Invisible at full health; appears on the first
+##   hit. Colors match the infestation level bar in HUD.gd.
+##
 ## Usage: instantiate via Arena, then call initialize() before the node
 ## is added to the scene tree.
 
@@ -36,25 +41,74 @@ const ANT_FRAMES: Array[Texture2D] = [
 	preload("res://assets/ant_walk_3.svg"),
 	preload("res://assets/ant_walk_4.svg"),
 ]
+const GNAT_FRAMES: Array[Texture2D] = [
+	preload("res://assets/gnat_walk_1.svg"),
+	preload("res://assets/gnat_walk_2.svg"),
+	preload("res://assets/gnat_walk_3.svg"),
+	preload("res://assets/gnat_walk_4.svg"),
+]
+const CRICKET_FRAMES: Array[Texture2D] = [
+	preload("res://assets/cricket_walk_1.svg"),
+	preload("res://assets/cricket_walk_2.svg"),
+	preload("res://assets/cricket_walk_3.svg"),
+	preload("res://assets/cricket_walk_4.svg"),
+]
+const BEETLE_FRAMES: Array[Texture2D] = [
+	preload("res://assets/beetle_walk_1.svg"),
+	preload("res://assets/beetle_walk_2.svg"),
+	preload("res://assets/beetle_walk_3.svg"),
+	preload("res://assets/beetle_walk_4.svg"),
+]
+const COCKROACH_FRAMES: Array[Texture2D] = [
+	preload("res://assets/cockroach_walk_1.svg"),
+	preload("res://assets/cockroach_walk_2.svg"),
+	preload("res://assets/cockroach_walk_3.svg"),
+	preload("res://assets/cockroach_walk_4.svg"),
+]
+const RAT_FRAMES: Array[Texture2D] = [
+	preload("res://assets/rat_walk_1.svg"),
+	preload("res://assets/rat_walk_2.svg"),
+	preload("res://assets/rat_walk_3.svg"),
+	preload("res://assets/rat_walk_4.svg"),
+]
 
 
 # ---------------------------------------------------------------------------
 # Enemy type
 # ---------------------------------------------------------------------------
 
-enum EnemyType { ANT, CRICKET, BEETLE, COCKROACH, RAT }
+enum EnemyType { ANT, GNAT, CRICKET, BEETLE, COCKROACH, RAT }
 
 ## Per-type stat table. All numeric values are placeholders — tuned via playtesting.
 ##   hp            — starting (and maximum) hit points
 ##   speed         — movement speed in cells per second
 ##   infestation   — Infestation Level increase when this pest reaches the exit
-##   color         — placeholder cylinder colour (replaced by ASCII billboard in Phase 3)
+##   color         — used only for kill-burst particle color
 const STATS := {
-	EnemyType.ANT:       { "hp": 10,  "speed": 2.55, "infestation": 1,  "bounty": 10, "color": Color(0.85, 0.35, 0.15) },
-	EnemyType.CRICKET:   { "hp":  8,  "speed": 4.25, "infestation": 1,  "bounty": 2,  "color": Color(0.50, 0.80, 0.20) },
-	EnemyType.BEETLE:    { "hp": 40,  "speed": 1.275,"infestation": 3,  "bounty": 2,  "color": Color(0.20, 0.40, 0.80) },
-	EnemyType.COCKROACH: { "hp": 80,  "speed": 0.85, "infestation": 5,  "bounty": 2,  "color": Color(0.55, 0.30, 0.10) },
-	EnemyType.RAT:       { "hp": 200, "speed": 0.595,"infestation": 10, "bounty": 2,  "color": Color(0.70, 0.65, 0.60) },
+	EnemyType.ANT:       { "hp": 10,  "speed": 2.5,  "infestation": 1.0, "bounty": 10, "color": Color(0.85, 0.35, 0.15) },
+	EnemyType.GNAT:      { "hp":  5,  "speed": 5.6,  "infestation": 0.5, "bounty": 5,  "color": Color(0.16, 0.14, 0.19) },
+	EnemyType.CRICKET:   { "hp": 12,  "speed": 3.2,  "infestation": 1.0, "bounty": 15, "color": Color(0.35, 0.55, 0.12) },
+	EnemyType.BEETLE:    { "hp": 25,  "speed": 1.5,  "infestation": 3.0, "bounty": 15, "color": Color(0.10, 0.22, 0.50) },
+	EnemyType.COCKROACH: { "hp": 80,  "speed": 1.0,  "infestation": 5.0, "bounty": 25, "color": Color(0.48, 0.21, 0.06) },
+	EnemyType.RAT:       { "hp": 200, "speed": 0.6,  "infestation": 10.0,"bounty": 50, "color": Color(0.42, 0.41, 0.40) },
+}
+
+# Visual quad size and shadow size vary by type so larger enemies read bigger on screen.
+const VISUAL_QUAD_SIZE: Dictionary = {
+	EnemyType.ANT:       2.0,
+	EnemyType.GNAT:      1.60,
+	EnemyType.CRICKET:   1.8,
+	EnemyType.BEETLE:    2.40,
+	EnemyType.COCKROACH: 2.60,
+	EnemyType.RAT:       3.20,
+}
+const SHADOW_PLANE_SIZE: Dictionary = {
+	EnemyType.ANT:       2.72,
+	EnemyType.GNAT:      2.10,
+	EnemyType.CRICKET:   2.50,
+	EnemyType.BEETLE:    3.10,
+	EnemyType.COCKROACH: 3.40,
+	EnemyType.RAT:       4.20,
 }
 
 
@@ -62,11 +116,17 @@ const STATS := {
 # Constants
 # ---------------------------------------------------------------------------
 
-## Waddle oscillation rate in radians/second.
-const WADDLE_SPEED: float = 24.0
+## Waddle oscillation in radians per cell of travel.
+## Derived so one full waddle cycle equals one animation cycle:
+##   anim cycle = 4 frames / (speed × 3.0 fps-per-speed) = 4/(3×speed) seconds
+##   waddle period = 2π / (WADDLE_RADS_PER_CELL × speed)
+##   setting equal → WADDLE_RADS_PER_CELL = 3π/2
+## Result: left-sway and right-sway each land on a frame transition.
+const WADDLE_RADS_PER_CELL: float = 3.0 * PI / 2.0
 
-## Lateral sway distance in world units.
-const WADDLE_OFFSET: float = 0.03
+## Lateral sway as a fraction of the enemy's visual quad size.
+## Scaled so the gnat's sway matches its original tuned value (~0.03 world units).
+const WADDLE_OFFSET_FRACTION: float = 0.02
 
 ## How close (in world units) the enemy must be to a cell centre before
 ## it is considered to have arrived and advances to the next cell.
@@ -74,6 +134,26 @@ const ARRIVAL_THRESHOLD: float = 0.05
 
 ## Duration of the death flash in seconds.
 const DEATH_FLASH_DURATION: float = 0.12
+
+## Albedo multiplier applied to enemy sprites to lift them against a dark background.
+## Values above 1.0 boost saturation and brightness. The rat stays at 1.0 because its
+## identity is a muted gray — the boost would wash it to white.
+const SPRITE_BRIGHTNESS: Dictionary = {
+	EnemyType.ANT:       2.2,
+	EnemyType.GNAT:      2.2,
+	EnemyType.CRICKET:   2.2,
+	EnemyType.BEETLE:    2.2,
+	EnemyType.COCKROACH: 2.2,
+	EnemyType.RAT:       1.0,
+}
+
+# HP bar — colors match the infestation level bar (COLOR_BAR_BG / COLOR_BAR_FILL in HUD.gd).
+const HP_BAR_BG_COLOR   := Color(0.28, 0.28, 0.28, 1.0)
+const HP_BAR_FILL_COLOR := Color(0.85, 0.22, 0.22, 1.0)
+## Bar width as a fraction of the enemy's visual quad width.
+const HP_BAR_WIDTH_FRACTION: float = 0.65
+## Bar height in world units (CELL_SIZE = 1.0, so this is a thin stripe).
+const HP_BAR_HEIGHT: float = 0.3
 
 ## Speed multiplier applied while at least one Glue Board is in range.
 ## 0.285 = 71.5% slowdown (up 30% from the original 55% slowdown at 0.45).
@@ -100,6 +180,12 @@ signal cell_advanced
 # Private state
 # ---------------------------------------------------------------------------
 
+# Enemy type stored so visual and shadow setup can look up per-type sizes and frames.
+var _enemy_type: EnemyType = EnemyType.ANT
+
+# Walk frame set for this enemy — assigned in initialize() based on type.
+var _walk_frames: Array[Texture2D] = []
+
 # The last cell centre the enemy fully arrived at.
 var _current_cell: Vector2i = Vector2i.ZERO
 
@@ -117,13 +203,17 @@ var _visual: MeshInstance3D = null
 var _shadow_mi: MeshInstance3D = null
 
 # Accumulated time driving the waddle oscillation.
-var _waddle_time: float = 0.0
+var _waddle_time:   float = 0.0
+# Effective radians/second — WADDLE_RADS_PER_CELL × speed, set in initialize().
+var _waddle_speed:  float = WADDLE_RADS_PER_CELL
+# Effective sway amplitude in world units — WADDLE_OFFSET_FRACTION × visual size, set in initialize().
+var _waddle_offset: float = WADDLE_OFFSET_FRACTION
 
 # Per-instance stats set from STATS at initialize() time.
 var _move_speed: float = 0.0
 var _max_hp: float = 0.0
 var _current_hp: float = 0.0
-var _infestation_damage: int = 0
+var _infestation_damage: float = 0.0
 
 # Set to true when _die() is called; stops movement and prevents re-entry.
 var _is_dead: bool = false
@@ -138,7 +228,7 @@ var _slow_source_count: int = 0
 # freed when the last one is removed.
 var _glue_splatter: Node3D = null
 
-# Accumulated walk time used to index into ANT_FRAMES.
+# Accumulated walk time used to index into _walk_frames.
 var _walk_time: float = 0.0
 
 # Stored so _process can swap the walk frame without rebuilding the material.
@@ -147,8 +237,17 @@ var _visual_material: StandardMaterial3D = null
 # Base color for this enemy type — stored so the hit flash can return to it.
 var _base_color: Color = Color.WHITE
 
+# Per-instance copy of SPRITE_BRIGHTNESS for this enemy type — set in initialize().
+var _sprite_brightness: float = 2.2
+
 # Tracks the active hit-flash tween so a second hit cancels the first.
 var _hit_tween: Tween = null
+
+# HP bar — root container and the fill mesh instance whose size changes on each hit.
+var _hp_bar: Node3D = null
+var _hp_bar_fill: MeshInstance3D = null
+# Full bar width in world units, cached so _update_hp_bar() can compute the fill offset.
+var _hp_bar_width: float = 0.0
 
 
 # ---------------------------------------------------------------------------
@@ -161,9 +260,14 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 	if initial_path.size() < 2:
 		return
 
+	_enemy_type    = enemy_type
+	_walk_frames   = _frames_for_type(enemy_type)
+
 	var stats          = STATS[enemy_type]
 	_move_speed        = stats["speed"]
 	_base_move_speed   = _move_speed
+	_waddle_speed      = WADDLE_RADS_PER_CELL * _move_speed
+	_waddle_offset     = WADDLE_OFFSET_FRACTION * VISUAL_QUAD_SIZE[enemy_type] * Grid.CELL_SIZE
 	_max_hp            = wave * 1.02 + stats["hp"]
 	_current_hp        = _max_hp
 	_infestation_damage = stats["infestation"]
@@ -177,9 +281,11 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 	global_position   = _cell_to_world(_current_cell)
 	global_position.y = 0.25
 
-	_base_color = stats["color"]
+	_base_color        = stats["color"]
+	_sprite_brightness = SPRITE_BRIGHTNESS[enemy_type]
 	_spawn_visual(_base_color)
 	_spawn_shadow()
+	_spawn_hp_bar()
 
 
 # ---------------------------------------------------------------------------
@@ -192,6 +298,7 @@ func take_damage(amount: float, flash_color: Color = Color.WHITE) -> void:
 	if _is_dead:
 		return
 	_current_hp = maxf(_current_hp - amount, 0.0)
+	_update_hp_bar()
 	if _current_hp == 0.0:
 		_die()
 	else:
@@ -224,9 +331,9 @@ func _flash_hit(color: Color) -> void:
 		_hit_tween.kill()
 	var mat: StandardMaterial3D = _visual.material_override
 	_hit_tween = create_tween()
-	# Overbright tint in the trap's theme color, then return to neutral white.
+	# Overbright tint in the trap's theme color, then return to the sprite's boosted base brightness.
 	_hit_tween.tween_property(mat, "albedo_color", Color(color.r * 4.0, color.g * 4.0, color.b * 4.0, 1.0), 0.04)
-	_hit_tween.tween_property(mat, "albedo_color", Color.WHITE, 0.08)
+	_hit_tween.tween_property(mat, "albedo_color", Color(_sprite_brightness, _sprite_brightness, _sprite_brightness, 1.0), 0.08)
 
 
 ## Returns current HP as a fraction of max HP (0.0–1.0).
@@ -235,7 +342,7 @@ func get_hp_fraction() -> float:
 
 
 ## Returns the Infestation Level damage this pest deals on exit.
-func get_infestation_damage() -> int:
+func get_infestation_damage() -> float:
 	return _infestation_damage
 
 
@@ -317,7 +424,7 @@ func _process(delta: float) -> void:
 
 	if _visual != null:
 		_waddle_time += delta
-		var sway       := sin(_waddle_time * WADDLE_SPEED) * WADDLE_OFFSET
+		var sway       := sin(_waddle_time * _waddle_speed) * _waddle_offset
 		var travel_dir := _target_cell - _current_cell
 		if travel_dir.x != 0:
 			_visual.position.x = 0.0
@@ -327,7 +434,7 @@ func _process(delta: float) -> void:
 			_visual.position.x = sway
 		_visual.basis = _facing_basis(travel_dir)
 		_walk_time += delta
-		_visual_material.albedo_texture = ANT_FRAMES[int(_walk_time * _move_speed * 3.0) % ANT_FRAMES.size()]
+		_visual_material.albedo_texture = _walk_frames[int(_walk_time * _move_speed * 3.0) % _walk_frames.size()]
 
 
 # ---------------------------------------------------------------------------
@@ -440,22 +547,35 @@ func _build_glue_blob_mesh(base_r: float, color: Color) -> ImmediateMesh:
 	return im
 
 
-## Creates the enemy visual as a billboard quad using the ant sprite.
-## The sprite SVG carries its own baked colors; albedo_color stays white.
-## Replaced by an ASCII billboard node in Phase 3.
+## Returns the walk-frame array for the given enemy type.
+func _frames_for_type(enemy_type: EnemyType) -> Array[Texture2D]:
+	match enemy_type:
+		EnemyType.ANT:       return ANT_FRAMES
+		EnemyType.GNAT:      return GNAT_FRAMES
+		EnemyType.CRICKET:   return CRICKET_FRAMES
+		EnemyType.BEETLE:    return BEETLE_FRAMES
+		EnemyType.COCKROACH: return COCKROACH_FRAMES
+		EnemyType.RAT:       return RAT_FRAMES
+	return ANT_FRAMES
+
+
+## Creates the enemy visual as a billboard quad using the per-type sprite.
+## Each SVG carries its own baked colors; albedo_color stays white.
+## Quad size scales with enemy type so larger enemies read bigger on screen.
 func _spawn_visual(color: Color) -> void:
 	var mesh_instance := MeshInstance3D.new()
 
-	var quad  := QuadMesh.new()
-	quad.size  = Vector2(Grid.CELL_SIZE * 2.1, Grid.CELL_SIZE * 2.1)
+	var quad_cells: float = VISUAL_QUAD_SIZE[_enemy_type]
+	var quad       := QuadMesh.new()
+	quad.size       = Vector2(Grid.CELL_SIZE * quad_cells, Grid.CELL_SIZE * quad_cells)
 	mesh_instance.mesh = quad
 
 	# _base_color is kept for particle effects; the sprite carries its own baked colors.
 	_base_color = color
 
 	var material                  := StandardMaterial3D.new()
-	material.albedo_color          = Color.WHITE   # do not tint — SVG colors are baked in
-	material.albedo_texture        = ANT_FRAMES[0]
+	material.albedo_color          = Color(_sprite_brightness, _sprite_brightness, _sprite_brightness, 1.0)
+	material.albedo_texture        = _walk_frames[0]
 	material.shading_mode          = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.transparency          = BaseMaterial3D.TRANSPARENCY_ALPHA
 	mesh_instance.material_override = material
@@ -464,6 +584,72 @@ func _spawn_visual(color: Color) -> void:
 
 	_visual = mesh_instance
 	add_child(mesh_instance)
+
+
+## Creates the floating HP bar — two flat quads (background + fill) lying on the XZ
+## plane so they face the top-down camera. The bar is hidden at full health and shown
+## on the first hit; _update_hp_bar() keeps the fill in sync with _current_hp.
+func _spawn_hp_bar() -> void:
+	_hp_bar_width = VISUAL_QUAD_SIZE[_enemy_type] * Grid.CELL_SIZE * HP_BAR_WIDTH_FRACTION
+
+	_hp_bar            = Node3D.new()
+	_hp_bar.position.y = 0.08   # small Y lift keeps it above the floor in the depth buffer
+	# In the top-down orthographic view, screen-up = world -Z.
+	# Offset by half the visual quad so the bar sits just above the sprite edge
+	# regardless of whether the enemy is moving horizontally or vertically.
+	_hp_bar.position.z = -(VISUAL_QUAD_SIZE[_enemy_type] * Grid.CELL_SIZE * 0.5 + 0.15)
+	_hp_bar.visible    = false  # only visible when HP drops below maximum
+	add_child(_hp_bar)
+
+	# Basis that lies a QuadMesh flat on the XZ plane facing world +Y (the camera).
+	# QuadMesh default: local XY plane, normal = +Z. This basis maps:
+	#   local X → world X  (bar width runs east–west)
+	#   local Y → world –Z (bar height runs into the scene)
+	#   local Z → world +Y (normal faces camera)
+	var flat_basis := Basis(Vector3(1, 0, 0), Vector3(0, 0, -1), Vector3(0, 1, 0))
+
+	# Background track — full bar width, dark grey.
+	var bg_quad        := QuadMesh.new()
+	bg_quad.size        = Vector2(_hp_bar_width, HP_BAR_HEIGHT)
+	var bg_mi          := MeshInstance3D.new()
+	bg_mi.mesh          = bg_quad
+	bg_mi.basis         = flat_basis
+	var bg_mat         := StandardMaterial3D.new()
+	bg_mat.albedo_color = HP_BAR_BG_COLOR
+	bg_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bg_mi.material_override = bg_mat
+	_hp_bar.add_child(bg_mi)
+
+	# Fill bar — starts at full width; _update_hp_bar() shrinks it from the right.
+	# Raised by 0.005 world units so it always renders in front of the background quad.
+	var fill_quad        := QuadMesh.new()
+	fill_quad.size        = Vector2(_hp_bar_width, HP_BAR_HEIGHT)
+	_hp_bar_fill          = MeshInstance3D.new()
+	_hp_bar_fill.mesh     = fill_quad
+	_hp_bar_fill.basis    = flat_basis
+	_hp_bar_fill.position.y = 0.005
+	var fill_mat         := StandardMaterial3D.new()
+	fill_mat.albedo_color = HP_BAR_FILL_COLOR
+	fill_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_hp_bar_fill.material_override = fill_mat
+	_hp_bar.add_child(_hp_bar_fill)
+
+
+## Shows or hides the HP bar and updates the fill to reflect current health.
+## Called from take_damage() on every hit.
+func _update_hp_bar() -> void:
+	if _hp_bar == null:
+		return
+	var fraction := get_hp_fraction()
+	_hp_bar.visible = fraction < 1.0
+	if not _hp_bar.visible:
+		return
+	# Shrink the fill quad to match remaining HP.
+	var fill_width := _hp_bar_width * fraction
+	(_hp_bar_fill.mesh as QuadMesh).size.x = fill_width
+	# Shift the fill center so its left edge stays pinned to the background's left edge.
+	# The bar's width axis is world X, so position.x is the correct lever here.
+	_hp_bar_fill.position.x = -(_hp_bar_width - fill_width) * 0.5
 
 
 ## Adds a soft drop shadow on the floor beneath the enemy.
@@ -475,9 +661,10 @@ func _spawn_visual(color: Color) -> void:
 ## is at y = 0.25, the local Y offset is -0.237.
 func _spawn_shadow() -> void:
 	_shadow_mi      = MeshInstance3D.new()
-	var plane       := PlaneMesh.new()
-	plane.size       = Vector2(Grid.CELL_SIZE * 2.72, Grid.CELL_SIZE * 2.72)
-	_shadow_mi.mesh  = plane
+	var shadow_cells: float = SHADOW_PLANE_SIZE[_enemy_type]
+	var plane        := PlaneMesh.new()
+	plane.size        = Vector2(Grid.CELL_SIZE * shadow_cells, Grid.CELL_SIZE * shadow_cells)
+	_shadow_mi.mesh   = plane
 
 	var mat          := ShaderMaterial.new()
 	mat.shader        = SHADOW_BLOB_SHADER
