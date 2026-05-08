@@ -135,10 +135,14 @@ func _ready() -> void:
 	await get_tree().process_frame
 	var narrow_w := maxf(_pause_btn.size.x, _exit_btn.size.x)
 	var wide_w   := maxf(_restart_btn.size.x, _speed_btn.size.x)
-	_pause_btn.custom_minimum_size   = Vector2(narrow_w, 0.0)
+	# Speed button always has text so its height is a stable anchor; lock both
+	# speed and pause to that value so neither resizes when pause toggles between
+	# the drawn bars (empty text) and the ▶ resume character.
+	var ctrl_h   := _speed_btn.size.y
+	_pause_btn.custom_minimum_size   = Vector2(narrow_w, ctrl_h)
 	_exit_btn.custom_minimum_size    = Vector2(narrow_w, 0.0)
 	_restart_btn.custom_minimum_size = Vector2(wide_w,   0.0)
-	_speed_btn.custom_minimum_size   = Vector2(wide_w,   0.0)
+	_speed_btn.custom_minimum_size   = Vector2(wide_w,   ctrl_h)
 
 
 func _build_ui() -> void:
