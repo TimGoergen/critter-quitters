@@ -160,14 +160,33 @@ jobs:
           GODOT="$HOME/.local/godot-ci/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
           "$GODOT" --headless --export-release "Windows Desktop" "../dist/critter_quitters_win.exe"
 
-      - name: Export — Android APK
+      - name: Export — Android APK (unsigned, sign manually)
+        # Godot 4.5 headless export on Linux silently fails its signing config check even
+        # with valid settings. We disable Godot's signing and use apksigner directly instead.
         working-directory: game
         env:
-          # ubuntu-latest has Android SDK at this path; Godot uses it for apksigner
           ANDROID_HOME: /usr/local/lib/android/sdk
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
         run: |
+          # Disable Godot's built-in signing so the export proceeds past the config check
+          python3 -c "
+          path = 'export_presets.cfg'
+          content = open(path).read()
+          content = content.replace('package/signed=true', 'package/signed=false')
+          open(path, 'w').write(content)
+          print('Godot signing disabled')
+          "
           GODOT="$HOME/.local/godot-ci/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
-          "$GODOT" --headless --verbose --export-release "Android" "../dist/critter_quitters.apk"
+          "$GODOT" --headless --export-release "Android" "../dist/critter_quitters_raw.apk"
+          # Sign the exported APK with apksigner from the Android build-tools
+          BUILD_TOOLS=$(ls "$ANDROID_HOME/build-tools/" | sort -V | tail -1)
+          "$ANDROID_HOME/build-tools/$BUILD_TOOLS/apksigner" sign \
+            --ks ../build/android_release.keystore \
+            --ks-key-alias critter_quitters \
+            --ks-pass "pass:$KEYSTORE_PASS" \
+            --key-pass "pass:$KEYSTORE_PASS" \
+            --out ../dist/critter_quitters.apk \
+            ../dist/critter_quitters_raw.apk
 
       - name: Stamp version into filenames
         run: |
