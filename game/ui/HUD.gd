@@ -373,6 +373,9 @@ func _build_ui() -> void:
 	_speed_pause_box.add_child(_pause_btn)
 
 	_pause_bar_icon = _PauseBarIcon.new()
+	# Match bar height to the font cap height so the drawn bars are the same visual
+	# size as the ▶ and ▶▶ characters on the speed button.
+	_pause_bar_icon.target_height = UIFonts.primary_bold().get_ascent(21)
 	_pause_bar_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_pause_bar_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_pause_btn.add_child(_pause_bar_icon)
@@ -1053,14 +1056,19 @@ func _apply_send_wave_btn_style(btn: Button) -> void:
 ## Using _draw() rather than a Unicode block character gives exact control over
 ## bar width and gap — the ▮▮ glyph was too thick and too widely spaced.
 class _PauseBarIcon extends Control:
+	## Set to font.get_ascent(size) so bar height matches rendered text on adjacent buttons.
+	var target_height: float = 0.0
+
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_RESIZED:
 			queue_redraw()
 
 	func _draw() -> void:
-		var bar_w := size.x * 0.13           # thin bars (≈ half the visual weight of ▮)
-		var gap   := size.x * 0.14           # gap between the two bars
-		var bar_h := size.y * 0.52           # bars occupy roughly the font cap-height zone
+		var bar_w := size.x * 0.13
+		var gap   := size.x * 0.14
+		# Use the font-derived cap height when available so bars visually match the
+		# ▶ / ▶▶ characters on the speed button; fall back to a size.y fraction otherwise.
+		var bar_h := target_height if target_height > 0.0 else size.y * 0.52
 		var x0    := (size.x - bar_w * 2.0 - gap) * 0.5
 		var y0    := (size.y - bar_h) * 0.5
 		var color := Color(0.08, 0.05, 0.00) # matches COLOR_GOLD_TEXT
