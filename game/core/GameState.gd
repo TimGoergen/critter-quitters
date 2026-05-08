@@ -65,6 +65,13 @@ signal early_wave_bonus_awarded(coins: int)
 ## avoid importing Trap.gd into GameState and creating a circular dependency.
 signal trap_type_selected(type: int)
 
+## Emitted by the HUD zoom button and by enemy-follow tap logic.
+## Arena connects here to call _toggle_zoom().
+signal zoom_toggle_requested
+
+## Emitted by Arena after a zoom state change so HUD can update the button label.
+signal zoom_state_changed(is_zoomed: bool)
+
 
 # ---------------------------------------------------------------------------
 # Constants

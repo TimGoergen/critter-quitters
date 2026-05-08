@@ -1,19 +1,16 @@
 ## HUD.gd
-## Minimal in-run overlay: Bug Bucks counter, wave number, Infestation bar,
-## between-wave countdown splash, run-over screen, and trap type selector.
+## In-run overlay: left trap selector panel and right info/control panel,
+## flanking the arena on both sides.  Landscape-only layout.
 ## Built procedurally — no scene file required.
 ##
-## Top panel: single row — wave + bucks (left), infestation bar (centre),
-##   EXIT + RESTART (right).
-## Selector: pinned to the bottom edge, orientation-aware.
-##   Landscape — single-row horizontal strip, left-aligned.
-##   Portrait  — 2×2 grid strip spanning full width.
+## Left panel (LEFT_PANEL_W wide):  vertical stack of 4 trap selector buttons.
+## Right panel (RIGHT_PANEL_W wide): wave, bug bucks, infestation bar,
+##   speed/pause, zoom toggle, countdown/send-wave-early, exit/restart.
 
 extends CanvasLayer
 
 const Trap     = preload("res://traps/Trap.gd")
 const UIFonts  = preload("res://ui/UIFonts.gd")
-const Grid     = preload("res://arena/Grid.gd")
 
 const COLOR_PANEL_BG    := Color(0.08, 0.08, 0.13, 0.88)
 const COLOR_BAR_BG      := Color(0.28, 0.28, 0.28, 1.0)
@@ -22,37 +19,30 @@ const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM    := Color(0.60, 0.60, 0.65, 1.0)
 const COLOR_COUNTDOWN        := Color(1.00, 1.00, 1.00, 1.00)
 const COLOR_COUNTDOWN_SHADOW := Color(0.00, 0.00, 0.00, 0.70)
-const COLOR_INCOMING         := Color(0.90, 0.15, 0.15, 1.00)  # red "Incoming!" label
+const COLOR_INCOMING         := Color(0.90, 0.15, 0.15, 1.00)
 const COLOR_INFESTED    := Color(0.85, 0.10, 0.10, 1.0)
 const COLOR_OVERLAY_BG  := Color(0.04, 0.02, 0.02, 0.82)
 
-# Send Wave Early button — dark-green palette matching the Uninfested icon outline.
 const COLOR_GREEN_NORMAL  := Color(0.04, 0.25, 0.00, 1.0)
 const COLOR_GREEN_HOVER   := Color(0.07, 0.33, 0.01, 1.0)
 const COLOR_GREEN_PRESSED := Color(0.02, 0.16, 0.00, 1.0)
 const COLOR_GREEN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
 
-# Generic button style — used by Send Wave Early and Restart, not the trap selector.
 const COLOR_BTN_NORMAL  := Color(0.30, 0.30, 0.30, 1.0)
 const COLOR_BTN_HOVER   := Color(0.38, 0.38, 0.38, 1.0)
 const COLOR_BTN_PRESSED := Color(0.22, 0.22, 0.22, 1.0)
 const COLOR_BTN_BORDER  := Color(0.68, 0.68, 0.68, 1.0)
 
-# Gold palette — used for the control buttons (EXIT, RESTART, pause, speed).
 const COLOR_GOLD_BG_NORMAL  := Color(0.72, 0.55, 0.04, 1.0)
 const COLOR_GOLD_BG_HOVER   := Color(0.85, 0.66, 0.06, 1.0)
 const COLOR_GOLD_BG_PRESSED := Color(0.55, 0.41, 0.02, 1.0)
 const COLOR_GOLD_BORDER     := Color(1.00, 0.92, 0.35, 1.0)
-const COLOR_GOLD_TEXT       := Color(0.08, 0.05, 0.00, 1.0)  # near-black for contrast on gold
+const COLOR_GOLD_TEXT       := Color(0.08, 0.05, 0.00, 1.0)
 
-# Trap selector — hazard / sticker palette.
-const COLOR_HAZARD_YELLOW         := Color(1.00, 0.84, 0.00, 1.0)  # active-state border
-const COLOR_BTN_SHADOW            := Color(0.00, 0.00, 0.00, 0.80)  # sticker drop-shadow
-# Applied to the whole button node when the player can't afford it; washes colour out.
+const COLOR_HAZARD_YELLOW         := Color(1.00, 0.84, 0.00, 1.0)
+const COLOR_BTN_SHADOW            := Color(0.00, 0.00, 0.00, 0.80)
 const COLOR_UNAFFORDABLE_MODULATE := Color(0.58, 0.55, 0.52, 0.80)
 
-# Per-trap brand colours and badge text.  Indices match Trap.Type: 0=Snap, 1=Zapper, 2=Fogger, 3=Glue.
-# Colours are intentionally saturated — low-budget exterminator business-card aesthetic.
 const TRAP_BRAND: Array = [
 	{"normal": Color(0.52, 0.20, 0.07), "hover": Color(0.64, 0.26, 0.09), "sel": Color(0.68, 0.28, 0.10), "badge": "PRO GRADE"},
 	{"normal": Color(0.07, 0.25, 0.60), "hover": Color(0.10, 0.33, 0.76), "sel": Color(0.09, 0.30, 0.68), "badge": "+-1000V"},
@@ -60,7 +50,6 @@ const TRAP_BRAND: Array = [
 	{"normal": Color(0.50, 0.34, 0.05), "hover": Color(0.62, 0.43, 0.07), "sel": Color(0.57, 0.38, 0.06), "badge": "STICKY"},
 ]
 
-# Per-trap button text: [name line, tagline format].  %d receives the cost.
 const TRAP_LABELS: Array = [
 	["SNAP TRAP",  "$%d  *  SINCE 1952"],
 	["ZAPPER",     "$%d  *  GUARANTEED"],
@@ -68,17 +57,12 @@ const TRAP_LABELS: Array = [
 	["GLUE BOARD", "$%d  *  NO ESCAPE"],
 ]
 
-const PANEL_H:          float = 72.0   # top stats bar height — matches SELECTOR_LANDSCAPE_STRIP_H
-const BAR_H:            float = 45.0   # infestation bar fill height — ~3/4 of usable row height (60px)
-const MARGIN:           float = 12.0   # general UI margin
+# Panel dimensions — read by Arena.gd to compute the usable arena area.
+const LEFT_PANEL_W:   float = 180.0
+const RIGHT_PANEL_W:  float = 180.0
+const ARENA_MARGIN_PX: float = 24.0
 
-# Trap selector layout — read by Arena.gd to compute usable arena area.
-# SELECTOR_PANEL_W is the minimum width of each button in the landscape bottom strip.
-# SELECTOR_LANDSCAPE_STRIP_H is the bottom strip height in landscape.
-# SELECTOR_STRIP_H is the bottom strip height in portrait.
-const SELECTOR_PANEL_W:          float = 160.0
-const SELECTOR_LANDSCAPE_STRIP_H: float = 72.0
-const SELECTOR_STRIP_H:           float = 88.0   # two button rows + margins
+const MARGIN: float = 8.0   # inner padding for both panels
 
 var _wave_label:        Label
 var _bucks_label:       Label
@@ -92,29 +76,23 @@ var _early_bonus_particles:  CPUParticles2D
 var _run_over_overlay:       Control
 
 var _speed_btn:      Button
-var _speed_mult_lbl: Label   # "1x" / "2x" — left side of speed button
-var _speed_icon_lbl: Label   # "▶▶" / "▶"  — right side of speed button
+var _speed_mult_lbl: Label
+var _speed_icon_lbl: Label
 var _pause_btn:      Button
+var _pause_bar_icon: Control
 var _exit_btn:       Button
 var _restart_btn:    Button
-var _speed_pause_box: HBoxContainer  # wraps both buttons; repositioned on orientation change
-var _is_fast:        bool = false
-var _is_paused:      bool = false
-var _pause_bar_icon: Control  # drawn pause bars; hidden when button shows ▶ to resume
+var _zoom_btn:       Button   # toggles overview ↔ zoomed-in
+
+var _is_fast:   bool = false
+var _is_paused: bool = false
 
 var _selector_buttons: Array[Button] = []
-# Root node of the current selector layout — freed and rebuilt on orientation change.
-var _selector_root: Control = null
-# Tracks the orientation at last build so we only rebuild when it flips.
-var _selector_is_landscape: bool = true
 
-# Index of the selector button currently under the mouse (-1 = none).
-var _hovered_btn_idx: int = -1
+var _blink_time: float = 0.0
 
 
 func _ready() -> void:
-	# Allow the HUD layer itself to process input while the tree is paused,
-	# so the run-over overlay's Restart button remains clickable.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	Engine.time_scale = 1.0
 	_build_ui()
@@ -125,200 +103,273 @@ func _ready() -> void:
 	GameState.early_wave_bonus_awarded.connect(_on_early_bonus_awarded)
 	GameState.run_ended.connect(_on_run_ended)
 	GameState.trap_type_selected.connect(_on_trap_type_selected)
+	GameState.zoom_state_changed.connect(_on_zoom_state_changed)
 	_on_bucks_changed(GameState.bug_bucks)
 	_on_infestation_changed(GameState.infestation_level)
 	_on_wave_changed(GameState.current_wave)
 	get_viewport().size_changed.connect(_on_viewport_resized)
-	# After the first layout pass, synchronise buttons in two pairs:
-	#   narrow pair — pause and exit share the wider of the two
-	#   wide pair   — restart and speed share the wider of the two
-	# This keeps the visual grouping: short action buttons on one side,
-	# longer labels on the other.
-	await get_tree().process_frame
-	var narrow_w := maxf(_pause_btn.size.x, _exit_btn.size.x)
-	var wide_w   := maxf(_restart_btn.size.x, _speed_btn.size.x)
-	# Speed button's height is a stable anchor (font metrics apply even with empty text);
-	# lock both speed and pause to that value so neither resizes when their displayed
-	# content changes.
-	var ctrl_h   := _speed_btn.size.y
-	_pause_btn.custom_minimum_size   = Vector2(narrow_w, ctrl_h)
-	_exit_btn.custom_minimum_size    = Vector2(narrow_w, 0.0)
-	_restart_btn.custom_minimum_size = Vector2(wide_w,   0.0)
-	_speed_btn.custom_minimum_size   = Vector2(wide_w,   ctrl_h)
 
 
 func _build_ui() -> void:
-	# --- Top panel ---
-	# Layout: [wave + bucks (left)] [infestation bar (centre, expands)] [speed + exit + restart (right)]
-	var top_bg := ColorRect.new()
-	top_bg.color         = COLOR_PANEL_BG
-	top_bg.anchor_right  = 1.0
-	top_bg.anchor_bottom = 0.0
-	top_bg.offset_bottom = PANEL_H
-	add_child(top_bg)
+	_build_left_panel()
+	_build_right_panel()
+	_build_run_over_overlay()
 
-	var top_margin := MarginContainer.new()
-	top_margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	top_margin.add_theme_constant_override("margin_left",   MARGIN)
-	top_margin.add_theme_constant_override("margin_right",  MARGIN)
-	top_margin.add_theme_constant_override("margin_top",    6)
-	top_margin.add_theme_constant_override("margin_bottom", 6)
-	top_bg.add_child(top_margin)
 
-	var top_row := HBoxContainer.new()
-	top_row.add_theme_constant_override("separation", 32)
-	top_margin.add_child(top_row)
+# ---------------------------------------------------------------------------
+# Left panel — trap selector
+# ---------------------------------------------------------------------------
 
-	# Left group: wave label then coin + amount, all on the same row as everything else.
+func _build_left_panel() -> void:
+	var bg := ColorRect.new()
+	bg.color        = COLOR_PANEL_BG
+	bg.anchor_left  = 0.0
+	bg.anchor_right = 0.0
+	bg.anchor_top   = 0.0
+	bg.anchor_bottom = 1.0
+	bg.offset_right = LEFT_PANEL_W
+	add_child(bg)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left",   MARGIN)
+	margin.add_theme_constant_override("margin_right",  MARGIN)
+	margin.add_theme_constant_override("margin_top",    MARGIN)
+	margin.add_theme_constant_override("margin_bottom", MARGIN)
+	bg.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(vbox)
+
+	for i in range(4):
+		var btn := Button.new()
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+		btn.clip_contents         = false
+		btn.add_theme_font_size_override("font_size", 18)
+		btn.add_theme_font_override("font", UIFonts.primary_bold())
+		btn.text = _selector_label(i)
+
+		btn.pressed.connect(GameState.select_trap_type.bind(i))
+		_style_selector_button(btn, i, i == GameState.selected_trap_type, _can_afford(i))
+		vbox.add_child(btn)
+		_selector_buttons.append(btn)
+		_add_btn_badge(btn, i)
+		_add_btn_cost_label(btn, i, 11)
+
+
+# ---------------------------------------------------------------------------
+# Right panel — info and controls
+# ---------------------------------------------------------------------------
+
+func _build_right_panel() -> void:
+	var bg := ColorRect.new()
+	bg.color         = COLOR_PANEL_BG
+	bg.anchor_left   = 1.0
+	bg.anchor_right  = 1.0
+	bg.anchor_top    = 0.0
+	bg.anchor_bottom = 1.0
+	bg.offset_left   = -RIGHT_PANEL_W
+	add_child(bg)
+
+	var margin := MarginContainer.new()
+	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
+	margin.add_theme_constant_override("margin_left",   MARGIN)
+	margin.add_theme_constant_override("margin_right",  MARGIN)
+	margin.add_theme_constant_override("margin_top",    MARGIN)
+	margin.add_theme_constant_override("margin_bottom", MARGIN)
+	bg.add_child(margin)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 6)
+	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	margin.add_child(vbox)
+
+	# --- Wave label ---
 	_wave_label = Label.new()
 	_wave_label.text = "WAVE  1"
-	_wave_label.add_theme_font_size_override("font_size", 54)
+	_wave_label.add_theme_font_size_override("font_size", 28)
 	_wave_label.add_theme_font_override("font", UIFonts.header())
 	_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
-	_wave_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	top_row.add_child(_wave_label)
+	_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(_wave_label)
 
+	# --- Bug Bucks row ---
 	var bucks_row := HBoxContainer.new()
-	bucks_row.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bucks_row.add_theme_constant_override("separation", 4)
-	top_row.add_child(bucks_row)
+	vbox.add_child(bucks_row)
 
 	var coin_icon := TextureRect.new()
 	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
 	coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	coin_icon.custom_minimum_size = Vector2(34, 34)
+	coin_icon.custom_minimum_size = Vector2(28, 28)
 	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bucks_row.add_child(coin_icon)
 
 	_bucks_label = Label.new()
 	_bucks_label.text = "0"
-	_bucks_label.add_theme_font_size_override("font_size", 42)
+	_bucks_label.add_theme_font_size_override("font_size", 28)
 	_bucks_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_bucks_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
-	_bucks_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_bucks_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_bucks_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bucks_row.add_child(_bucks_label)
 
-	# Centre: "INFESTATION" label, expanding bar track, percentage readout.
-	var center_hbox := HBoxContainer.new()
-	center_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	center_hbox.alignment             = BoxContainer.ALIGNMENT_CENTER
-	center_hbox.add_theme_constant_override("separation", 8)
-	top_row.add_child(center_hbox)
+	# --- Infestation section ---
+	var inf_row := HBoxContainer.new()
+	inf_row.add_theme_constant_override("separation", 4)
+	vbox.add_child(inf_row)
 
 	var inf_icon := TextureRect.new()
 	inf_icon.texture              = load("res://assets/infestation_level.png")
 	inf_icon.stretch_mode         = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	inf_icon.expand_mode          = TextureRect.EXPAND_IGNORE_SIZE
-	inf_icon.custom_minimum_size  = Vector2(54, 54)   # matches the former "INFESTATION" font size
+	inf_icon.custom_minimum_size  = Vector2(28, 28)
 	inf_icon.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
-	center_hbox.add_child(inf_icon)
-
-	var track := ColorRect.new()
-	track.color                 = COLOR_BAR_BG
-	track.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	track.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	track.custom_minimum_size   = Vector2(0, BAR_H)
-	center_hbox.add_child(track)
-
-	_infestation_fill          = ColorRect.new()
-	_infestation_fill.color    = COLOR_BAR_FILL
-	_infestation_fill.size.y   = BAR_H
-	_infestation_fill.position = Vector2.ZERO
-	track.add_child(_infestation_fill)
+	inf_row.add_child(inf_icon)
 
 	_infestation_label = Label.new()
 	_infestation_label.text = "0%"
-	_infestation_label.add_theme_font_size_override("font_size", 33)
+	_infestation_label.add_theme_font_size_override("font_size", 20)
 	_infestation_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_infestation_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
-	_infestation_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	center_hbox.add_child(_infestation_label)
+	_infestation_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_infestation_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_infestation_label.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
+	inf_row.add_child(_infestation_label)
 
-	# Right: exit and restart.
-	# EXIT and RESTART both restart the run for now. Future pass: EXIT returns to the
-	# between-level hub; RESTART replays the current contract from wave 1.
-	var right_hbox := HBoxContainer.new()
-	right_hbox.size_flags_horizontal = Control.SIZE_SHRINK_END
-	right_hbox.add_theme_constant_override("separation", 6)
-	top_row.add_child(right_hbox)
+	# Bar track below the row
+	var track := ColorRect.new()
+	track.color                 = COLOR_BAR_BG
+	track.custom_minimum_size   = Vector2(0, 10)
+	track.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(track)
 
-	_exit_btn = Button.new()
-	_exit_btn.text = "EXIT"
-	_exit_btn.add_theme_font_size_override("font_size", 21)
-	_exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_exit_btn)
-	_exit_btn.pressed.connect(_on_exit_pressed)
-	right_hbox.add_child(_exit_btn)
+	_infestation_fill          = ColorRect.new()
+	_infestation_fill.color    = COLOR_BAR_FILL
+	_infestation_fill.size.y   = 10
+	_infestation_fill.position = Vector2.ZERO
+	track.add_child(_infestation_fill)
 
-	_restart_btn = Button.new()
-	_restart_btn.text = "RESTART"
-	_restart_btn.add_theme_font_size_override("font_size", 21)
-	_restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_restart_btn)
-	_restart_btn.pressed.connect(_on_restart_pressed)
-	right_hbox.add_child(_restart_btn)
+	# --- Speed + Pause ---
+	var speed_pause_row := HBoxContainer.new()
+	speed_pause_row.add_theme_constant_override("separation", 4)
+	vbox.add_child(speed_pause_row)
 
-	# --- Countdown splash (upper-centre, hidden by default) ---
-	# Band 0.15–0.30: "Incoming!" — bold, larger, red
+	_pause_btn = Button.new()
+	_pause_btn.text = ""
+	_pause_btn.add_theme_font_size_override("font_size", 18)
+	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_gold_button_style(_pause_btn)
+	_pause_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pause_btn.pressed.connect(_on_pause_btn_pressed)
+	speed_pause_row.add_child(_pause_btn)
+
+	_pause_bar_icon = _PauseBarIcon.new()
+	_pause_bar_icon.target_height = UIFonts.primary_bold().get_ascent(18)
+	_pause_bar_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_pause_bar_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pause_btn.add_child(_pause_bar_icon)
+
+	_speed_btn = Button.new()
+	_speed_btn.text = ""
+	_speed_btn.add_theme_font_size_override("font_size", 18)
+	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_gold_button_style(_speed_btn)
+	_speed_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_speed_btn.pressed.connect(_on_speed_btn_pressed)
+	speed_pause_row.add_child(_speed_btn)
+
+	_speed_mult_lbl = Label.new()
+	_speed_mult_lbl.text                 = "1x"
+	_speed_mult_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_speed_mult_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_speed_mult_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	_speed_mult_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_speed_mult_lbl.offset_left  = 8.0
+	_speed_mult_lbl.offset_right = -8.0
+	_speed_mult_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	_speed_mult_lbl.add_theme_font_size_override("font_size", 18)
+	_speed_mult_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
+	_speed_btn.add_child(_speed_mult_lbl)
+
+	_speed_icon_lbl = Label.new()
+	_speed_icon_lbl.text                 = "▶▶"
+	_speed_icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_speed_icon_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_speed_icon_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	_speed_icon_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_speed_icon_lbl.offset_left  = 8.0
+	_speed_icon_lbl.offset_right = -8.0
+	_speed_icon_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	_speed_icon_lbl.add_theme_font_size_override("font_size", 18)
+	_speed_icon_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
+	_speed_btn.add_child(_speed_icon_lbl)
+
+	# --- Zoom toggle ---
+	_zoom_btn = Button.new()
+	_zoom_btn.text = "ZOOM"
+	_zoom_btn.add_theme_font_size_override("font_size", 18)
+	_zoom_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_gold_button_style(_zoom_btn)
+	_zoom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_zoom_btn.pressed.connect(func() -> void: GameState.zoom_toggle_requested.emit())
+	vbox.add_child(_zoom_btn)
+
+	# --- Spacer (pushes countdown and bottom buttons down) ---
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spacer)
+
+	# --- Countdown block (hidden by default) ---
 	_countdown_wave_label = Label.new()
-	_countdown_wave_label.anchor_right         = 1.0
-	_countdown_wave_label.anchor_top           = 0.15
-	_countdown_wave_label.anchor_bottom        = 0.30
-	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_countdown_wave_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_countdown_wave_label.add_theme_font_size_override("font_size", 72)
+	_countdown_wave_label.text               = "Incoming!"
+	_countdown_wave_label.add_theme_font_size_override("font_size", 24)
 	_countdown_wave_label.add_theme_color_override("font_color", COLOR_INCOMING)
 	_countdown_wave_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
-	_countdown_wave_label.add_theme_constant_override("shadow_offset_x", 2)
-	_countdown_wave_label.add_theme_constant_override("shadow_offset_y", 2)
+	_countdown_wave_label.add_theme_constant_override("shadow_offset_x", 1)
+	_countdown_wave_label.add_theme_constant_override("shadow_offset_y", 1)
 	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
+	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_wave_label.visible = false
-	add_child(_countdown_wave_label)
+	vbox.add_child(_countdown_wave_label)
+
+	_countdown_number_label = Label.new()
+	_countdown_number_label.add_theme_font_size_override("font_size", 36)
+	_countdown_number_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
+	_countdown_number_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
+	_countdown_number_label.add_theme_constant_override("shadow_offset_x", 1)
+	_countdown_number_label.add_theme_constant_override("shadow_offset_y", 1)
+	_countdown_number_label.add_theme_font_override("font", UIFonts.header())
+	_countdown_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown_number_label.visible = false
+	vbox.add_child(_countdown_number_label)
 
 	_build_early_bonus_particles()
 
-	# Band 0.30–0.45: countdown number
-	_countdown_number_label = Label.new()
-	_countdown_number_label.anchor_right         = 1.0
-	_countdown_number_label.anchor_top           = 0.30
-	_countdown_number_label.anchor_bottom        = 0.45
-	_countdown_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_countdown_number_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_countdown_number_label.add_theme_font_size_override("font_size", 46)
-	_countdown_number_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
-	_countdown_number_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
-	_countdown_number_label.add_theme_constant_override("shadow_offset_x", 2)
-	_countdown_number_label.add_theme_constant_override("shadow_offset_y", 2)
-	_countdown_number_label.add_theme_font_override("font", UIFonts.header())
-	_countdown_number_label.visible = false
-	add_child(_countdown_number_label)
-
-	# "Send Wave Early" button — centred in the lower half of the screen (midpoint at y=0.75),
-	# hidden during waves. Content is owned by a child HBoxContainer so we can place the
-	# bug-bucks reward amount on the right side independently of the left-side icon + text.
-	_send_wave_btn               = Button.new()
-	_send_wave_btn.text          = ""  # all content is in the child HBoxContainer
-	_send_wave_btn.anchor_top    = 0.70
-	_send_wave_btn.anchor_bottom = 0.80
-	# Horizontal anchors are set by _reposition_countdown_labels() based on orientation.
-	_send_wave_btn.visible       = false
+	_send_wave_btn = Button.new()
+	_send_wave_btn.text = ""
+	_send_wave_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_send_wave_btn.visible = false
 	_apply_send_wave_btn_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
-	add_child(_send_wave_btn)
+	vbox.add_child(_send_wave_btn)
 
 	var btn_row := HBoxContainer.new()
 	btn_row.set_anchors_preset(Control.PRESET_FULL_RECT)
-	btn_row.offset_left  = 20.0   # horizontal padding inside the button
-	btn_row.offset_right = -20.0
-	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	btn_row.add_theme_constant_override("separation", 8)
+	btn_row.offset_left  = 8.0
+	btn_row.offset_right = -8.0
+	btn_row.alignment    = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 4)
 	btn_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_send_wave_btn.add_child(btn_row)
 
 	var game_icon := TextureRect.new()
 	game_icon.texture             = load("res://assets/uninfested.png") as Texture2D
-	game_icon.custom_minimum_size = Vector2(32, 32)
+	game_icon.custom_minimum_size = Vector2(24, 24)
 	game_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	game_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	game_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -326,18 +377,18 @@ func _build_ui() -> void:
 	btn_row.add_child(game_icon)
 
 	var btn_label := Label.new()
-	btn_label.text                     = "Send Wave Early"
-	btn_label.size_flags_horizontal    = Control.SIZE_EXPAND_FILL
-	btn_label.size_flags_vertical      = Control.SIZE_SHRINK_CENTER
-	btn_label.mouse_filter             = Control.MOUSE_FILTER_IGNORE
+	btn_label.text                  = "Send Early"
+	btn_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	btn_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	btn_label.add_theme_font_override("font", UIFonts.primary())
-	btn_label.add_theme_font_size_override("font_size", 18)
+	btn_label.add_theme_font_size_override("font_size", 13)
 	btn_label.add_theme_color_override("font_color", COLOR_TEXT)
 	btn_row.add_child(btn_label)
 
 	var btn_coin_icon := TextureRect.new()
 	btn_coin_icon.texture             = load("res://assets/bug_buck_coin.png") as Texture2D
-	btn_coin_icon.custom_minimum_size = Vector2(20, 20)
+	btn_coin_icon.custom_minimum_size = Vector2(16, 16)
 	btn_coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	btn_coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	btn_coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -345,92 +396,43 @@ func _build_ui() -> void:
 	btn_row.add_child(btn_coin_icon)
 
 	_send_wave_reward_label = Label.new()
-	_send_wave_reward_label.text                  = "0"
-	_send_wave_reward_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_send_wave_reward_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	_send_wave_reward_label.text                = "0"
+	_send_wave_reward_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_send_wave_reward_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	_send_wave_reward_label.add_theme_font_override("font", UIFonts.primary_bold())
-	_send_wave_reward_label.add_theme_font_size_override("font_size", 16)
+	_send_wave_reward_label.add_theme_font_size_override("font_size", 13)
 	_send_wave_reward_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
 	btn_row.add_child(_send_wave_reward_label)
 
-	_build_trap_selector()
+	# --- Exit + Restart ---
+	var exit_restart_row := HBoxContainer.new()
+	exit_restart_row.add_theme_constant_override("separation", 4)
+	vbox.add_child(exit_restart_row)
 
-	# Speed toggle and pause: wrapped in an HBoxContainer anchored to the bottom-right.
-	# The container measures its own width from the buttons' content; _position_speed_btn()
-	# sets the vertical bounds to align with the selector strip.
-	_speed_pause_box = HBoxContainer.new()
-	_speed_pause_box.alignment = BoxContainer.ALIGNMENT_END
-	_speed_pause_box.add_theme_constant_override("separation", 6)
-	add_child(_speed_pause_box)
+	_exit_btn = Button.new()
+	_exit_btn.text = "EXIT"
+	_exit_btn.add_theme_font_size_override("font_size", 16)
+	_exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_gold_button_style(_exit_btn)
+	_exit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_exit_btn.pressed.connect(_on_exit_pressed)
+	exit_restart_row.add_child(_exit_btn)
 
-	_pause_btn = Button.new()
-	_pause_btn.text = ""  # icon is drawn by _pause_bar_icon child; no text in run state
-	_pause_btn.add_theme_font_size_override("font_size", 21)
-	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_pause_btn)
-	_pause_btn.size_flags_vertical  = Control.SIZE_FILL
-	_pause_btn.pressed.connect(_on_pause_btn_pressed)
-	_speed_pause_box.add_child(_pause_btn)
+	_restart_btn = Button.new()
+	_restart_btn.text = "RESTART"
+	_restart_btn.add_theme_font_size_override("font_size", 16)
+	_restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_gold_button_style(_restart_btn)
+	_restart_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_restart_btn.pressed.connect(_on_restart_pressed)
+	exit_restart_row.add_child(_restart_btn)
 
-	_pause_bar_icon = _PauseBarIcon.new()
-	# Match bar height to the font cap height so the drawn bars are the same visual
-	# size as the ▶ and ▶▶ characters on the speed button.
-	_pause_bar_icon.target_height = UIFonts.primary_bold().get_ascent(21)
-	_pause_bar_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_pause_bar_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pause_btn.add_child(_pause_bar_icon)
 
-	_speed_btn = Button.new()
-	_speed_btn.text = ""  # content is two child labels: multiplier left, icon right
-	_speed_btn.add_theme_font_size_override("font_size", 21)
-	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_speed_btn)
-	_speed_btn.pressed.connect(_on_speed_btn_pressed)
-	_speed_pause_box.add_child(_speed_btn)
-
-	# Both labels share the same full-rect anchor; horizontal_alignment puts each
-	# on its own side.  Offsets match the button's content_margin_left/right (12px).
-	_speed_mult_lbl = Label.new()
-	_speed_mult_lbl.text                 = "1x"
-	_speed_mult_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_speed_mult_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_speed_mult_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_speed_mult_lbl.anchor_left          = 0.0
-	_speed_mult_lbl.anchor_right         = 1.0
-	_speed_mult_lbl.anchor_top           = 0.0
-	_speed_mult_lbl.anchor_bottom        = 1.0
-	_speed_mult_lbl.offset_left          = 12.0
-	_speed_mult_lbl.offset_right         = -12.0
-	_speed_mult_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_speed_mult_lbl.add_theme_font_size_override("font_size", 24)
-	_speed_mult_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
-	_speed_btn.add_child(_speed_mult_lbl)
-
-	# At 1x: ▶▶ (two triangles = will go faster).  At 2x: ▶ (one = will slow down).
-	_speed_icon_lbl = Label.new()
-	_speed_icon_lbl.text                 = "▶▶"
-	_speed_icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_speed_icon_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_speed_icon_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_speed_icon_lbl.anchor_left          = 0.0
-	_speed_icon_lbl.anchor_right         = 1.0
-	_speed_icon_lbl.anchor_top           = 0.0
-	_speed_icon_lbl.anchor_bottom        = 1.0
-	_speed_icon_lbl.offset_left          = 12.0
-	_speed_icon_lbl.offset_right         = -12.0
-	_speed_icon_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_speed_icon_lbl.add_theme_font_size_override("font_size", 24)
-	_speed_icon_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
-	_speed_btn.add_child(_speed_icon_lbl)
-
-	_position_speed_btn()
-	_reposition_countdown_labels()
-
-	_build_run_over_overlay()
-
+# ---------------------------------------------------------------------------
+# Run-over overlay
+# ---------------------------------------------------------------------------
 
 func _build_run_over_overlay() -> void:
-	# Full-screen container. Stays responsive while the tree is paused.
 	_run_over_overlay = Control.new()
 	_run_over_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_run_over_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
@@ -443,12 +445,12 @@ func _build_run_over_overlay() -> void:
 	_run_over_overlay.add_child(bg)
 
 	var infested_label := Label.new()
-	infested_label.text                  = "INFESTED!"
-	infested_label.anchor_right          = 1.0
-	infested_label.anchor_top            = 0.30
-	infested_label.anchor_bottom         = 0.55
-	infested_label.horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
-	infested_label.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+	infested_label.text                 = "INFESTED!"
+	infested_label.anchor_right         = 1.0
+	infested_label.anchor_top           = 0.30
+	infested_label.anchor_bottom        = 0.55
+	infested_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	infested_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	infested_label.add_theme_font_size_override("font_size", 96)
 	infested_label.add_theme_color_override("font_color", COLOR_INFESTED)
 	infested_label.add_theme_font_override("font", UIFonts.header())
@@ -467,6 +469,10 @@ func _build_run_over_overlay() -> void:
 	btn.pressed.connect(_on_restart_pressed)
 	_run_over_overlay.add_child(btn)
 
+
+# ---------------------------------------------------------------------------
+# Signal handlers
+# ---------------------------------------------------------------------------
 
 func _on_bucks_changed(amount: int) -> void:
 	_bucks_label.text = "%d" % amount
@@ -499,133 +505,26 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 		_countdown_number_label.modulate.a = 1.0
 
 
-var _blink_time: float = 0.0
-
 func _process(delta: float) -> void:
-	# Countdown blink: 2 on/off cycles per second while the label is visible.
 	if _countdown_number_label.visible:
 		_blink_time += delta
 		var on: bool = fmod(_blink_time, 1.0 / 2.0) < (1.0 / 4.0)
 		_countdown_number_label.modulate.a = 1.0 if on else 0.0
 
 
-
-## Repositions the speed/pause container to align with the selector strip.
-##
-## The container is anchored to the bottom-right corner and given a generous fixed width;
-## ALIGNMENT_END keeps the buttons right-justified within it regardless of their content
-## widths, so no manual pixel measurement is needed.  Godot resolves each button's width
-## from its own minimum size (font + margins), not from any offset we supply.
-##
-## Landscape: vertically flush with the selector strip's inner bounds.
-## Portrait:  floats above the strip, one row tall.
-##
-## Called after the selector is built and on every orientation change.
-func _position_speed_btn() -> void:
-	var box := _speed_pause_box
-	box.anchor_left   = 1.0
-	box.anchor_right  = 1.0
-	box.anchor_top    = 1.0
-	box.anchor_bottom = 1.0
-	# 400px is well beyond the combined button widths; ALIGNMENT_END right-justifies the
-	# buttons so the speed toggle sits MARGIN pixels from the right screen edge,
-	# matching the margin_right of the top panel that EXIT and RESTART live in.
-	box.offset_right  = -MARGIN
-	box.offset_left   = -400
-
-	if _selector_is_landscape:
-		# inner margins match the MarginContainer values in _build_selector_landscape.
-		box.offset_bottom = -6.0
-		box.offset_top    = -(SELECTOR_LANDSCAPE_STRIP_H - 6.0)
-	else:
-		# Portrait selector fills the full width, so float buttons just above it.
-		# Height matches one portrait selector row.
-		var row_h := (SELECTOR_STRIP_H - 5.0 - 5.0 - 6.0) / 2.0
-		box.offset_bottom = -(SELECTOR_STRIP_H + MARGIN)
-		box.offset_top    = box.offset_bottom - row_h
+func _on_zoom_state_changed(is_zoomed: bool) -> void:
+	_zoom_btn.text = "OVERVIEW" if is_zoomed else "ZOOM"
 
 
-## Returns the fraction of screen width at which the arena's right edge falls.
-## Replicates Arena.gd's camera-fit math so HUD can position labels in the gap.
-func _arena_right_frac() -> float:
-	var vp    := get_viewport().get_visible_rect().size
-	var scr_w := vp.x
-	var scr_h := vp.y
-	if scr_h <= 0.0 or scr_w <= 0.0:
-		return 1.0
-	var landscape := scr_w >= scr_h
-	var bot_add   := SELECTOR_LANDSCAPE_STRIP_H if landscape else SELECTOR_STRIP_H
-	var usable_h  := scr_h - PANEL_H - bot_add
-	if usable_h <= 0.0:
-		return 1.0
-	var arena_world := float(Grid.GRID_SIZE) * Grid.CELL_SIZE + 2.0
-	var cam_size := maxf(
-		arena_world * scr_h / usable_h,
-		arena_world * scr_h / scr_w
-	)
-	# Pixels occupied by the grid itself (excluding the 1-unit margin on each side).
-	var grid_px := float(Grid.GRID_SIZE) * Grid.CELL_SIZE * scr_h / cam_size
-	# Arena is horizontally centred; right edge = centre + half grid width.
-	return (scr_w + grid_px) / (2.0 * scr_w)
-
-
-## Positions the countdown labels and Send Wave Early button.
-## Landscape: in the gap to the right of the arena.
-## Portrait:  upper-centre of the screen (original positions).
-func _reposition_countdown_labels() -> void:
-	var vp        := get_viewport().get_visible_rect().size
-	var landscape := vp.x >= vp.y
-
-	if not landscape:
-		_countdown_wave_label.anchor_left   = 0.0
-		_countdown_wave_label.anchor_right  = 1.0
-		_countdown_wave_label.anchor_top    = 0.15
-		_countdown_wave_label.anchor_bottom = 0.30
-		_countdown_number_label.anchor_left   = 0.0
-		_countdown_number_label.anchor_right  = 1.0
-		_countdown_number_label.anchor_top    = 0.30
-		_countdown_number_label.anchor_bottom = 0.45
-		_send_wave_btn.anchor_left   = 0.10
-		_send_wave_btn.anchor_right  = 0.90
-		_send_wave_btn.anchor_top    = 0.70
-		_send_wave_btn.anchor_bottom = 0.80
-		_send_wave_btn.offset_left   = 0
-		_send_wave_btn.offset_right  = 0
-		return
-
-	# Landscape: fill the right-hand gap between the arena and the screen edge.
-	var right := _arena_right_frac()
-
-	# Vertical anchor: content area runs from bottom of the top bar to top of
-	# the speed/pause strip.  lerpf at 0.42 places the block slightly above mid.
-	var top_frac  := PANEL_H / vp.y
-	var bot_frac  := 1.0 - SELECTOR_LANDSCAPE_STRIP_H / vp.y
-	var v_center  := lerpf(top_frac, bot_frac, 0.42)
-
-	_countdown_wave_label.anchor_left   = right
-	_countdown_wave_label.anchor_right  = 1.0
-	_countdown_wave_label.anchor_top    = v_center - 0.11
-	_countdown_wave_label.anchor_bottom = v_center
-
-	_countdown_number_label.anchor_left   = right
-	_countdown_number_label.anchor_right  = 1.0
-	_countdown_number_label.anchor_top    = v_center
-	_countdown_number_label.anchor_bottom = v_center + 0.09
-
-	# "Send Wave Early" spans the full right-side gap with a small pixel margin.
-	_send_wave_btn.anchor_left   = right
-	_send_wave_btn.anchor_right  = 1.0
-	_send_wave_btn.anchor_top    = v_center + 0.11
-	_send_wave_btn.anchor_bottom = v_center + 0.21
-	_send_wave_btn.offset_left   = MARGIN
-	_send_wave_btn.offset_right  = -MARGIN
+func _on_viewport_resized() -> void:
+	pass   # panels are anchored — they resize automatically
 
 
 func _on_speed_btn_pressed() -> void:
 	_is_fast = not _is_fast
-	Engine.time_scale       = 2.0 if _is_fast else 1.0
-	_speed_mult_lbl.text    = "2x" if _is_fast else "1x"
-	_speed_icon_lbl.text    = "▶"  if _is_fast else "▶▶"
+	Engine.time_scale    = 2.0 if _is_fast else 1.0
+	_speed_mult_lbl.text = "2x" if _is_fast else "1x"
+	_speed_icon_lbl.text = "▶"  if _is_fast else "▶▶"
 
 
 func _on_pause_btn_pressed() -> void:
@@ -645,34 +544,32 @@ func _on_send_wave_pressed() -> void:
 
 func _build_early_bonus_particles() -> void:
 	_early_bonus_particles = CPUParticles2D.new()
-	_early_bonus_particles.z_index               = -1    # renders behind all other HUD controls
+	_early_bonus_particles.z_index               = -1
 	_early_bonus_particles.emitting              = false
 	_early_bonus_particles.one_shot              = true
 	_early_bonus_particles.lifetime              = 0.425
-	_early_bonus_particles.explosiveness         = 1.0   # all particles fire simultaneously
-	_early_bonus_particles.spread                = 180.0 # full 360° burst
+	_early_bonus_particles.explosiveness         = 1.0
+	_early_bonus_particles.spread                = 180.0
 	_early_bonus_particles.initial_velocity_min  = 250.0
 	_early_bonus_particles.initial_velocity_max  = 450.0
 	_early_bonus_particles.gravity               = Vector2(0.0, 350.0)
-	_early_bonus_particles.scale_amount_min      = 0.125  # 25% of original 0.5
-	_early_bonus_particles.scale_amount_max      = 0.225  # 25% of original 0.9
+	_early_bonus_particles.scale_amount_min      = 0.125
+	_early_bonus_particles.scale_amount_max      = 0.225
 	_early_bonus_particles.texture               = load("res://assets/bug_buck_coin.png") as Texture2D
 	add_child(_early_bonus_particles)
 
 
 func _on_early_bonus_awarded(coins: int) -> void:
-	# Derive seconds from coins so we can scale the particle count to the reward.
 	var seconds := coins / GameState.early_wave_bonus_rate
-	_early_bonus_particles.amount = max(1, seconds * 4)
+	_early_bonus_particles.amount   = max(1, seconds * 4)
 	_early_bonus_particles.position = _send_wave_btn.get_global_rect().get_center()
 	_early_bonus_particles.restart()
 
 
 func _on_run_ended() -> void:
 	Engine.time_scale = 1.0
-	# Clear any player-initiated pause so the run-over overlay owns the paused state cleanly.
-	_is_paused      = false
-	_pause_btn.text = ""
+	_is_paused        = false
+	_pause_btn.text   = ""
 	_pause_bar_icon.show()
 	_run_over_overlay.visible = true
 	get_tree().paused = true
@@ -684,7 +581,6 @@ func _on_restart_pressed() -> void:
 
 
 func _on_exit_pressed() -> void:
-	# Future: navigate to the between-level hub instead of restarting.
 	get_tree().paused = false
 	get_tree().reload_current_scene()
 
@@ -692,131 +588,6 @@ func _on_exit_pressed() -> void:
 # ---------------------------------------------------------------------------
 # Trap selector
 # ---------------------------------------------------------------------------
-
-func _is_landscape() -> bool:
-	var vp := get_viewport().get_visible_rect().size
-	return vp.x >= vp.y
-
-
-## Rebuilds the selector panel when the screen flips between landscape and portrait.
-func _on_viewport_resized() -> void:
-	var landscape := _is_landscape()
-	_reposition_countdown_labels()
-	if landscape == _selector_is_landscape:
-		return
-	# Orientation changed — free the old layout and build the new one.
-	_hovered_btn_idx = -1
-	_selector_buttons.clear()
-	if _selector_root != null and is_instance_valid(_selector_root):
-		_selector_root.queue_free()
-	_selector_root = null
-	_build_trap_selector()
-	_position_speed_btn()
-
-
-func _build_trap_selector() -> void:
-	_selector_is_landscape = _is_landscape()
-	if _selector_is_landscape:
-		_build_selector_landscape()
-	else:
-		_build_selector_portrait()
-
-
-## Landscape: buttons in a horizontal strip pinned to the bottom-left of the screen.
-## Buttons are left-aligned and sized to SELECTOR_PANEL_W each — the strip does not
-## span the full screen width, leaving the right portion clear.
-func _build_selector_landscape() -> void:
-	var bg := ColorRect.new()
-	bg.color         = COLOR_PANEL_BG
-	bg.anchor_left   = 0.0
-	bg.anchor_right  = 1.0
-	bg.anchor_top    = 1.0
-	bg.anchor_bottom = 1.0
-	bg.offset_top    = -SELECTOR_LANDSCAPE_STRIP_H
-	bg.offset_bottom = 0
-	add_child(bg)
-	_selector_root = bg
-
-	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left",   8)
-	margin.add_theme_constant_override("margin_right",  8)
-	margin.add_theme_constant_override("margin_top",    6)
-	margin.add_theme_constant_override("margin_bottom", 6)
-	bg.add_child(margin)
-
-	# Left-aligned row — buttons occupy only their minimum width, not the full strip.
-	var row := HBoxContainer.new()
-	row.alignment = BoxContainer.ALIGNMENT_BEGIN
-	row.add_theme_constant_override("separation", 6)
-	margin.add_child(row)
-
-	for i in range(4):
-		var btn := Button.new()
-		btn.custom_minimum_size   = Vector2(SELECTOR_PANEL_W, 0.0)
-		btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-		btn.clip_contents         = false
-		btn.add_theme_font_size_override("font_size", 20)
-		btn.add_theme_font_override("font", UIFonts.primary_bold())
-		btn.text = _selector_label(i)
-
-		btn.pressed.connect(GameState.select_trap_type.bind(i))
-		btn.mouse_entered.connect(_on_btn_hover_start.bind(i))
-		btn.mouse_exited.connect(_on_btn_hover_end.bind(i))
-		_style_selector_button(btn, i, i == GameState.selected_trap_type, _can_afford(i))
-		row.add_child(btn)
-		_selector_buttons.append(btn)
-		_add_btn_badge(btn, i)
-		_add_btn_cost_label(btn, i, 13)
-
-
-## Portrait: 2×2 grid of buttons pinned to the bottom edge of the screen.
-## Each trap occupies one cell; the two columns fill the screen width evenly.
-func _build_selector_portrait() -> void:
-	var bg := ColorRect.new()
-	bg.color         = COLOR_PANEL_BG
-	bg.anchor_left   = 0.0
-	bg.anchor_right  = 1.0
-	bg.anchor_top    = 1.0
-	bg.anchor_bottom = 1.0
-	bg.offset_top    = -SELECTOR_STRIP_H
-	bg.offset_bottom = 0
-	add_child(bg)
-	_selector_root = bg
-
-	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left",   6)
-	margin.add_theme_constant_override("margin_right",  6)
-	margin.add_theme_constant_override("margin_top",    5)
-	margin.add_theme_constant_override("margin_bottom", 5)
-	bg.add_child(margin)
-
-	# 2 columns → 4 buttons become a 2×2 grid; each cell expands to fill its half.
-	var grid := GridContainer.new()
-	grid.columns = 2
-	grid.add_theme_constant_override("h_separation", 6)
-	grid.add_theme_constant_override("v_separation", 6)
-	margin.add_child(grid)
-
-	for i in range(4):
-		var btn := Button.new()
-		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-		btn.clip_contents         = false
-		btn.add_theme_font_size_override("font_size", 17)
-		btn.add_theme_font_override("font", UIFonts.primary_bold())
-		btn.text = _selector_label(i)
-
-		btn.pressed.connect(GameState.select_trap_type.bind(i))
-		btn.mouse_entered.connect(_on_btn_hover_start.bind(i))
-		btn.mouse_exited.connect(_on_btn_hover_end.bind(i))
-		_style_selector_button(btn, i, i == GameState.selected_trap_type, _can_afford(i))
-		grid.add_child(btn)
-		_selector_buttons.append(btn)
-		_add_btn_badge(btn, i)
-		_add_btn_cost_label(btn, i, 11)
-
 
 func _refresh_trap_selector() -> void:
 	for i in range(_selector_buttons.size()):
@@ -832,25 +603,19 @@ func _on_trap_type_selected(_type: int) -> void:
 	_refresh_trap_selector()
 
 
-# Returns the trap name only (first line). The cost/tagline is a separate child Label.
 func _selector_label(type: int) -> String:
 	return TRAP_LABELS[type][0]
 
-# Returns the cost + tagline string for use in the child cost Label.
+
 func _selector_cost_line(type: int) -> String:
 	var cost: int = Trap.STATS[type]["cost"]
 	return TRAP_LABELS[type][1] % cost
 
 
-# Returns true if the player can currently afford the given trap type.
 func _can_afford(type: int) -> bool:
 	return GameState.bug_bucks >= Trap.STATS[type]["cost"]
 
 
-# Applies the hazard-sticker visual style to a trap selector button.
-# Selected state: thick caution-yellow border + raised drop-shadow (sticker sitting proud).
-# Pressed state: shadow collapses to simulate the sticker being pushed flat.
-# Unaffordable state: entire button node is modulated grey (sun-bleached look).
 func _style_selector_button(btn: Button, type: int, selected: bool, affordable: bool) -> void:
 	var brand: Dictionary = TRAP_BRAND[type]
 	var border_color := COLOR_HAZARD_YELLOW       if selected else Color(0.72, 0.72, 0.72, 1.0)
@@ -858,7 +623,6 @@ func _style_selector_button(btn: Button, type: int, selected: bool, affordable: 
 	var shadow_size  := 3                         if selected else 2
 	var shadow_off   := Vector2(3, 4)             if selected else Vector2(2, 3)
 
-	# Normal — raised shadow gives the "sticker sitting off the surface" look.
 	var box_n := StyleBoxFlat.new()
 	box_n.bg_color              = brand["sel"]   if selected else brand["normal"]
 	box_n.border_color          = border_color
@@ -873,7 +637,6 @@ func _style_selector_button(btn: Button, type: int, selected: bool, affordable: 
 	box_n.content_margin_bottom = 5.0
 	btn.add_theme_stylebox_override("normal", box_n)
 
-	# Hover — brighter background, same border and shadow.
 	var box_h := StyleBoxFlat.new()
 	box_h.bg_color              = brand["hover"]
 	box_h.border_color          = border_color
@@ -888,7 +651,6 @@ func _style_selector_button(btn: Button, type: int, selected: bool, affordable: 
 	box_h.content_margin_bottom = 5.0
 	btn.add_theme_stylebox_override("hover", box_h)
 
-	# Pressed — shadow collapses; top margin grows slightly to simulate pressing in.
 	var box_p := StyleBoxFlat.new()
 	box_p.bg_color              = brand["sel"].darkened(0.15)
 	box_p.border_color          = border_color
@@ -903,15 +665,10 @@ func _style_selector_button(btn: Button, type: int, selected: bool, affordable: 
 	box_p.content_margin_bottom = 4.0
 	btn.add_theme_stylebox_override("pressed", box_p)
 
-	# White text reads clearly on every dark saturated background.
 	btn.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
-
-	# Desaturate the whole button (background, text, badge) when the player can't afford it.
 	btn.modulate = Color(1.0, 1.0, 1.0, 1.0) if affordable else COLOR_UNAFFORDABLE_MODULATE
 
 
-# Adds a small hazard-yellow fake-credential badge to the top-right corner of a button.
-# The label is a child of the button so it moves with it, but ignores mouse input.
 func _add_btn_badge(btn: Button, type: int) -> void:
 	var lbl := Label.new()
 	lbl.text         = TRAP_BRAND[type]["badge"]
@@ -919,7 +676,6 @@ func _add_btn_badge(btn: Button, type: int) -> void:
 	lbl.add_theme_font_size_override("font_size", 9)
 	lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
-	# Anchor to the button's top-right corner.
 	lbl.anchor_left   = 1.0
 	lbl.anchor_right  = 1.0
 	lbl.anchor_top    = 0.0
@@ -931,8 +687,6 @@ func _add_btn_badge(btn: Button, type: int) -> void:
 	btn.add_child(lbl)
 
 
-# Adds the cost + tagline as a small Label anchored to the bottom of the button.
-# Kept separate from the trap name so each line can have its own font size.
 func _add_btn_cost_label(btn: Button, type: int, font_size: int) -> void:
 	var lbl := Label.new()
 	lbl.text                  = _selector_cost_line(type)
@@ -950,24 +704,9 @@ func _add_btn_cost_label(btn: Button, type: int, font_size: int) -> void:
 	btn.add_child(lbl)
 
 
-func _on_btn_hover_start(idx: int) -> void:
-	if _hovered_btn_idx == idx:
-		return  # already at hover scale — ignore re-entry caused by the scale animation shifting bounds
-	_hovered_btn_idx = idx
-	var btn := _selector_buttons[idx]
-	btn.pivot_offset = btn.size * 0.5
-	var t := create_tween()
-	t.tween_property(btn, "scale", Vector2(1.042, 1.042), 0.09).set_ease(Tween.EASE_OUT)
-
-
-func _on_btn_hover_end(idx: int) -> void:
-	if _hovered_btn_idx == idx:
-		_hovered_btn_idx = -1
-	var btn := _selector_buttons[idx]
-	btn.pivot_offset = btn.size * 0.5
-	var t := create_tween()
-	t.tween_property(btn, "scale", Vector2(1.0, 1.0), 0.08).set_ease(Tween.EASE_IN)
-
+# ---------------------------------------------------------------------------
+# Button styles
+# ---------------------------------------------------------------------------
 
 func _apply_gold_button_style(btn: Button) -> void:
 	for state in [["normal", COLOR_GOLD_BG_NORMAL], ["hover", COLOR_GOLD_BG_HOVER], ["pressed", COLOR_GOLD_BG_PRESSED]]:
@@ -976,44 +715,12 @@ func _apply_gold_button_style(btn: Button) -> void:
 		box.border_color       = COLOR_GOLD_BORDER
 		box.set_border_width_all(3)
 		box.set_corner_radius_all(5)
-		box.content_margin_left   = 12.0
-		box.content_margin_right  = 12.0
+		box.content_margin_left   = 8.0
+		box.content_margin_right  = 8.0
 		box.content_margin_top    = 6.0
 		box.content_margin_bottom = 6.0
 		btn.add_theme_stylebox_override(state[0], box)
 	btn.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
-
-
-# Compact variant for icon-only buttons: 4px content margins instead of 12px.
-func _apply_gold_icon_button_style(btn: Button) -> void:
-	for state in [["normal", COLOR_GOLD_BG_NORMAL], ["hover", COLOR_GOLD_BG_HOVER], ["pressed", COLOR_GOLD_BG_PRESSED]]:
-		var box := StyleBoxFlat.new()
-		box.bg_color           = state[1]
-		box.border_color       = COLOR_GOLD_BORDER
-		box.set_border_width_all(3)
-		box.set_corner_radius_all(5)
-		box.content_margin_left   = 4.0
-		box.content_margin_right  = 4.0
-		box.content_margin_top    = 4.0
-		box.content_margin_bottom = 4.0
-		btn.add_theme_stylebox_override(state[0], box)
-	btn.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
-
-
-# Compact variant for icon-only buttons: 4px content margins instead of 12px.
-func _apply_icon_button_style(btn: Button) -> void:
-	for state in [["normal", COLOR_BTN_NORMAL], ["hover", COLOR_BTN_HOVER], ["pressed", COLOR_BTN_PRESSED]]:
-		var box := StyleBoxFlat.new()
-		box.bg_color           = state[1]
-		box.border_color       = COLOR_BTN_BORDER
-		box.set_border_width_all(2)
-		box.set_corner_radius_all(5)
-		box.content_margin_left   = 4.0
-		box.content_margin_right  = 4.0
-		box.content_margin_top    = 4.0
-		box.content_margin_bottom = 4.0
-		btn.add_theme_stylebox_override(state[0], box)
-	btn.add_theme_color_override("font_color", COLOR_TEXT)
 
 
 func _apply_button_style(btn: Button) -> void:
@@ -1031,8 +738,6 @@ func _apply_button_style(btn: Button) -> void:
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
 
 
-# Dark-green style for the Send Wave Early button — background matches the
-# darkest green in the Uninfested icon outline.
 func _apply_send_wave_btn_style(btn: Button) -> void:
 	for state in [["normal", COLOR_GREEN_NORMAL], ["hover", COLOR_GREEN_HOVER], ["pressed", COLOR_GREEN_PRESSED]]:
 		var box := StyleBoxFlat.new()
@@ -1040,8 +745,8 @@ func _apply_send_wave_btn_style(btn: Button) -> void:
 		box.border_color       = COLOR_GREEN_BORDER
 		box.set_border_width_all(2)
 		box.set_corner_radius_all(5)
-		box.content_margin_left   = 12.0
-		box.content_margin_right  = 12.0
+		box.content_margin_left   = 8.0
+		box.content_margin_right  = 8.0
 		box.content_margin_top    = 6.0
 		box.content_margin_bottom = 6.0
 		btn.add_theme_stylebox_override(state[0], box)
@@ -1052,11 +757,7 @@ func _apply_send_wave_btn_style(btn: Button) -> void:
 # Pause icon
 # ---------------------------------------------------------------------------
 
-## Draws two thin vertical bars to form a pause symbol.
-## Using _draw() rather than a Unicode block character gives exact control over
-## bar width and gap — the ▮▮ glyph was too thick and too widely spaced.
 class _PauseBarIcon extends Control:
-	## Set to font.get_ascent(size) so bar height matches rendered text on adjacent buttons.
 	var target_height: float = 0.0
 
 	func _notification(what: int) -> void:
@@ -1065,12 +766,10 @@ class _PauseBarIcon extends Control:
 
 	func _draw() -> void:
 		var bar_w := size.x * 0.13
-		var gap   := size.x * 0.091  # 0.14 × 0.65 — reduced by 35%
-		# Use the font-derived cap height when available so bars visually match the
-		# ▶ / ▶▶ characters on the speed button; fall back to a size.y fraction otherwise.
+		var gap   := size.x * 0.091
 		var bar_h := target_height if target_height > 0.0 else size.y * 0.52
 		var x0    := (size.x - bar_w * 2.0 - gap) * 0.5
 		var y0    := (size.y - bar_h) * 0.5
-		var color := Color(0.08, 0.05, 0.00) # matches COLOR_GOLD_TEXT
+		var color := Color(0.08, 0.05, 0.00)
 		draw_rect(Rect2(x0,               y0, bar_w, bar_h), color)
 		draw_rect(Rect2(x0 + bar_w + gap, y0, bar_w, bar_h), color)
