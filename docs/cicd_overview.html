@@ -1,0 +1,895 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CI/CD Pipeline — Critter Quitters Pest Control</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+      color: #1a1a2e;
+      background: #f7f8fc;
+    }
+
+    /* ── Page shell ── */
+    .page {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 48px 32px 80px;
+    }
+
+    /* ── Header ── */
+    header {
+      border-bottom: 3px solid #2563eb;
+      padding-bottom: 24px;
+      margin-bottom: 40px;
+    }
+    header h1 {
+      font-size: 28px;
+      font-weight: 700;
+      color: #1e3a8a;
+      letter-spacing: -0.3px;
+    }
+    header .subtitle {
+      margin-top: 6px;
+      font-size: 14px;
+      color: #64748b;
+    }
+
+    /* ── Section headings ── */
+    h2 {
+      font-size: 19px;
+      font-weight: 700;
+      color: #1e3a8a;
+      margin: 44px 0 14px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #cbd5e1;
+    }
+    h3 {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1e40af;
+      margin: 24px 0 8px;
+    }
+
+    p { margin-bottom: 12px; }
+    p:last-child { margin-bottom: 0; }
+
+    /* ── Callout boxes ── */
+    .callout {
+      border-left: 4px solid #2563eb;
+      background: #eff6ff;
+      padding: 14px 18px;
+      margin: 20px 0;
+      border-radius: 0 6px 6px 0;
+    }
+    .callout.analogy { border-color: #7c3aed; background: #f5f3ff; }
+    .callout.note    { border-color: #0891b2; background: #ecfeff; }
+    .callout.warn    { border-color: #d97706; background: #fffbeb; }
+    .callout strong  { display: block; margin-bottom: 4px; font-size: 12px;
+                       text-transform: uppercase; letter-spacing: 0.6px; color: #475569; }
+
+    /* ── Pipeline diagram ── */
+    .pipeline {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      margin: 28px 0;
+      overflow-x: auto;
+    }
+    .stage {
+      flex: 1;
+      min-width: 180px;
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 16px 14px;
+      position: relative;
+    }
+    .stage + .stage { margin-left: 32px; }
+    .stage + .stage::before {
+      content: "▶";
+      position: absolute;
+      left: -24px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #94a3b8;
+      font-size: 13px;
+    }
+    .stage-title {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.7px;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+    .stage-name {
+      font-size: 14px;
+      font-weight: 700;
+      color: #1e3a8a;
+      margin-bottom: 6px;
+    }
+    .stage-runner {
+      font-size: 12px;
+      color: #64748b;
+      background: #f1f5f9;
+      border-radius: 4px;
+      padding: 2px 7px;
+      display: inline-block;
+      margin-bottom: 10px;
+    }
+    .stage ul { list-style: none; padding: 0; }
+    .stage ul li {
+      font-size: 13px;
+      padding: 3px 0 3px 16px;
+      position: relative;
+      color: #374151;
+    }
+    .stage ul li::before {
+      content: "·";
+      position: absolute;
+      left: 5px;
+      color: #94a3b8;
+      font-weight: 700;
+    }
+
+    /* ── Step table ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 14px;
+    }
+    thead th {
+      background: #1e3a8a;
+      color: #fff;
+      padding: 10px 14px;
+      text-align: left;
+      font-weight: 600;
+      font-size: 13px;
+    }
+    tbody tr:nth-child(odd)  { background: #fff; }
+    tbody tr:nth-child(even) { background: #f8fafc; }
+    tbody td {
+      padding: 9px 14px;
+      border-bottom: 1px solid #e2e8f0;
+      vertical-align: top;
+    }
+    td code, th code { font-family: "Cascadia Code", Consolas, monospace; font-size: 12px; }
+
+    /* ── Inline code ── */
+    code {
+      font-family: "Cascadia Code", Consolas, monospace;
+      font-size: 12.5px;
+      background: #f1f5f9;
+      border: 1px solid #e2e8f0;
+      padding: 1px 5px;
+      border-radius: 3px;
+      color: #0f172a;
+    }
+
+    /* ── Key/value pairs ── */
+    .kv { display: grid; grid-template-columns: 200px 1fr; gap: 6px 16px; margin: 12px 0; }
+    .kv dt { font-weight: 600; font-size: 14px; color: #374151; }
+    .kv dd { font-size: 14px; color: #374151; }
+
+    /* ── Secrets table helper ── */
+    .secret-name { font-weight: 600; font-family: monospace; font-size: 13px; color: #7c3aed; }
+
+    /* ── Output destination card ── */
+    .dest-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin: 20px 0; }
+    .dest-card {
+      background: #fff;
+      border: 1px solid #cbd5e1;
+      border-radius: 8px;
+      padding: 18px 18px 16px;
+    }
+    .dest-card h4 { font-size: 14px; font-weight: 700; color: #1e3a8a; margin-bottom: 8px; }
+    .dest-card p  { font-size: 13px; color: #374151; margin-bottom: 6px; }
+    .dest-card p:last-child { margin-bottom: 0; }
+
+    /* ── Footer ── */
+    footer {
+      margin-top: 60px;
+      padding-top: 20px;
+      border-top: 1px solid #cbd5e1;
+      font-size: 13px;
+      color: #94a3b8;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>CI/CD Pipeline — Critter Quitters Pest Control</h1>
+    <p class="subtitle">Build &amp; Deploy overview · GitHub Actions · Last updated May 2026 (ADB deploy added)</p>
+  </header>
+
+
+  <!-- ═══════════════════════════════════════════════════════ 1. PLATFORM -->
+  <h2>1. The Platform: GitHub Actions</h2>
+
+  <p>
+    The pipeline runs on <strong>GitHub Actions</strong>, which is GitHub's built-in CI/CD system.
+    If you think of GitHub as a combination of Azure Repos and Azure DevOps, then GitHub Actions
+    is the <em>Pipelines</em> half — it reads a YAML definition file, provisions temporary
+    virtual machines, and executes your build steps on them.
+  </p>
+
+  <div class="callout analogy">
+    <strong>Azure DevOps analogy</strong>
+    Think of GitHub Actions as Azure Pipelines with Microsoft-hosted agents, where the pipeline
+    definition lives in a <code>.yml</code> file inside the repository itself. There is no
+    separate pipeline editor UI — everything is code in the repo.
+  </div>
+
+  <p>
+    The pipeline definition file is:
+    <code>.github/workflows/build.yml</code>
+    — a path that GitHub Actions looks for automatically. Every repository can have multiple
+    workflow files; this project has one.
+  </p>
+
+
+  <!-- ═══════════════════════════════════════════════════════ 2. TRIGGERS -->
+  <h2>2. What Triggers the Pipeline</h2>
+
+  <h3>Automatic trigger — push to <code>main</code></h3>
+  <p>
+    The pipeline runs automatically whenever a commit is pushed (or a pull request is merged)
+    to the <code>main</code> branch. This is equivalent to a <em>Continuous Integration trigger</em>
+    in Azure DevOps set to watch a specific branch.
+  </p>
+  <p>
+    No other branches trigger the pipeline. Feature branches can be pushed freely without
+    causing a build.
+  </p>
+
+  <h3>Manual trigger</h3>
+  <p>
+    The pipeline can also be triggered on demand, without a code change. In GitHub, this is
+    called a <strong>workflow dispatch</strong>.
+  </p>
+  <p><strong>To trigger it manually:</strong></p>
+  <ol style="margin: 8px 0 12px 24px; font-size: 14px; line-height: 2;">
+    <li>Open the repository on GitHub.com.</li>
+    <li>Click the <strong>Actions</strong> tab (top navigation bar).</li>
+    <li>Select <strong>Build &amp; Deploy</strong> from the workflow list on the left.</li>
+    <li>Click the <strong>Run workflow</strong> button (top right of the run list).</li>
+    <li>Select <strong>main</strong> as the branch and click <strong>Run workflow</strong>.</li>
+  </ol>
+
+  <div class="callout analogy">
+    <strong>Azure DevOps analogy</strong>
+    This is the equivalent of clicking <em>Queue</em> on a pipeline in Azure DevOps.
+    In Octopus terms, it is like triggering a deployment manually from the dashboard.
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════ 3. WHERE IT RUNS -->
+  <h2>3. Where It Runs</h2>
+
+  <p>
+    Each job in the pipeline runs on a <strong>GitHub-hosted runner</strong> — a temporary
+    virtual machine that GitHub provisions, runs your job on, and then destroys. You do not
+    own or manage these machines. They are the equivalent of Microsoft-hosted agents in
+    Azure DevOps.
+  </p>
+
+  <dl class="kv">
+    <dt>Job 1 runner</dt>
+    <dd><code>ubuntu-latest</code> — a Linux VM (Ubuntu 24.x). Used for Godot headless export
+        of both Windows and Android targets, because Linux can cross-compile to both platforms.</dd>
+    <dt>Job 2 runner</dt>
+    <dd><code>windows-latest</code> — a Windows Server VM. Required because Inno Setup (the
+        Windows installer builder) only runs on Windows.</dd>
+    <dt>Job 3 runner</dt>
+    <dd><code>ubuntu-latest</code> — Linux again, used only to publish the final GitHub release.
+        No compilation happens here.</dd>
+    <dt>Job 4 runner</dt>
+    <dd><code>ubuntu-latest</code> — Linux, used to upload the signed APK to Firebase App Distribution.
+        Skipped automatically when the <code>FIREBASE_APP_ID</code> secret is not configured.</dd>
+  </dl>
+
+  <p>
+    Runners have a generous set of software pre-installed (build tools, Java, the Android SDK,
+    PowerShell, Python, etc.), which is why the pipeline does not need to install most of its
+    dependencies from scratch on every run.
+  </p>
+
+  <div class="callout note">
+    <strong>Billing note</strong>
+    Public repositories on GitHub get unlimited Actions minutes for free. Private repositories
+    have a monthly free allowance (2,000 minutes as of this writing); Linux minutes are cheaper
+    than Windows minutes. This project's pipeline uses roughly 5–8 minutes of Linux time and
+    1–2 minutes of Windows time per run.
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════ 4. PIPELINE STRUCTURE -->
+  <h2>4. Pipeline Structure</h2>
+
+  <p>
+    GitHub Actions uses the word <strong>job</strong> where Azure DevOps uses the word
+    <strong>stage</strong>. Each job runs on its own fresh runner in parallel with other jobs,
+    unless you declare a dependency. This pipeline has three jobs that run in sequence:
+  </p>
+
+  <div class="pipeline">
+    <div class="stage">
+      <div class="stage-title">Job 1</div>
+      <div class="stage-name">Export</div>
+      <div class="stage-runner">ubuntu-latest</div>
+      <ul>
+        <li>Download Godot (cached)</li>
+        <li>Decode Android keystore</li>
+        <li>Inject signing password</li>
+        <li>Configure Godot settings</li>
+        <li>Export Windows .exe</li>
+        <li>Export &amp; sign Android .apk</li>
+        <li>Upload both as artifacts</li>
+      </ul>
+    </div>
+    <div class="stage">
+      <div class="stage-title">Job 2</div>
+      <div class="stage-name">Windows Installer</div>
+      <div class="stage-runner">windows-latest</div>
+      <ul>
+        <li>Download Windows .exe artifact</li>
+        <li>Run Inno Setup compiler</li>
+        <li>Upload installer as artifact</li>
+      </ul>
+    </div>
+    <div class="stage">
+      <div class="stage-title">Job 3</div>
+      <div class="stage-name">Publish Release</div>
+      <div class="stage-runner">ubuntu-latest</div>
+      <ul>
+        <li>Download all artifacts</li>
+        <li>Create GitHub pre-release</li>
+        <li>Attach .apk + setup .exe</li>
+      </ul>
+    </div>
+    <div class="stage" style="border-color:#7c3aed; opacity:0.75;">
+      <div class="stage-title">Job 4</div>
+      <div class="stage-name" style="color:#7c3aed;">Firebase Deploy</div>
+      <div class="stage-runner">ubuntu-latest</div>
+      <ul>
+        <li>Download APK artifact</li>
+        <li>Upload to Firebase App Distribution</li>
+        <li style="color:#94a3b8;font-style:italic;">Skipped if secret absent</li>
+      </ul>
+    </div>
+  </div>
+
+  <p>
+    Job 2 cannot start until Job 1 finishes successfully. Job 3 cannot start until both
+    Job 1 and Job 2 finish successfully. Job 4 runs independently after Job 1 and is
+    skipped when the <code>FIREBASE_APP_ID</code> secret has not been configured.
+    If any required job fails, downstream jobs are skipped and the overall pipeline is marked failed.
+  </p>
+
+  <div class="callout analogy">
+    <strong>Azure DevOps / Octopus analogy</strong>
+    This maps directly to a three-stage Azure Pipeline with sequential stage dependencies,
+    where Job 3 is analogous to an Octopus Deploy step that publishes the release package
+    and makes it available for installation.
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════ 5. JOB DETAIL -->
+  <h2>5. What Each Job Does, Step by Step</h2>
+
+  <h3>Job 1 — Export (Windows + Android)</h3>
+
+  <table>
+    <thead>
+      <tr><th style="width:34%">Step</th><th>What it does</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Checkout</td>
+        <td>Clones the repository onto the runner. Equivalent to a <em>Get Sources</em> task in Azure DevOps.</td>
+      </tr>
+      <tr>
+        <td>Compute short SHA</td>
+        <td>Takes the first 7 characters of the commit hash (e.g., <code>c2ad952</code>) and stores it as a pipeline variable for use in filenames and the release tag.</td>
+      </tr>
+      <tr>
+        <td>Set up Java 17</td>
+        <td>Installs Temurin JDK 17. Required by <code>apksigner</code>, the Android signing tool.</td>
+      </tr>
+      <tr>
+        <td>Restore Godot from cache</td>
+        <td>
+          Checks whether the Godot binary and export templates have already been downloaded on
+          a previous run. If the cache exists, the next two steps are skipped. The cache key
+          is <code>godot-4.5.1-stable-v5</code> — incrementing the version number or the
+          suffix busts the cache.
+        </td>
+      </tr>
+      <tr>
+        <td>Download Godot binary</td>
+        <td>
+          Downloads the Godot 4.5.1 Linux headless binary from the official Godot GitHub
+          releases page. This is the "server" build of Godot — it has no display output and
+          is designed specifically for CI/CD.
+          <em>(Skipped on cache hit.)</em>
+        </td>
+      </tr>
+      <tr>
+        <td>Download export templates</td>
+        <td>
+          Downloads the matching export template package. Export templates are the pre-compiled
+          platform runtimes that Godot packages your game into. Without them, Godot cannot
+          produce a Windows or Android build.
+          <em>(Skipped on cache hit.)</em>
+        </td>
+      </tr>
+      <tr>
+        <td>Decode Android keystore</td>
+        <td>
+          Retrieves the Android release keystore from the <code>ANDROID_KEYSTORE_BASE64</code>
+          secret, decodes it from base64, and writes it to <code>build/android_release.keystore</code>
+          on the runner's local disk. The keystore file itself is never stored in the repository.
+        </td>
+      </tr>
+      <tr>
+        <td>Inject keystore password</td>
+        <td>
+          Reads the <code>ANDROID_KEYSTORE_PASS</code> secret and writes it into the
+          <code>game/export_presets.cfg</code> file in the placeholder field that was left
+          intentionally blank in the repository. This keeps the password out of source control.
+        </td>
+      </tr>
+      <tr>
+        <td>Verify keystore and SDK</td>
+        <td>Sanity check — confirms the password was injected and the keystore file exists before proceeding. Fails the build immediately if either is missing.</td>
+      </tr>
+      <tr>
+        <td>Configure Godot editor settings</td>
+        <td>
+          Writes a Godot editor settings file to the runner's home directory, telling Godot
+          where to find the Android SDK and Java SDK. These paths are fixed on GitHub's
+          Ubuntu runners.
+        </td>
+      </tr>
+      <tr>
+        <td>Export — Windows Desktop</td>
+        <td>
+          Runs Godot in headless mode with the <code>--export-release</code> flag. Godot reads
+          the project files, packages all game assets, and produces a standalone
+          <code>.exe</code> for Windows. Linux can cross-compile for Windows because the
+          export uses pre-built Windows templates.
+        </td>
+      </tr>
+      <tr>
+        <td>Export — Android APK</td>
+        <td>
+          Runs Godot again to produce an Android <code>.apk</code>. Godot's built-in APK
+          signing is bypassed due to a known bug in Godot 4.5. Instead, the APK is signed
+          immediately afterward using <code>apksigner</code> from the Android build-tools,
+          then the unsigned intermediate file is deleted.
+        </td>
+      </tr>
+      <tr>
+        <td>Stamp version into filenames</td>
+        <td>
+          Renames the output files to include the short commit SHA:
+          <code>critter_quitters_c2ad952_win.exe</code> and
+          <code>critter_quitters_c2ad952.apk</code>.
+        </td>
+      </tr>
+      <tr>
+        <td>Upload artifacts</td>
+        <td>
+          Stores both output files as <strong>pipeline artifacts</strong> — temporary
+          storage attached to this pipeline run. Artifacts are the hand-off mechanism
+          between jobs running on different machines. Equivalent to publishing an artifact
+          in Azure DevOps.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Job 2 — Windows Installer</h3>
+
+  <table>
+    <thead>
+      <tr><th style="width:34%">Step</th><th>What it does</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Checkout</td>
+        <td>Clones the repository. Needed to access the Inno Setup script (<code>build/setup.iss</code>).</td>
+      </tr>
+      <tr>
+        <td>Download Windows exe artifact</td>
+        <td>Retrieves the <code>.exe</code> produced by Job 1 and places it in <code>dist\</code> on this new Windows runner.</td>
+      </tr>
+      <tr>
+        <td>Build installer with Inno Setup</td>
+        <td>
+          Runs the Inno Setup compiler (<code>ISCC.exe</code>), which is pre-installed on
+          GitHub Windows runners, against the <code>build/setup.iss</code> script. This
+          produces a standard Windows installer: <code>critter_quitters_setup_c2ad952.exe</code>.
+          The version string and source file path are passed in as compiler defines.
+        </td>
+      </tr>
+      <tr>
+        <td>Upload installer artifact</td>
+        <td>Stores the installer <code>.exe</code> as a pipeline artifact for Job 3 to collect.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Job 3 — Publish Release</h3>
+
+  <table>
+    <thead>
+      <tr><th style="width:34%">Step</th><th>What it does</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Download all artifacts</td>
+        <td>Collects both artifacts from Jobs 1 and 2 onto this runner's disk.</td>
+      </tr>
+      <tr>
+        <td>Create GitHub pre-release</td>
+        <td>
+          Creates a <strong>GitHub Release</strong> — a named, versioned snapshot in the
+          repository — tagged <code>build-c2ad952</code> (using the short SHA). Attaches the
+          Windows installer and the signed Android APK as downloadable assets. The release
+          is marked as a <em>pre-release</em>, which flags it as not yet promoted to
+          production in the GitHub UI.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h3>Job 4 — Firebase Deploy <span style="font-weight:400; color:#94a3b8; font-size:13px;">(optional — skipped until secrets configured)</span></h3>
+
+  <table>
+    <thead>
+      <tr><th style="width:34%">Step</th><th>What it does</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Download APK artifact</td>
+        <td>Retrieves the signed <code>.apk</code> produced by Job 1.</td>
+      </tr>
+      <tr>
+        <td>Resolve APK path</td>
+        <td>Finds the exact filename of the APK (which includes the SHA) so the Firebase action receives a concrete file path rather than a glob pattern.</td>
+      </tr>
+      <tr>
+        <td>Upload to Firebase App Distribution</td>
+        <td>
+          Sends the APK to Firebase App Distribution using the
+          <code>wzieba/Firebase-Distribution-Github-Action</code> action. Firebase notifies
+          registered testers (the <em>testers</em> group) that a new build is available.
+          Testers receive a push notification on their device to install the update.
+          Requires the <code>FIREBASE_APP_ID</code> and <code>FIREBASE_SERVICE_ACCOUNT_KEY</code> secrets to be configured.
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+
+  <!-- ═══════════════════════════════════════════════════════ 6. SECRETS -->
+  <h2>6. Secrets and Configuration</h2>
+
+  <p>
+    Sensitive values are stored as <strong>GitHub Actions Secrets</strong>, which are
+    equivalent to secret pipeline variables in Azure DevOps. They are encrypted at rest,
+    never echoed in logs, and are only injected into the pipeline at runtime.
+  </p>
+
+  <div class="callout analogy">
+    <strong>Where to find them</strong>
+    GitHub repository → <strong>Settings</strong> → <strong>Secrets and variables</strong>
+    → <strong>Actions</strong>. This is equivalent to Azure DevOps pipeline Library variable
+    groups marked as secret.
+  </div>
+
+  <table>
+    <thead>
+      <tr><th>Secret name</th><th>What it contains</th><th>How it is used</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="secret-name">ANDROID_KEYSTORE_BASE64</span></td>
+        <td>The Android release keystore file, encoded as base64 text.</td>
+        <td>Decoded back to a binary <code>.jks</code>/<code>.keystore</code> file on the runner for signing.</td>
+      </tr>
+      <tr>
+        <td><span class="secret-name">ANDROID_KEYSTORE_PASS</span></td>
+        <td>The password protecting the keystore and its key.</td>
+        <td>Injected into the Godot export presets at runtime; also passed to <code>apksigner</code> for signing.</td>
+      </tr>
+      <tr>
+        <td><span class="secret-name">FIREBASE_APP_ID</span></td>
+        <td>The Firebase Android App ID for this project (e.g. <code>1:123456789:android:abcdef</code>). Found in Firebase console → Project Settings → Your apps.</td>
+        <td>Used by Job 4. When absent, Job 4 is skipped entirely — the rest of the pipeline is unaffected.</td>
+      </tr>
+      <tr>
+        <td><span class="secret-name">FIREBASE_SERVICE_ACCOUNT_KEY</span></td>
+        <td>Full JSON content of a GCP service account key with the <em>Firebase App Distribution Admin</em> role.</td>
+        <td>Authenticates the Firebase upload in Job 4. Required alongside <code>FIREBASE_APP_ID</code>.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p>
+    There is also one pipeline-level configuration value stored directly in the workflow
+    file (not a secret, since it is not sensitive):
+  </p>
+
+  <dl class="kv">
+    <dt><code>GODOT_VERSION</code></dt>
+    <dd>
+      Set to <code>4.5.1</code> at the top of <code>build.yml</code>. To upgrade Godot,
+      change this value and clear the Actions cache (repository → Actions → Caches) so
+      the new version is downloaded.
+    </dd>
+  </dl>
+
+
+  <!-- ═══════════════════════════════════════════════════════ 7. CACHING -->
+  <h2>7. Dependency Caching</h2>
+
+  <p>
+    The Godot binary (~100 MB) and export templates (~700 MB) take several minutes to
+    download. The pipeline caches them between runs so that subsequent builds skip the
+    download entirely.
+  </p>
+  <p>
+    The cache is keyed on the string <code>godot-4.5.1-stable-v5</code>. If the cache
+    becomes corrupt or you upgrade Godot, either change the version number or increment
+    the <code>v5</code> suffix. Cached items are stored by GitHub and automatically evicted
+    after 7 days of non-use.
+  </p>
+
+  <div class="callout analogy">
+    <strong>Azure DevOps analogy</strong>
+    This is equivalent to the <em>Cache</em> task in Azure Pipelines, which stores and
+    restores directories between pipeline runs using a cache key.
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════ 8. OUTPUTS -->
+  <h2>8. Where the Outputs Go</h2>
+
+  <div class="dest-grid">
+    <div class="dest-card">
+      <h4>GitHub Release (permanent)</h4>
+      <p>
+        The primary output. Every successful run creates a new
+        <strong>GitHub Release</strong> tagged <code>build-{sha}</code>, visible at:<br>
+        <em>Repository → Releases</em>
+      </p>
+      <p>
+        Each release contains two downloadable files:
+      </p>
+      <p>
+        <code>critter_quitters_setup_{sha}.exe</code> — Windows installer<br>
+        <code>critter_quitters_{sha}.apk</code> — signed Android APK
+      </p>
+      <p>
+        Releases are marked as <em>pre-release</em>. They persist indefinitely until
+        manually deleted.
+      </p>
+    </div>
+    <div class="dest-card">
+      <h4>Pipeline Artifacts (temporary)</h4>
+      <p>
+        Intermediate files produced during the run and used to pass outputs between
+        jobs. Three artifacts are created per run:
+      </p>
+      <p>
+        <code>windows-exe</code> — raw .exe from Godot<br>
+        <code>android-apk</code> — signed .apk<br>
+        <code>windows-installer</code> — Inno Setup installer
+      </p>
+      <p>
+        Artifacts are available for download from the run's summary page for
+        <strong>90 days</strong>, then automatically deleted. They are not the intended
+        distribution mechanism — the Release is.
+      </p>
+    </div>
+  </div>
+
+  <div class="callout analogy">
+    <strong>Octopus Deploy analogy</strong>
+    The <strong>GitHub Release</strong> is the closest equivalent to an Octopus release
+    package. It is versioned, tagged, and contains the actual deployable artifacts.
+    The pipeline artifacts are analogous to the intermediate drop folder in an Azure
+    DevOps build that feeds into the Octopus package feed — useful for debugging, but
+    not the thing you hand to an end user.
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════ 9. ADB DEPLOY -->
+  <h2>9. Installing on Your Pixel (ADB Script)</h2>
+
+  <p>
+    After CI produces a release, you can install the APK directly onto your Pixel 10 Pro XL
+    using the script <code>scripts/deploy-to-pixel.ps1</code>. The script uses the
+    <strong>gh CLI</strong> (already configured on this machine) to download the latest APK
+    from GitHub Releases, then installs it via <strong>ADB</strong> (Android Debug Bridge)
+    over your local WiFi network.
+  </p>
+
+  <h3>One-time setup</h3>
+
+  <p>
+    These steps only need to be done once per machine. The ADB tools are already installed
+    at <code>%LOCALAPPDATA%\Android\Sdk\platform-tools\adb.exe</code>.
+  </p>
+
+  <ol style="margin: 8px 0 16px 24px; font-size: 14px; line-height: 2.2;">
+    <li>
+      On your Pixel: <strong>Settings &rarr; About phone &rarr; Build number</strong> — tap
+      <em>Build number</em> seven times to unlock Developer options.
+    </li>
+    <li>
+      Go to <strong>Settings &rarr; System &rarr; Developer options</strong> and enable
+      <strong>Wireless debugging</strong>.
+    </li>
+    <li>
+      Tap <strong>"Pair device with pairing code"</strong>. The screen shows an IP address,
+      a pairing port, and a 6-digit code.
+    </li>
+    <li>
+      On your PC, run:<br>
+      <code>&amp; "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" pair &lt;ip&gt;:&lt;pairing-port&gt;</code><br>
+      Enter the 6-digit code when prompted.
+    </li>
+  </ol>
+
+  <div class="callout note">
+    <strong>Pairing vs. connecting</strong>
+    Pairing is permanent — you only do it once. Connecting is per-session: after a Pixel
+    reboot, the listen port changes and you need to reconnect (but not re-pair).
+  </div>
+
+  <h3>Per-session reconnect (after each Pixel reboot)</h3>
+
+  <p>
+    The Wireless Debugging screen shows a second port labeled <em>"IP address &amp; Port"</em>
+    — this is the listen port, separate from the pairing port. Run:
+  </p>
+  <p>
+    <code>&amp; "$env:LOCALAPPDATA\Android\Sdk\platform-tools\adb.exe" connect &lt;ip&gt;:&lt;port&gt;</code>
+  </p>
+  <p>
+    You only need this if the Pixel has rebooted since the last session. If ADB is already
+    connected, skip straight to deploying.
+  </p>
+
+  <h3>Deploying a build</h3>
+
+  <p>
+    Once ADB is connected, run the deploy script from a PowerShell terminal:
+  </p>
+  <p>
+    <code>powershell.exe -ExecutionPolicy Bypass -File "D:\Claude\Critter Quitters\scripts\deploy-to-pixel.ps1"</code>
+  </p>
+  <p>
+    The script will:
+  </p>
+  <ol style="margin: 8px 0 16px 24px; font-size: 14px; line-height: 2.2;">
+    <li>Query GitHub Releases for the latest build tag.</li>
+    <li>Download the signed APK to a temporary folder.</li>
+    <li>Detect the connected ADB device automatically.</li>
+    <li>Run <code>adb install -r</code> to install (or update) the app on the Pixel.</li>
+    <li>Clean up the temporary download.</li>
+  </ol>
+  <p>
+    To install a specific build rather than the latest, pass the release tag:
+  </p>
+  <p>
+    <code>... deploy-to-pixel.ps1 -Tag build-abc1234</code>
+  </p>
+
+  <div class="callout warn">
+    <strong>Install from unknown sources</strong>
+    The first time you install a sideloaded APK, Android may require you to allow installation
+    from unknown sources. Follow the on-screen prompt on the Pixel. You only need to do this
+    once.
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════ 10. MONITORING -->
+  <h2>10. Monitoring and Viewing Results</h2>
+
+  <p>
+    All pipeline runs are visible under the <strong>Actions</strong> tab of the repository.
+    Each run shows:
+  </p>
+  <ul style="margin: 8px 0 12px 28px; font-size: 14px; line-height: 2.1;">
+    <li>Overall pass/fail status</li>
+    <li>Which job failed (if any)</li>
+    <li>Full step-by-step logs for each job</li>
+    <li>A list of artifacts produced by the run</li>
+    <li>Total runtime and per-job duration</li>
+  </ul>
+
+  <p>
+    GitHub can be configured to send email notifications on pipeline failure via
+    <em>Settings → Notifications</em> in your GitHub account preferences.
+  </p>
+
+  <div class="callout warn">
+    <strong>On failure</strong>
+    If a run fails, open the run from the Actions tab, click the failed job, and expand
+    the failed step. The raw log output — including Godot's error messages — is shown
+    inline. There is no separate log storage system to query; everything is in the GitHub
+    Actions UI.
+  </div>
+
+
+  <!-- ═══════════════════════════════════════════════════════ 11. SUMMARY -->
+  <h2>11. End-to-End Summary</h2>
+
+  <table>
+    <thead>
+      <tr><th>Question</th><th>Answer</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>What triggers it automatically?</td>
+        <td>Any push (or merged pull request) to the <code>main</code> branch.</td>
+      </tr>
+      <tr>
+        <td>How do I trigger it manually?</td>
+        <td>Actions tab → Build &amp; Deploy → Run workflow → Run workflow.</td>
+      </tr>
+      <tr>
+        <td>Where does it run?</td>
+        <td>GitHub-hosted VMs: Linux for Godot export and release publishing; Windows for the installer build.</td>
+      </tr>
+      <tr>
+        <td>How long does it take?</td>
+        <td>~5–8 minutes total on a warm cache; ~12–15 minutes on a cold cache (first run after a Godot version change).</td>
+      </tr>
+      <tr>
+        <td>Where do the final outputs go?</td>
+        <td>GitHub Releases page of the repository — one release per successful run, named by commit SHA.</td>
+      </tr>
+      <tr>
+        <td>Where are secrets stored?</td>
+        <td>Repository Settings → Secrets and variables → Actions.</td>
+      </tr>
+      <tr>
+        <td>Where is the pipeline definition?</td>
+        <td><code>.github/workflows/build.yml</code> in the repository root.</td>
+      </tr>
+      <tr>
+        <td>Where is the Windows installer script?</td>
+        <td><code>build/setup.iss</code> in the repository root.</td>
+      </tr>
+      <tr>
+        <td>How do I install the APK on my Pixel?</td>
+        <td>Connect ADB over WiFi, then run <code>scripts/deploy-to-pixel.ps1</code>. See section 9.</td>
+      </tr>
+      <tr>
+        <td>Where is the ADB deploy script?</td>
+        <td><code>scripts/deploy-to-pixel.ps1</code> in the repository root.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <footer>
+    Critter Quitters Pest Control · Internal documentation · Updated May 2026
+  </footer>
+
+</div>
+</body>
+</html>
