@@ -34,7 +34,10 @@ jobs:
     name: Export (Windows + Android)
     runs-on: ubuntu-latest
     outputs:
-      sha: ${{ steps.version.outputs.sha }}
+      sha:       ${{ steps.version.outputs.sha }}
+      build_num: ${{ steps.version.outputs.build_num }}
+      branch:    ${{ steps.version.outputs.branch }}
+      msg:       ${{ steps.version.outputs.msg }}
 
     steps:
       - name: Checkout
@@ -44,7 +47,11 @@ jobs:
         id: version
         run: |
           SHA="${GITHUB_SHA:0:7}"
-          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+          BUILD_NUM=$(printf '%04d' "$GITHUB_RUN_NUMBER")
+          echo "sha=$SHA"                             >> "$GITHUB_OUTPUT"
+          echo "build_num=$BUILD_NUM"                 >> "$GITHUB_OUTPUT"
+          echo "branch=${GITHUB_REF_NAME}"            >> "$GITHUB_OUTPUT"
+          echo "msg=$(git log -1 --format='%s')"      >> "$GITHUB_OUTPUT"
 
       - name: Set up Java 17
         # Required for Android APK signing (Godot calls apksigner/jarsigner internally)
@@ -261,9 +268,10 @@ jobs:
       - name: Build installer with Inno Setup
         shell: pwsh
         run: |
-          $sha     = "${{ needs.export.outputs.sha }}"
-          $version = "0.0.$sha"
-          $srcExe  = (Get-ChildItem "dist\critter_quitters_*_win.exe" | Select-Object -First 1).FullName
+          $sha      = "${{ needs.export.outputs.sha }}"
+          $buildNum = "${{ needs.export.outputs.build_num }}"
+          $version  = "0.0.0.$buildNum"
+          $srcExe   = (Get-ChildItem "dist\critter_quitters_*_win.exe" | Select-Object -First 1).FullName
           # ISCC resolves OutputDir relative to the .iss file (build\), so pass an absolute path.
           $outputDir = (Resolve-Path "dist").Path
 
@@ -376,4 +384,4 @@ jobs:
           serviceCredentialsFileContent: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_KEY }}
           groups: testers
           file: ${{ steps.apk.outputs.path }}
-          releaseNotes: "Build ${{ needs.export.outputs.sha }} — ${{ github.sha }}"
+          releaseNotes: "[${{ needs.export.outputs.branch }}] ${{ needs.export.outputs.sha }}: ${{ needs.export.outputs.msg }}"
