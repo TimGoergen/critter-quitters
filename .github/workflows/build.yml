@@ -134,6 +134,11 @@ jobs:
       - name: Configure Godot editor settings
         # Godot needs the Android SDK path and Java SDK path to sign the APK.
         # Both are pre-installed on ubuntu-latest; JAVA_HOME is set by actions/setup-java.
+        #
+        # The three debug_keystore lines are required to satisfy Godot 4.5 issue #109551:
+        # the debug keystore validator runs even with package/signed=false and fails with a
+        # blank error if any of the three fields are set while the others are not. Setting
+        # all three to "" explicitly satisfies the "none of them" branch of that check.
         run: |
           python3 - <<'PYEOF'
           import os
@@ -144,6 +149,9 @@ jobs:
               '[resource]\n'
               f'export/android/android_sdk_path = "{sdk_path}"\n'
               f'export/android/java_sdk_path = "{java_home}"\n'
+              'export/android/debug_keystore = ""\n'
+              'export/android/debug_keystore_user = ""\n'
+              'export/android/debug_keystore_pass = ""\n'
           )
           dest = os.path.expanduser('~/.config/godot')
           os.makedirs(dest, exist_ok=True)
@@ -179,11 +187,13 @@ jobs:
           print('Godot signing disabled')
           "
           GODOT="$HOME/.local/godot-ci/Godot_v${GODOT_VERSION}-${GODOT_CHANNEL}_linux.x86_64"
-          # Redirect stderr to file; cat -A shows raw bytes so ANSI codes don't hide the error
-          "$GODOT" --headless --export-release "Android" "../dist/critter_quitters_raw.apk" 2>/tmp/godot_stderr.txt; GODOT_EXIT=$?
+          # Godot logs errors to stdout, so capture both streams together.
+          # tee lets the output appear in the Actions log in real time AND saves it for the
+          # error-message dump below, which makes blank-ANSI-code errors visible via cat -A.
+          "$GODOT" --headless --export-release "Android" "../dist/critter_quitters_raw.apk" 2>&1 | tee /tmp/godot_out.txt; GODOT_EXIT=${PIPESTATUS[0]}
           if [ $GODOT_EXIT -ne 0 ]; then
-            echo "=== Godot raw stderr (ANSI-stripped errors/warnings) ==="
-            cat -A /tmp/godot_stderr.txt | grep -i "config\|error\|warn\|android\|keystore\|sdk\|jdk\|platform\|tools" || cat -A /tmp/godot_stderr.txt | tail -30
+            echo "=== Godot output (raw bytes, ANSI visible) ==="
+            cat -A /tmp/godot_out.txt | tail -50
             exit $GODOT_EXIT
           fi
           # Sign the exported APK with apksigner from the Android build-tools
