@@ -58,11 +58,11 @@ const TRAP_LABELS: Array = [
 ]
 
 # Panel dimensions — read by Arena.gd to compute the usable arena area.
-const LEFT_PANEL_W:   float = 180.0
-const RIGHT_PANEL_W:  float = 180.0
-const ARENA_MARGIN_PX: float = 24.0
+const LEFT_PANEL_W:   float = 220.0
+const RIGHT_PANEL_W:  float = 220.0
+const ARENA_MARGIN_PX: float = 10.0
 
-const MARGIN: float = 8.0   # inner padding for both panels
+const MARGIN: float = 10.0   # inner padding for both panels
 
 var _wave_label:        Label
 var _bucks_label:       Label
@@ -139,7 +139,7 @@ func _build_left_panel() -> void:
 	bg.add_child(margin)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
+	vbox.add_theme_constant_override("separation", 8)
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
@@ -148,7 +148,7 @@ func _build_left_panel() -> void:
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
 		btn.clip_contents         = false
-		btn.add_theme_font_size_override("font_size", 18)
+		btn.add_theme_font_size_override("font_size", 22)
 		btn.add_theme_font_override("font", UIFonts.primary_bold())
 		btn.text = _selector_label(i)
 
@@ -157,7 +157,7 @@ func _build_left_panel() -> void:
 		vbox.add_child(btn)
 		_selector_buttons.append(btn)
 		_add_btn_badge(btn, i)
-		_add_btn_cost_label(btn, i, 11)
+		_add_btn_cost_label(btn, i, 14)
 
 
 # ---------------------------------------------------------------------------
@@ -183,14 +183,14 @@ func _build_right_panel() -> void:
 	bg.add_child(margin)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 6)
+	vbox.add_theme_constant_override("separation", 8)
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
 	# --- Wave label ---
 	_wave_label = Label.new()
 	_wave_label.text = "WAVE  1"
-	_wave_label.add_theme_font_size_override("font_size", 28)
+	_wave_label.add_theme_font_size_override("font_size", 36)
 	_wave_label.add_theme_font_override("font", UIFonts.header())
 	_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -205,13 +205,13 @@ func _build_right_panel() -> void:
 	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
 	coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	coin_icon.custom_minimum_size = Vector2(28, 28)
+	coin_icon.custom_minimum_size = Vector2(36, 36)
 	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	bucks_row.add_child(coin_icon)
 
 	_bucks_label = Label.new()
 	_bucks_label.text = "0"
-	_bucks_label.add_theme_font_size_override("font_size", 28)
+	_bucks_label.add_theme_font_size_override("font_size", 36)
 	_bucks_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_bucks_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
 	_bucks_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
@@ -227,13 +227,13 @@ func _build_right_panel() -> void:
 	inf_icon.texture              = load("res://assets/infestation_level.png")
 	inf_icon.stretch_mode         = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	inf_icon.expand_mode          = TextureRect.EXPAND_IGNORE_SIZE
-	inf_icon.custom_minimum_size  = Vector2(28, 28)
+	inf_icon.custom_minimum_size  = Vector2(36, 36)
 	inf_icon.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
 	inf_row.add_child(inf_icon)
 
 	_infestation_label = Label.new()
 	_infestation_label.text = "0%"
-	_infestation_label.add_theme_font_size_override("font_size", 20)
+	_infestation_label.add_theme_font_size_override("font_size", 26)
 	_infestation_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_infestation_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 	_infestation_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
@@ -244,7 +244,7 @@ func _build_right_panel() -> void:
 	# Bar track below the row
 	var track := ColorRect.new()
 	track.color                 = COLOR_BAR_BG
-	track.custom_minimum_size   = Vector2(0, 10)
+	track.custom_minimum_size   = Vector2(0, 14)
 	track.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(track)
 
@@ -261,7 +261,7 @@ func _build_right_panel() -> void:
 
 	_pause_btn = Button.new()
 	_pause_btn.text = ""
-	_pause_btn.add_theme_font_size_override("font_size", 18)
+	_pause_btn.add_theme_font_size_override("font_size", 22)
 	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_pause_btn)
 	_pause_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -269,14 +269,14 @@ func _build_right_panel() -> void:
 	speed_pause_row.add_child(_pause_btn)
 
 	_pause_bar_icon = _PauseBarIcon.new()
-	_pause_bar_icon.target_height = UIFonts.primary_bold().get_ascent(18)
+	_pause_bar_icon.target_height = UIFonts.primary_bold().get_ascent(22)
 	_pause_bar_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_pause_bar_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_pause_btn.add_child(_pause_bar_icon)
 
 	_speed_btn = Button.new()
 	_speed_btn.text = ""
-	_speed_btn.add_theme_font_size_override("font_size", 18)
+	_speed_btn.add_theme_font_size_override("font_size", 22)
 	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_speed_btn)
 	_speed_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -292,7 +292,7 @@ func _build_right_panel() -> void:
 	_speed_mult_lbl.offset_left  = 8.0
 	_speed_mult_lbl.offset_right = -8.0
 	_speed_mult_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_speed_mult_lbl.add_theme_font_size_override("font_size", 18)
+	_speed_mult_lbl.add_theme_font_size_override("font_size", 22)
 	_speed_mult_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
 	_speed_btn.add_child(_speed_mult_lbl)
 
@@ -305,14 +305,14 @@ func _build_right_panel() -> void:
 	_speed_icon_lbl.offset_left  = 8.0
 	_speed_icon_lbl.offset_right = -8.0
 	_speed_icon_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_speed_icon_lbl.add_theme_font_size_override("font_size", 18)
+	_speed_icon_lbl.add_theme_font_size_override("font_size", 22)
 	_speed_icon_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
 	_speed_btn.add_child(_speed_icon_lbl)
 
 	# --- Zoom toggle ---
 	_zoom_btn = Button.new()
 	_zoom_btn.text = "ZOOM"
-	_zoom_btn.add_theme_font_size_override("font_size", 18)
+	_zoom_btn.add_theme_font_size_override("font_size", 22)
 	_zoom_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_zoom_btn)
 	_zoom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -327,7 +327,7 @@ func _build_right_panel() -> void:
 	# --- Countdown block (hidden by default) ---
 	_countdown_wave_label = Label.new()
 	_countdown_wave_label.text               = "Incoming!"
-	_countdown_wave_label.add_theme_font_size_override("font_size", 24)
+	_countdown_wave_label.add_theme_font_size_override("font_size", 32)
 	_countdown_wave_label.add_theme_color_override("font_color", COLOR_INCOMING)
 	_countdown_wave_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
 	_countdown_wave_label.add_theme_constant_override("shadow_offset_x", 1)
@@ -338,7 +338,7 @@ func _build_right_panel() -> void:
 	vbox.add_child(_countdown_wave_label)
 
 	_countdown_number_label = Label.new()
-	_countdown_number_label.add_theme_font_size_override("font_size", 36)
+	_countdown_number_label.add_theme_font_size_override("font_size", 48)
 	_countdown_number_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
 	_countdown_number_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
 	_countdown_number_label.add_theme_constant_override("shadow_offset_x", 1)
@@ -369,7 +369,7 @@ func _build_right_panel() -> void:
 
 	var game_icon := TextureRect.new()
 	game_icon.texture             = load("res://assets/uninfested.png") as Texture2D
-	game_icon.custom_minimum_size = Vector2(24, 24)
+	game_icon.custom_minimum_size = Vector2(30, 30)
 	game_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	game_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	game_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -382,13 +382,13 @@ func _build_right_panel() -> void:
 	btn_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	btn_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	btn_label.add_theme_font_override("font", UIFonts.primary())
-	btn_label.add_theme_font_size_override("font_size", 13)
+	btn_label.add_theme_font_size_override("font_size", 18)
 	btn_label.add_theme_color_override("font_color", COLOR_TEXT)
 	btn_row.add_child(btn_label)
 
 	var btn_coin_icon := TextureRect.new()
 	btn_coin_icon.texture             = load("res://assets/bug_buck_coin.png") as Texture2D
-	btn_coin_icon.custom_minimum_size = Vector2(16, 16)
+	btn_coin_icon.custom_minimum_size = Vector2(20, 20)
 	btn_coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	btn_coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	btn_coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -400,7 +400,7 @@ func _build_right_panel() -> void:
 	_send_wave_reward_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_send_wave_reward_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	_send_wave_reward_label.add_theme_font_override("font", UIFonts.primary_bold())
-	_send_wave_reward_label.add_theme_font_size_override("font_size", 13)
+	_send_wave_reward_label.add_theme_font_size_override("font_size", 18)
 	_send_wave_reward_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
 	btn_row.add_child(_send_wave_reward_label)
 
@@ -411,7 +411,7 @@ func _build_right_panel() -> void:
 
 	_exit_btn = Button.new()
 	_exit_btn.text = "EXIT"
-	_exit_btn.add_theme_font_size_override("font_size", 16)
+	_exit_btn.add_theme_font_size_override("font_size", 20)
 	_exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_exit_btn)
 	_exit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -420,7 +420,7 @@ func _build_right_panel() -> void:
 
 	_restart_btn = Button.new()
 	_restart_btn.text = "RESTART"
-	_restart_btn.add_theme_font_size_override("font_size", 16)
+	_restart_btn.add_theme_font_size_override("font_size", 20)
 	_restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_restart_btn)
 	_restart_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -462,7 +462,7 @@ func _build_run_over_overlay() -> void:
 	btn.anchor_right         = 0.70
 	btn.anchor_top           = 0.70
 	btn.anchor_bottom        = 0.80
-	btn.add_theme_font_size_override("font_size", 28)
+	btn.add_theme_font_size_override("font_size", 32)
 	btn.add_theme_font_override("font", UIFonts.primary())
 	btn.process_mode         = Node.PROCESS_MODE_ALWAYS
 	_apply_button_style(btn)
@@ -673,7 +673,7 @@ func _add_btn_badge(btn: Button, type: int) -> void:
 	var lbl := Label.new()
 	lbl.text         = TRAP_BRAND[type]["badge"]
 	lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	lbl.add_theme_font_size_override("font_size", 9)
+	lbl.add_theme_font_size_override("font_size", 11)
 	lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
 	lbl.anchor_left   = 1.0
