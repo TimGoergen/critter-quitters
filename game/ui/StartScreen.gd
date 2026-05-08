@@ -50,7 +50,7 @@ func _on_viewport_resized() -> void:
 	var vp      := get_viewport().get_visible_rect().size
 	var scale_f := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
 	_van.scale    = Vector2(scale_f, scale_f)
-	_van.position = Vector2(vp.x * 0.5, vp.y * 0.5)
+	_van.position = Vector2(vp.x * 0.5, vp.y * 0.40)
 
 
 func _build_ui() -> void:
@@ -74,7 +74,7 @@ func _build_ui() -> void:
 	_van.centered = true
 	var scale_f   := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
 	_van.scale    = Vector2(scale_f, scale_f)
-	_van.position = Vector2(vp.x * 0.5, vp.y * 0.5)
+	_van.position = Vector2(vp.x * 0.5, vp.y * 0.40)
 	add_child(_van)
 
 	# --- Slogan ---
