@@ -1606,8 +1606,8 @@ func _fit_camera_to_grid() -> void:
 	if usable_h <= 0.0 or usable_w <= 0.0:
 		return
 
-	# +8 keeps a generous margin beyond the 2-cell-wide outer wall ring on all sides.
-	var arena_world := Grid.GRID_SIZE * Grid.CELL_SIZE + 8.0
+	# +3 keeps a minimal margin beyond the outer wall ring; zoom mode pans within this space.
+	var arena_world := Grid.GRID_SIZE * Grid.CELL_SIZE + 3.0
 
 	# With KEEP_HEIGHT, horizontal world coverage = size × (vp.x / vp.y).
 	# For the arena to fit usable_w pixels wide: size × (usable_w / vp.y) ≥ arena_world.
