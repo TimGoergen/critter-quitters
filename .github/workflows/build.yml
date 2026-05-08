@@ -70,6 +70,7 @@ jobs:
           # The actual binary inside that directory still uses a period: linux.x86_64
           EXTRACT_DIR="Godot_v${VER}_mono_linux_x86_64"
           BINARY_FILE="Godot_v${VER}_mono_linux.x86_64"
+          mkdir -p ~/.local
           rm -rf ~/.local/godot-ci
           mv "/tmp/godot_extract/${EXTRACT_DIR}" ~/.local/godot-ci
           chmod +x ~/.local/godot-ci/${BINARY_FILE}
