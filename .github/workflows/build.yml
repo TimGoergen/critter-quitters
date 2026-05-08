@@ -95,7 +95,10 @@ jobs:
           mkdir -p build
           python3 -c "
           import base64, os
-          data = ''.join(os.environ['KEYSTORE_B64'].split())  # strip all whitespace
+          data = os.environ['KEYSTORE_B64']
+          # Strip BOM (﻿) that PowerShell adds, plus any other non-ASCII or whitespace
+          data = data.encode('ascii', errors='ignore').decode()
+          data = ''.join(data.split())
           open('build/android_release.keystore', 'wb').write(base64.b64decode(data))
           "
 
