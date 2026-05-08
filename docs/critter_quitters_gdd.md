@@ -1,6 +1,6 @@
 ﻿# **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.22 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
+**Version:** Draft v0.24 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
 
 ---
 
@@ -31,6 +31,7 @@
 | v0.21 | Sprite art migration added as Phase 5. Previous phases 5, 5b, 6, 7 renumbered to 6, 6b, 7, 8. |
 | v0.22 | Mobile UI rework added as Phase 5. Previous phases 5, 6, 6b, 7, 8 renumbered to 6, 7, 7b, 8, 9. |
 | v0.23 | Phase 3 marked complete. All outstanding items cancelled as covered by Phase 6. |
+| v0.24 | Phase 5 design decisions recorded. Landscape-only orientation confirmed; portrait code paths to be removed. Trap placement: tap-to-select / tap-to-place confirmed; drag-to-place mechanic dropped. Input model: movement threshold (~15px) distinguishes tap from drag; drag always pans camera. Zoom: two fixed levels (overview = full arena, zoomed-in = 2× magnification); zoom toggle button in UI; panning only active when zoomed in. Enemy follow: tap enemy to follow (camera tracks at zoomed-in level); tap same enemy to cancel; tap different enemy or trap to switch focus; focus released on wave end or run end. Tap placed trap: centers camera and opens upgrade panel. Arena visual changes: smaller footprint (more margin), lighter wall colour. Upgrade panel redesigned for touch (larger tap targets). Phase 4 marked complete. |
 
 ---
 
@@ -594,7 +595,7 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: looks and feels like the game*
 
-### **Phase 4 — Build & Deploy Pipeline**
+### **Phase 4 — Build & Deploy Pipeline** ✓ Complete
 - Automated Godot export — Windows 11 (x86-64) and Android (arm64) builds triggered from GitHub Actions on push to main
 - Windows build: produces a signed .exe installer via Inno Setup or NSIS, uploaded as a GitHub Release artifact
 - Android build: produces a signed .apk/.aab, sideloadable to Pixel 10 Pro XL (arm64-v8a target); Play Store upload deferred to Phase 9
@@ -607,13 +608,20 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 *Goal: any push to main produces tested, installable builds for both target devices with no manual steps*
 
 ### **Phase 5 — Mobile UI Rework**
-- HUD layout adapted for portrait and landscape aspect ratios — element placement, sizing, and anchoring tested on mobile screen dimensions
-- Touch-friendly tap targets throughout — buttons, trap icons, and interactive elements meet minimum size guidelines
-- Trap placement UI reworked for touch — evaluate radial/panel approach vs. tap-to-select and tap-to-place; confirm drag behaviour
-- Store and upgrade panels redesigned for small screens — readable at mobile resolution, scrollable where needed
-- Font sizing and text readability verified on mobile display density
+- **Landscape-only** orientation; portrait code paths removed from HUD and Arena
+- **Layout model**: arena scales to fill screen height with a small margin; all HUD elements live left and right of the arena (never above/below); no UI overlaps the arena
+- **Trap selector** (side panel): touch-friendly buttons with minimum 44px tap targets; landscape-specific layout
+- **Top panel**: wave, Bug Bucks, infestation bar, pause, speed — sized and spaced for mobile readability
+- **Input system rewrite**: `InputEventScreenTouch` / `InputEventScreenDrag` replace mouse events; ~15px movement threshold distinguishes tap from drag; drag-to-place mechanic removed
+- **Tap-to-place**: tap empty cell with trap armed → place; drag → pan (never place)
+- **Two-level zoom**: overview (full arena, no pan) and zoomed-in (2× magnification, drag to pan); zoom toggle button in UI; panning clamped to arena bounds
+- **Enemy follow**: tap enemy → zoom in and follow; tap same enemy → cancel follow and return to overview; tap different enemy or placed trap → switch focus; focus released on wave end / run end
+- **Tap placed trap**: center camera on trap and open upgrade panel
+- **Upgrade panel**: redesigned for touch — larger buttons, relative sizing, no fixed pixel dimensions
+- **Arena visual changes**: reduced footprint (larger margin around grid), lighter wall colour
+- **Font sizing and safe-area margins** verified on Pixel 10 Pro XL
 
-*Goal: the UI works correctly and comfortably on a phone screen*
+*Goal: the full game is comfortably playable one-handed on a phone in landscape mode*
 
 ### **Phase 6 — Sprite Art Migration**
 - Illustrated Sprite3D art for all 5 enemies: Ant (replace SVG placeholder), Cricket, Beetle, Cockroach, Rat
