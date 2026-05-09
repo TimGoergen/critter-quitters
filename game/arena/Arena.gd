@@ -139,7 +139,7 @@ var _touch_down_pos: Vector2    = Vector2.ZERO   # screen position where the poi
 var _touch_last_pos: Vector2    = Vector2.ZERO   # most recent drag/move position
 var _touch_hold_time: float     = 0.0            # seconds held without exceeding drag threshold
 const DRAG_THRESHOLD_PX: float  = 15.0           # movement before classifying as drag/pan
-const HOLD_THRESHOLD_SEC: float = 0.35           # hold duration before entering DRAG_PLACING
+const HOLD_THRESHOLD_SEC: float = 0.25           # hold duration before entering DRAG_PLACING
 
 # Ghost preview node shown while in DRAG_PLACING mode.
 var _drag_place_preview: Node3D  = null
@@ -361,8 +361,11 @@ func _update_drag_preview(screen_pos: Vector2) -> void:
 	if anchor == _drag_place_anchor:
 		return   # still on the same cell — nothing to rebuild
 
-	_drag_place_anchor = anchor
+	# Clear the old preview first, then record the new anchor.
+	# Order matters: _clear_drag_preview() resets _drag_place_anchor to (-1,-1),
+	# so the assignment must come after the clear or the anchor is lost on release.
 	_clear_drag_preview()
+	_drag_place_anchor = anchor
 
 	if not _is_in_arena(anchor):
 		return
