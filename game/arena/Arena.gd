@@ -126,12 +126,24 @@ var _selected_trap: Node = null
 # True while the panel is the reason the tree is paused, so close knows to unpause.
 var _panel_paused: bool = false
 
-# Touch input state machine — classifies a finger gesture as either a tap or a drag.
-enum TouchState { IDLE, PENDING_CLASSIFY, DRAGGING }
+# Touch/mouse input state machine.
+#
+# IDLE             → no pointer down
+# PENDING_CLASSIFY → pointer down; waiting to see if this is a tap, a pan, or a hold
+# DRAGGING         → movement exceeded DRAG_THRESHOLD_PX first; panning the camera
+# DRAG_PLACING     → pointer held past HOLD_THRESHOLD_SEC without moving; dragging
+#                    a ghost preview around the arena to choose a placement cell
+enum TouchState { IDLE, PENDING_CLASSIFY, DRAGGING, DRAG_PLACING }
 var _touch_state:    TouchState = TouchState.IDLE
-var _touch_down_pos: Vector2    = Vector2.ZERO   # screen position where the finger landed
-var _touch_last_pos: Vector2    = Vector2.ZERO   # most recent drag position
-const DRAG_THRESHOLD_PX: float  = 15.0           # movement before classifying as drag
+var _touch_down_pos: Vector2    = Vector2.ZERO   # screen position where the pointer landed
+var _touch_last_pos: Vector2    = Vector2.ZERO   # most recent drag/move position
+var _touch_hold_time: float     = 0.0            # seconds held without exceeding drag threshold
+const DRAG_THRESHOLD_PX: float  = 15.0           # movement before classifying as drag/pan
+const HOLD_THRESHOLD_SEC: float = 0.35           # hold duration before entering DRAG_PLACING
+
+# Ghost preview node shown while in DRAG_PLACING mode.
+var _drag_place_preview: Node3D  = null
+var _drag_place_anchor:  Vector2i = Vector2i(-1, -1)
 
 # Camera zoom — two discrete levels: overview (full-arena fit) and zoomed-in (2×).
 enum ZoomState { OVERVIEW, ZOOMED_IN }
@@ -247,44 +259,140 @@ func _ready() -> void:
 # ---------------------------------------------------------------------------
 
 func _unhandled_input(event: InputEvent) -> void:
+	# --- Touch ---
 	if event is InputEventScreenTouch:
 		if event.index != 0:
 			return   # ignore second finger
 		if event.pressed:
-			_touch_state    = TouchState.PENDING_CLASSIFY
-			_touch_down_pos = event.position
-			_touch_last_pos = event.position
+			_on_pointer_down(event.position)
 		else:
-			if _touch_state == TouchState.PENDING_CLASSIFY:
-				_handle_tap(_touch_down_pos)
-			_touch_state = TouchState.IDLE
+			_on_pointer_released(event.position)
 		return
 
 	if event is InputEventScreenDrag:
 		if event.index != 0:
 			return
-		_touch_last_pos = event.position
-		if _touch_state == TouchState.PENDING_CLASSIFY:
-			if event.position.distance_to(_touch_down_pos) >= DRAG_THRESHOLD_PX:
-				_touch_state = TouchState.DRAGGING
-		if _touch_state == TouchState.DRAGGING:
-			# Drag pans the camera only when zoomed in and not following an enemy.
-			if _zoom_state == ZoomState.ZOOMED_IN and _followed_enemy == null:
-				var vp          := get_viewport().get_visible_rect().size
-				var world_per_px := _camera.size / vp.y
-				_apply_pan(_pan_world_pos - event.relative * world_per_px)
+		_on_pointer_dragged(event.position, event.relative)
 		return
 
-	# Keep right-click removal and keyboard shortcuts for desktop/dev use.
-	if event is InputEventKey:
-		if event.pressed and not event.echo:
-			_handle_key(event.keycode)
+	# --- Mouse ---
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				_on_pointer_down(event.position)
+			else:
+				_on_pointer_released(event.position)
+		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+			_try_remove_trap(_screen_to_grid(event.position))
 		return
 
-	if event is InputEventMouseButton and event.pressed:
-		var cell := _screen_to_grid(event.position)
-		if event.button_index == MOUSE_BUTTON_RIGHT:
-			_try_remove_trap(cell)
+	# InputEventMouseMotion carries no button state — guard with is_mouse_button_pressed.
+	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		_on_pointer_dragged(event.position, event.relative)
+		return
+
+	# Keyboard shortcuts for desktop/dev use.
+	if event is InputEventKey and event.pressed and not event.echo:
+		_handle_key(event.keycode)
+
+
+# ---------------------------------------------------------------------------
+# Unified pointer dispatch (touch + mouse share the same state machine)
+# ---------------------------------------------------------------------------
+
+## Called on finger-down or left mouse button press.
+func _on_pointer_down(screen_pos: Vector2) -> void:
+	_touch_state     = TouchState.PENDING_CLASSIFY
+	_touch_down_pos  = screen_pos
+	_touch_last_pos  = screen_pos
+	_touch_hold_time = 0.0
+
+
+## Called on finger-up or left mouse button release.
+func _on_pointer_released(screen_pos: Vector2) -> void:
+	match _touch_state:
+		TouchState.PENDING_CLASSIFY:
+			_handle_tap(_touch_down_pos)
+		TouchState.DRAG_PLACING:
+			_commit_drag_place()
+	_clear_drag_preview()
+	_touch_state = TouchState.IDLE
+
+
+## Called on finger drag or mouse motion while left button is held.
+func _on_pointer_dragged(screen_pos: Vector2, relative: Vector2) -> void:
+	_touch_last_pos = screen_pos
+
+	if _touch_state == TouchState.PENDING_CLASSIFY:
+		if screen_pos.distance_to(_touch_down_pos) >= DRAG_THRESHOLD_PX:
+			_touch_state = TouchState.DRAGGING
+
+	if _touch_state == TouchState.DRAGGING:
+		# Pan the camera only when zoomed in and not locked to an enemy.
+		if _zoom_state == ZoomState.ZOOMED_IN and _followed_enemy == null:
+			var vp           := get_viewport().get_visible_rect().size
+			var world_per_px := _camera.size / vp.y
+			_apply_pan(_pan_world_pos - relative * world_per_px)
+	elif _touch_state == TouchState.DRAG_PLACING:
+		_update_drag_preview(screen_pos)
+
+
+# ---------------------------------------------------------------------------
+# Drag-to-place
+# ---------------------------------------------------------------------------
+
+## Transitions PENDING_CLASSIFY → DRAG_PLACING after the hold threshold.
+## Called from _process when the hold timer fires.
+## Does nothing if the game is paused or the player cannot afford a trap.
+func _enter_drag_placing(screen_pos: Vector2) -> void:
+	if get_tree().paused or not _can_afford_trap():
+		# Nothing to drag-place; treat the rest of the gesture as inert.
+		_touch_state = TouchState.IDLE
+		return
+	_touch_state = TouchState.DRAG_PLACING
+	_update_drag_preview(screen_pos)
+
+
+## Positions or repositions the ghost preview at the cell under screen_pos.
+## Rebuilds the preview node only when the anchor cell changes.
+## Shows a valid (semi-transparent) or invalid (grey) ghost based on placement rules.
+func _update_drag_preview(screen_pos: Vector2) -> void:
+	var anchor := _clamp_to_anchor(_screen_to_grid(screen_pos))
+	if anchor == _drag_place_anchor:
+		return   # still on the same cell — nothing to rebuild
+
+	_drag_place_anchor = anchor
+	_clear_drag_preview()
+
+	if not _is_in_arena(anchor):
+		return
+
+	var cells := _get_trap_cells(anchor)
+	var valid  := not cells.is_empty() \
+		and not _footprint_overlaps_enemy(cells) \
+		and _can_place_at(cells)
+	_drag_place_preview = _make_trap_preview(GameState.selected_trap_type, 0.5, valid)
+	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
+	_drag_place_preview.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
+
+
+## Places a trap at the last previewed anchor and frees the preview.
+func _commit_drag_place() -> void:
+	var anchor := _drag_place_anchor
+	_clear_drag_preview()
+	if anchor == Vector2i(-1, -1) or not _can_afford_trap():
+		return
+	var cells := _get_trap_cells(anchor)
+	if not cells.is_empty() and not _footprint_overlaps_enemy(cells):
+		_try_place_trap(anchor)
+
+
+## Frees the ghost preview node and resets the tracked anchor.
+func _clear_drag_preview() -> void:
+	if _drag_place_preview != null and is_instance_valid(_drag_place_preview):
+		_drag_place_preview.queue_free()
+	_drag_place_preview   = null
+	_drag_place_anchor    = Vector2i(-1, -1)
 
 
 # ---------------------------------------------------------------------------
@@ -1627,11 +1735,16 @@ func _fit_camera_to_grid() -> void:
 	_camera.v_offset      = 0.0
 
 
-## Each frame: track the followed enemy's position when in enemy-follow mode.
-func _process(_delta: float) -> void:
+## Each frame: track the followed enemy, and promote a held pointer to DRAG_PLACING.
+func _process(delta: float) -> void:
 	if _followed_enemy != null and is_instance_valid(_followed_enemy):
 		var p := _followed_enemy.global_position
 		_apply_pan(Vector2(p.x, p.z))
+
+	if _touch_state == TouchState.PENDING_CLASSIFY:
+		_touch_hold_time += delta
+		if _touch_hold_time >= HOLD_THRESHOLD_SEC:
+			_enter_drag_placing(_touch_down_pos)
 
 
 ## Toggles between OVERVIEW and ZOOMED_IN camera levels.
