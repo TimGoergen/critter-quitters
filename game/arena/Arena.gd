@@ -332,8 +332,8 @@ func _on_pointer_dragged(screen_pos: Vector2, relative: Vector2) -> void:
 			_touch_state = TouchState.DRAGGING
 
 	if _touch_state == TouchState.DRAGGING:
-		# Pan the camera only when zoomed in and not locked to an enemy.
-		if _zoom_state == ZoomState.ZOOMED_IN and _followed_enemy == null:
+		# Pan when zoomed in and either free (no follow target) or paused (follow is suspended).
+		if _zoom_state == ZoomState.ZOOMED_IN and (_followed_enemy == null or get_tree().paused):
 			var vp           := get_viewport().get_visible_rect().size
 			var world_per_px := _camera.size / vp.y
 			_apply_pan(_pan_world_pos - relative * world_per_px)
@@ -808,6 +808,9 @@ func _spawn_enemy(path: Array[Vector2i], enemy_type: Enemy.EnemyType) -> void:
 	enemy.died.connect(_on_enemy_died.bind(enemy))
 	enemy.cell_advanced.connect(_redraw_path_display)
 
+	# Arena is PROCESS_MODE_ALWAYS so input works during pause; override here
+	# so enemies actually stop when the player pauses.
+	enemy.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(enemy)
 	enemy.initialize(path, enemy_type, GameState.current_wave)
 
@@ -1678,6 +1681,8 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	trap.fired.connect(_on_trap_fired)
 	trap.aoe_fired.connect(_on_fogger_aoe_fired)
 	trap.initialize(GameState.selected_trap_type as Trap.TrapType, _active_enemies)
+	# Arena is PROCESS_MODE_ALWAYS; override so traps pause with the game.
+	trap.process_mode = Node.PROCESS_MODE_PAUSABLE
 	_trap_container.add_child(trap)
 	GameState.spend_bug_bucks(trap.get_cost())
 	_trap_nodes[anchor] = trap
@@ -1686,12 +1691,16 @@ func _spawn_trap(anchor: Vector2i) -> void:
 func _on_trap_fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, trap_type: int) -> void:
 	var proj := Projectile.new()
 	proj.initialize(from_pos, to_pos, target, damage, trap_type)
+	# Arena is PROCESS_MODE_ALWAYS; override so projectiles pause with the game.
+	proj.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(proj)
 
 
 func _on_fogger_aoe_fired(from_pos: Vector3, aoe_range: float, damage: float, active_enemies: Array) -> void:
 	var cloud := FogCloud.new()
 	cloud.initialize(from_pos, aoe_range, damage, active_enemies)
+	# Arena is PROCESS_MODE_ALWAYS; override so fog clouds pause with the game.
+	cloud.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(cloud)
 
 
@@ -1746,7 +1755,9 @@ func _fit_camera_to_grid() -> void:
 
 ## Each frame: track the followed enemy, and promote a held pointer to DRAG_PLACING.
 func _process(delta: float) -> void:
-	if _followed_enemy != null and is_instance_valid(_followed_enemy):
+	# Don't track enemies while paused — the enemy is frozen, and the player
+	# should be able to pan freely to inspect the arena during pause.
+	if not get_tree().paused and _followed_enemy != null and is_instance_valid(_followed_enemy):
 		var p := _followed_enemy.global_position
 		_apply_pan(Vector2(p.x, p.z))
 

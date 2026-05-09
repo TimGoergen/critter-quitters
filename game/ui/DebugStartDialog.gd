@@ -13,9 +13,9 @@ signal confirmed(bug_bucks: int, wave_size: int, static_enemies: bool)
 const DEFAULT_BUG_BUCKS: int = 1000
 const DEFAULT_WAVE_SIZE:  int = 10
 
-const PANEL_W: float = 300.0
-const PANEL_H: float = 216.0
-const PADDING: float = 14.0
+const PANEL_W: float = 600.0
+const PANEL_H: float = 432.0
+const PADDING: float = 28.0
 
 const COLOR_BG      := Color(0.04, 0.22, 0.00, 0.95)
 const COLOR_OUTLINE := Color(0.22, 0.60, 0.04, 1.0)
@@ -59,13 +59,13 @@ func _build_ui() -> void:
 	add_child(overlay)
 
 	# Store the full panel rect (including border) for outside-click detection.
-	_panel_rect = Rect2(Vector2(px - 4.0, py - 4.0), Vector2(PANEL_W + 8.0, PANEL_H + 8.0))
+	_panel_rect = Rect2(Vector2(px - 8.0, py - 8.0), Vector2(PANEL_W + 16.0, PANEL_H + 16.0))
 
 	# Outline border
 	var border       := ColorRect.new()
 	border.color      = COLOR_OUTLINE
-	border.position   = Vector2(px - 4.0, py - 4.0)
-	border.size       = Vector2(PANEL_W + 8.0, PANEL_H + 8.0)
+	border.position   = Vector2(px - 8.0, py - 8.0)
+	border.size       = Vector2(PANEL_W + 16.0, PANEL_H + 16.0)
 	add_child(border)
 
 	# Background
@@ -82,39 +82,39 @@ func _build_ui() -> void:
 	var lbl_title := Label.new()
 	lbl_title.text     = "Playtest Setup"
 	lbl_title.position = Vector2(PADDING, y)
-	lbl_title.add_theme_font_size_override("font_size", 24)
+	lbl_title.add_theme_font_size_override("font_size", 48)
 	lbl_title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	lbl_title.add_theme_font_override("font", UIFonts.header())
 	bg.add_child(lbl_title)
-	y += 28.0
+	y += 56.0
 
 	# Divider
 	var div       := ColorRect.new()
 	div.color      = COLOR_DIVIDER
 	div.position   = Vector2(PADDING, y)
-	div.size       = Vector2(inner_w, 1.0)
+	div.size       = Vector2(inner_w, 2.0)
 	bg.add_child(div)
-	y += 10.0
+	y += 20.0
 
 	# Bug Bucks row
 	_field_bucks = _add_field_row(bg, y, "Starting Bug Bucks", str(DEFAULT_BUG_BUCKS), 10000, 0)
-	y += 36.0
+	y += 72.0
 
 	# Wave size row
 	_field_waves = _add_field_row(bg, y, "Enemies per Wave", str(DEFAULT_WAVE_SIZE), 10, 1)
-	y += 36.0
+	y += 72.0
 
 	# Static enemies toggle — when on, each wave spawns 3 of every enemy type for visual review
 	var static_row := HBoxContainer.new()
 	static_row.position            = Vector2(PADDING, y)
-	static_row.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, 28.0)
+	static_row.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, 56.0)
 	static_row.add_theme_constant_override("separation", 4)
 	bg.add_child(static_row)
 
 	var static_lbl := Label.new()
 	static_lbl.text                  = "Static Enemies (review mode)"
 	static_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	static_lbl.add_theme_font_size_override("font_size", 13)
+	static_lbl.add_theme_font_size_override("font_size", 26)
 	static_lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 	static_lbl.add_theme_font_override("font", UIFonts.primary())
 	static_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
@@ -125,22 +125,22 @@ func _build_ui() -> void:
 	_check_static.add_theme_font_override("font", UIFonts.primary())
 	_style_checkbox(_check_static)
 	static_row.add_child(_check_static)
-	y += 36.0
+	y += 72.0
 
 	# Divider
 	var div2       := ColorRect.new()
 	div2.color      = COLOR_DIVIDER
 	div2.position   = Vector2(PADDING, y)
-	div2.size       = Vector2(inner_w, 1.0)
+	div2.size       = Vector2(inner_w, 2.0)
 	bg.add_child(div2)
-	y += 10.0
+	y += 20.0
 
 	# Start button
 	var btn               := Button.new()
 	btn.text               = "Start"
 	btn.position           = Vector2(PADDING, y)
-	btn.custom_minimum_size = Vector2(inner_w, 32.0)
-	btn.add_theme_font_size_override("font_size", 15)
+	btn.custom_minimum_size = Vector2(inner_w, 64.0)
+	btn.add_theme_font_size_override("font_size", 30)
 	btn.add_theme_font_override("font", UIFonts.primary_bold())
 	btn.pressed.connect(_on_start_pressed)
 	_style_start_button(btn)
@@ -153,14 +153,14 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 		step: int = 100, min_val: int = 0) -> LineEdit:
 	var row := HBoxContainer.new()
 	row.position            = Vector2(PADDING, y)
-	row.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, 28.0)
+	row.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, 56.0)
 	row.add_theme_constant_override("separation", 4)
 	parent.add_child(row)
 
 	var lbl := Label.new()
 	lbl.text                  = label_text
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_font_size_override("font_size", 26)
 	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 	lbl.add_theme_font_override("font", UIFonts.primary())
 	lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
@@ -168,25 +168,25 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 
 	var minus_btn := Button.new()
 	minus_btn.text              = "−"
-	minus_btn.custom_minimum_size = Vector2(28.0, 28.0)
-	minus_btn.add_theme_font_size_override("font_size", 15)
+	minus_btn.custom_minimum_size = Vector2(56.0, 56.0)
+	minus_btn.add_theme_font_size_override("font_size", 30)
 	minus_btn.add_theme_font_override("font", UIFonts.primary())
 	_style_button(minus_btn)
 	row.add_child(minus_btn)
 
 	var field := LineEdit.new()
 	field.text                  = default_value
-	field.custom_minimum_size   = Vector2(64.0, 28.0)
+	field.custom_minimum_size   = Vector2(128.0, 56.0)
 	field.alignment             = HORIZONTAL_ALIGNMENT_CENTER
-	field.add_theme_font_size_override("font_size", 13)
+	field.add_theme_font_size_override("font_size", 26)
 	field.add_theme_font_override("font", UIFonts.primary())
 	_style_field(field)
 	row.add_child(field)
 
 	var plus_btn := Button.new()
 	plus_btn.text               = "+"
-	plus_btn.custom_minimum_size = Vector2(28.0, 28.0)
-	plus_btn.add_theme_font_size_override("font_size", 15)
+	plus_btn.custom_minimum_size = Vector2(56.0, 56.0)
+	plus_btn.add_theme_font_size_override("font_size", 30)
 	plus_btn.add_theme_font_override("font", UIFonts.primary())
 	_style_button(plus_btn)
 	row.add_child(plus_btn)
