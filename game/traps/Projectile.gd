@@ -340,14 +340,14 @@ func _build_bolt_ribbon(pts: Array[Vector2], half_w: float) -> ImmediateMesh:
 ## Electric impact: cross-shaped spark particles scatter outward with near-zero gravity
 ## so they read as electric arcs rather than falling debris.
 func _spawn_zapper_impact(killed: bool, enemy_color: Color) -> void:
-	_spawn_electric_sparks(18, 0.28, Grid.CELL_SIZE * 5.0, Grid.CELL_SIZE * 14.0,
-			0.55, 1.20, Grid.CELL_SIZE * 0.36, COLOR_ZAPPER_SPARK)
+	_spawn_electric_sparks(14, 0.28, Grid.CELL_SIZE * 4.0, Grid.CELL_SIZE * 11.2,
+			0.44, 0.96, Grid.CELL_SIZE * 0.29, COLOR_ZAPPER_SPARK)
 	# Bright white flash at the centre of the strike.
-	_spawn_electric_sparks(7, 0.16, Grid.CELL_SIZE * 2.0, Grid.CELL_SIZE * 5.5,
-			0.65, 1.30, Grid.CELL_SIZE * 0.26, Color.WHITE)
+	_spawn_electric_sparks(6, 0.16, Grid.CELL_SIZE * 1.6, Grid.CELL_SIZE * 4.4,
+			0.52, 1.04, Grid.CELL_SIZE * 0.21, Color.WHITE)
 	if killed:
-		_spawn_electric_sparks(16, 0.40, Grid.CELL_SIZE * 7.0, Grid.CELL_SIZE * 20.0,
-				0.80, 1.90, Grid.CELL_SIZE * 0.44, COLOR_ZAPPER_SPARK)
+		_spawn_electric_sparks(13, 0.40, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.0,
+				0.64, 1.52, Grid.CELL_SIZE * 0.35, COLOR_ZAPPER_SPARK)
 
 
 ## Spawns cross-shaped spark particles using the zapper spark mesh.
@@ -374,7 +374,7 @@ func _spawn_electric_sparks(amount: int, lifetime: float, vel_min: float, vel_ma
 	mat.cull_mode                 = BaseMaterial3D.CULL_DISABLED
 	mat.emission_enabled          = true
 	mat.emission                  = color
-	mat.emission_energy_multiplier = 5.0
+	mat.emission_energy_multiplier = 4.0
 	spark_mesh.surface_set_material(0, mat)
 	particles.mesh = spark_mesh
 
@@ -387,8 +387,8 @@ func _spawn_electric_sparks(amount: int, lifetime: float, vel_min: float, vel_ma
 ## Builds a flat cross/plus shape in the XZ plane — two thin quads at 90° to each other.
 ## From the top-down camera this reads as a star/spark mark rather than a round blob.
 func _build_zapper_spark_mesh(size: float) -> ImmediateMesh:
-	var hw := size * 0.14   # half-width of each arm — wider for visibility
-	var hl := size * 0.60   # half-length of each arm
+	var hw := size * 0.11   # half-width of each arm — wider for visibility
+	var hl := size * 0.48   # half-length of each arm
 	var im := ImmediateMesh.new()
 	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	# Horizontal arm (along X)
