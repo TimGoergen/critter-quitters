@@ -62,8 +62,9 @@ const LEFT_PANEL_W:   float = 220.0
 const RIGHT_PANEL_W:  float = 220.0
 const ARENA_MARGIN_PX: float = 4.0
 
-const MARGIN: float = 10.0            # inner padding for both panels
+const MARGIN: float = 10.0             # inner padding for both panels
 const SCREEN_EDGE_MARGIN: float = 24.0 # extra inset on the screen-edge side and top/bottom to clear rounded corners
+const RIGHT_BTN_H: float = 52.0        # fixed height for all right-panel buttons
 
 var _wave_label:        Label
 var _bucks_label:       Label
@@ -140,8 +141,8 @@ func _build_left_panel() -> void:
 	bg.add_child(margin)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
-	vbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	vbox.add_theme_constant_override("separation", 16)
+	vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	margin.add_child(vbox)
 
 	for i in range(4):
@@ -259,7 +260,7 @@ func _build_right_panel() -> void:
 	# --- Speed + Pause ---
 	var speed_pause_row := HBoxContainer.new()
 	speed_pause_row.add_theme_constant_override("separation", 4)
-	speed_pause_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	speed_pause_row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	vbox.add_child(speed_pause_row)
 
 	_pause_btn = Button.new()
@@ -268,6 +269,8 @@ func _build_right_panel() -> void:
 	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_pause_btn)
 	_pause_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pause_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_pause_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
 	_pause_btn.pressed.connect(_on_pause_btn_pressed)
 	speed_pause_row.add_child(_pause_btn)
 
@@ -283,6 +286,8 @@ func _build_right_panel() -> void:
 	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_speed_btn)
 	_speed_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_speed_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_speed_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
 	_speed_btn.pressed.connect(_on_speed_btn_pressed)
 	speed_pause_row.add_child(_speed_btn)
 
@@ -319,7 +324,8 @@ func _build_right_panel() -> void:
 	_zoom_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_zoom_btn)
 	_zoom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_zoom_btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	_zoom_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+	_zoom_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
 	_zoom_btn.pressed.connect(func() -> void: GameState.zoom_toggle_requested.emit())
 	vbox.add_child(_zoom_btn)
 
@@ -357,6 +363,8 @@ func _build_right_panel() -> void:
 	_send_wave_btn = Button.new()
 	_send_wave_btn.text = ""
 	_send_wave_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_send_wave_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+	_send_wave_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
 	_send_wave_btn.visible = false
 	_apply_send_wave_btn_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
@@ -419,6 +427,8 @@ func _build_right_panel() -> void:
 	_exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_exit_btn)
 	_exit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_exit_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+	_exit_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
 	_exit_btn.pressed.connect(_on_exit_pressed)
 	exit_restart_row.add_child(_exit_btn)
 
@@ -428,6 +438,8 @@ func _build_right_panel() -> void:
 	_restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_restart_btn)
 	_restart_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_restart_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+	_restart_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
 	_restart_btn.pressed.connect(_on_restart_pressed)
 	exit_restart_row.add_child(_restart_btn)
 
