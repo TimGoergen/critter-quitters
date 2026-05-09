@@ -335,6 +335,16 @@ func _build_right_panel() -> void:
 	vbox.add_child(spacer)
 
 	# --- Countdown block (hidden by default) ---
+	# The wrapper always occupies its reserved height so that showing/hiding
+	# the countdown items does not shift the Exit/Restart buttons below.
+	# Reserved height: "Incoming!" label (~42px) + number label (~62px) +
+	# Send Early button (RIGHT_BTN_H = 52) + two 8px separations = 172px;
+	# use 175 for a small safety margin.
+	var countdown_wrapper := VBoxContainer.new()
+	countdown_wrapper.custom_minimum_size = Vector2(0, 175)
+	countdown_wrapper.add_theme_constant_override("separation", 8)
+	vbox.add_child(countdown_wrapper)
+
 	_countdown_wave_label = Label.new()
 	_countdown_wave_label.text               = "Incoming!"
 	_countdown_wave_label.add_theme_font_size_override("font_size", 32)
@@ -345,7 +355,7 @@ func _build_right_panel() -> void:
 	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
 	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_wave_label.visible = false
-	vbox.add_child(_countdown_wave_label)
+	countdown_wrapper.add_child(_countdown_wave_label)
 
 	_countdown_number_label = Label.new()
 	_countdown_number_label.add_theme_font_size_override("font_size", 48)
@@ -356,7 +366,7 @@ func _build_right_panel() -> void:
 	_countdown_number_label.add_theme_font_override("font", UIFonts.header())
 	_countdown_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_number_label.visible = false
-	vbox.add_child(_countdown_number_label)
+	countdown_wrapper.add_child(_countdown_number_label)
 
 	_build_early_bonus_particles()
 
@@ -368,7 +378,7 @@ func _build_right_panel() -> void:
 	_send_wave_btn.visible = false
 	_apply_send_wave_btn_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
-	vbox.add_child(_send_wave_btn)
+	countdown_wrapper.add_child(_send_wave_btn)
 
 	var btn_row := HBoxContainer.new()
 	btn_row.set_anchors_preset(Control.PRESET_FULL_RECT)
