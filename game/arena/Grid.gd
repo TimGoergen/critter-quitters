@@ -1,5 +1,5 @@
 ## Grid.gd
-## Represents the 31x31 arena grid.
+## Represents the 31×29 arena grid.
 ##
 ## Owns the state of every cell — what occupies it and whether it can be
 ## traversed by pests or built on by the player. Grid state is the single
@@ -18,11 +18,13 @@ extends Node
 # Constants
 # ---------------------------------------------------------------------------
 
-## The number of cells along each side of the square grid.
+## Number of grid columns (width, along the X axis).
 ## Subject to change via playtesting — adjust here and everything scales.
-## 31 is intentionally odd so row 15 is the exact centre — entrance and exit
-## both land there with a 3-row gap (rows 14–16).
 const GRID_SIZE: int = 31
+
+## Number of grid rows (height, along the Z axis). Intentionally odd so
+## row 14 is the exact centre — entrance and exit land there with a 3-row gap (rows 13–15).
+const GRID_ROWS: int = 29
 
 ## World-space size of one grid cell in metres.
 ## Changing this scales the entire arena uniformly.
@@ -97,7 +99,7 @@ func get_cell(cell: Vector2i) -> CellState:
 ## Returns true if the cell is within the grid boundaries.
 func is_in_bounds(cell: Vector2i) -> bool:
 	return cell.x >= 0 and cell.x < GRID_SIZE \
-		and cell.y >= 0 and cell.y < GRID_SIZE
+		and cell.y >= 0 and cell.y < GRID_ROWS
 
 
 ## Returns true if pests can move through this cell.
@@ -163,7 +165,7 @@ func remove_obstacle(cell: Vector2i) -> void:
 ## Used by Arena Evolution when selecting a random obstacle to remove.
 func get_obstacle_cells() -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
-	for row in range(GRID_SIZE):
+	for row in range(GRID_ROWS):
 		for col in range(GRID_SIZE):
 			if _cells[row][col] == CellState.OBSTACLE:
 				result.append(Vector2i(col, row))
@@ -174,7 +176,7 @@ func get_obstacle_cells() -> Array[Vector2i]:
 ## Used by Pathfinder to build the navigation graph.
 func get_passable_cells() -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
-	for row in range(GRID_SIZE):
+	for row in range(GRID_ROWS):
 		for col in range(GRID_SIZE):
 			var cell := Vector2i(col, row)
 			if is_passable(cell):
@@ -190,7 +192,7 @@ func get_passable_cells() -> Array[Vector2i]:
 ## Called at startup and at the beginning of each run.
 func _initialize_cells() -> void:
 	_cells.clear()
-	for row in range(GRID_SIZE):
+	for row in range(GRID_ROWS):
 		var row_data: Array[int] = []
 		row_data.resize(GRID_SIZE)
 		row_data.fill(CellState.EMPTY)

@@ -151,7 +151,8 @@ var _zoom_state:           ZoomState = ZoomState.OVERVIEW
 var _overview_camera_size: float     = 0.0   # camera.size at the overview level; set by _fit_camera_to_grid
 var _camera_base_h_offset: float     = 0.0   # h_offset that centres the arena between the two panels
 var _pan_world_pos:         Vector2  = Vector2.ZERO   # current camera XZ pan offset (world units)
-var _arena_world_half:      float    = 0.0   # half the grid world size; used for pan clamping
+var _arena_world_half:      float    = 0.0   # half the grid world width (X); used for pan clamping
+var _arena_world_half_z:    float    = 0.0   # half the grid world height (Z); used for pan clamping
 var _followed_enemy:        Node3D   = null  # non-null while enemy-follow mode is active
 
 # Reference to the playtest setup dialog while it is open; null after it confirms.
@@ -175,10 +176,10 @@ func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
 	# Phase 1: entrance and exit are hardcoded for the prototype.
-	# Grid is 31×31 (odd) so row 15 is the exact vertical centre — both gaps
-	# land there, spanning rows 14–16 (3 rows each).
-	var entrance := Vector2i(0, 15)
-	var exit     := Vector2i(30, 15)
+	# Grid is 31×29; row 14 is the exact vertical centre — both gaps
+	# land there, spanning rows 13–15 (3 rows each).
+	var entrance := Vector2i(0, 14)
+	var exit     := Vector2i(30, 14)
 
 	_spawn_cell   = Vector2i(entrance.x - 1, entrance.y)
 	_despawn_cell = Vector2i(exit.x + 1, exit.y)
@@ -201,20 +202,20 @@ func _ready() -> void:
 	# only passable openings in those columns.
 	var ent_gap := [entrance.y - 1, entrance.y, entrance.y + 1]
 	var ex_gap  := [exit.y - 1, exit.y, exit.y + 1]
-	for row in range(Grid.GRID_SIZE):
+	for row in range(Grid.GRID_ROWS):
 		if row not in ent_gap:
 			_grid.set_cell(Vector2i(entrance.x, row), Grid.CellState.WALL)
 		if row not in ex_gap:
 			_grid.set_cell(Vector2i(exit.x, row), Grid.CellState.WALL)
 
-	# Mark the top and bottom border rows (0 and GRID_SIZE-1) as WALL for all
-	# interior columns. Geometry placed outside the grid at z = ±15.5 consistently
+	# Mark the top and bottom border rows (0 and GRID_ROWS-1) as WALL for all
+	# interior columns. Geometry placed outside the grid at z = ±14.5 consistently
 	# failed to render regardless of mesh type, so walls are placed on the outermost
 	# grid rows instead — symmetric with the left/right approach using columns 0/30.
 	# Columns 0 and GRID_SIZE-1 are already WALL from the column loop above.
 	for col in range(1, Grid.GRID_SIZE - 1):
 		_grid.set_cell(Vector2i(col, 0),                   Grid.CellState.WALL)
-		_grid.set_cell(Vector2i(col, Grid.GRID_SIZE - 1),  Grid.CellState.WALL)
+		_grid.set_cell(Vector2i(col, Grid.GRID_ROWS - 1),  Grid.CellState.WALL)
 
 	GameState.start_run(entrance, exit)
 	_pathfinder.initialize(_grid)
@@ -741,20 +742,22 @@ func _screen_to_grid(screen_pos: Vector2) -> Vector2i:
 	var world_pos := ray_origin + ray_dir * t
 
 	# Convert world XZ position to grid column and row.
-	# The grid is centred on the world origin, so we offset by half the
-	# total grid width before dividing by cell size.
-	var half_grid := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
-	var col       := floori((world_pos.x + half_grid) / Grid.CELL_SIZE)
-	var row       := floori((world_pos.z + half_grid) / Grid.CELL_SIZE)
+	# The grid is centred on the world origin; X and Z use separate half-extents
+	# because the grid is no longer square (31 cols × 29 rows).
+	var half_w := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
+	var half_h := (Grid.GRID_ROWS * Grid.CELL_SIZE) / 2.0
+	var col    := floori((world_pos.x + half_w) / Grid.CELL_SIZE)
+	var row    := floori((world_pos.z + half_h) / Grid.CELL_SIZE)
 
 	return Vector2i(col, row)
 
 
 ## Converts a grid coordinate to its world-space centre position at y = 0.
 func _cell_to_world(cell: Vector2i) -> Vector3:
-	var half_grid := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
-	var x         := cell.x * Grid.CELL_SIZE - half_grid + Grid.CELL_SIZE * 0.5
-	var z         := cell.y * Grid.CELL_SIZE - half_grid + Grid.CELL_SIZE * 0.5
+	var half_w := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
+	var half_h := (Grid.GRID_ROWS * Grid.CELL_SIZE) / 2.0
+	var x      := cell.x * Grid.CELL_SIZE - half_w + Grid.CELL_SIZE * 0.5
+	var z      := cell.y * Grid.CELL_SIZE - half_h + Grid.CELL_SIZE * 0.5
 	return Vector3(x, 0.0, z)
 
 
@@ -1048,18 +1051,18 @@ func _hide_selected_trap_outline() -> void:
 func _clamp_to_anchor(cell: Vector2i) -> Vector2i:
 	return Vector2i(
 		clampi(cell.x, 0, Grid.GRID_SIZE - 2),
-		clampi(cell.y, 0, Grid.GRID_SIZE - 2)
+		clampi(cell.y, 0, Grid.GRID_ROWS - 2)
 	)
 
 
 
 
-## Returns true when a cell is within the arena, defined as the 31x31 floor
-## plus the 1-cell-wide wall border surrounding it (x: -1..31, y: -1..31).
+## Returns true when a cell is within the arena, defined as the 31×29 floor
+## plus the 1-cell-wide wall border surrounding it (x: -1..31, y: -1..29).
 ## Cells beyond that boundary are outside the arena entirely.
 func _is_in_arena(cell: Vector2i) -> bool:
 	return cell.x >= -1 and cell.x <= Grid.GRID_SIZE \
-		and cell.y >= -1 and cell.y <= Grid.GRID_SIZE
+		and cell.y >= -1 and cell.y <= Grid.GRID_ROWS
 
 
 ## Returns the Manhattan distance from cell to the nearest cell in the
@@ -1287,12 +1290,13 @@ func _spawn_floor() -> void:
 	mat.set_shader_parameter("crop_offset",   crop_offset)
 	mat.set_shader_parameter("crop_size",     CROP_SIZE)
 
-	# Plane sized to the full 31×31 grid. The border-column wall slabs render
+	# Plane sized to the full 31×29 grid. The border-column wall slabs render
 	# on top of the edges; the floor texture shows through the entrance and
 	# exit gap columns.
-	var grid_world := Grid.GRID_SIZE * Grid.CELL_SIZE
-	var plane      := PlaneMesh.new()
-	plane.size      = Vector2(grid_world, grid_world)
+	var grid_w := Grid.GRID_SIZE * Grid.CELL_SIZE
+	var grid_h := Grid.GRID_ROWS * Grid.CELL_SIZE
+	var plane   := PlaneMesh.new()
+	plane.size   = Vector2(grid_w, grid_h)
 	var mi         := MeshInstance3D.new()
 	mi.mesh         = plane
 	mi.position     = Vector3(0.0, 0.010, 0.0)
@@ -1311,13 +1315,13 @@ func _spawn_arena_border() -> void:
 	var ex_gap  := [ex_row  - 1, ex_row,  ex_row  + 1]
 
 	var cells: Array[Vector2i] = []
-	# Top row (row 0) and bottom row (row GRID_SIZE-1) — full width
+	# Top row (row 0) and bottom row (row GRID_ROWS-1) — full width
 	for col in range(Grid.GRID_SIZE):
 		cells.append(Vector2i(col, 0))
-		cells.append(Vector2i(col, Grid.GRID_SIZE - 1))
-	# Left column (col 0) and right column (col GRID_SIZE-1), rows 1..GRID_SIZE-2.
-	# Rows 0 and GRID_SIZE-1 are already in the top/bottom sets above.
-	for row in range(1, Grid.GRID_SIZE - 1):
+		cells.append(Vector2i(col, Grid.GRID_ROWS - 1))
+	# Left column (col 0) and right column (col GRID_SIZE-1), rows 1..GRID_ROWS-2.
+	# Rows 0 and GRID_ROWS-1 are already in the top/bottom sets above.
+	for row in range(1, Grid.GRID_ROWS - 1):
 		if row not in ent_gap:
 			cells.append(Vector2i(0, row))
 		if row not in ex_gap:
@@ -1631,9 +1635,9 @@ func _spawn_outer_border_ring() -> void:
 	# Top and bottom outer rows — full width including corner cells
 	for col in range(-1, Grid.GRID_SIZE + 1):
 		cells.append(Vector2i(col, -1))
-		cells.append(Vector2i(col, Grid.GRID_SIZE))
-	# Left and right outer columns — rows 0..GRID_SIZE-1 (corners covered by top/bottom above)
-	for row in range(Grid.GRID_SIZE):
+		cells.append(Vector2i(col, Grid.GRID_ROWS))
+	# Left and right outer columns — rows 0..GRID_ROWS-1 (corners covered by top/bottom above)
+	for row in range(Grid.GRID_ROWS):
 		if row not in ent_gap:
 			cells.append(Vector2i(-1, row))
 		if row not in ex_gap:
@@ -1731,16 +1735,17 @@ func _fit_camera_to_grid() -> void:
 		return
 
 	# +3 keeps a minimal margin beyond the outer wall ring; zoom mode pans within this space.
-	var arena_world := Grid.GRID_SIZE * Grid.CELL_SIZE + 3.0
+	var arena_w := Grid.GRID_SIZE * Grid.CELL_SIZE + 3.0
+	var arena_h := Grid.GRID_ROWS * Grid.CELL_SIZE + 3.0
 
 	# With KEEP_HEIGHT, horizontal world coverage = size × (vp.x / vp.y).
-	# For the arena to fit usable_w pixels wide: size × (usable_w / vp.y) ≥ arena_world.
-	var size_for_height  := arena_world * vp.y / usable_h
-	var size_for_width   := arena_world * vp.y / usable_w
+	# arena_w and arena_h differ now that the grid is not square.
+	var size_for_height  := arena_h * vp.y / usable_h
+	var size_for_width   := arena_w * vp.y / usable_w
 	_overview_camera_size = maxf(size_for_height, size_for_width)
-	# Use arena_world (which includes the outer-wall margin) so zoom panning can
-	# reach the outer wall, matching the area already visible in overview.
-	_arena_world_half     = arena_world / 2.0
+	# Store separate half-extents so pan clamping uses the correct bound per axis.
+	_arena_world_half   = arena_w / 2.0
+	_arena_world_half_z = arena_h / 2.0
 
 	if _zoom_state == ZoomState.OVERVIEW:
 		_camera.size = _overview_camera_size
@@ -1790,8 +1795,8 @@ func _apply_pan(pos: Vector2) -> void:
 	var world_per_px  := _camera.size / vp.y
 	var visible_half_w := (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * world_per_px * 0.5
 	var visible_half_h := (vp.y - HUD.ARENA_MARGIN_PX * 2.0) * world_per_px * 0.5
-	var cx := clampf(pos.x, -_arena_world_half + visible_half_w, _arena_world_half - visible_half_w)
-	var cz := clampf(pos.y, -_arena_world_half + visible_half_h, _arena_world_half - visible_half_h)
+	var cx := clampf(pos.x, -_arena_world_half   + visible_half_w, _arena_world_half   - visible_half_w)
+	var cz := clampf(pos.y, -_arena_world_half_z + visible_half_h, _arena_world_half_z - visible_half_h)
 	_pan_world_pos   = Vector2(cx, cz)
 	_camera.h_offset = _camera_base_h_offset + cx
 	_camera.v_offset = -cz
