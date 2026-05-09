@@ -170,6 +170,10 @@ var _entrance_rows: Array[int] = []
 # ---------------------------------------------------------------------------
 
 func _ready() -> void:
+	# Keep processing input even when the scene tree is paused (user-triggered pause
+	# or upgrade panel pause) so camera pan and trap placement remain available.
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
 	# Phase 1: entrance and exit are hardcoded for the prototype.
 	# Grid is 31×31 (odd) so row 15 is the exact vertical centre — both gaps
 	# land there, spanning rows 14–16 (3 rows each).
@@ -343,9 +347,9 @@ func _on_pointer_dragged(screen_pos: Vector2, relative: Vector2) -> void:
 
 ## Transitions PENDING_CLASSIFY → DRAG_PLACING after the hold threshold.
 ## Called from _process when the hold timer fires.
-## Does nothing if the game is paused or the player cannot afford a trap.
+## Does nothing if the player cannot afford a trap.
 func _enter_drag_placing(screen_pos: Vector2) -> void:
-	if get_tree().paused or not _can_afford_trap():
+	if not _can_afford_trap():
 		# Nothing to drag-place; treat the rest of the gesture as inert.
 		_touch_state = TouchState.IDLE
 		return
@@ -422,7 +426,7 @@ func _handle_tap(screen_pos: Vector2) -> void:
 		return
 
 	# Tap on an empty arena cell → place trap if affordable and not obstructed.
-	if not get_tree().paused and _is_in_arena(cell):
+	if _is_in_arena(cell):
 		_close_upgrade_panel()
 		if _can_afford_trap():
 			var anchor := _clamp_to_anchor(cell)
@@ -1725,7 +1729,9 @@ func _fit_camera_to_grid() -> void:
 	var size_for_height  := arena_world * vp.y / usable_h
 	var size_for_width   := arena_world * vp.y / usable_w
 	_overview_camera_size = maxf(size_for_height, size_for_width)
-	_arena_world_half     = (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
+	# Use arena_world (which includes the outer-wall margin) so zoom panning can
+	# reach the outer wall, matching the area already visible in overview.
+	_arena_world_half     = arena_world / 2.0
 
 	if _zoom_state == ZoomState.OVERVIEW:
 		_camera.size = _overview_camera_size
