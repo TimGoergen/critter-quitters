@@ -25,7 +25,7 @@ const COLOR_IMPACT     := Color(1.0, 0.80, 0.15)   # golden burst
 
 # Zapper bolt and spark colours.
 const COLOR_ZAPPER_BOLT  := Color(0.45, 0.80, 1.00)   # electric blue
-const COLOR_ZAPPER_SPARK := Color(0.65, 0.88, 1.00)   # pale blue-white
+const COLOR_ZAPPER_SPARK := Color(0.82, 0.96, 1.00)   # near-white electric blue — high brightness for emission bloom
 
 # Glue Board projectile and impact colour — amber, matching the splatter badge.
 const COLOR_GLUE      := Color(0.88, 0.70, 0.18, 0.90)
@@ -340,14 +340,14 @@ func _build_bolt_ribbon(pts: Array[Vector2], half_w: float) -> ImmediateMesh:
 ## Electric impact: cross-shaped spark particles scatter outward with near-zero gravity
 ## so they read as electric arcs rather than falling debris.
 func _spawn_zapper_impact(killed: bool, enemy_color: Color) -> void:
-	_spawn_electric_sparks(12, 0.24, Grid.CELL_SIZE * 4.0, Grid.CELL_SIZE * 11.0,
-			0.22, 0.58, Grid.CELL_SIZE * 0.18, COLOR_ZAPPER_SPARK)
-	# Tiny white flash at the centre of the strike.
-	_spawn_electric_sparks(4, 0.13, Grid.CELL_SIZE * 1.5, Grid.CELL_SIZE * 4.0,
-			0.30, 0.70, Grid.CELL_SIZE * 0.12, Color.WHITE)
+	_spawn_electric_sparks(18, 0.28, Grid.CELL_SIZE * 5.0, Grid.CELL_SIZE * 14.0,
+			0.55, 1.20, Grid.CELL_SIZE * 0.36, COLOR_ZAPPER_SPARK)
+	# Bright white flash at the centre of the strike.
+	_spawn_electric_sparks(7, 0.16, Grid.CELL_SIZE * 2.0, Grid.CELL_SIZE * 5.5,
+			0.65, 1.30, Grid.CELL_SIZE * 0.26, Color.WHITE)
 	if killed:
-		_spawn_electric_sparks(10, 0.35, Grid.CELL_SIZE * 5.5, Grid.CELL_SIZE * 16.0,
-				0.55, 1.40, Grid.CELL_SIZE * 0.22, COLOR_ZAPPER_SPARK)
+		_spawn_electric_sparks(16, 0.40, Grid.CELL_SIZE * 7.0, Grid.CELL_SIZE * 20.0,
+				0.80, 1.90, Grid.CELL_SIZE * 0.44, COLOR_ZAPPER_SPARK)
 
 
 ## Spawns cross-shaped spark particles using the zapper spark mesh.
@@ -369,9 +369,12 @@ func _spawn_electric_sparks(amount: int, lifetime: float, vel_min: float, vel_ma
 
 	var spark_mesh := _build_zapper_spark_mesh(spark_size)
 	var mat        := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.cull_mode    = BaseMaterial3D.CULL_DISABLED
+	mat.albedo_color              = color
+	mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode                 = BaseMaterial3D.CULL_DISABLED
+	mat.emission_enabled          = true
+	mat.emission                  = color
+	mat.emission_energy_multiplier = 5.0
 	spark_mesh.surface_set_material(0, mat)
 	particles.mesh = spark_mesh
 
@@ -384,8 +387,8 @@ func _spawn_electric_sparks(amount: int, lifetime: float, vel_min: float, vel_ma
 ## Builds a flat cross/plus shape in the XZ plane — two thin quads at 90° to each other.
 ## From the top-down camera this reads as a star/spark mark rather than a round blob.
 func _build_zapper_spark_mesh(size: float) -> ImmediateMesh:
-	var hw := size * 0.07   # half-width of each arm (thin)
-	var hl := size * 0.55   # half-length of each arm
+	var hw := size * 0.14   # half-width of each arm — wider for visibility
+	var hl := size * 0.60   # half-length of each arm
 	var im := ImmediateMesh.new()
 	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
 	# Horizontal arm (along X)
