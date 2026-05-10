@@ -548,36 +548,57 @@ func _check_full_upgrade_bonus() -> void:
 ## Spawns the star label and glow disc that reflect how many stats are maxed.
 ## Called once from initialize() — not spawned for preview instances.
 func _spawn_star_display() -> void:
-	# Gold disc — covers the trap footprint, alpha scales with fraction of maxed stats.
+	# Radial gradient gold glow disc — same technique as the enemy selection glow.
+	# Opacity driven by the max_alpha shader uniform, updated in _update_star_display().
+	var glow_radius := Grid.CELL_SIZE * 1.6
+	var shader := Shader.new()
+	shader.code = """
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled;
+uniform float radius = 1.0;
+uniform float max_alpha = 0.0;
+varying float frag_dist;
+void vertex() {
+    frag_dist = length(VERTEX.xz) / radius;
+}
+void fragment() {
+    float d = clamp(frag_dist, 0.0, 1.0);
+    ALBEDO = vec3(0.96, 0.82, 0.15);
+    ALPHA  = max_alpha * (1.0 - d * d);
+}
+"""
 	var glow_mi   := MeshInstance3D.new()
 	var glow_mesh := CylinderMesh.new()
-	glow_mesh.top_radius      = Grid.CELL_SIZE * 1.12
-	glow_mesh.bottom_radius   = Grid.CELL_SIZE * 1.12
+	glow_mesh.top_radius      = glow_radius
+	glow_mesh.bottom_radius   = glow_radius
 	glow_mesh.height          = 0.001
-	glow_mesh.radial_segments = 32
+	glow_mesh.radial_segments = 48
 	glow_mi.mesh              = glow_mesh
-	# Position just above the shadow (world y ≈ 0.065), below the trap body.
+	# Sit just above the shadow, below all trap body elements.
 	glow_mi.position.y        = 0.065 - 0.25
-	var glow_mat             := StandardMaterial3D.new()
-	glow_mat.albedo_color     = Color(0.92, 0.75, 0.10, 0.0)   # gold; alpha updated by _update_star_display
-	glow_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
-	glow_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
+	var glow_mat := ShaderMaterial.new()
+	glow_mat.shader = shader
+	glow_mat.set_shader_parameter("radius", glow_radius)
+	glow_mat.set_shader_parameter("max_alpha", 0.0)
 	glow_mi.material_override = glow_mat
 	_star_glow = glow_mi
 	add_child(_star_glow)
 
-	# Label3D — filled stars rendered in the 3D world above the trap.
-	# Positioned at the bottom edge of the footprint (screen-space "below" in top-down view).
-	_star_label               = Label3D.new()
-	_star_label.font          = UIFonts.primary_bold()
-	_star_label.font_size     = 48
-	_star_label.modulate      = Color(0.95, 0.80, 0.10, 1.0)
-	_star_label.outline_size  = 6
-	_star_label.outline_modulate = Color(0.0, 0.0, 0.0, 0.80)
-	_star_label.position      = Vector3(0.0, 0.50, Grid.CELL_SIZE * 0.72)
-	_star_label.billboard     = BaseMaterial3D.BILLBOARD_ENABLED
-	_star_label.no_depth_test = true
-	_star_label.text          = ""
+	# Label3D — large gold stars centered on the trap, always rendered on top.
+	# pixel_size controls how many world units one font pixel occupies; at 0.010
+	# a 96pt star glyph is roughly 0.96 world units (≈ one cell) tall.
+	_star_label                  = Label3D.new()
+	_star_label.font             = UIFonts.primary_bold()
+	_star_label.font_size        = 96
+	_star_label.pixel_size       = 0.010
+	_star_label.modulate         = Color(0.96, 0.84, 0.12, 1.0)
+	_star_label.outline_size     = 10
+	_star_label.outline_modulate = Color(0.0, 0.0, 0.0, 0.90)
+	_star_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_star_label.position         = Vector3(0.0, 0.65, 0.0)
+	_star_label.billboard        = BaseMaterial3D.BILLBOARD_ENABLED
+	_star_label.no_depth_test    = true
+	_star_label.text             = ""
 	add_child(_star_label)
 
 
@@ -585,12 +606,12 @@ func _spawn_star_display() -> void:
 func _update_star_display() -> void:
 	if _star_label == null:
 		return
-	var maxed: int   = get_maxed_stat_count()
+	var maxed: int = get_maxed_stat_count()
 	_star_label.text = "★".repeat(maxed)
-	var frac         := float(maxed) / float(get_total_upgradeable_stats())
-	var mat: StandardMaterial3D = _star_glow.material_override
-	# Alpha ranges from 0.0 (no maxed stats) up to 0.48 (fully upgraded).
-	mat.albedo_color = Color(0.92, 0.75, 0.10, frac * 0.48)
+	var frac := float(maxed) / float(get_total_upgradeable_stats())
+	var mat: ShaderMaterial = _star_glow.material_override
+	# max_alpha peaks at 0.75 when fully upgraded — bright gold halo, not blinding.
+	mat.set_shader_parameter("max_alpha", frac * 0.75)
 
 
 ## Forces the range indicator visible and pins it so hover-exit cannot hide it.
