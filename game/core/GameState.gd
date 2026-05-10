@@ -196,8 +196,8 @@ func set_countdown(seconds: int) -> void:
 
 ## Increases infestation_level by points / INFESTATION_MAX.
 ## Calls end_run() if the level reaches 1.0.
-func add_infestation(points: int) -> void:
-	infestation_level = minf(infestation_level + float(points) / float(INFESTATION_MAX), 1.0)
+func add_infestation(points: float) -> void:
+	infestation_level = minf(infestation_level + points / float(INFESTATION_MAX), 1.0)
 	infestation_changed.emit(infestation_level)
 	if infestation_level >= 1.0:
 		end_run()
