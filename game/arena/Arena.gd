@@ -1347,9 +1347,26 @@ uniform float crop_size   = 0.400;
 // Darkens the floor so game objects read clearly against it.
 const float BRIGHTNESS = 0.7;
 
+// Grid dimensions — must match Grid.GRID_SIZE and Grid.GRID_ROWS.
+const vec2 GRID_CELLS = vec2(31.0, 29.0);
+
+// Line fade: distance (as fraction of a cell) where the line reaches zero opacity.
+const float LINE_HALF_WIDTH = 0.04;
+// Maximum opacity of the grid overlay — keep very low so the texture reads first.
+const float LINE_ALPHA = 0.04;
+
 void fragment() {
 	vec2 uv = crop_offset + UV * crop_size;
-	ALBEDO = texture(floor_texture, uv).rgb * BRIGHTNESS;
+	vec3 floor_color = texture(floor_texture, uv).rgb * BRIGHTNESS;
+
+	// Map UV to cell space; fract gives position within each cell (0..1).
+	// min(f, 1-f) gives distance to the nearest grid line edge (0..0.5).
+	vec2 f = fract(UV * GRID_CELLS);
+	float nearest = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+	float line = 1.0 - smoothstep(0.0, LINE_HALF_WIDTH, nearest);
+
+	vec3 line_color = vec3(0.92, 0.90, 0.85);
+	ALBEDO = mix(floor_color, line_color, line * LINE_ALPHA);
 }
 """
 

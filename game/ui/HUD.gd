@@ -358,16 +358,16 @@ func _build_right_panel() -> void:
 	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(spacer)
 
-	# --- Countdown block (hidden by default) ---
-	# The wrapper always occupies its reserved height so that showing/hiding
-	# the countdown items does not shift the Exit/Restart buttons below.
-	# Reserved height: "Incoming!" label (~42px) + number label (~62px) +
-	# Send Early button (RIGHT_BTN_H = 52) + two 8px separations = 172px;
-	# use 175 for a small safety margin.
-	var countdown_wrapper := VBoxContainer.new()
-	countdown_wrapper.custom_minimum_size = Vector2(0, 175)
-	countdown_wrapper.add_theme_constant_override("separation", 8)
-	vbox.add_child(countdown_wrapper)
+	# --- Countdown labels (hidden by default) ---
+	# These live in their own fixed-height container separate from the Send
+	# button.  custom_minimum_size reserves the space even when both labels
+	# are hidden, so the button below never shifts position.
+	# Reserved: "Incoming!" (~38px) + number (~55px) + 8px separation = 101px;
+	# use 115 for breathing room.
+	var countdown_labels := VBoxContainer.new()
+	countdown_labels.custom_minimum_size = Vector2(0, 115)
+	countdown_labels.add_theme_constant_override("separation", 8)
+	vbox.add_child(countdown_labels)
 
 	_countdown_wave_label = Label.new()
 	_countdown_wave_label.text               = "Incoming!"
@@ -379,7 +379,7 @@ func _build_right_panel() -> void:
 	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
 	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_wave_label.visible = false
-	countdown_wrapper.add_child(_countdown_wave_label)
+	countdown_labels.add_child(_countdown_wave_label)
 
 	_countdown_number_label = Label.new()
 	_countdown_number_label.add_theme_font_size_override("font_size", 48)
@@ -390,64 +390,85 @@ func _build_right_panel() -> void:
 	_countdown_number_label.add_theme_font_override("font", UIFonts.header())
 	_countdown_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_number_label.visible = false
-	countdown_wrapper.add_child(_countdown_number_label)
+	countdown_labels.add_child(_countdown_number_label)
 
 	_build_early_bonus_particles()
 
+	# --- Send Wave button (always visible, always in the same slot) ---
+	# Sits directly in the outer vbox, below the fixed-height label area, so
+	# showing/hiding the countdown labels never affects its position.
 	_send_wave_btn = Button.new()
 	_send_wave_btn.text = ""
 	_send_wave_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_send_wave_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
-	_send_wave_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
+	# Taller than a standard button so the two-row content fits without clipping.
+	_send_wave_btn.custom_minimum_size   = Vector2(0, 80)
 	_apply_send_wave_btn_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
-	countdown_wrapper.add_child(_send_wave_btn)
+	vbox.add_child(_send_wave_btn)
 
-	var btn_row := HBoxContainer.new()
-	btn_row.set_anchors_preset(Control.PRESET_FULL_RECT)
-	btn_row.offset_left  = 8.0
-	btn_row.offset_right = -8.0
-	btn_row.alignment    = BoxContainer.ALIGNMENT_CENTER
-	btn_row.add_theme_constant_override("separation", 4)
-	btn_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_send_wave_btn.add_child(btn_row)
+	# Two-row VBox fills the button interior.
+	# Row 1: pest icon + action label (what the button does).
+	# Row 2: coin icon + reward amount (what the player earns).
+	var btn_vbox := VBoxContainer.new()
+	btn_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	btn_vbox.offset_left   = 8.0
+	btn_vbox.offset_right  = -8.0
+	btn_vbox.offset_top    = 4.0
+	btn_vbox.offset_bottom = -4.0
+	btn_vbox.alignment     = BoxContainer.ALIGNMENT_CENTER
+	btn_vbox.add_theme_constant_override("separation", 2)
+	btn_vbox.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	_send_wave_btn.add_child(btn_vbox)
+
+	# Row 1 — action label with a small pest icon to the left.
+	var top_row := HBoxContainer.new()
+	top_row.alignment    = BoxContainer.ALIGNMENT_CENTER
+	top_row.add_theme_constant_override("separation", 5)
+	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn_vbox.add_child(top_row)
 
 	var game_icon := TextureRect.new()
 	game_icon.texture             = load("res://assets/uninfested.png") as Texture2D
-	game_icon.custom_minimum_size = Vector2(30, 30)
+	game_icon.custom_minimum_size = Vector2(26, 26)
 	game_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	game_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	game_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	game_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	btn_row.add_child(game_icon)
+	top_row.add_child(game_icon)
 
-	_send_wave_text_label                  = Label.new()
-	_send_wave_text_label.text             = "Send Early"
-	_send_wave_text_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_send_wave_text_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_send_wave_text_label.mouse_filter     = Control.MOUSE_FILTER_IGNORE
-	_send_wave_text_label.add_theme_font_override("font", UIFonts.primary())
-	_send_wave_text_label.add_theme_font_size_override("font_size", 18)
+	_send_wave_text_label              = Label.new()
+	_send_wave_text_label.text         = "Send Early"
+	_send_wave_text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_send_wave_text_label.add_theme_font_override("font", UIFonts.primary_bold())
+	_send_wave_text_label.add_theme_font_size_override("font_size", 17)
 	_send_wave_text_label.add_theme_color_override("font_color", COLOR_TEXT)
-	btn_row.add_child(_send_wave_text_label)
+	top_row.add_child(_send_wave_text_label)
+
+	# Row 2 — coin icon + gold reward amount, centred in the button width.
+	var bot_row := HBoxContainer.new()
+	bot_row.alignment    = BoxContainer.ALIGNMENT_CENTER
+	bot_row.add_theme_constant_override("separation", 4)
+	bot_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn_vbox.add_child(bot_row)
 
 	var btn_coin_icon := TextureRect.new()
 	btn_coin_icon.texture             = load("res://assets/bug_buck_coin.png") as Texture2D
-	btn_coin_icon.custom_minimum_size = Vector2(20, 20)
+	btn_coin_icon.custom_minimum_size = Vector2(22, 22)
 	btn_coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	btn_coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	btn_coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	btn_coin_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	btn_row.add_child(btn_coin_icon)
+	bot_row.add_child(btn_coin_icon)
 
 	_send_wave_reward_label = Label.new()
 	_send_wave_reward_label.text                = "0"
 	_send_wave_reward_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_send_wave_reward_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	_send_wave_reward_label.add_theme_font_override("font", UIFonts.primary_bold())
-	_send_wave_reward_label.add_theme_font_size_override("font_size", 18)
+	_send_wave_reward_label.add_theme_font_size_override("font_size", 20)
 	_send_wave_reward_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
-	btn_row.add_child(_send_wave_reward_label)
+	bot_row.add_child(_send_wave_reward_label)
 
 	# --- Exit + Restart ---
 	var exit_restart_row := HBoxContainer.new()
