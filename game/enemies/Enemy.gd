@@ -546,16 +546,37 @@ func show_selection_glow() -> void:
 	var mi   := MeshInstance3D.new()
 	var mesh := CylinderMesh.new()
 	# Radius sized to the sprite so the glow peeks out as a halo around the edges.
-	mesh.top_radius      = VISUAL_QUAD_SIZE[_enemy_type] * Grid.CELL_SIZE * 0.55
-	mesh.bottom_radius   = mesh.top_radius
+	var radius: float    = VISUAL_QUAD_SIZE[_enemy_type] * Grid.CELL_SIZE * 0.55
+	mesh.top_radius      = radius
+	mesh.bottom_radius   = radius
 	mesh.height          = 0.001   # visually flat; avoids z-fighting
 	mesh.radial_segments = 32
 	mi.mesh              = mesh
 
-	var mat          := StandardMaterial3D.new()
-	mat.albedo_color  = Color(1.0, 0.82, 0.0, 0.42)
-	mat.shading_mode  = BaseMaterial3D.SHADING_MODE_UNSHADED
-	mat.transparency  = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# Shader fades alpha from opaque at the centre to transparent at the edge.
+	# Uses VERTEX.xz / radius so the gradient is always correct regardless of
+	# the CylinderMesh UV layout.
+	var shader := Shader.new()
+	shader.code = """
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled;
+uniform float radius = 0.5;
+
+varying float frag_dist;
+
+void vertex() {
+    frag_dist = length(VERTEX.xz) / radius;
+}
+
+void fragment() {
+    float d = clamp(frag_dist, 0.0, 1.0);
+    ALBEDO = vec3(1.0, 0.82, 0.0);
+    ALPHA  = 0.62 * (1.0 - d * d);
+}
+"""
+	var mat := ShaderMaterial.new()
+	mat.shader = shader
+	mat.set_shader_parameter("radius", radius)
 	mi.material_override = mat
 
 	# Sit just above the shadow (world y ≈ 0.08; enemy root is at y = 0.25).
