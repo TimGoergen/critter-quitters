@@ -12,7 +12,7 @@ extends CanvasLayer
 const Trap     = preload("res://traps/Trap.gd")
 const UIFonts  = preload("res://ui/UIFonts.gd")
 
-const COLOR_PANEL_BG    := Color(0.115, 0.115, 0.188, 0.88)
+const COLOR_PANEL_BG    := Color(0.144, 0.144, 0.235, 0.88)
 const COLOR_BAR_BG      := Color(0.28, 0.28, 0.28, 1.0)
 const COLOR_BAR_FILL    := Color(0.85, 0.22, 0.22, 1.0)
 const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)

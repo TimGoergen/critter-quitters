@@ -17,7 +17,7 @@ const Enemy   = preload("res://enemies/Enemy.gd")
 const UIFonts = preload("res://ui/UIFonts.gd")
 const HUD     = preload("res://ui/HUD.gd")
 
-const COLOR_PANEL_BG := Color(0.115, 0.115, 0.188, 0.92)
+const COLOR_PANEL_BG := Color(0.144, 0.144, 0.235, 0.92)
 const COLOR_BORDER   := Color(0.22, 0.22, 0.40, 1.0)
 const COLOR_BAR_BG   := Color(0.28, 0.28, 0.28, 1.0)
 const COLOR_BAR_FILL := Color(0.85, 0.22, 0.22, 1.0)
