@@ -181,8 +181,8 @@ func _process(_delta: float) -> void:
 
 
 func _update_hp() -> void:
-	var cur  := _tracked_enemy.get_current_hp()
-	var max_ := _tracked_enemy.get_max_hp()
+	var cur:  float = _tracked_enemy.get_current_hp()
+	var max_: float = _tracked_enemy.get_max_hp()
 	_hp_label.text  = "%d / %d" % [ceili(cur), ceili(max_)]
 	var frac        := cur / max_ if max_ > 0.0 else 0.0
 	_hp_fill.size.x = _hp_track.size.x * frac
