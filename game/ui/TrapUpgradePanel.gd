@@ -21,6 +21,7 @@ signal sell_requested   # Arena connects this to _on_sell_trap_requested(anchor)
 
 const HUD      = preload("res://ui/HUD.gd")
 const UIFonts  = preload("res://ui/UIFonts.gd")
+const Trap     = preload("res://traps/Trap.gd")
 
 const PADDING:   float = 10.0
 const BORDER_W:  float = 2.0
@@ -221,24 +222,48 @@ func _refresh() -> void:
 
 	_lbl_title.text  = _trap.get_type_name()
 
-	_lbl_damage.text       = "Damage:    %.1f" % _trap.get_damage()
-	_lbl_damage_stars.text = _stars(_trap.get_damage_level())
+	var trap_type := _trap.get_type()
 	_lbl_range.text        = "Range:     %.1f" % _trap.get_range_radius()
 	_lbl_range_stars.text  = _stars(_trap.get_range_level())
 
-	if _trap.is_passive():
-		_lbl_rate.text       = "Fire Rate: passive"
-		_lbl_rate_stars.text = ""
+	if trap_type == Trap.TrapType.GLUE_BOARD:
+		_lbl_damage.text       = "Adhesion:  %d%%" % int(_trap.get_adhesion_pct())
+		_lbl_damage_stars.text = _stars(_trap.get_damage_level())
+		_lbl_rate.text         = "Fire Rate: passive"
+		_lbl_rate_stars.text   = ""
+	elif trap_type == Trap.TrapType.FOGGER:
+		_lbl_damage.text       = "Potency:   %.1f" % _trap.get_damage()
+		_lbl_damage_stars.text = _stars(_trap.get_damage_level())
+		_lbl_rate.text         = "Fire Rate: %.2f /s" % _trap.get_shots_per_sec()
+		_lbl_rate_stars.text   = _stars(_trap.get_rate_level())
 	else:
-		_lbl_rate.text       = "Fire Rate: %.2f /s" % _trap.get_shots_per_sec()
-		_lbl_rate_stars.text = _stars(_trap.get_rate_level())
+		_lbl_damage.text       = "Damage:    %.1f" % _trap.get_damage()
+		_lbl_damage_stars.text = _stars(_trap.get_damage_level())
+		_lbl_rate.text         = "Fire Rate: %.2f /s" % _trap.get_shots_per_sec()
+		_lbl_rate_stars.text   = _stars(_trap.get_rate_level())
 
-	_refresh_button(
-		_btn_a,
-		_trap.is_damage_maxed(),
-		_trap.get_damage_upgrade_cost(),
-		"Damage   %.1f → %.1f" % [_trap.get_damage(), _trap.get_damage_after_upgrade()]
-	)
+	# Upgrade button A — label depends on trap type.
+	if trap_type == Trap.TrapType.GLUE_BOARD:
+		_refresh_button(
+			_btn_a,
+			_trap.is_damage_maxed(),
+			_trap.get_damage_upgrade_cost(),
+			"Adhesion  %d%% → %d%%" % [int(_trap.get_adhesion_pct()), int(_trap.get_adhesion_after_upgrade_pct())]
+		)
+	elif trap_type == Trap.TrapType.FOGGER:
+		_refresh_button(
+			_btn_a,
+			_trap.is_damage_maxed(),
+			_trap.get_damage_upgrade_cost(),
+			"Potency  %.1f → %.1f" % [_trap.get_damage(), _trap.get_damage_after_upgrade()]
+		)
+	else:
+		_refresh_button(
+			_btn_a,
+			_trap.is_damage_maxed(),
+			_trap.get_damage_upgrade_cost(),
+			"Damage   %.1f → %.1f" % [_trap.get_damage(), _trap.get_damage_after_upgrade()]
+		)
 	_refresh_button(
 		_btn_b,
 		_trap.is_range_maxed(),

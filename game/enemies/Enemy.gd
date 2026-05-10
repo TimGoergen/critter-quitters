@@ -155,9 +155,10 @@ const HP_BAR_WIDTH_FRACTION: float = 0.65
 ## Bar height in world units (CELL_SIZE = 1.0, so this is a thin stripe).
 const HP_BAR_HEIGHT: float = 0.3
 
-## Speed multiplier applied while at least one Glue Board is in range.
-## 0.285 = 71.5% slowdown (up 30% from the original 55% slowdown at 0.45).
-const SLOW_FACTOR: float = 0.285
+## Per-source slow factor registry.  Key = Trap node, value = slow strength
+## (0.0 = no slow, 1.0 = fully stopped).  Speed = base × (1 − max_factor).
+## Dictionary allows multiple overlapping boards; each contributes independently
+## and the strongest one wins.
 
 
 # ---------------------------------------------------------------------------
@@ -222,7 +223,7 @@ var _bounty: int = 0
 # Slow state — tracks how many Glue Boards currently have this enemy in range.
 # Speed is reduced while count > 0 and restored when it drops back to zero.
 var _base_move_speed: float = 0.0
-var _slow_source_count: int = 0
+var _slow_sources: Dictionary = {}   # Trap node → slow strength (0.0–1.0)
 
 # Glue splatter visual — spawned when the first slow source is applied,
 # freed when the last one is removed.
@@ -309,20 +310,31 @@ func take_damage(amount: float, flash_color: Color = Color.WHITE) -> void:
 
 
 ## Called by a Glue Board when this enemy enters its range circle.
-## Reference-counted so overlapping boards compose correctly.
-func add_slow_source() -> void:
-	_slow_source_count += 1
-	if _slow_source_count == 1:
-		_move_speed = _base_move_speed * SLOW_FACTOR
+## source is the Trap node; factor is the slow strength (0.0–1.0).
+## Multiple overlapping boards compose by taking the strongest active factor.
+func add_slow_source(source: Node3D, factor: float) -> void:
+	var was_empty := _slow_sources.is_empty()
+	_slow_sources[source] = factor
+	_recalculate_slow_speed()
+	if was_empty:
 		_show_glue_splatter()
 
 
 ## Called by a Glue Board when this enemy leaves its range circle (or the board is removed).
-func remove_slow_source() -> void:
-	_slow_source_count = maxi(_slow_source_count - 1, 0)
-	if _slow_source_count == 0:
-		_move_speed = _base_move_speed
+func remove_slow_source(source: Node3D) -> void:
+	_slow_sources.erase(source)
+	_recalculate_slow_speed()
+	if _slow_sources.is_empty():
 		_hide_glue_splatter()
+
+
+## Sets _move_speed from the strongest active slow source, or restores full speed.
+func _recalculate_slow_speed() -> void:
+	if _slow_sources.is_empty():
+		_move_speed = _base_move_speed
+	else:
+		var max_factor: float = _slow_sources.values().max()
+		_move_speed = _base_move_speed * (1.0 - max_factor)
 
 
 ## Briefly flashes the enemy white then returns to its base color.

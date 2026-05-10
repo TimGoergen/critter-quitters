@@ -30,6 +30,7 @@ extends Node3D
 const Grid               = preload("res://arena/Grid.gd")
 const Projectile         = preload("res://traps/Projectile.gd")
 const FogCloud           = preload("res://traps/FogCloud.gd")
+const UIFonts            = preload("res://ui/UIFonts.gd")
 const SHADOW_OUTLINE_SHADER = preload("res://assets/shadow_outline.gdshader")
 
 
@@ -49,7 +50,7 @@ const STATS := {
 	TrapType.SNAP_TRAP:  { "damage": 5.0,  "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.52, 0.27, 0.08) },
 	TrapType.ZAPPER:     { "damage": 30.0, "range": 9.6, "cooldown": 2.5, "cost": 75, "color": Color(0.10, 0.50, 1.00) },
 	TrapType.FOGGER:     { "damage": 3.0,  "range": 4.0, "cooldown": 2.2, "cost": 60, "color": Color(0.35, 0.88, 0.18) },
-	TrapType.GLUE_BOARD: { "damage": 0.0,  "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(0.92, 0.89, 0.78) },
+	TrapType.GLUE_BOARD: { "damage": 0.50, "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(0.92, 0.89, 0.78) },
 }
 
 ## Each stat can be upgraded this many times independently.
@@ -140,6 +141,11 @@ var _hover_area:      Area3D = null
 # When true, the indicator stays visible regardless of hover state (upgrade panel open).
 var _indicator_pinned: bool  = false
 
+# Star display — Label3D showing filled stars for each maxed stat, plus a gold glow disc.
+# Both are null until _spawn_star_display() is called from initialize().
+var _star_label: Label3D        = null
+var _star_glow:  MeshInstance3D = null
+
 # Snap Trap animation nodes — null for all other trap types.
 var _snap_bar_pivot: Node3D         = null
 var _snap_cheese:    MeshInstance3D = null
@@ -189,7 +195,9 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	_base_cooldown = _cooldown
 
 	_spawn_visual(stats["color"])
+	_spawn_star_display()
 	stats_changed.connect(_rebuild_range_indicator)
+	stats_changed.connect(_update_star_display)
 
 
 ## Lightweight setup for placement preview ghosts.
@@ -341,6 +349,27 @@ func get_type_name() -> String:
 func get_cost() -> int:
 	return _cost
 
+## Glue Board only — adhesion strength as a percentage (e.g. 50.0 for 50% slow).
+func get_adhesion_pct() -> float:
+	return _damage * 100.0
+
+## Glue Board only — adhesion after the next damage upgrade, as a percentage.
+func get_adhesion_after_upgrade_pct() -> float:
+	return (_damage + _base_damage * UPGRADE_DAMAGE_FACTOR) * 100.0
+
+## Returns how many stats are currently at MAX_UPGRADE_LEVEL.
+func get_maxed_stat_count() -> int:
+	var count := 0
+	if is_damage_maxed():  count += 1
+	if is_range_maxed():   count += 1
+	if not is_passive() and is_rate_maxed():  count += 1
+	return count
+
+## Returns the total number of independently upgradeable stats for this trap.
+## Passive traps (Glue Board) have 2; active traps have 3.
+func get_total_upgradeable_stats() -> int:
+	return 2 if is_passive() else 3
+
 
 # ---------------------------------------------------------------------------
 # Combat loop
@@ -389,7 +418,7 @@ func _exit_tree() -> void:
 	# Release the slow source so the enemy returns to normal speed immediately
 	# when the trap is sold or overwritten.
 	if is_instance_valid(_slowed_enemy):
-		_slowed_enemy.remove_slow_source()
+		_slowed_enemy.remove_slow_source(self)
 	_slowed_enemy = null
 
 
@@ -428,7 +457,7 @@ func _update_glue_slow() -> void:
 	# so the slot is free — we don't wait for the interval to expire.
 	if is_instance_valid(_slowed_enemy):
 		if _xz_distance(_slowed_enemy.global_position) > _range:
-			_slowed_enemy.remove_slow_source()
+			_slowed_enemy.remove_slow_source(self)
 			_slowed_enemy = null
 	elif _slowed_enemy != null:
 		# Instance is no longer valid (enemy died).
@@ -452,10 +481,10 @@ func _update_glue_slow() -> void:
 	# Switch to the new target if it differs from the current one.
 	if closest != _slowed_enemy:
 		if is_instance_valid(_slowed_enemy):
-			_slowed_enemy.remove_slow_source()
+			_slowed_enemy.remove_slow_source(self)
 		_slowed_enemy = closest
 		if _slowed_enemy != null:
-			_slowed_enemy.add_slow_source()
+			_slowed_enemy.add_slow_source(self, _damage)
 			# Cosmetic glue projectile — damage is 0, slow is the only effect.
 			fired.emit(global_position, _slowed_enemy.global_position, _slowed_enemy, 0.0, _trap_type)
 
@@ -514,6 +543,54 @@ func _check_full_upgrade_bonus() -> void:
 	if _base_cooldown > 0.0:
 		_cooldown = maxf(_cooldown / 1.075, 0.1)
 	_bonus_applied = true
+
+
+## Spawns the star label and glow disc that reflect how many stats are maxed.
+## Called once from initialize() — not spawned for preview instances.
+func _spawn_star_display() -> void:
+	# Gold disc — covers the trap footprint, alpha scales with fraction of maxed stats.
+	var glow_mi   := MeshInstance3D.new()
+	var glow_mesh := CylinderMesh.new()
+	glow_mesh.top_radius      = Grid.CELL_SIZE * 1.12
+	glow_mesh.bottom_radius   = Grid.CELL_SIZE * 1.12
+	glow_mesh.height          = 0.001
+	glow_mesh.radial_segments = 32
+	glow_mi.mesh              = glow_mesh
+	# Position just above the shadow (world y ≈ 0.065), below the trap body.
+	glow_mi.position.y        = 0.065 - 0.25
+	var glow_mat             := StandardMaterial3D.new()
+	glow_mat.albedo_color     = Color(0.92, 0.75, 0.10, 0.0)   # gold; alpha updated by _update_star_display
+	glow_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	glow_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
+	glow_mi.material_override = glow_mat
+	_star_glow = glow_mi
+	add_child(_star_glow)
+
+	# Label3D — filled stars rendered in the 3D world above the trap.
+	# Positioned at the bottom edge of the footprint (screen-space "below" in top-down view).
+	_star_label               = Label3D.new()
+	_star_label.font          = UIFonts.primary_bold()
+	_star_label.font_size     = 48
+	_star_label.modulate      = Color(0.95, 0.80, 0.10, 1.0)
+	_star_label.outline_size  = 6
+	_star_label.outline_modulate = Color(0.0, 0.0, 0.0, 0.80)
+	_star_label.position      = Vector3(0.0, 0.50, Grid.CELL_SIZE * 0.72)
+	_star_label.billboard     = BaseMaterial3D.BILLBOARD_ENABLED
+	_star_label.no_depth_test = true
+	_star_label.text          = ""
+	add_child(_star_label)
+
+
+## Refreshes the star label and glow disc after any upgrade.
+func _update_star_display() -> void:
+	if _star_label == null:
+		return
+	var maxed: int   = get_maxed_stat_count()
+	_star_label.text = "★".repeat(maxed)
+	var frac         := float(maxed) / float(get_total_upgradeable_stats())
+	var mat: StandardMaterial3D = _star_glow.material_override
+	# Alpha ranges from 0.0 (no maxed stats) up to 0.48 (fully upgraded).
+	mat.albedo_color = Color(0.92, 0.75, 0.10, frac * 0.48)
 
 
 ## Forces the range indicator visible and pins it so hover-exit cannot hide it.
