@@ -153,26 +153,23 @@ func _build_left_panel() -> void:
 	bg.add_child(border)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 16)
-	vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	vbox.add_theme_constant_override("separation", 8)
+	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
 	for i in range(4):
 		var btn := Button.new()
+		btn.text                  = ""
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
-		btn.custom_minimum_size   = Vector2(0, 70)
-		btn.clip_contents         = false
-		btn.add_theme_font_size_override("font_size", 22)
-		btn.add_theme_font_override("font", UIFonts.primary_bold())
-		btn.text = _selector_label(i)
+		btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+		btn.clip_contents         = true
 
 		btn.pressed.connect(GameState.select_trap_type.bind(i))
 		_style_selector_button(btn, i, i == GameState.selected_trap_type, _can_afford(i))
+		_build_btn_content(btn, i)
+		_add_btn_badge(btn, i)
 		vbox.add_child(btn)
 		_selector_buttons.append(btn)
-		_add_btn_badge(btn, i)
-		_add_btn_cost_label(btn, i, 14)
 
 
 # ---------------------------------------------------------------------------
@@ -652,6 +649,99 @@ func _refresh_trap_selector() -> void:
 
 func _on_trap_type_selected(_type: int) -> void:
 	_refresh_trap_selector()
+
+
+## Returns the path where a trap's button image should live.
+## The file may not exist yet — callers check ResourceLoader.exists() first.
+func _trap_image_path(type: int) -> String:
+	match type:
+		0: return "res://assets/traps/snap_trap.png"
+		1: return "res://assets/traps/zapper.png"
+		2: return "res://assets/traps/fogger.png"
+		3: return "res://assets/traps/glue_board.png"
+	return ""
+
+
+## Builds the internal layout of a trap selector button:
+##   top area  — trap image (brand colour background; real texture when available)
+##   name row  — trap name centred below the image
+##   cost row  — bug bucks coin icon + numeric cost in gold, centred
+## All child nodes carry MOUSE_FILTER_IGNORE so clicks reach the Button.
+func _build_btn_content(btn: Button, type: int) -> void:
+	var inner := MarginContainer.new()
+	inner.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inner.add_theme_constant_override("margin_left",   6)
+	inner.add_theme_constant_override("margin_right",  6)
+	inner.add_theme_constant_override("margin_top",    6)
+	inner.add_theme_constant_override("margin_bottom", 6)
+	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(inner)
+
+	var cvbox := VBoxContainer.new()
+	cvbox.add_theme_constant_override("separation", 4)
+	cvbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	cvbox.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	inner.add_child(cvbox)
+
+	# Image area — fills remaining height; brand colour shows until a real
+	# texture is placed at the path returned by _trap_image_path().
+	var img_area := Control.new()
+	img_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	img_area.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	img_area.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	cvbox.add_child(img_area)
+
+	var img_bg := ColorRect.new()
+	img_bg.color       = TRAP_BRAND[type]["normal"].darkened(0.15)
+	img_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	img_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	img_area.add_child(img_bg)
+
+	var img_tex := TextureRect.new()
+	img_tex.set_anchors_preset(Control.PRESET_FULL_RECT)
+	img_tex.expand_mode  = TextureRect.EXPAND_IGNORE_SIZE
+	img_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	img_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var tex_path := _trap_image_path(type)
+	if ResourceLoader.exists(tex_path):
+		img_tex.texture = load(tex_path)
+	img_area.add_child(img_tex)
+
+	# Trap name
+	var name_lbl := Label.new()
+	name_lbl.text                  = TRAP_LABELS[type][0]
+	name_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	name_lbl.add_theme_font_size_override("font_size", 16)
+	name_lbl.add_theme_color_override("font_color", Color.WHITE)
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cvbox.add_child(name_lbl)
+
+	# Cost row — coin icon + numeric amount in gold
+	var cost_row := HBoxContainer.new()
+	cost_row.add_theme_constant_override("separation", 4)
+	cost_row.alignment    = BoxContainer.ALIGNMENT_CENTER
+	cost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cvbox.add_child(cost_row)
+
+	var coin_icon := TextureRect.new()
+	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
+	coin_icon.custom_minimum_size = Vector2(18, 18)
+	coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	coin_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	cost_row.add_child(coin_icon)
+
+	var cost_lbl := Label.new()
+	cost_lbl.text                = str(Trap.STATS[type]["cost"])
+	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	cost_lbl.add_theme_font_size_override("font_size", 16)
+	cost_lbl.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
+	cost_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cost_row.add_child(cost_lbl)
 
 
 func _selector_label(type: int) -> String:
