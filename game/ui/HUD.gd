@@ -663,7 +663,7 @@ func _trap_image_path(type: int) -> String:
 
 
 ## Builds the internal layout of a trap selector button:
-##   top area  — trap image (brand colour background; real texture when available)
+##   top area  — live SubViewport rendering the trap from directly above
 ##   name row  — trap name centred below the image
 ##   cost row  — bug bucks coin icon + numeric cost in gold, centred
 ## All child nodes carry MOUSE_FILTER_IGNORE so clicks reach the Button.
@@ -683,8 +683,10 @@ func _build_btn_content(btn: Button, type: int) -> void:
 	cvbox.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	inner.add_child(cvbox)
 
-	# Image area — fills remaining height; brand colour shows until a real
-	# texture is placed at the path returned by _trap_image_path().
+	# Image area — brand-coloured background with a live 3D sub-viewport on top.
+	# The sub-viewport renders the actual trap visual from an orthographic
+	# top-down camera, so the icon exactly matches what appears in the arena.
+	# All trap materials are SHADING_MODE_UNSHADED, so no lighting is needed.
 	var img_area := Control.new()
 	img_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	img_area.size_flags_vertical   = Control.SIZE_EXPAND_FILL
@@ -692,20 +694,41 @@ func _build_btn_content(btn: Button, type: int) -> void:
 	cvbox.add_child(img_area)
 
 	var img_bg := ColorRect.new()
-	img_bg.color       = TRAP_BRAND[type]["normal"].darkened(0.15)
+	img_bg.color        = TRAP_BRAND[type]["normal"].darkened(0.15)
 	img_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	img_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	img_area.add_child(img_bg)
 
-	var img_tex := TextureRect.new()
-	img_tex.set_anchors_preset(Control.PRESET_FULL_RECT)
-	img_tex.expand_mode  = TextureRect.EXPAND_IGNORE_SIZE
-	img_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	img_tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var tex_path := _trap_image_path(type)
-	if ResourceLoader.exists(tex_path):
-		img_tex.texture = load(tex_path)
-	img_area.add_child(img_tex)
+	# SubViewport — 180×180 px, transparent so the brand bg shows through gaps.
+	var svp := SubViewport.new()
+	svp.size                      = Vector2i(180, 180)
+	svp.transparent_bg            = true
+	svp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+
+	# Orthographic camera looking straight down. size=2.2 gives ~15% margin
+	# around the 1.9-cell trap footprint on all sides.
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size       = 2.2
+	cam.position   = Vector3(0.0, 5.0, 0.0)
+	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
+	svp.add_child(cam)
+
+	# Trap in preview mode — spawns the full visual without combat state.
+	# Range indicator is deferred-hidden so it does not clutter the icon.
+	var trap_preview := Node3D.new()
+	trap_preview.set_script(Trap)
+	trap_preview.initialize_preview(type as Trap.TrapType)
+	svp.add_child(trap_preview)
+	trap_preview.call_deferred("hide_range_indicator")
+
+	# SubViewportContainer stretches the sub-viewport to fill the available area.
+	var svc := SubViewportContainer.new()
+	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	svc.stretch      = true
+	svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	svc.add_child(svp)
+	img_area.add_child(svc)
 
 	# Trap name
 	var name_lbl := Label.new()
