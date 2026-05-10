@@ -65,6 +65,7 @@ const ARENA_MARGIN_PX: float = 4.0
 const MARGIN: float = 10.0             # inner padding for both panels
 const SCREEN_EDGE_MARGIN: float = 24.0 # extra inset on the screen-edge side and top/bottom to clear rounded corners
 const RIGHT_BTN_H: float = 52.0        # fixed height for all right-panel buttons
+const INNER_BORDER_W: float = 2.0      # black separator line at the arena-facing edge of each panel
 
 var _wave_label:        Label
 var _bucks_label:       Label
@@ -140,6 +141,17 @@ func _build_left_panel() -> void:
 	margin.add_theme_constant_override("margin_bottom", MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	bg.add_child(margin)
 
+	# Black separator line at the inner (arena-facing) edge.
+	var border := ColorRect.new()
+	border.color         = Color.BLACK
+	border.anchor_left   = 1.0
+	border.anchor_right  = 1.0
+	border.anchor_top    = 0.0
+	border.anchor_bottom = 1.0
+	border.offset_left   = -INNER_BORDER_W
+	border.offset_right  = 0.0
+	bg.add_child(border)
+
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 16)
 	vbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -184,6 +196,17 @@ func _build_right_panel() -> void:
 	margin.add_theme_constant_override("margin_top",    MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	margin.add_theme_constant_override("margin_bottom", MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	bg.add_child(margin)
+
+	# Black separator line at the inner (arena-facing) edge.
+	var border := ColorRect.new()
+	border.color         = Color.BLACK
+	border.anchor_left   = 0.0
+	border.anchor_right  = 0.0
+	border.anchor_top    = 0.0
+	border.anchor_bottom = 1.0
+	border.offset_left   = 0.0
+	border.offset_right  = INNER_BORDER_W
+	bg.add_child(border)
 
 	var vbox := VBoxContainer.new()
 	# 5px separation instead of 8 so the fixed-height items (wave label,
