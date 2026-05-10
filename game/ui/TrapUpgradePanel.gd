@@ -222,7 +222,7 @@ func _refresh() -> void:
 
 	_lbl_title.text  = _trap.get_type_name()
 
-	var trap_type := _trap.get_type()
+	var trap_type: int = _trap.get_type()
 	_lbl_range.text        = "Range:     %.1f" % _trap.get_range_radius()
 	_lbl_range_stars.text  = _stars(_trap.get_range_level())
 
