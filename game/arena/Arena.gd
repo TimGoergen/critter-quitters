@@ -253,7 +253,7 @@ func _ready() -> void:
 	# Release enemy follow when a new wave launches (countdown expires).
 	GameState.wave_countdown_changed.connect(func(sec: int) -> void:
 		if sec == 0:
-			_followed_enemy = null
+			_set_followed_enemy(null)
 	)
 
 	# Size the camera to fit the arena inside the usable area between side panels,
@@ -470,7 +470,7 @@ func _handle_tap(screen_pos: Vector2) -> void:
 	# Tap on a placed trap → center camera (if zoomed) and open upgrade panel.
 	if _trap_anchors.has(cell):
 		if _zoom_state == ZoomState.ZOOMED_IN:
-			_followed_enemy = null
+			_set_followed_enemy(null)
 			var wp := _cell_to_world(_trap_anchors[cell])
 			_apply_pan(Vector2(wp.x, wp.z))
 		_open_upgrade_panel(_trap_anchors[cell])
@@ -502,20 +502,32 @@ func _find_enemy_near_screen(screen_pos: Vector2, max_dist_px: float) -> Node3D:
 	return best
 
 
+## Sets the followed enemy and keeps the selection glow in sync.
+## Pass null to clear the follow and hide the glow on the previous target.
+func _set_followed_enemy(enemy: Node3D) -> void:
+	if _followed_enemy == enemy:
+		return
+	if is_instance_valid(_followed_enemy):
+		_followed_enemy.hide_selection_glow()
+	_followed_enemy = enemy
+	if is_instance_valid(_followed_enemy):
+		_followed_enemy.show_selection_glow()
+
+
 ## Handles a tap on an enemy: zooms in and follows, or cancels follow.
 func _handle_enemy_tap(enemy: Node3D) -> void:
 	if _zoom_state == ZoomState.OVERVIEW:
 		# Zoom in and begin following this enemy.
 		_zoom_state = ZoomState.ZOOMED_IN
 		_camera.size = _overview_camera_size * 0.5
-		_followed_enemy = enemy
+		_set_followed_enemy(enemy)
 		GameState.zoom_state_changed.emit(true)
 	elif _followed_enemy == enemy:
 		# Tap the same enemy again → back to overview.
 		_toggle_zoom()
 	else:
 		# Switch follow to this new enemy (stay zoomed).
-		_followed_enemy = enemy
+		_set_followed_enemy(enemy)
 
 
 # ---------------------------------------------------------------------------
@@ -591,7 +603,7 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 		return
 
 	if _zoom_state == ZoomState.ZOOMED_IN:
-		_followed_enemy = null
+		_set_followed_enemy(null)
 		var wp := _cell_to_world(anchor)
 		_apply_pan(Vector2(wp.x, wp.z))
 
@@ -1836,7 +1848,7 @@ func _toggle_zoom() -> void:
 		_apply_pan(_pan_world_pos)
 	else:
 		_zoom_state      = ZoomState.OVERVIEW
-		_followed_enemy  = null
+		_set_followed_enemy(null)
 		_camera.size     = _overview_camera_size
 		_camera.h_offset = _camera_base_h_offset
 		_camera.v_offset = 0.0
@@ -1858,7 +1870,7 @@ func _apply_pan(pos: Vector2) -> void:
 
 ## Resets camera to overview when a run ends.
 func _on_run_ended_camera() -> void:
-	_followed_enemy = null
+	_set_followed_enemy(null)
 	if _zoom_state == ZoomState.ZOOMED_IN:
 		_toggle_zoom()
 

@@ -228,6 +228,9 @@ var _slow_source_count: int = 0
 # freed when the last one is removed.
 var _glue_splatter: Node3D = null
 
+# Yellow disc shown beneath the enemy while the camera is following it.
+var _selection_glow: MeshInstance3D = null
+
 # Accumulated walk time used to index into _walk_frames.
 var _walk_time: float = 0.0
 
@@ -511,6 +514,44 @@ func _hide_glue_splatter() -> void:
 		return
 	_glue_splatter.queue_free()
 	_glue_splatter = null
+
+
+# ---------------------------------------------------------------------------
+# Selection glow — shown while this enemy is the camera-follow target
+# ---------------------------------------------------------------------------
+
+## Shows a flat yellow disc beneath the enemy sprite to indicate it is selected.
+## Spawned on first call; subsequent calls just make it visible.
+func show_selection_glow() -> void:
+	if _selection_glow != null:
+		_selection_glow.visible = true
+		return
+
+	var mi   := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	# Radius sized to the sprite so the glow peeks out as a halo around the edges.
+	mesh.top_radius      = VISUAL_QUAD_SIZE[_enemy_type] * Grid.CELL_SIZE * 0.55
+	mesh.bottom_radius   = mesh.top_radius
+	mesh.height          = 0.001   # visually flat; avoids z-fighting
+	mesh.radial_segments = 32
+	mi.mesh              = mesh
+
+	var mat          := StandardMaterial3D.new()
+	mat.albedo_color  = Color(1.0, 0.82, 0.0, 0.42)
+	mat.shading_mode  = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.transparency  = BaseMaterial3D.TRANSPARENCY_ALPHA
+	mi.material_override = mat
+
+	# Sit just above the shadow (world y ≈ 0.08; enemy root is at y = 0.25).
+	mi.position.y    = 0.08 - 0.25
+	_selection_glow  = mi
+	add_child(mi)
+
+
+## Hides the selection glow without freeing it — shown again cheaply if re-selected.
+func hide_selection_glow() -> void:
+	if _selection_glow != null:
+		_selection_glow.visible = false
 
 
 ## Adds one flat irregular blob to parent at pos.
