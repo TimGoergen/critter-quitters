@@ -1798,18 +1798,20 @@ func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
 
 
 ## Sizes and positions the orthographic camera so the arena fills the space
-## between the left and right HUD panels, with ARENA_MARGIN_PX of breathing room
-## on all sides.  Stores the resulting size as _overview_camera_size for zoom logic.
+## between the left and right HUD panels, with the same margins as the HUD
+## panel content: MARGIN on the inner panel edges, SCREEN_EDGE_MARGIN on the
+## top and bottom screen edges (which may have rounded corners on mobile).
+## Stores the resulting size as _overview_camera_size for zoom logic.
 ##
 ## v_offset sign convention for this top-down camera (local Y = world −Z):
 ##   positive → aim shifts toward world −Z → origin appears lower on screen.
 func _fit_camera_to_grid() -> void:
 	var vp       := get_viewport().get_visible_rect().size
-	# Subtract ARENA_MARGIN_PX on both sides of every edge so the arena has
-	# breathing room against all four boundaries: top, bottom, and the inner
-	# edges of both side panels.
-	var usable_w := vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.ARENA_MARGIN_PX * 2.0
-	var usable_h := vp.y - HUD.ARENA_MARGIN_PX * 2.0
+	# Left/right: match the HUD panel inner padding (MARGIN).
+	# Top/bottom: match the HUD panel screen-edge inset (SCREEN_EDGE_MARGIN)
+	# which clears rounded corners on mobile devices.
+	var usable_w := vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.MARGIN * 2.0
+	var usable_h := vp.y - HUD.SCREEN_EDGE_MARGIN * 2.0
 	if usable_h <= 0.0 or usable_w <= 0.0:
 		return
 
@@ -1830,9 +1832,9 @@ func _fit_camera_to_grid() -> void:
 		_camera.size = _overview_camera_size
 
 	# Shift the camera centre to the midpoint of the usable horizontal band
-	# (left panel + margin … right panel + margin).
+	# (left panel + MARGIN … right panel + MARGIN).
 	var world_per_px     := _overview_camera_size / vp.y
-	var h_center_px      := HUD.LEFT_PANEL_W + HUD.ARENA_MARGIN_PX + usable_w * 0.5
+	var h_center_px      := HUD.LEFT_PANEL_W + HUD.MARGIN + usable_w * 0.5
 	_camera_base_h_offset = (h_center_px - vp.x * 0.5) * world_per_px
 	_camera.h_offset      = _camera_base_h_offset
 	_camera.v_offset      = 0.0
@@ -1873,8 +1875,8 @@ func _toggle_zoom() -> void:
 func _apply_pan(pos: Vector2) -> void:
 	var vp            := get_viewport().get_visible_rect().size
 	var world_per_px  := _camera.size / vp.y
-	var visible_half_w := (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.ARENA_MARGIN_PX * 2.0) * world_per_px * 0.5
-	var visible_half_h := (vp.y - HUD.ARENA_MARGIN_PX * 2.0) * world_per_px * 0.5
+	var visible_half_w := (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.MARGIN * 2.0) * world_per_px * 0.5
+	var visible_half_h := (vp.y - HUD.SCREEN_EDGE_MARGIN * 2.0) * world_per_px * 0.5
 	var cx := clampf(pos.x, -_arena_world_half   + visible_half_w, _arena_world_half   - visible_half_w)
 	var cz := clampf(pos.y, -_arena_world_half_z + visible_half_h, _arena_world_half_z - visible_half_h)
 	_pan_world_pos   = Vector2(cx, cz)

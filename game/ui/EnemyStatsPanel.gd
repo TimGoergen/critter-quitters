@@ -65,7 +65,7 @@ func _build_ui() -> void:
 	var vp      := get_viewport().get_visible_rect().size
 	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
 	var px       := arena_cx - PANEL_W * 0.5
-	var py       := 16.0
+	var py       := HUD.SCREEN_EDGE_MARGIN
 	var inner_w  := PANEL_W - PAD * 2.0
 
 	# Thin border rect behind the background
