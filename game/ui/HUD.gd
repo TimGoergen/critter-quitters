@@ -693,15 +693,11 @@ func _build_btn_content(btn: Button, type: int) -> void:
 	img_area.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	cvbox.add_child(img_area)
 
-	var img_bg := ColorRect.new()
-	img_bg.color        = TRAP_BRAND[type]["normal"].darkened(0.15)
-	img_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	img_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	img_area.add_child(img_bg)
-
-	# SubViewport — 180×180 px, transparent so the brand bg shows through gaps.
+	# SubViewport — own_world_3d isolates it from the main scene so only the
+	# trap is rendered; transparent_bg lets the button's own background show through.
 	var svp := SubViewport.new()
 	svp.size                      = Vector2i(180, 180)
+	svp.own_world_3d              = true
 	svp.transparent_bg            = true
 	svp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
 
