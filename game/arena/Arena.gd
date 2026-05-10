@@ -31,6 +31,7 @@ const Projectile        = preload("res://traps/Projectile.gd")
 const FogCloud          = preload("res://traps/FogCloud.gd")
 const HUD               = preload("res://ui/HUD.gd")
 const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
+const EnemyStatsPanel   = preload("res://ui/EnemyStatsPanel.gd")
 const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
 
 
@@ -163,6 +164,7 @@ var _pan_world_pos:         Vector2  = Vector2.ZERO   # current camera XZ pan of
 var _arena_world_half:      float    = 0.0   # half the grid world width (X); used for pan clamping
 var _arena_world_half_z:    float    = 0.0   # half the grid world height (Z); used for pan clamping
 var _followed_enemy:        Node3D   = null  # non-null while enemy-follow mode is active
+var _enemy_stats_panel:    Node     = null  # EnemyStatsPanel instance
 
 # Reference to the playtest setup dialog while it is open; null after it confirms.
 var _debug_dialog: Node = null
@@ -245,6 +247,8 @@ func _ready() -> void:
 
 	_pathfinder.recalculate()
 	add_child(HUD.new())
+	_enemy_stats_panel = EnemyStatsPanel.new()
+	add_child(_enemy_stats_panel)
 	GameState.wave_skip_requested.connect(_on_wave_skip_requested)
 	GameState.run_ended.connect(_close_upgrade_panel)
 	GameState.run_ended.connect(_on_run_ended_camera)
@@ -465,6 +469,10 @@ func _handle_tap(screen_pos: Vector2) -> void:
 		_handle_enemy_tap(tapped_enemy)
 		return
 
+	# Any tap that does not land on the followed enemy clears the follow and
+	# closes the stats panel — this covers empty cells, trap taps, and anything else.
+	_set_followed_enemy(null)
+
 	var cell := _screen_to_grid(screen_pos)
 
 	# Tap on a placed trap → center camera (if zoomed) and open upgrade panel.
@@ -502,8 +510,8 @@ func _find_enemy_near_screen(screen_pos: Vector2, max_dist_px: float) -> Node3D:
 	return best
 
 
-## Sets the followed enemy and keeps the selection glow in sync.
-## Pass null to clear the follow and hide the glow on the previous target.
+## Sets the followed enemy, keeps the selection glow in sync, and
+## shows or hides the stats panel for the new target.
 func _set_followed_enemy(enemy: Node3D) -> void:
 	if _followed_enemy == enemy:
 		return
@@ -512,6 +520,8 @@ func _set_followed_enemy(enemy: Node3D) -> void:
 	_followed_enemy = enemy
 	if is_instance_valid(_followed_enemy):
 		_followed_enemy.show_selection_glow()
+	if _enemy_stats_panel != null:
+		_enemy_stats_panel.set_enemy(_followed_enemy)
 
 
 ## Handles a tap on an enemy: zooms in and follows, or cancels follow.
@@ -883,6 +893,8 @@ func _spawn_enemy(path: Array[Vector2i], enemy_type: Enemy.EnemyType) -> void:
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
 	GameState.add_infestation(enemy.get_infestation_damage())
 	_active_enemies.erase(enemy)
+	if enemy == _followed_enemy:
+		_set_followed_enemy(null)
 	# enemy.queue_free() is called inside Enemy.gd — no double-free needed.
 
 	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
@@ -892,6 +904,8 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 func _on_enemy_died(enemy: Node3D) -> void:
 	GameState.add_bug_bucks(enemy.get_bounty())
 	_active_enemies.erase(enemy)
+	if enemy == _followed_enemy:
+		_set_followed_enemy(null)
 	# enemy.queue_free() is called inside Enemy._die() after the flash tween.
 
 	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:

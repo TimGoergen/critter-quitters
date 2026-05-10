@@ -339,6 +339,22 @@ func _flash_hit(color: Color) -> void:
 	_hit_tween.tween_property(mat, "albedo_color", Color(_sprite_brightness, _sprite_brightness, _sprite_brightness, 1.0), 0.08)
 
 
+## Returns the enemy type enum value (used by EnemyStatsPanel for the type name).
+func get_enemy_type() -> EnemyType:
+	return _enemy_type
+
+## Returns current HP (raw value, not fraction).
+func get_current_hp() -> float:
+	return _current_hp
+
+## Returns maximum HP for this enemy at the current wave.
+func get_max_hp() -> float:
+	return _max_hp
+
+## Returns the unmodified movement speed (not the Glue-slowed value).
+func get_base_speed() -> float:
+	return _base_move_speed
+
 ## Returns current HP as a fraction of max HP (0.0–1.0).
 func get_hp_fraction() -> float:
 	return _current_hp / _max_hp if _max_hp > 0.0 else 0.0
