@@ -12,7 +12,7 @@ extends CanvasLayer
 const Trap     = preload("res://traps/Trap.gd")
 const UIFonts  = preload("res://ui/UIFonts.gd")
 
-const COLOR_PANEL_BG    := Color(0.092, 0.092, 0.150, 0.88)
+const COLOR_PANEL_BG    := Color(0.115, 0.115, 0.188, 0.88)
 const COLOR_BAR_BG      := Color(0.28, 0.28, 0.28, 1.0)
 const COLOR_BAR_FILL    := Color(0.85, 0.22, 0.22, 1.0)
 const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
@@ -134,8 +134,8 @@ func _build_left_panel() -> void:
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left",   MARGIN + SCREEN_EDGE_MARGIN)  # screen edge
-	margin.add_theme_constant_override("margin_right",  MARGIN)
+	margin.add_theme_constant_override("margin_left",   SCREEN_EDGE_MARGIN)
+	margin.add_theme_constant_override("margin_right",  SCREEN_EDGE_MARGIN)
 	margin.add_theme_constant_override("margin_top",    MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	margin.add_theme_constant_override("margin_bottom", MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	bg.add_child(margin)
@@ -179,8 +179,8 @@ func _build_right_panel() -> void:
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left",   MARGIN)
-	margin.add_theme_constant_override("margin_right",  MARGIN + SCREEN_EDGE_MARGIN)  # screen edge
+	margin.add_theme_constant_override("margin_left",   SCREEN_EDGE_MARGIN)
+	margin.add_theme_constant_override("margin_right",  SCREEN_EDGE_MARGIN)
 	margin.add_theme_constant_override("margin_top",    MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	margin.add_theme_constant_override("margin_bottom", MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	bg.add_child(margin)
