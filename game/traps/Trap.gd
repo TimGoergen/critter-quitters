@@ -1248,21 +1248,22 @@ func _spawn_zapper_visual() -> void:
 	glow_mesh.radial_segments = 16
 	glow_mi.mesh              = glow_mesh
 	var glow_mat              := StandardMaterial3D.new()
-	glow_mat.albedo_color      = Color(0.20, 0.60, 1.00, 0.55)
+	glow_mat.albedo_color      = Color(0.00, 0.50, 1.00, 0.70)   # saturated neon blue
 	glow_mat.shading_mode      = BaseMaterial3D.SHADING_MODE_UNSHADED
 	glow_mat.transparency      = BaseMaterial3D.TRANSPARENCY_ALPHA
 	glow_mi.material_override  = glow_mat
 	_zapper_uv_light.add_child(glow_mi)
 
-	# Lightning bolt — replaces the rectangular UV tube.  Built as a flat polygon
-	# on the XZ plane so it reads as a bolt silhouette from the top-down camera.
+	# Lightning bolt — large flat polygon on the XZ plane, always rendered on top
+	# of all other trap geometry via no_depth_test so it reads clearly from above.
 	var bolt_mi              := MeshInstance3D.new()
-	bolt_mi.mesh              = _build_bolt_mesh(fp * 0.20, Color(0.15, 0.72, 1.00))
+	bolt_mi.mesh              = _build_bolt_mesh(fp * 0.42, Color(0.00, 0.50, 1.00))
 	var bolt_mat             := StandardMaterial3D.new()
 	bolt_mat.albedo_color     = Color.WHITE
 	bolt_mat.vertex_color_use_as_albedo = true
 	bolt_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	bolt_mat.cull_mode        = BaseMaterial3D.CULL_DISABLED
+	bolt_mat.no_depth_test    = true   # always draw on top of cage, ring, and floor
 	bolt_mi.material_override  = bolt_mat
 	_zapper_uv_light.add_child(bolt_mi)
 

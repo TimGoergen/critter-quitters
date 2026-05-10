@@ -74,6 +74,7 @@ var _infestation_label: Label
 var _countdown_wave_label:   Label
 var _countdown_number_label: Label
 var _send_wave_btn:          Button
+var _send_wave_text_label:   Label   # "Send Early" / "Send Next Wave"
 var _send_wave_reward_label: Label
 var _early_bonus_particles:  CPUParticles2D
 var _run_over_overlay:       Control
@@ -398,7 +399,6 @@ func _build_right_panel() -> void:
 	_send_wave_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_send_wave_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
 	_send_wave_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_send_wave_btn.visible = false
 	_apply_send_wave_btn_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	countdown_wrapper.add_child(_send_wave_btn)
@@ -421,15 +421,15 @@ func _build_right_panel() -> void:
 	game_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	btn_row.add_child(game_icon)
 
-	var btn_label := Label.new()
-	btn_label.text                  = "Send Early"
-	btn_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	btn_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
-	btn_label.add_theme_font_override("font", UIFonts.primary())
-	btn_label.add_theme_font_size_override("font_size", 18)
-	btn_label.add_theme_color_override("font_color", COLOR_TEXT)
-	btn_row.add_child(btn_label)
+	_send_wave_text_label                  = Label.new()
+	_send_wave_text_label.text             = "Send Early"
+	_send_wave_text_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_send_wave_text_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_send_wave_text_label.mouse_filter     = Control.MOUSE_FILTER_IGNORE
+	_send_wave_text_label.add_theme_font_override("font", UIFonts.primary())
+	_send_wave_text_label.add_theme_font_size_override("font_size", 18)
+	_send_wave_text_label.add_theme_color_override("font_color", COLOR_TEXT)
+	btn_row.add_child(_send_wave_text_label)
 
 	var btn_coin_icon := TextureRect.new()
 	btn_coin_icon.texture             = load("res://assets/bug_buck_coin.png") as Texture2D
@@ -536,22 +536,33 @@ func _on_infestation_changed(level: float) -> void:
 
 func _on_wave_changed(wave: int) -> void:
 	_wave_label.text = "WAVE  %d" % wave
+	# If no countdown is running, the button is in during-wave mode.
+	# Refresh its bonus display so it reflects the newly incremented wave number.
+	if not _countdown_number_label.visible:
+		_send_wave_text_label.text   = "Send Next Wave"
+		_send_wave_reward_label.text = "%d" % (wave * GameState.WAVE_OVERLAP_BONUS_RATE)
 
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 	if seconds_remaining > 0:
-		_countdown_wave_label.text    = "Incoming!"
-		_countdown_number_label.text  = "%d..." % seconds_remaining
-		_send_wave_reward_label.text  = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
+		# Between-wave countdown — button sends the wave early for a time-based bonus.
+		_countdown_wave_label.text      = "Incoming!"
+		_countdown_number_label.text    = "%d..." % seconds_remaining
 		_countdown_wave_label.visible   = true
 		_countdown_number_label.visible = true
-		_send_wave_btn.visible          = true
-	else:
-		_countdown_wave_label.visible   = false
-		_countdown_number_label.visible = false
-		_send_wave_btn.visible          = false
+		_send_wave_text_label.text      = "Send Early"
+		_send_wave_reward_label.text    = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
 		_blink_time = 0.0
 		_countdown_number_label.modulate.a = 1.0
+	else:
+		# Wave launched — hide the countdown labels but keep the button visible.
+		# Button now sends the NEXT wave early for a wave-number-scaled bonus.
+		_countdown_wave_label.visible   = false
+		_countdown_number_label.visible = false
+		_blink_time = 0.0
+		_countdown_number_label.modulate.a = 1.0
+		_send_wave_text_label.text   = "Send Next Wave"
+		_send_wave_reward_label.text = "%d" % (GameState.current_wave * GameState.WAVE_OVERLAP_BONUS_RATE)
 
 
 func _process(delta: float) -> void:

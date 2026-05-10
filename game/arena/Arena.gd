@@ -951,10 +951,10 @@ func _on_trap_type_changed(_type: int) -> void:
 	pass   # reserved for future type-change side effects
 
 
-## Skips any active countdown and starts the wave immediately.
-## Triggered by the "Send Wave Early" HUD button via GameState.wave_skip_requested.
-## Awards coins based on how many seconds were left, and emits early_wave_bonus_awarded
-## so the HUD can play the particle burst.
+## Handles the "Send Wave Early" button.
+## Between waves (countdown active): skips the countdown and awards a time-remaining bonus.
+## During a wave (enemies active): launches the next wave immediately for a larger bonus
+## scaled by the current wave number.  Both paths are available at any time.
 func _on_wave_skip_requested() -> void:
 	if _countdown_active:
 		_countdown_active = false
@@ -963,6 +963,14 @@ func _on_wave_skip_requested() -> void:
 			GameState.add_bug_bucks(bonus)
 			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.set_countdown(0)
+		_launch_wave()
+	elif not (_active_enemies.is_empty() and _enemies_left_to_spawn == 0):
+		# Wave is active — send the next wave immediately.  Bonus scales with wave
+		# number so the risk/reward stays meaningful in later waves.
+		var bonus := GameState.current_wave * GameState.WAVE_OVERLAP_BONUS_RATE
+		GameState.add_bug_bucks(bonus)
+		GameState.early_wave_bonus_awarded.emit(bonus)
+		GameState.current_wave += 1
 		_launch_wave()
 
 

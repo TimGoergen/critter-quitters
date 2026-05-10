@@ -131,9 +131,15 @@ var exit_cell: Vector2i = Vector2i.ZERO
 ## All types are always available — Bug Bucks cost is the only gate.
 var selected_trap_type: int = 0
 
-## Bug Bucks awarded per second remaining when the player clicks Send Wave Early.
-## Default 2; future meta-upgrades can increase this between runs.
+## Bug Bucks awarded per second remaining when the player clicks Send Wave Early
+## during the between-wave countdown.  Default 2; upgradeable between runs.
 var early_wave_bonus_rate: int = 2
+
+## Flat Bug Bucks bonus awarded per current-wave-number when the player sends
+## the next wave while the current wave is still active.
+## Final bonus = current_wave × WAVE_OVERLAP_BONUS_RATE.
+## Larger than the countdown bonus because the player is taking on real risk.
+const WAVE_OVERLAP_BONUS_RATE: int = 20
 
 
 # ---------------------------------------------------------------------------

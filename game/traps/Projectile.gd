@@ -24,8 +24,8 @@ const COLOR_PROJECTILE := Color(1.0, 0.90, 0.25)   # bright yellow
 const COLOR_IMPACT     := Color(1.0, 0.80, 0.15)   # golden burst
 
 # Zapper bolt and spark colours.
-const COLOR_ZAPPER_BOLT  := Color(0.45, 0.80, 1.00)   # electric blue
-const COLOR_ZAPPER_SPARK := Color(0.82, 0.96, 1.00)   # near-white electric blue — high brightness for emission bloom
+const COLOR_ZAPPER_BOLT  := Color(0.00, 0.50, 1.00)   # saturated neon blue
+const COLOR_ZAPPER_SPARK := Color(0.20, 0.75, 1.00)   # bright neon blue spark
 
 # Glue Board projectile and impact colour — amber, matching the splatter badge.
 const COLOR_GLUE      := Color(0.88, 0.70, 0.18, 0.90)
