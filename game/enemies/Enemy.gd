@@ -469,10 +469,13 @@ func _facing_basis(dir: Vector2i) -> Basis:
 
 ## Converts a grid coordinate to its world-space centre at y = 0.
 ## Mirrors the same function in Arena.gd — shared once a utility exists.
+## Grid is not square (GRID_SIZE columns × GRID_ROWS rows), so X and Z
+## use different half-extents.
 func _cell_to_world(cell: Vector2i) -> Vector3:
-	var half_grid := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
-	var x         := cell.x * Grid.CELL_SIZE - half_grid + Grid.CELL_SIZE * 0.5
-	var z         := cell.y * Grid.CELL_SIZE - half_grid + Grid.CELL_SIZE * 0.5
+	var half_w := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
+	var half_h := (Grid.GRID_ROWS * Grid.CELL_SIZE) / 2.0
+	var x      := cell.x * Grid.CELL_SIZE - half_w + Grid.CELL_SIZE * 0.5
+	var z      := cell.y * Grid.CELL_SIZE - half_h + Grid.CELL_SIZE * 0.5
 	return Vector3(x, 0.0, z)
 
 

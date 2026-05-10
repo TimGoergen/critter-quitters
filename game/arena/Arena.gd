@@ -141,6 +141,15 @@ var _touch_hold_time: float     = 0.0            # seconds held without exceedin
 const DRAG_THRESHOLD_PX: float  = 15.0           # movement before classifying as drag/pan
 const HOLD_THRESHOLD_SEC: float = 0.25           # hold duration before entering DRAG_PLACING
 
+# Pinch-to-zoom — two-finger gesture that toggles between the two zoom levels.
+# While _pinch_active is true all single-finger routing is suspended.
+var _pinch_active:      bool    = false
+var _pinch_finger0_pos: Vector2 = Vector2.ZERO   # current world position of finger 0
+var _pinch_finger1_pos: Vector2 = Vector2.ZERO   # current world position of finger 1
+var _pinch_start_span:  float   = 0.0            # finger distance when the gesture began
+# Minimum span change (px) required to register a zoom direction.
+const PINCH_THRESHOLD_PX: float = 40.0
+
 # Ghost preview node shown while in DRAG_PLACING mode.
 var _drag_place_preview: Node3D  = null
 var _drag_place_anchor:  Vector2i = Vector2i(-1, -1)
@@ -266,18 +275,33 @@ func _ready() -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	# --- Touch ---
 	if event is InputEventScreenTouch:
-		if event.index != 0:
-			return   # ignore second finger
-		if event.pressed:
-			_on_pointer_down(event.position)
-		else:
-			_on_pointer_released(event.position)
+		if event.index == 0:
+			_pinch_finger0_pos = event.position
+			if event.pressed:
+				_on_pointer_down(event.position)
+			elif _pinch_active:
+				_end_pinch()   # finger 0 lifted while pinching — evaluate and clear
+			else:
+				_on_pointer_released(event.position)
+		elif event.index == 1:
+			if event.pressed:
+				# Second finger landed — fold the in-progress single-finger gesture
+				# into a pinch.  _touch_last_pos holds finger 0's current position.
+				_pinch_finger0_pos = _touch_last_pos
+				_pinch_finger1_pos = event.position
+				_begin_pinch()
+			elif _pinch_active:
+				_end_pinch()   # finger 1 lifted while pinching — evaluate and clear
 		return
 
 	if event is InputEventScreenDrag:
-		if event.index != 0:
-			return
-		_on_pointer_dragged(event.position, event.relative)
+		if event.index == 0:
+			_pinch_finger0_pos = event.position
+			if _pinch_active:
+				return   # swallow single-finger routing during pinch
+			_on_pointer_dragged(event.position, event.relative)
+		elif event.index == 1 and _pinch_active:
+			_pinch_finger1_pos = event.position
 		return
 
 	# --- Mouse ---
@@ -401,6 +425,32 @@ func _clear_drag_preview() -> void:
 		_drag_place_preview.queue_free()
 	_drag_place_preview   = null
 	_drag_place_anchor    = Vector2i(-1, -1)
+
+
+# ---------------------------------------------------------------------------
+# Pinch-to-zoom
+# ---------------------------------------------------------------------------
+
+## Called when a second finger lands while finger 0 is already down.
+## Cancels any in-progress single-finger operation and begins tracking span.
+func _begin_pinch() -> void:
+	_clear_drag_preview()
+	_touch_state      = TouchState.IDLE
+	_pinch_active     = true
+	_pinch_start_span = _pinch_finger0_pos.distance_to(_pinch_finger1_pos)
+
+
+## Called when either finger lifts during a pinch.
+## Compares final span to starting span and toggles zoom if the change is large enough.
+## Spreading fingers (span grows) zooms in; pinching (span shrinks) zooms out.
+func _end_pinch() -> void:
+	_pinch_active = false
+	_touch_state  = TouchState.IDLE
+	var delta := _pinch_finger0_pos.distance_to(_pinch_finger1_pos) - _pinch_start_span
+	if delta > PINCH_THRESHOLD_PX and _zoom_state == ZoomState.OVERVIEW:
+		_toggle_zoom()
+	elif delta < -PINCH_THRESHOLD_PX and _zoom_state == ZoomState.ZOOMED_IN:
+		_toggle_zoom()
 
 
 # ---------------------------------------------------------------------------
@@ -1729,7 +1779,10 @@ func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
 ##   positive → aim shifts toward world −Z → origin appears lower on screen.
 func _fit_camera_to_grid() -> void:
 	var vp       := get_viewport().get_visible_rect().size
-	var usable_w := vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W
+	# Subtract ARENA_MARGIN_PX on both sides of every edge so the arena has
+	# breathing room against all four boundaries: top, bottom, and the inner
+	# edges of both side panels.
+	var usable_w := vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.ARENA_MARGIN_PX * 2.0
 	var usable_h := vp.y - HUD.ARENA_MARGIN_PX * 2.0
 	if usable_h <= 0.0 or usable_w <= 0.0:
 		return
@@ -1750,9 +1803,10 @@ func _fit_camera_to_grid() -> void:
 	if _zoom_state == ZoomState.OVERVIEW:
 		_camera.size = _overview_camera_size
 
-	# Shift the camera centre to the midpoint of the usable horizontal band.
+	# Shift the camera centre to the midpoint of the usable horizontal band
+	# (left panel + margin … right panel + margin).
 	var world_per_px     := _overview_camera_size / vp.y
-	var h_center_px      := HUD.LEFT_PANEL_W + usable_w * 0.5
+	var h_center_px      := HUD.LEFT_PANEL_W + HUD.ARENA_MARGIN_PX + usable_w * 0.5
 	_camera_base_h_offset = (h_center_px - vp.x * 0.5) * world_per_px
 	_camera.h_offset      = _camera_base_h_offset
 	_camera.v_offset      = 0.0
@@ -1793,7 +1847,7 @@ func _toggle_zoom() -> void:
 func _apply_pan(pos: Vector2) -> void:
 	var vp            := get_viewport().get_visible_rect().size
 	var world_per_px  := _camera.size / vp.y
-	var visible_half_w := (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * world_per_px * 0.5
+	var visible_half_w := (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.ARENA_MARGIN_PX * 2.0) * world_per_px * 0.5
 	var visible_half_h := (vp.y - HUD.ARENA_MARGIN_PX * 2.0) * world_per_px * 0.5
 	var cx := clampf(pos.x, -_arena_world_half   + visible_half_w, _arena_world_half   - visible_half_w)
 	var cz := clampf(pos.y, -_arena_world_half_z + visible_half_h, _arena_world_half_z - visible_half_h)
