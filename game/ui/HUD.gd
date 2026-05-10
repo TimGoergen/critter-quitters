@@ -186,7 +186,10 @@ func _build_right_panel() -> void:
 	bg.add_child(margin)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	# 5px separation instead of 8 so the fixed-height items (wave label,
+	# buttons, countdown block) fit within the available height on a 600px
+	# screen after top+bottom SCREEN_EDGE_MARGIN is applied.
+	vbox.add_theme_constant_override("separation", 5)
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
