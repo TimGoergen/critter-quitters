@@ -60,6 +60,10 @@ signal wave_skip_requested
 ## Emitted when the player skips the countdown and receives a coin bonus for the remaining time.
 signal early_wave_bonus_awarded(coins: int)
 
+## Emitted whenever the "send next wave early" reward changes — at wave launch with
+## the full amount, after each enemy spawns as it decreases, and at 0 once exhausted.
+signal early_send_reward_changed(amount: int)
+
 ## Emitted when the player picks a different trap type to place.
 ## type is an int matching the Trap.TrapType enum — stored as int here to
 ## avoid importing Trap.gd into GameState and creating a circular dependency.
@@ -140,6 +144,11 @@ var early_wave_bonus_rate: int = 2
 ## Final bonus = current_wave × WAVE_OVERLAP_BONUS_RATE.
 ## Larger than the countdown bonus because the player is taking on real risk.
 const WAVE_OVERLAP_BONUS_RATE: int = 20
+
+## Bug Bucks awarded per enemy that has NOT yet spawned when the player presses
+## "Send Next Wave" during an active wave.  Small by design — the real reward
+## is the extra kill bounties from tackling two waves at once.
+const EARLY_SEND_PER_ENEMY: int = 3
 
 
 # ---------------------------------------------------------------------------

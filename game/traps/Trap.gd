@@ -558,7 +558,7 @@ func _check_full_upgrade_bonus() -> void:
 func _spawn_star_display() -> void:
 	# Center star is larger; side stars are smaller to signal hierarchy.
 	# pixel_size=0.009 throughout so world-unit sizes scale directly with font_size.
-	var sizes := [88, 54, 54]   # [center, left, right] font sizes
+	var sizes := [88, 66, 66]   # [center, left, right] font sizes
 	for sz: int in sizes:
 		var lbl                  := Label3D.new()
 		lbl.font                  = UIFonts.primary_bold()
@@ -592,7 +592,7 @@ func _update_star_display() -> void:
 	# edge of the outline bar (~z=0.874): 0.45 + 0.395 = 0.845, just inside the line.
 	const STAR_Z:       float = 0.45
 	const STAR_Y:       float = 0.65
-	const SIDE_OFFSET:  float = 0.48
+	const SIDE_OFFSET:  float = 0.24
 
 	# Slot 0 = center, 1 = left, 2 = right
 	var positions := [

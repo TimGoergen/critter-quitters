@@ -968,11 +968,13 @@ func _on_wave_skip_requested() -> void:
 		GameState.set_countdown(0)
 		_launch_wave()
 	elif not (_active_enemies.is_empty() and _enemies_left_to_spawn == 0):
-		# Wave is active — send the next wave immediately.  Bonus scales with wave
-		# number so the risk/reward stays meaningful in later waves.
-		var bonus := GameState.current_wave * GameState.WAVE_OVERLAP_BONUS_RATE
+		# Wave is active — send the next wave immediately.  Reward equals the
+		# per-enemy bounty for each enemy that has not yet spawned; once all
+		# enemies are out the reward is 0.
+		var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY
 		GameState.add_bug_bucks(bonus)
 		GameState.early_wave_bonus_awarded.emit(bonus)
+		GameState.early_send_reward_changed.emit(0)
 		GameState.current_wave += 1
 		_launch_wave()
 
@@ -998,6 +1000,8 @@ func _launch_wave() -> void:
 		_enemies_left_to_spawn = _static_spawn_queue.size()
 	else:
 		_enemies_left_to_spawn = _wave_size
+	# Publish the full reward so the HUD can display it before the first spawn.
+	GameState.early_send_reward_changed.emit(_enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY)
 	get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
 
 
@@ -1007,6 +1011,7 @@ func _spawn_next_in_wave() -> void:
 	if _enemies_left_to_spawn <= 0:
 		return
 	_enemies_left_to_spawn -= 1
+	GameState.early_send_reward_changed.emit(_enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY)
 
 	var open_rows: Array[int] = []
 	for row in _entrance_rows:

@@ -75,6 +75,7 @@ var _countdown_wave_label:   Label
 var _countdown_number_label: Label
 var _send_wave_btn:          Button
 var _send_wave_text_label:   Label   # "Send Early" / "Send Next Wave"
+var _send_wave_reward_row:   HBoxContainer
 var _send_wave_reward_label: Label
 var _early_bonus_particles:  CPUParticles2D
 var _run_over_overlay:       Control
@@ -88,8 +89,9 @@ var _exit_btn:       Button
 var _restart_btn:    Button
 var _zoom_btn:       Button   # toggles overview ↔ zoomed-in
 
-var _is_fast:   bool = false
-var _is_paused: bool = false
+var _is_fast:        bool = false
+var _is_paused:      bool = false
+var _countdown_active: bool = false
 
 var _selector_buttons: Array[Button] = []
 
@@ -105,6 +107,7 @@ func _ready() -> void:
 	GameState.wave_changed.connect(_on_wave_changed)
 	GameState.wave_countdown_changed.connect(_on_wave_countdown_changed)
 	GameState.early_wave_bonus_awarded.connect(_on_early_bonus_awarded)
+	GameState.early_send_reward_changed.connect(_on_early_send_reward_changed)
 	GameState.run_ended.connect(_on_run_ended)
 	GameState.trap_type_selected.connect(_on_trap_type_selected)
 	GameState.zoom_state_changed.connect(_on_zoom_state_changed)
@@ -192,7 +195,7 @@ func _build_right_panel() -> void:
 	margin.add_theme_constant_override("margin_left",   SCREEN_EDGE_MARGIN)
 	margin.add_theme_constant_override("margin_right",  SCREEN_EDGE_MARGIN)
 	margin.add_theme_constant_override("margin_top",    MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
-	margin.add_theme_constant_override("margin_bottom", MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
+	margin.add_theme_constant_override("margin_bottom", int(MARGIN + SCREEN_EDGE_MARGIN))
 	bg.add_child(margin)
 
 	# Black separator line at the inner (arena-facing) edge.
@@ -207,10 +210,7 @@ func _build_right_panel() -> void:
 	bg.add_child(border)
 
 	var vbox := VBoxContainer.new()
-	# 5px separation instead of 8 so the fixed-height items (wave label,
-	# buttons, countdown block) fit within the available height on a 600px
-	# screen after top+bottom SCREEN_EDGE_MARGIN is applied.
-	vbox.add_theme_constant_override("separation", 5)
+	vbox.add_theme_constant_override("separation", 8)
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
@@ -353,63 +353,21 @@ func _build_right_panel() -> void:
 	_zoom_btn.pressed.connect(func() -> void: GameState.zoom_toggle_requested.emit())
 	vbox.add_child(_zoom_btn)
 
-	# --- Spacer (pushes countdown and bottom buttons down) ---
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(spacer)
-
-	# --- Countdown labels (hidden by default) ---
-	# These live in their own fixed-height container separate from the Send
-	# button.  custom_minimum_size reserves the space even when both labels
-	# are hidden, so the button below never shifts position.
-	# Reserved: "Incoming!" (~38px) + number (~55px) + 8px separation = 101px;
-	# use 115 for breathing room.
-	var countdown_labels := VBoxContainer.new()
-	countdown_labels.custom_minimum_size = Vector2(0, 115)
-	countdown_labels.add_theme_constant_override("separation", 8)
-	vbox.add_child(countdown_labels)
-
-	_countdown_wave_label = Label.new()
-	_countdown_wave_label.text               = "Incoming!"
-	_countdown_wave_label.add_theme_font_size_override("font_size", 32)
-	_countdown_wave_label.add_theme_color_override("font_color", COLOR_INCOMING)
-	_countdown_wave_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
-	_countdown_wave_label.add_theme_constant_override("shadow_offset_x", 1)
-	_countdown_wave_label.add_theme_constant_override("shadow_offset_y", 1)
-	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
-	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_countdown_wave_label.visible = false
-	countdown_labels.add_child(_countdown_wave_label)
-
-	_countdown_number_label = Label.new()
-	_countdown_number_label.add_theme_font_size_override("font_size", 48)
-	_countdown_number_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
-	_countdown_number_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
-	_countdown_number_label.add_theme_constant_override("shadow_offset_x", 1)
-	_countdown_number_label.add_theme_constant_override("shadow_offset_y", 1)
-	_countdown_number_label.add_theme_font_override("font", UIFonts.header())
-	_countdown_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_countdown_number_label.visible = false
-	countdown_labels.add_child(_countdown_number_label)
-
 	_build_early_bonus_particles()
 
-	# --- Send Wave button (always visible, always in the same slot) ---
-	# Sits directly in the outer vbox, below the fixed-height label area, so
-	# showing/hiding the countdown labels never affects its position.
+	# --- Send Wave button — fills all remaining vbox space. ---
+	# The countdown labels live inside this button so they always share the same
+	# visual region.  btn_vbox is ALIGNMENT_CENTER so when the countdown labels
+	# are hidden the action/reward rows remain vertically centered.
 	_send_wave_btn = Button.new()
 	_send_wave_btn.text = ""
 	_send_wave_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_send_wave_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
-	# Taller than a standard button so the two-row content fits without clipping.
-	_send_wave_btn.custom_minimum_size   = Vector2(0, 80)
+	_send_wave_btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	_send_wave_btn.custom_minimum_size   = Vector2(0, 70)
 	_apply_send_wave_btn_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	vbox.add_child(_send_wave_btn)
 
-	# Two-row VBox fills the button interior.
-	# Row 1: pest icon + action label (what the button does).
-	# Row 2: coin icon + reward amount (what the player earns).
 	var btn_vbox := VBoxContainer.new()
 	btn_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
 	btn_vbox.offset_left   = 8.0
@@ -417,11 +375,42 @@ func _build_right_panel() -> void:
 	btn_vbox.offset_top    = 4.0
 	btn_vbox.offset_bottom = -4.0
 	btn_vbox.alignment     = BoxContainer.ALIGNMENT_CENTER
-	btn_vbox.add_theme_constant_override("separation", 2)
+	btn_vbox.add_theme_constant_override("separation", 4)
 	btn_vbox.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	# clip_contents prevents wide reward numbers from rendering outside the button.
+	btn_vbox.clip_contents = true
 	_send_wave_btn.add_child(btn_vbox)
 
-	# Row 1 — action label with a small pest icon to the left.
+	# Countdown section — "Incoming!" + flashing seconds, always present in the
+	# layout but invisible (modulate.a = 0) when no wave is due.  Using modulate
+	# instead of visible keeps the labels' height reserved so the action/reward
+	# rows below never shift position when the countdown appears or disappears.
+	_countdown_wave_label = Label.new()
+	_countdown_wave_label.text               = "Incoming!"
+	_countdown_wave_label.add_theme_font_size_override("font_size", 27)
+	_countdown_wave_label.add_theme_color_override("font_color", COLOR_INCOMING)
+	_countdown_wave_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
+	_countdown_wave_label.add_theme_constant_override("shadow_offset_x", 1)
+	_countdown_wave_label.add_theme_constant_override("shadow_offset_y", 1)
+	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
+	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown_wave_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	_countdown_wave_label.modulate.a          = 0.0
+	btn_vbox.add_child(_countdown_wave_label)
+
+	_countdown_number_label = Label.new()
+	_countdown_number_label.add_theme_font_size_override("font_size", 18)
+	_countdown_number_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
+	_countdown_number_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
+	_countdown_number_label.add_theme_constant_override("shadow_offset_x", 1)
+	_countdown_number_label.add_theme_constant_override("shadow_offset_y", 1)
+	_countdown_number_label.add_theme_font_override("font", UIFonts.header())
+	_countdown_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown_number_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	_countdown_number_label.modulate.a          = 0.0
+	btn_vbox.add_child(_countdown_number_label)
+
+	# Action row — pest icon + "Send Early" / "Send Next Wave" text.
 	var top_row := HBoxContainer.new()
 	top_row.alignment    = BoxContainer.ALIGNMENT_CENTER
 	top_row.add_theme_constant_override("separation", 5)
@@ -430,7 +419,7 @@ func _build_right_panel() -> void:
 
 	var game_icon := TextureRect.new()
 	game_icon.texture             = load("res://assets/uninfested.png") as Texture2D
-	game_icon.custom_minimum_size = Vector2(26, 26)
+	game_icon.custom_minimum_size = Vector2(36, 36)
 	game_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	game_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	game_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -441,16 +430,19 @@ func _build_right_panel() -> void:
 	_send_wave_text_label.text         = "Send Early"
 	_send_wave_text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_send_wave_text_label.add_theme_font_override("font", UIFonts.primary_bold())
-	_send_wave_text_label.add_theme_font_size_override("font_size", 17)
+	_send_wave_text_label.add_theme_font_size_override("font_size", 18)
 	_send_wave_text_label.add_theme_color_override("font_color", COLOR_TEXT)
 	top_row.add_child(_send_wave_text_label)
 
-	# Row 2 — coin icon + gold reward amount, centred in the button width.
-	var bot_row := HBoxContainer.new()
-	bot_row.alignment    = BoxContainer.ALIGNMENT_CENTER
-	bot_row.add_theme_constant_override("separation", 4)
-	bot_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn_vbox.add_child(bot_row)
+	# Reward row — coin icon + gold amount earned for sending early.
+	# Hidden when the reward is zero (no early bonus available).
+	_send_wave_reward_row         = HBoxContainer.new()
+	_send_wave_reward_row.alignment    = BoxContainer.ALIGNMENT_CENTER
+	_send_wave_reward_row.add_theme_constant_override("separation", 4)
+	_send_wave_reward_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_send_wave_reward_row.visible      = false
+	btn_vbox.add_child(_send_wave_reward_row)
+	var bot_row := _send_wave_reward_row
 
 	var btn_coin_icon := TextureRect.new()
 	btn_coin_icon.texture             = load("res://assets/bug_buck_coin.png") as Texture2D
@@ -471,8 +463,11 @@ func _build_right_panel() -> void:
 	bot_row.add_child(_send_wave_reward_label)
 
 	# --- Exit + Restart ---
+	# In the vbox like every other button row so the vbox separation constant
+	# controls the gap above it consistently.
 	var exit_restart_row := HBoxContainer.new()
 	exit_restart_row.add_theme_constant_override("separation", 4)
+	exit_restart_row.size_flags_vertical = Control.SIZE_SHRINK_END
 	vbox.add_child(exit_restart_row)
 
 	_exit_btn = Button.new()
@@ -557,11 +552,9 @@ func _on_infestation_changed(level: float) -> void:
 
 func _on_wave_changed(wave: int) -> void:
 	_wave_label.text = "WAVE  %d" % wave
-	# If no countdown is running, the button is in during-wave mode.
-	# Refresh its bonus display so it reflects the newly incremented wave number.
 	if not _countdown_number_label.visible:
-		_send_wave_text_label.text   = "Send Next Wave"
-		_send_wave_reward_label.text = "%d" % (wave * GameState.WAVE_OVERLAP_BONUS_RATE)
+		_send_wave_text_label.text = "Send Next Wave"
+		# Reward label is driven by early_send_reward_changed — no update needed here.
 
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
@@ -569,25 +562,24 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 		# Between-wave countdown — button sends the wave early for a time-based bonus.
 		_countdown_wave_label.text      = "Incoming!"
 		_countdown_number_label.text    = "%d..." % seconds_remaining
-		_countdown_wave_label.visible   = true
-		_countdown_number_label.visible = true
+		_countdown_wave_label.modulate.a   = 1.0
+		_countdown_number_label.modulate.a = 1.0
+		_countdown_active               = true
 		_send_wave_text_label.text      = "Send Early"
 		_send_wave_reward_label.text    = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
 		_blink_time = 0.0
-		_countdown_number_label.modulate.a = 1.0
 	else:
-		# Wave launched — hide the countdown labels but keep the button visible.
-		# Button now sends the NEXT wave early for a wave-number-scaled bonus.
-		_countdown_wave_label.visible   = false
-		_countdown_number_label.visible = false
+		# Wave launched — hide the countdown, switch button to "Send Next Wave".
+		# Reward label is driven by early_send_reward_changed as enemies spawn.
+		_countdown_wave_label.modulate.a   = 0.0
+		_countdown_number_label.modulate.a = 0.0
+		_countdown_active               = false
 		_blink_time = 0.0
-		_countdown_number_label.modulate.a = 1.0
-		_send_wave_text_label.text   = "Send Next Wave"
-		_send_wave_reward_label.text = "%d" % (GameState.current_wave * GameState.WAVE_OVERLAP_BONUS_RATE)
+		_send_wave_text_label.text = "Send Next Wave"
 
 
 func _process(delta: float) -> void:
-	if _countdown_number_label.visible:
+	if _countdown_active:
 		_blink_time += delta
 		var on: bool = fmod(_blink_time, 1.0 / 2.0) < (1.0 / 4.0)
 		_countdown_number_label.modulate.a = 1.0 if on else 0.0
@@ -625,7 +617,8 @@ func _on_send_wave_pressed() -> void:
 
 func _build_early_bonus_particles() -> void:
 	_early_bonus_particles = CPUParticles2D.new()
-	_early_bonus_particles.z_index               = -1
+	# z_index must be > 0 so particles draw in front of the side panels (z 0).
+	_early_bonus_particles.z_index               = 10
 	_early_bonus_particles.emitting              = false
 	_early_bonus_particles.one_shot              = true
 	_early_bonus_particles.lifetime              = 0.425
@@ -641,10 +634,14 @@ func _build_early_bonus_particles() -> void:
 
 
 func _on_early_bonus_awarded(coins: int) -> void:
-	var seconds := coins / GameState.early_wave_bonus_rate
-	_early_bonus_particles.amount   = max(1, seconds * 4)
+	_early_bonus_particles.amount   = max(1, coins / 4)
 	_early_bonus_particles.position = _send_wave_btn.get_global_rect().get_center()
 	_early_bonus_particles.restart()
+
+
+func _on_early_send_reward_changed(amount: int) -> void:
+	_send_wave_reward_row.visible  = amount > 0
+	_send_wave_reward_label.text   = "%d" % amount
 
 
 func _on_run_ended() -> void:
