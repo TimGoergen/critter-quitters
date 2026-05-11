@@ -24,8 +24,8 @@ const COLOR_PROJECTILE := Color(1.0, 0.90, 0.25)   # bright yellow
 const COLOR_IMPACT     := Color(1.0, 0.80, 0.15)   # golden burst
 
 # Zapper bolt and spark colours.
-const COLOR_ZAPPER_BOLT  := Color(0.45, 0.80, 1.00)   # electric blue
-const COLOR_ZAPPER_SPARK := Color(0.65, 0.88, 1.00)   # pale blue-white
+const COLOR_ZAPPER_BOLT  := Color(0.00, 0.50, 1.00)   # saturated neon blue
+const COLOR_ZAPPER_SPARK := Color(0.20, 0.75, 1.00)   # bright neon blue spark
 
 # Glue Board projectile and impact colour — amber, matching the splatter badge.
 const COLOR_GLUE      := Color(0.88, 0.70, 0.18, 0.90)
@@ -337,19 +337,68 @@ func _build_bolt_ribbon(pts: Array[Vector2], half_w: float) -> ImmediateMesh:
 	return im
 
 
-## Electric impact: fast blue-white sparks with minimal gravity so they scatter
-## outward rather than falling (electric arcs don't arc downward like debris).
+## Electric impact: cross-shaped spark particles scatter outward with near-zero gravity
+## so they read as electric arcs rather than falling debris.
 func _spawn_zapper_impact(killed: bool, enemy_color: Color) -> void:
-	_spawn_particles(10, 0.22, Grid.CELL_SIZE * 3.5, Grid.CELL_SIZE * 10.0,
-			0.20, 0.55, Grid.CELL_SIZE * 0.14, COLOR_ZAPPER_SPARK,
-			false, -Grid.CELL_SIZE * 2.0)
-	# Tiny white centre flash that dissolves almost immediately.
-	_spawn_particles(5, 0.14, Grid.CELL_SIZE * 1.5, Grid.CELL_SIZE * 4.0,
-			0.35, 0.80, Grid.CELL_SIZE * 0.10, Color.WHITE,
-			false, -Grid.CELL_SIZE * 2.0)
+	_spawn_electric_sparks(14, 0.28, Grid.CELL_SIZE * 4.0, Grid.CELL_SIZE * 11.2,
+			0.44, 0.96, Grid.CELL_SIZE * 0.29, COLOR_ZAPPER_SPARK)
+	# Bright white flash at the centre of the strike.
+	_spawn_electric_sparks(6, 0.16, Grid.CELL_SIZE * 1.6, Grid.CELL_SIZE * 4.4,
+			0.52, 1.04, Grid.CELL_SIZE * 0.21, Color.WHITE)
 	if killed:
-		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
-				Grid.CELL_SIZE * 0.495, COLOR_ZAPPER_SPARK, true)
+		_spawn_electric_sparks(13, 0.40, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.0,
+				0.64, 1.52, Grid.CELL_SIZE * 0.35, COLOR_ZAPPER_SPARK)
+
+
+## Spawns cross-shaped spark particles using the zapper spark mesh.
+## Near-zero gravity keeps them horizontal — electric arcs don't arc like debris.
+func _spawn_electric_sparks(amount: int, lifetime: float, vel_min: float, vel_max: float,
+		scale_min: float, scale_max: float, spark_size: float, color: Color) -> void:
+	var particles              := CPUParticles3D.new()
+	particles.one_shot          = true
+	particles.explosiveness     = 1.0
+	particles.amount            = amount
+	particles.lifetime          = lifetime
+	particles.direction         = Vector3.UP
+	particles.spread            = 180.0
+	particles.initial_velocity_min = vel_min
+	particles.initial_velocity_max = vel_max
+	particles.gravity           = Vector3(0.0, -Grid.CELL_SIZE * 1.2, 0.0)
+	particles.scale_amount_min  = scale_min
+	particles.scale_amount_max  = scale_max
+
+	var spark_mesh := _build_zapper_spark_mesh(spark_size)
+	var mat        := StandardMaterial3D.new()
+	mat.albedo_color              = color
+	mat.shading_mode              = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.cull_mode                 = BaseMaterial3D.CULL_DISABLED
+	mat.emission_enabled          = true
+	mat.emission                  = color
+	mat.emission_energy_multiplier = 4.0
+	spark_mesh.surface_set_material(0, mat)
+	particles.mesh = spark_mesh
+
+	get_parent().add_child(particles)
+	particles.global_position = global_position
+	particles.restart()
+	get_tree().create_timer(lifetime + 0.15).timeout.connect(particles.queue_free)
+
+
+## Builds a flat cross/plus shape in the XZ plane — two thin quads at 90° to each other.
+## From the top-down camera this reads as a star/spark mark rather than a round blob.
+func _build_zapper_spark_mesh(size: float) -> ImmediateMesh:
+	var hw := size * 0.11   # half-width of each arm — wider for visibility
+	var hl := size * 0.48   # half-length of each arm
+	var im := ImmediateMesh.new()
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	# Horizontal arm (along X)
+	im.surface_add_vertex(Vector3(-hl, 0.0, -hw)); im.surface_add_vertex(Vector3( hl, 0.0, -hw)); im.surface_add_vertex(Vector3( hl, 0.0,  hw))
+	im.surface_add_vertex(Vector3(-hl, 0.0, -hw)); im.surface_add_vertex(Vector3( hl, 0.0,  hw)); im.surface_add_vertex(Vector3(-hl, 0.0,  hw))
+	# Vertical arm (along Z)
+	im.surface_add_vertex(Vector3(-hw, 0.0, -hl)); im.surface_add_vertex(Vector3( hw, 0.0, -hl)); im.surface_add_vertex(Vector3( hw, 0.0,  hl))
+	im.surface_add_vertex(Vector3(-hw, 0.0, -hl)); im.surface_add_vertex(Vector3( hw, 0.0,  hl)); im.surface_add_vertex(Vector3(-hw, 0.0,  hl))
+	im.surface_end()
+	return im
 
 
 ## Glue splat: a handful of amber chunks scatter outward from the hit point.

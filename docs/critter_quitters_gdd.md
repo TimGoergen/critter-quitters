@@ -1,6 +1,6 @@
 ﻿# **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.24 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** ASCII / minimalist **Reference:** Desktop Tower Defense
+**Version:** Draft v0.25 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
 
 ---
 
@@ -32,6 +32,8 @@
 | v0.22 | Mobile UI rework added as Phase 5. Previous phases 5, 6, 6b, 7, 8 renumbered to 6, 7, 7b, 8, 9. |
 | v0.23 | Phase 3 marked complete. All outstanding items cancelled as covered by Phase 6. |
 | v0.24 | Phase 5 design decisions recorded. Landscape-only orientation confirmed; portrait code paths to be removed. Trap placement: tap-to-select / tap-to-place confirmed; drag-to-place mechanic dropped. Input model: movement threshold (~15px) distinguishes tap from drag; drag always pans camera. Zoom: two fixed levels (overview = full arena, zoomed-in = 2× magnification); zoom toggle button in UI; panning only active when zoomed in. Enemy follow: tap enemy to follow (camera tracks at zoomed-in level); tap same enemy to cancel; tap different enemy or trap to switch focus; focus released on wave end or run end. Tap placed trap: centers camera and opens upgrade panel. Arena visual changes: smaller footprint (more margin), lighter wall colour. Upgrade panel redesigned for touch (larger tap targets). Phase 4 marked complete. |
+| v0.25 | Phase 5 (Mobile UI Rework) complete. Viewport scaling: `stretch/mode=viewport` + `stretch/aspect=expand` at 1280×600 base resolution — all UI coordinates are virtual pixels, consistent across physical screen sizes. Safe area margins (24px) added to side panels to keep controls away from screen edges and camera cutouts. Orientation: `SCREEN_SENSOR_LANDSCAPE` (allows normal and upside-down landscape; blocks portrait). Firebase App Distribution integrated into CI: signed APK deployed automatically to testers group on every push to main or feature/** branches. Build version format changed from `0.0.<sha>` to `0.0.0.<NNNN>` (zero-padded GitHub run number, always incrementing); Firebase release notes show branch name + short SHA + commit message. Section 10 updated to reflect implemented mobile UX model. Art style tag in header corrected. Phase 5 marked complete. |
+| v0.26 | Sound added as Phase 6. Previous phases 6, 7, 7b, 8, 9 renumbered to 7, 8, 8b, 9, 10. Audio removed from Phase 9 (Depth & Polish) as it is now covered by Phase 6. |
 
 ---
 
@@ -456,27 +458,40 @@ The game targets a modern CGI children's show aesthetic — clean rounded shapes
 
 * Speed controls (1×, 2×, pause) always visible during combat phase
 
-* Portrait orientation primary; landscape optional
+* **Landscape-only orientation** — game is locked to landscape; portrait is not supported. Both normal and 180° landscape rotations are allowed so the phone can be held either way.
 
 * Bug Bucks count and Infestation Level always visible in HUD — trap picker never more than one tap away
 
 * No internet required for core gameplay
 
-**Arena scrolling / camera**
+**Layout model (implemented)**
 
-Arena size may grow as waves progress and could exceed the visible screen area. The viewport must support panning. Primary input is touch-screen, creating a gesture conflict between pan and placement tap.
+The arena is flanked by two fixed-width side panels (left: trap selector; right: wave info, controls, zoom). The arena scales to fill the available height (screen height minus a small margin) and is centered horizontally in the space between the panels. No UI element overlaps the arena. The HUD panels scroll with the screen — they are not part of the scrollable arena viewport.
 
-Proposed resolution:
+Viewport base resolution is 1280×600 virtual pixels. `stretch/mode=viewport` + `stretch/aspect=expand` ensures all UI coordinates are consistent virtual pixels regardless of physical screen size or DPI. Side panel widths are 220px each in virtual coords; 24px safe-area margins keep controls away from screen edges and camera cutouts.
 
-* **Short tap** — place/select trap on the tapped cell
-* **Press-and-drag** — pan the viewport
-* A threshold (e.g. 8–10px movement) distinguishes a tap from a drag before committing the action
+**Arena camera and zoom (implemented)**
 
-Additional considerations:
+Two fixed zoom levels:
 
-* Off-screen pest indicators — directional arrows pinned to viewport edges point toward pests outside the current view. No minimap. Arrows scale in size/intensity with threat level. Visible during combat only.
-* HUD elements must remain fixed on screen outside the scrollable arena viewport
-* Pinch-to-zoom (optional) — allows strategic overview; minimum zoom must keep cells tappable
+* **Overview** — full arena visible, no panning. Default state.
+* **Zoomed-in** — 2× magnification. Drag to pan within arena bounds.
+
+A zoom toggle button in the right panel switches between levels. Zoom resets to overview on wave end and run end.
+
+**Enemy follow (implemented)**
+
+* Tap any enemy → zoom in to zoomed-in level and camera tracks that enemy
+* Tap the same enemy again → cancel follow and return to overview
+* Tap a different enemy → switch follow target (stay zoomed)
+* Tap a placed trap → camera centers on trap, upgrade panel opens
+* Follow is released automatically on wave end and run end
+
+**Touch input model (implemented)**
+
+* **Short tap (< 15px movement)** — place trap on empty cell, select placed trap, or tap enemy to follow
+* **Drag (≥ 15px movement)** — pan camera (only active when zoomed in); never places a trap on release
+* A 15px movement threshold distinguishes a tap from a drag before committing the action
 
 **Placed trap interaction**
 
@@ -487,10 +502,16 @@ When the player taps an already-placed trap, an upgrade panel appears showing:
 - Current damage, range, and fire rate
 - Upgrade cost in Bug Bucks
 - Three upgrade buttons (Damage, Range, Fire Rate) — each shows the current value and the value after that upgrade, so the choice is informed
+- Sell button — refunds 70% of the trap's buy price
 
 At star 5, the three buttons are replaced by three tier-up variation options. These offer dramatic stat changes and advance the trap to the next tier with the star resetting to 0.
 
-The panel is dismissed by tapping the close button or tapping an empty arena cell.
+The panel is dismissed by tapping the close button or tapping outside the panel.
+
+**Future considerations (not yet implemented)**
+
+* Off-screen pest indicators — directional arrows pinned to viewport edges pointing toward pests outside the current view; scale with threat level
+* Pinch-to-zoom — continuous zoom between overview and maximum magnification
 
 ---
 
@@ -588,17 +609,17 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 - ✓ Enemy hit reaction — brief white flash on hit; white flash then queue_free on death
 - ✓ Snap Trap procedural placeholder visual — portrait mousetrap shape with animated kill bar and cheese wedge; to be replaced by illustrated Sprite3D
 - ✓ Snap Trap projectile — tumbling cheese wedge with cheese-splat impact particles
-- ~~✗ Sprite3D art for all enemies (Ant SVG placeholder only; Cricket, Beetle, Cockroach, Rat still use colored cylinders)~~ — cancelled; covered by Phase 6
-- ~~✗ Sprite3D art for all traps (Snap Trap uses procedural mesh; Zapper, Fogger, Glue Board use colored boxes)~~ — cancelled; covered by Phase 6
-- ~~✗ Procedural animated background system~~ — cancelled; covered by Phase 6
-- ~~✗ Basic per-element color palette~~ — cancelled; deferred to Phase 6
+- ~~✗ Sprite3D art for all enemies (Ant SVG placeholder only; Cricket, Beetle, Cockroach, Rat still use colored cylinders)~~ — cancelled; covered by Phase 7
+- ~~✗ Sprite3D art for all traps (Snap Trap uses procedural mesh; Zapper, Fogger, Glue Board use colored boxes)~~ — cancelled; covered by Phase 7
+- ~~✗ Procedural animated background system~~ — cancelled; covered by Phase 7
+- ~~✗ Basic per-element color palette~~ — cancelled; deferred to Phase 7
 
 *Goal: looks and feels like the game*
 
 ### **Phase 4 — Build & Deploy Pipeline** ✓ Complete
 - Automated Godot export — Windows 11 (x86-64) and Android (arm64) builds triggered from GitHub Actions on push to main
 - Windows build: produces a signed .exe installer via Inno Setup or NSIS, uploaded as a GitHub Release artifact
-- Android build: produces a signed .apk/.aab, sideloadable to Pixel 10 Pro XL (arm64-v8a target); Play Store upload deferred to Phase 9
+- Android build: produces a signed .apk/.aab, sideloadable to Pixel 10 Pro XL (arm64-v8a target); Play Store upload deferred to Phase 10
 - Export templates cached in CI to avoid re-downloading on every run
 - Godot project settings verified for each target: Mobile renderer confirmed on Android, Compatibility renderer on Windows
 - Secrets managed via GitHub Actions environment variables: keystore credentials, signing passwords
@@ -607,23 +628,39 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: any push to main produces tested, installable builds for both target devices with no manual steps*
 
-### **Phase 5 — Mobile UI Rework**
-- **Landscape-only** orientation; portrait code paths removed from HUD and Arena
-- **Layout model**: arena scales to fill screen height with a small margin; all HUD elements live left and right of the arena (never above/below); no UI overlaps the arena
-- **Trap selector** (side panel): touch-friendly buttons with minimum 44px tap targets; landscape-specific layout
-- **Top panel**: wave, Bug Bucks, infestation bar, pause, speed — sized and spaced for mobile readability
-- **Input system rewrite**: `InputEventScreenTouch` / `InputEventScreenDrag` replace mouse events; ~15px movement threshold distinguishes tap from drag; drag-to-place mechanic removed
-- **Tap-to-place**: tap empty cell with trap armed → place; drag → pan (never place)
-- **Two-level zoom**: overview (full arena, no pan) and zoomed-in (2× magnification, drag to pan); zoom toggle button in UI; panning clamped to arena bounds
-- **Enemy follow**: tap enemy → zoom in and follow; tap same enemy → cancel follow and return to overview; tap different enemy or placed trap → switch focus; focus released on wave end / run end
-- **Tap placed trap**: center camera on trap and open upgrade panel
-- **Upgrade panel**: redesigned for touch — larger buttons, relative sizing, no fixed pixel dimensions
-- **Arena visual changes**: reduced footprint (larger margin around grid), lighter wall colour
-- **Font sizing and safe-area margins** verified on Pixel 10 Pro XL
+### **Phase 5 — Mobile UI Rework** ✓ Complete
+- ✓ **Landscape-only** orientation (`SCREEN_SENSOR_LANDSCAPE`); portrait code paths removed from HUD and Arena
+- ✓ **Viewport scaling**: `stretch/mode=viewport` + `stretch/aspect=expand` at 1280×600 base; virtual pixel coordinates consistent across all screen sizes
+- ✓ **Layout model**: arena flanked by left (trap selector, 220px) and right (controls/info, 220px) side panels; 24px safe-area margins; no UI overlaps the arena
+- ✓ **Trap selector** (left panel): touch-friendly vertical buttons; minimum 70px height tap targets
+- ✓ **Right panel**: wave label, Bug Bucks, infestation bar, speed/pause, zoom toggle, countdown/send-wave, exit/restart
+- ✓ **Input system rewrite**: `InputEventScreenTouch` / `InputEventScreenDrag` replace mouse events; 15px movement threshold distinguishes tap from drag; drag-to-place mechanic removed
+- ✓ **Tap-to-place**: tap empty cell with trap armed → place; drag → pan (never place)
+- ✓ **Two-level zoom**: overview (full arena, no pan) and zoomed-in (2× magnification, drag to pan); zoom toggle button in right panel; panning clamped to arena bounds
+- ✓ **Enemy follow**: tap enemy → zoom in and follow; tap same enemy → cancel; tap different enemy → switch; released on wave end / run end
+- ✓ **Tap placed trap**: center camera on trap and open upgrade panel
+- ✓ **Sell button** added to upgrade panel; refunds 70% of buy price
+- ✓ **Upgrade panel**: viewport-relative sizing, minimum 48px button height, centered in arena zone
+- ✓ **Arena visual changes**: lighter wall colour; camera margin tuned for minimal gap between arena and side panels in overview mode
+- ✓ **Font sizing** verified on Pixel 10 Pro XL (wave/bucks labels 42pt, infestation 32pt, selector buttons 22pt)
+- ✓ **Firebase App Distribution**: CI deploys signed APK to testers group on every push to main or feature/** branches; release notes show branch + SHA + commit message
+- ✓ **Version format**: `0.0.0.NNNN` (zero-padded GitHub run number, always incrementing)
 
 *Goal: the full game is comfortably playable one-handed on a phone in landscape mode*
 
-### **Phase 6 — Sprite Art Migration**
+### **Phase 6 — Sound**
+- Background music — understated and quirky ambient loop, appropriate to the pest control theme; tone sits between minimal and playfully odd
+- Per-enemy footstep / movement sounds, scaled to enemy type (e.g. skittering for Ant, heavier for Beetle)
+- Enemy hit reaction sound — brief impact per trap type
+- Enemy death sound — short, satisfying; distinct from hit
+- Per-trap fire sounds — each trap type has a unique firing sound (snap, zap, hiss, stick)
+- UI sounds — button press, wave start announcement, wave clear, run-end (infestation maxed)
+- Bug Bucks earned chime — light, non-intrusive
+- Audio bus setup — separate buses for music, SFX, and UI with independent volume controls
+
+*Goal: the game is playable with the screen off and every meaningful event has an audio identity*
+
+### **Phase 7 — Sprite Art Migration**
 - Illustrated Sprite3D art for all 5 enemies: Ant (replace SVG placeholder), Cricket, Beetle, Cockroach, Rat
 - Illustrated Sprite3D art for all 4 traps: Snap Trap (replace procedural mesh), Zapper, Fogger, Glue Board
 - Per-element color palette finalized across all sprites
@@ -631,7 +668,7 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: all gameplay-visible assets are illustrated sprites; no colored cylinders, boxes, or placeholder meshes remain*
 
-### **Phase 7 — Full Game Loop**
+### **Phase 8 — Full Game Loop**
 - Wave composition system — complexity curve, group-based spawning, boss waves
 - All 4 trap types
 - All 5 enemy types
@@ -642,11 +679,11 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: complete playable game from start to run-end*
 
-### **Prototype note (Phase 7)**
+### **Prototype note (Phase 8)**
 
 The current prototype uses an endless-wave structure for testing and balancing purposes. The target shipped design groups waves into Rounds (3–5 waves) and Rounds into Levels (Contracts, 5–10 rounds). At the end of each Round, the player picks 1 of 3 randomly offered temporary perks that last for the remainder of the run. Completing a Level (Contract) awards Service Fees for meta progression. The prototype will remain endless until the core loop is balanced and the grouping structure is fully designed.
 
-### **Phase 7b — Meta Progression**
+### **Phase 8b — Meta Progression**
 - Service Fees earned at run end based on performance
 - The Truck hub screen — Start New Job, Upgrades, Stats
 - Equipment upgrade tree
@@ -655,17 +692,16 @@ The current prototype uses an endless-wave structure for testing and balancing p
 
 *Goal: long-term progression loop across runs*
 
-### **Phase 8 — Depth & Polish**
+### **Phase 9 — Depth & Polish**
 - Full upgrade trees and DoT system (fire, ice)
 - Trap unlock progression
 - Store tiers, reroll mechanic
 - Infestation healing — store options and trap modifier
 - HUD polish
-- Audio
 
 *Goal: full-featured game*
 
-### **Phase 9 — Platform**
+### **Phase 10 — Platform**
 - Mobile export and touch controls
 - Web export
 - Performance optimisation

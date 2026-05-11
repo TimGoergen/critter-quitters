@@ -12,7 +12,7 @@ extends CanvasLayer
 const Trap     = preload("res://traps/Trap.gd")
 const UIFonts  = preload("res://ui/UIFonts.gd")
 
-const COLOR_PANEL_BG    := Color(0.08, 0.08, 0.13, 0.88)
+const COLOR_PANEL_BG    := Color(0.144, 0.144, 0.235, 0.88)
 const COLOR_BAR_BG      := Color(0.28, 0.28, 0.28, 1.0)
 const COLOR_BAR_FILL    := Color(0.85, 0.22, 0.22, 1.0)
 const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
@@ -62,8 +62,10 @@ const LEFT_PANEL_W:   float = 220.0
 const RIGHT_PANEL_W:  float = 220.0
 const ARENA_MARGIN_PX: float = 4.0
 
-const MARGIN: float = 10.0            # inner padding for both panels
+const MARGIN: float = 10.0             # inner padding for both panels
 const SCREEN_EDGE_MARGIN: float = 24.0 # extra inset on the screen-edge side and top/bottom to clear rounded corners
+const RIGHT_BTN_H: float = 52.0        # fixed height for all right-panel buttons
+const INNER_BORDER_W: float = 2.0      # black separator line at the arena-facing edge of each panel
 
 var _wave_label:        Label
 var _bucks_label:       Label
@@ -72,6 +74,8 @@ var _infestation_label: Label
 var _countdown_wave_label:   Label
 var _countdown_number_label: Label
 var _send_wave_btn:          Button
+var _send_wave_text_label:   Label   # "Send Early" / "Send Next Wave"
+var _send_wave_reward_row:   HBoxContainer
 var _send_wave_reward_label: Label
 var _early_bonus_particles:  CPUParticles2D
 var _run_over_overlay:       Control
@@ -85,8 +89,9 @@ var _exit_btn:       Button
 var _restart_btn:    Button
 var _zoom_btn:       Button   # toggles overview ↔ zoomed-in
 
-var _is_fast:   bool = false
-var _is_paused: bool = false
+var _is_fast:        bool = false
+var _is_paused:      bool = false
+var _countdown_active: bool = false
 
 var _selector_buttons: Array[Button] = []
 
@@ -102,6 +107,7 @@ func _ready() -> void:
 	GameState.wave_changed.connect(_on_wave_changed)
 	GameState.wave_countdown_changed.connect(_on_wave_countdown_changed)
 	GameState.early_wave_bonus_awarded.connect(_on_early_bonus_awarded)
+	GameState.early_send_reward_changed.connect(_on_early_send_reward_changed)
 	GameState.run_ended.connect(_on_run_ended)
 	GameState.trap_type_selected.connect(_on_trap_type_selected)
 	GameState.zoom_state_changed.connect(_on_zoom_state_changed)
@@ -133,33 +139,41 @@ func _build_left_panel() -> void:
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left",   MARGIN + SCREEN_EDGE_MARGIN)  # screen edge
-	margin.add_theme_constant_override("margin_right",  MARGIN)
+	margin.add_theme_constant_override("margin_left",   SCREEN_EDGE_MARGIN)
+	margin.add_theme_constant_override("margin_right",  SCREEN_EDGE_MARGIN)
 	margin.add_theme_constant_override("margin_top",    MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	margin.add_theme_constant_override("margin_bottom", MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	bg.add_child(margin)
 
+	# Black separator line at the inner (arena-facing) edge.
+	var border := ColorRect.new()
+	border.color         = Color.BLACK
+	border.anchor_left   = 1.0
+	border.anchor_right  = 1.0
+	border.anchor_top    = 0.0
+	border.anchor_bottom = 1.0
+	border.offset_left   = -INNER_BORDER_W
+	border.offset_right  = 0.0
+	bg.add_child(border)
+
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 8)
-	vbox.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
 	for i in range(4):
 		var btn := Button.new()
+		btn.text                  = ""
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
-		btn.custom_minimum_size   = Vector2(0, 70)
-		btn.clip_contents         = false
-		btn.add_theme_font_size_override("font_size", 22)
-		btn.add_theme_font_override("font", UIFonts.primary_bold())
-		btn.text = _selector_label(i)
+		btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+		btn.clip_contents         = true
 
 		btn.pressed.connect(GameState.select_trap_type.bind(i))
 		_style_selector_button(btn, i, i == GameState.selected_trap_type, _can_afford(i))
+		_build_btn_content(btn, i)
+		_add_btn_badge(btn, i)
 		vbox.add_child(btn)
 		_selector_buttons.append(btn)
-		_add_btn_badge(btn, i)
-		_add_btn_cost_label(btn, i, 14)
 
 
 # ---------------------------------------------------------------------------
@@ -178,11 +192,22 @@ func _build_right_panel() -> void:
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left",   MARGIN)
-	margin.add_theme_constant_override("margin_right",  MARGIN + SCREEN_EDGE_MARGIN)  # screen edge
+	margin.add_theme_constant_override("margin_left",   SCREEN_EDGE_MARGIN)
+	margin.add_theme_constant_override("margin_right",  SCREEN_EDGE_MARGIN)
 	margin.add_theme_constant_override("margin_top",    MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
-	margin.add_theme_constant_override("margin_bottom", MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
+	margin.add_theme_constant_override("margin_bottom", int(MARGIN + SCREEN_EDGE_MARGIN))
 	bg.add_child(margin)
+
+	# Black separator line at the inner (arena-facing) edge.
+	var border := ColorRect.new()
+	border.color         = Color.BLACK
+	border.anchor_left   = 0.0
+	border.anchor_right  = 0.0
+	border.anchor_top    = 0.0
+	border.anchor_bottom = 1.0
+	border.offset_left   = 0.0
+	border.offset_right  = INNER_BORDER_W
+	bg.add_child(border)
 
 	var vbox := VBoxContainer.new()
 	vbox.add_theme_constant_override("separation", 8)
@@ -192,7 +217,7 @@ func _build_right_panel() -> void:
 	# --- Wave label ---
 	_wave_label = Label.new()
 	_wave_label.text = "WAVE  1"
-	_wave_label.add_theme_font_size_override("font_size", 42)
+	_wave_label.add_theme_font_size_override("font_size", 52)
 	_wave_label.add_theme_font_override("font", UIFonts.header())
 	_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -205,10 +230,10 @@ func _build_right_panel() -> void:
 
 	var coin_icon := TextureRect.new()
 	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
-	coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	coin_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	coin_icon.custom_minimum_size = Vector2(44, 44)
-	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	coin_icon.size_flags_vertical = Control.SIZE_FILL
 	bucks_row.add_child(coin_icon)
 
 	_bucks_label = Label.new()
@@ -220,46 +245,81 @@ func _build_right_panel() -> void:
 	_bucks_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bucks_row.add_child(_bucks_label)
 
-	# --- Infestation section ---
-	var inf_row := HBoxContainer.new()
-	inf_row.add_theme_constant_override("separation", 4)
-	vbox.add_child(inf_row)
+	# --- Infestation section — single bar element ---
+	# The bar background is the root container; the fill grows from the left;
+	# the icon and percentage are overlaid and centered vertically inside it.
+	var inf_container := Control.new()
+	inf_container.custom_minimum_size   = Vector2(0, 52)  # 8px taller than the 44px icon
+	inf_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(inf_container)
+
+	var inf_track := ColorRect.new()
+	inf_track.color = COLOR_BAR_BG
+	inf_track.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inf_container.add_child(inf_track)
+
+	# Fill grows rightward; anchor_bottom=1 keeps it full height automatically.
+	_infestation_fill                  = ColorRect.new()
+	_infestation_fill.color            = COLOR_BAR_FILL
+	_infestation_fill.anchor_bottom    = 1.0
+	_infestation_fill.offset_right     = 0.0
+	inf_container.add_child(_infestation_fill)
+
+	# Overlay: icon on the left, percentage on the right, both centered vertically.
+	var inf_overlay := HBoxContainer.new()
+	inf_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inf_overlay.add_theme_constant_override("separation", 4)
+	inf_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	inf_container.add_child(inf_overlay)
 
 	var inf_icon := TextureRect.new()
-	inf_icon.texture              = load("res://assets/infestation_level.png")
-	inf_icon.stretch_mode         = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	inf_icon.expand_mode          = TextureRect.EXPAND_IGNORE_SIZE
-	inf_icon.custom_minimum_size  = Vector2(44, 44)
-	inf_icon.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
-	inf_row.add_child(inf_icon)
+	inf_icon.texture             = load("res://assets/infestation_level.png")
+	inf_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	inf_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+	inf_icon.custom_minimum_size = Vector2(44, 44)
+	inf_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	inf_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	# Outline shader: samples 4 cardinal neighbours; draws black on transparent
+	# pixels that border an opaque pixel, leaving the image itself unchanged.
+	var outline_shader := Shader.new()
+	outline_shader.code = """
+shader_type canvas_item;
+uniform float outline_px = 1.5;
+void fragment() {
+	vec2 step = outline_px / vec2(textureSize(TEXTURE, 0));
+	vec4 col = texture(TEXTURE, UV);
+	if (col.a < 0.5) {
+		float n = texture(TEXTURE, UV + vec2( step.x,     0.0)).a
+		        + texture(TEXTURE, UV + vec2(-step.x,     0.0)).a
+		        + texture(TEXTURE, UV + vec2(    0.0,  step.y)).a
+		        + texture(TEXTURE, UV + vec2(    0.0, -step.y)).a;
+		if (n > 0.0) { COLOR = vec4(0.0, 0.0, 0.0, 1.0); return; }
+	}
+	COLOR = col;
+}
+"""
+	var outline_mat := ShaderMaterial.new()
+	outline_mat.shader = outline_shader
+	inf_icon.material  = outline_mat
+	inf_overlay.add_child(inf_icon)
 
 	_infestation_label = Label.new()
 	_infestation_label.text = "0%"
 	_infestation_label.add_theme_font_size_override("font_size", 32)
 	_infestation_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_infestation_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	_infestation_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_infestation_label.add_theme_constant_override("outline_size", 3)
 	_infestation_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_infestation_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_infestation_label.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
-	inf_row.add_child(_infestation_label)
-
-	# Bar track below the row
-	var track := ColorRect.new()
-	track.color                 = COLOR_BAR_BG
-	track.custom_minimum_size   = Vector2(0, 14)
-	track.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_child(track)
-
-	_infestation_fill          = ColorRect.new()
-	_infestation_fill.color    = COLOR_BAR_FILL
-	_infestation_fill.size.y   = 10
-	_infestation_fill.position = Vector2.ZERO
-	track.add_child(_infestation_fill)
+	_infestation_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	inf_overlay.add_child(_infestation_label)
 
 	# --- Speed + Pause ---
 	var speed_pause_row := HBoxContainer.new()
 	speed_pause_row.add_theme_constant_override("separation", 4)
-	speed_pause_row.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	speed_pause_row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
 	vbox.add_child(speed_pause_row)
 
 	_pause_btn = Button.new()
@@ -268,6 +328,8 @@ func _build_right_panel() -> void:
 	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_pause_btn)
 	_pause_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pause_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_pause_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
 	_pause_btn.pressed.connect(_on_pause_btn_pressed)
 	speed_pause_row.add_child(_pause_btn)
 
@@ -283,6 +345,8 @@ func _build_right_panel() -> void:
 	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_speed_btn)
 	_speed_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_speed_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_speed_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
 	_speed_btn.pressed.connect(_on_speed_btn_pressed)
 	speed_pause_row.add_child(_speed_btn)
 
@@ -319,98 +383,126 @@ func _build_right_panel() -> void:
 	_zoom_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_zoom_btn)
 	_zoom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_zoom_btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	_zoom_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+	_zoom_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
 	_zoom_btn.pressed.connect(func() -> void: GameState.zoom_toggle_requested.emit())
 	vbox.add_child(_zoom_btn)
 
-	# --- Spacer (pushes countdown and bottom buttons down) ---
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(spacer)
+	_build_early_bonus_particles()
 
-	# --- Countdown block (hidden by default) ---
+	# --- Send Wave button — fills all remaining vbox space. ---
+	# The countdown labels live inside this button so they always share the same
+	# visual region.  btn_vbox is ALIGNMENT_CENTER so when the countdown labels
+	# are hidden the action/reward rows remain vertically centered.
+	_send_wave_btn = Button.new()
+	_send_wave_btn.text = ""
+	_send_wave_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_send_wave_btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	_send_wave_btn.custom_minimum_size   = Vector2(0, 70)
+	_apply_send_wave_btn_style(_send_wave_btn)
+	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
+	vbox.add_child(_send_wave_btn)
+
+	var btn_vbox := VBoxContainer.new()
+	btn_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	btn_vbox.offset_left   = 8.0
+	btn_vbox.offset_right  = -8.0
+	btn_vbox.offset_top    = 4.0
+	btn_vbox.offset_bottom = -4.0
+	btn_vbox.alignment     = BoxContainer.ALIGNMENT_CENTER
+	btn_vbox.add_theme_constant_override("separation", 4)
+	btn_vbox.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	# clip_contents prevents wide reward numbers from rendering outside the button.
+	btn_vbox.clip_contents = true
+	_send_wave_btn.add_child(btn_vbox)
+
+	# Countdown section — "Incoming!" + flashing seconds, always present in the
+	# layout but invisible (modulate.a = 0) when no wave is due.  Using modulate
+	# instead of visible keeps the labels' height reserved so the action/reward
+	# rows below never shift position when the countdown appears or disappears.
 	_countdown_wave_label = Label.new()
-	_countdown_wave_label.text               = "Incoming!"
-	_countdown_wave_label.add_theme_font_size_override("font_size", 32)
+	_countdown_wave_label.text               = "INCOMING"
+	_countdown_wave_label.add_theme_font_size_override("font_size", 27)
 	_countdown_wave_label.add_theme_color_override("font_color", COLOR_INCOMING)
 	_countdown_wave_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
 	_countdown_wave_label.add_theme_constant_override("shadow_offset_x", 1)
 	_countdown_wave_label.add_theme_constant_override("shadow_offset_y", 1)
 	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
 	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_countdown_wave_label.visible = false
-	vbox.add_child(_countdown_wave_label)
+	_countdown_wave_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	_countdown_wave_label.modulate.a          = 0.0
+	btn_vbox.add_child(_countdown_wave_label)
 
 	_countdown_number_label = Label.new()
-	_countdown_number_label.add_theme_font_size_override("font_size", 48)
+	_countdown_number_label.add_theme_font_size_override("font_size", 18)
 	_countdown_number_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
 	_countdown_number_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
 	_countdown_number_label.add_theme_constant_override("shadow_offset_x", 1)
 	_countdown_number_label.add_theme_constant_override("shadow_offset_y", 1)
 	_countdown_number_label.add_theme_font_override("font", UIFonts.header())
 	_countdown_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_countdown_number_label.visible = false
-	vbox.add_child(_countdown_number_label)
+	_countdown_number_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	_countdown_number_label.modulate.a          = 0.0
+	btn_vbox.add_child(_countdown_number_label)
 
-	_build_early_bonus_particles()
-
-	_send_wave_btn = Button.new()
-	_send_wave_btn.text = ""
-	_send_wave_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_send_wave_btn.visible = false
-	_apply_send_wave_btn_style(_send_wave_btn)
-	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
-	vbox.add_child(_send_wave_btn)
-
-	var btn_row := HBoxContainer.new()
-	btn_row.set_anchors_preset(Control.PRESET_FULL_RECT)
-	btn_row.offset_left  = 8.0
-	btn_row.offset_right = -8.0
-	btn_row.alignment    = BoxContainer.ALIGNMENT_CENTER
-	btn_row.add_theme_constant_override("separation", 4)
-	btn_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_send_wave_btn.add_child(btn_row)
+	# Action row — pest icon + "Send Early" / "Send Next Wave" text.
+	var top_row := HBoxContainer.new()
+	top_row.alignment    = BoxContainer.ALIGNMENT_CENTER
+	top_row.add_theme_constant_override("separation", 5)
+	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn_vbox.add_child(top_row)
 
 	var game_icon := TextureRect.new()
 	game_icon.texture             = load("res://assets/uninfested.png") as Texture2D
-	game_icon.custom_minimum_size = Vector2(30, 30)
+	game_icon.custom_minimum_size = Vector2(36, 36)
 	game_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	game_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	game_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	game_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	btn_row.add_child(game_icon)
+	top_row.add_child(game_icon)
 
-	var btn_label := Label.new()
-	btn_label.text                  = "Send Early"
-	btn_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	btn_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
-	btn_label.add_theme_font_override("font", UIFonts.primary())
-	btn_label.add_theme_font_size_override("font_size", 18)
-	btn_label.add_theme_color_override("font_color", COLOR_TEXT)
-	btn_row.add_child(btn_label)
+	_send_wave_text_label              = Label.new()
+	_send_wave_text_label.text         = "Send Early"
+	_send_wave_text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_send_wave_text_label.add_theme_font_override("font", UIFonts.primary_bold())
+	_send_wave_text_label.add_theme_font_size_override("font_size", 18)
+	_send_wave_text_label.add_theme_color_override("font_color", COLOR_TEXT)
+	top_row.add_child(_send_wave_text_label)
+
+	# Reward row — coin icon + gold amount earned for sending early.
+	# Hidden when the reward is zero (no early bonus available).
+	_send_wave_reward_row         = HBoxContainer.new()
+	_send_wave_reward_row.alignment    = BoxContainer.ALIGNMENT_CENTER
+	_send_wave_reward_row.add_theme_constant_override("separation", 4)
+	_send_wave_reward_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_send_wave_reward_row.modulate.a   = 0.0
+	btn_vbox.add_child(_send_wave_reward_row)
+	var bot_row := _send_wave_reward_row
 
 	var btn_coin_icon := TextureRect.new()
 	btn_coin_icon.texture             = load("res://assets/bug_buck_coin.png") as Texture2D
-	btn_coin_icon.custom_minimum_size = Vector2(20, 20)
+	btn_coin_icon.custom_minimum_size = Vector2(22, 22)
 	btn_coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	btn_coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	btn_coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	btn_coin_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	btn_row.add_child(btn_coin_icon)
+	bot_row.add_child(btn_coin_icon)
 
 	_send_wave_reward_label = Label.new()
 	_send_wave_reward_label.text                = "0"
 	_send_wave_reward_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_send_wave_reward_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	_send_wave_reward_label.add_theme_font_override("font", UIFonts.primary_bold())
-	_send_wave_reward_label.add_theme_font_size_override("font_size", 18)
+	_send_wave_reward_label.add_theme_font_size_override("font_size", 20)
 	_send_wave_reward_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
-	btn_row.add_child(_send_wave_reward_label)
+	bot_row.add_child(_send_wave_reward_label)
 
 	# --- Exit + Restart ---
+	# In the vbox like every other button row so the vbox separation constant
+	# controls the gap above it consistently.
 	var exit_restart_row := HBoxContainer.new()
 	exit_restart_row.add_theme_constant_override("separation", 4)
+	exit_restart_row.size_flags_vertical = Control.SIZE_SHRINK_END
 	vbox.add_child(exit_restart_row)
 
 	_exit_btn = Button.new()
@@ -419,6 +511,8 @@ func _build_right_panel() -> void:
 	_exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_exit_btn)
 	_exit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_exit_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+	_exit_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
 	_exit_btn.pressed.connect(_on_exit_pressed)
 	exit_restart_row.add_child(_exit_btn)
 
@@ -428,6 +522,8 @@ func _build_right_panel() -> void:
 	_restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_gold_button_style(_restart_btn)
 	_restart_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_restart_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+	_restart_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
 	_restart_btn.pressed.connect(_on_restart_pressed)
 	exit_restart_row.add_child(_restart_btn)
 
@@ -484,36 +580,41 @@ func _on_bucks_changed(amount: int) -> void:
 
 
 func _on_infestation_changed(level: float) -> void:
-	var track: Control = _infestation_fill.get_parent()
-	_infestation_fill.size.x = track.size.x * level
-	_infestation_label.text  = "%d%%" % roundi(level * 100.0)
+	var container: Control = _infestation_fill.get_parent()
+	_infestation_fill.offset_right = container.size.x * level
+	_infestation_label.text        = "%d%%" % roundi(level * 100.0)
 
 
 func _on_wave_changed(wave: int) -> void:
 	_wave_label.text = "WAVE  %d" % wave
+	if not _countdown_number_label.visible:
+		_send_wave_text_label.text = "Send Next Wave"
+		# Reward label is driven by early_send_reward_changed — no update needed here.
 
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 	if seconds_remaining > 0:
-		_countdown_wave_label.text    = "Incoming!"
-		_countdown_number_label.text  = "%d..." % seconds_remaining
-		_send_wave_reward_label.text  = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
-		_countdown_wave_label.visible   = true
-		_countdown_number_label.visible = true
-		_send_wave_btn.visible          = true
-	else:
-		_countdown_wave_label.visible   = false
-		_countdown_number_label.visible = false
-		_send_wave_btn.visible          = false
+		# Between-wave countdown — button sends the wave early for a time-based bonus.
+		# "INCOMING" flashes; the number label is kept in layout (for space) but never shown.
+		_countdown_wave_label.modulate.a = 1.0
+		_countdown_active                = true
+		_send_wave_text_label.text       = "Send Early"
+		_send_wave_reward_label.text     = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
 		_blink_time = 0.0
-		_countdown_number_label.modulate.a = 1.0
+	else:
+		# Wave launched — hide the countdown, switch button to "Send Next Wave".
+		# Reward label is driven by early_send_reward_changed as enemies spawn.
+		_countdown_wave_label.modulate.a = 0.0
+		_countdown_active                = false
+		_blink_time = 0.0
+		_send_wave_text_label.text = "Send Next Wave"
 
 
 func _process(delta: float) -> void:
-	if _countdown_number_label.visible:
+	if _countdown_active:
 		_blink_time += delta
 		var on: bool = fmod(_blink_time, 1.0 / 2.0) < (1.0 / 4.0)
-		_countdown_number_label.modulate.a = 1.0 if on else 0.0
+		_countdown_wave_label.modulate.a = 1.0 if on else 0.0
 
 
 func _on_zoom_state_changed(is_zoomed: bool) -> void:
@@ -548,7 +649,8 @@ func _on_send_wave_pressed() -> void:
 
 func _build_early_bonus_particles() -> void:
 	_early_bonus_particles = CPUParticles2D.new()
-	_early_bonus_particles.z_index               = -1
+	# z_index must be > 0 so particles draw in front of the side panels (z 0).
+	_early_bonus_particles.z_index               = 10
 	_early_bonus_particles.emitting              = false
 	_early_bonus_particles.one_shot              = true
 	_early_bonus_particles.lifetime              = 0.425
@@ -564,10 +666,14 @@ func _build_early_bonus_particles() -> void:
 
 
 func _on_early_bonus_awarded(coins: int) -> void:
-	var seconds := coins / GameState.early_wave_bonus_rate
-	_early_bonus_particles.amount   = max(1, seconds * 4)
+	_early_bonus_particles.amount   = max(1, coins / 4)
 	_early_bonus_particles.position = _send_wave_btn.get_global_rect().get_center()
 	_early_bonus_particles.restart()
+
+
+func _on_early_send_reward_changed(amount: int) -> void:
+	_send_wave_reward_row.modulate.a = 1.0 if amount > 0 else 0.0
+	_send_wave_reward_label.text     = "%d" % amount
 
 
 func _on_run_ended() -> void:
@@ -585,8 +691,7 @@ func _on_restart_pressed() -> void:
 
 
 func _on_exit_pressed() -> void:
-	get_tree().paused = false
-	get_tree().reload_current_scene()
+	get_tree().quit()
 
 
 # ---------------------------------------------------------------------------
@@ -605,6 +710,118 @@ func _refresh_trap_selector() -> void:
 
 func _on_trap_type_selected(_type: int) -> void:
 	_refresh_trap_selector()
+
+
+## Returns the path where a trap's button image should live.
+## The file may not exist yet — callers check ResourceLoader.exists() first.
+func _trap_image_path(type: int) -> String:
+	match type:
+		0: return "res://assets/traps/snap_trap.png"
+		1: return "res://assets/traps/zapper.png"
+		2: return "res://assets/traps/fogger.png"
+		3: return "res://assets/traps/glue_board.png"
+	return ""
+
+
+## Builds the internal layout of a trap selector button:
+##   top area  — live SubViewport rendering the trap from directly above
+##   name row  — trap name centred below the image
+##   cost row  — bug bucks coin icon + numeric cost in gold, centred
+## All child nodes carry MOUSE_FILTER_IGNORE so clicks reach the Button.
+func _build_btn_content(btn: Button, type: int) -> void:
+	var inner := MarginContainer.new()
+	inner.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inner.add_theme_constant_override("margin_left",   6)
+	inner.add_theme_constant_override("margin_right",  6)
+	inner.add_theme_constant_override("margin_top",    6)
+	inner.add_theme_constant_override("margin_bottom", 6)
+	inner.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(inner)
+
+	var cvbox := VBoxContainer.new()
+	cvbox.add_theme_constant_override("separation", 4)
+	cvbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	cvbox.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	inner.add_child(cvbox)
+
+	# Image area — brand-coloured background with a live 3D sub-viewport on top.
+	# The sub-viewport renders the actual trap visual from an orthographic
+	# top-down camera, so the icon exactly matches what appears in the arena.
+	# All trap materials are SHADING_MODE_UNSHADED, so no lighting is needed.
+	var img_area := Control.new()
+	img_area.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	img_area.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	img_area.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	cvbox.add_child(img_area)
+
+	# SubViewport — own_world_3d isolates it from the main scene so only the
+	# trap is rendered; transparent_bg lets the button's own background show through.
+	var svp := SubViewport.new()
+	svp.size                      = Vector2i(180, 180)
+	svp.own_world_3d              = true
+	svp.transparent_bg            = true
+	svp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+
+	# Orthographic camera looking straight down. size=2.2 gives ~15% margin
+	# around the 1.9-cell trap footprint on all sides.
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size       = 2.2
+	cam.position   = Vector3(0.0, 5.0, 0.0)
+	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
+	svp.add_child(cam)
+
+	# Trap in preview mode — spawns the full visual without combat state.
+	# Range indicator is deferred-hidden so it does not clutter the icon.
+	var trap_preview := Node3D.new()
+	trap_preview.set_script(Trap)
+	trap_preview.initialize_preview(type as Trap.TrapType)
+	svp.add_child(trap_preview)
+	trap_preview.call_deferred("hide_range_indicator")
+
+	# SubViewportContainer stretches the sub-viewport to fill the available area.
+	var svc := SubViewportContainer.new()
+	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	svc.stretch      = true
+	svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	svc.add_child(svp)
+	img_area.add_child(svc)
+
+	# Trap name
+	var name_lbl := Label.new()
+	name_lbl.text                  = TRAP_LABELS[type][0]
+	name_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	name_lbl.add_theme_font_size_override("font_size", 16)
+	name_lbl.add_theme_color_override("font_color", Color.WHITE)
+	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cvbox.add_child(name_lbl)
+
+	# Cost row — coin icon + numeric amount in gold
+	var cost_row := HBoxContainer.new()
+	cost_row.add_theme_constant_override("separation", 4)
+	cost_row.alignment    = BoxContainer.ALIGNMENT_CENTER
+	cost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cvbox.add_child(cost_row)
+
+	var coin_icon := TextureRect.new()
+	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
+	coin_icon.custom_minimum_size = Vector2(24, 24)
+	coin_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	coin_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	cost_row.add_child(coin_icon)
+
+	var cost_lbl := Label.new()
+	cost_lbl.text                = str(Trap.STATS[type]["cost"])
+	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	cost_lbl.add_theme_font_size_override("font_size", 22)
+	cost_lbl.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
+	cost_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cost_row.add_child(cost_lbl)
 
 
 func _selector_label(type: int) -> String:

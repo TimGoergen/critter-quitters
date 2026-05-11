@@ -155,9 +155,10 @@ const HP_BAR_WIDTH_FRACTION: float = 0.65
 ## Bar height in world units (CELL_SIZE = 1.0, so this is a thin stripe).
 const HP_BAR_HEIGHT: float = 0.3
 
-## Speed multiplier applied while at least one Glue Board is in range.
-## 0.285 = 71.5% slowdown (up 30% from the original 55% slowdown at 0.45).
-const SLOW_FACTOR: float = 0.285
+## Per-source slow factor registry.  Key = Trap node, value = slow strength
+## (0.0 = no slow, 1.0 = fully stopped).  Speed = base × (1 − max_factor).
+## Dictionary allows multiple overlapping boards; each contributes independently
+## and the strongest one wins.
 
 
 # ---------------------------------------------------------------------------
@@ -222,11 +223,14 @@ var _bounty: int = 0
 # Slow state — tracks how many Glue Boards currently have this enemy in range.
 # Speed is reduced while count > 0 and restored when it drops back to zero.
 var _base_move_speed: float = 0.0
-var _slow_source_count: int = 0
+var _slow_sources: Dictionary = {}   # Trap node → slow strength (0.0–1.0)
 
 # Glue splatter visual — spawned when the first slow source is applied,
 # freed when the last one is removed.
 var _glue_splatter: Node3D = null
+
+# Yellow disc shown beneath the enemy while the camera is following it.
+var _selection_glow: MeshInstance3D = null
 
 # Accumulated walk time used to index into _walk_frames.
 var _walk_time: float = 0.0
@@ -306,20 +310,31 @@ func take_damage(amount: float, flash_color: Color = Color.WHITE) -> void:
 
 
 ## Called by a Glue Board when this enemy enters its range circle.
-## Reference-counted so overlapping boards compose correctly.
-func add_slow_source() -> void:
-	_slow_source_count += 1
-	if _slow_source_count == 1:
-		_move_speed = _base_move_speed * SLOW_FACTOR
+## source is the Trap node; factor is the slow strength (0.0–1.0).
+## Multiple overlapping boards compose by taking the strongest active factor.
+func add_slow_source(source: Node3D, factor: float) -> void:
+	var was_empty := _slow_sources.is_empty()
+	_slow_sources[source] = factor
+	_recalculate_slow_speed()
+	if was_empty:
 		_show_glue_splatter()
 
 
 ## Called by a Glue Board when this enemy leaves its range circle (or the board is removed).
-func remove_slow_source() -> void:
-	_slow_source_count = maxi(_slow_source_count - 1, 0)
-	if _slow_source_count == 0:
-		_move_speed = _base_move_speed
+func remove_slow_source(source: Node3D) -> void:
+	_slow_sources.erase(source)
+	_recalculate_slow_speed()
+	if _slow_sources.is_empty():
 		_hide_glue_splatter()
+
+
+## Sets _move_speed from the strongest active slow source, or restores full speed.
+func _recalculate_slow_speed() -> void:
+	if _slow_sources.is_empty():
+		_move_speed = _base_move_speed
+	else:
+		var max_factor: float = _slow_sources.values().max()
+		_move_speed = _base_move_speed * (1.0 - max_factor)
 
 
 ## Briefly flashes the enemy white then returns to its base color.
@@ -335,6 +350,22 @@ func _flash_hit(color: Color) -> void:
 	_hit_tween.tween_property(mat, "albedo_color", Color(color.r * 4.0, color.g * 4.0, color.b * 4.0, 1.0), 0.04)
 	_hit_tween.tween_property(mat, "albedo_color", Color(_sprite_brightness, _sprite_brightness, _sprite_brightness, 1.0), 0.08)
 
+
+## Returns the enemy type enum value (used by EnemyStatsPanel for the type name).
+func get_enemy_type() -> EnemyType:
+	return _enemy_type
+
+## Returns current HP (raw value, not fraction).
+func get_current_hp() -> float:
+	return _current_hp
+
+## Returns maximum HP for this enemy at the current wave.
+func get_max_hp() -> float:
+	return _max_hp
+
+## Returns the unmodified movement speed (not the Glue-slowed value).
+func get_base_speed() -> float:
+	return _base_move_speed
 
 ## Returns current HP as a fraction of max HP (0.0–1.0).
 func get_hp_fraction() -> float:
@@ -469,10 +500,13 @@ func _facing_basis(dir: Vector2i) -> Basis:
 
 ## Converts a grid coordinate to its world-space centre at y = 0.
 ## Mirrors the same function in Arena.gd — shared once a utility exists.
+## Grid is not square (GRID_SIZE columns × GRID_ROWS rows), so X and Z
+## use different half-extents.
 func _cell_to_world(cell: Vector2i) -> Vector3:
-	var half_grid := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
-	var x         := cell.x * Grid.CELL_SIZE - half_grid + Grid.CELL_SIZE * 0.5
-	var z         := cell.y * Grid.CELL_SIZE - half_grid + Grid.CELL_SIZE * 0.5
+	var half_w := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
+	var half_h := (Grid.GRID_ROWS * Grid.CELL_SIZE) / 2.0
+	var x      := cell.x * Grid.CELL_SIZE - half_w + Grid.CELL_SIZE * 0.5
+	var z      := cell.y * Grid.CELL_SIZE - half_h + Grid.CELL_SIZE * 0.5
 	return Vector3(x, 0.0, z)
 
 
@@ -508,6 +542,65 @@ func _hide_glue_splatter() -> void:
 		return
 	_glue_splatter.queue_free()
 	_glue_splatter = null
+
+
+# ---------------------------------------------------------------------------
+# Selection glow — shown while this enemy is the camera-follow target
+# ---------------------------------------------------------------------------
+
+## Shows a flat yellow disc beneath the enemy sprite to indicate it is selected.
+## Spawned on first call; subsequent calls just make it visible.
+func show_selection_glow() -> void:
+	if _selection_glow != null:
+		_selection_glow.visible = true
+		return
+
+	var mi   := MeshInstance3D.new()
+	var mesh := CylinderMesh.new()
+	# Radius sized to the sprite so the glow peeks out as a halo around the edges.
+	var radius: float    = VISUAL_QUAD_SIZE[_enemy_type] * Grid.CELL_SIZE * 0.55
+	mesh.top_radius      = radius
+	mesh.bottom_radius   = radius
+	mesh.height          = 0.001   # visually flat; avoids z-fighting
+	mesh.radial_segments = 32
+	mi.mesh              = mesh
+
+	# Shader fades alpha from opaque at the centre to transparent at the edge.
+	# Uses VERTEX.xz / radius so the gradient is always correct regardless of
+	# the CylinderMesh UV layout.
+	var shader := Shader.new()
+	shader.code = """
+shader_type spatial;
+render_mode unshaded, blend_mix, depth_draw_never, cull_disabled;
+uniform float radius = 0.5;
+
+varying float frag_dist;
+
+void vertex() {
+    frag_dist = length(VERTEX.xz) / radius;
+}
+
+void fragment() {
+    float d = clamp(frag_dist, 0.0, 1.0);
+    ALBEDO = vec3(1.0, 0.82, 0.0);
+    ALPHA  = 0.62 * (1.0 - d * d);
+}
+"""
+	var mat := ShaderMaterial.new()
+	mat.shader = shader
+	mat.set_shader_parameter("radius", radius)
+	mi.material_override = mat
+
+	# Sit just above the shadow (world y ≈ 0.08; enemy root is at y = 0.25).
+	mi.position.y    = 0.08 - 0.25
+	_selection_glow  = mi
+	add_child(mi)
+
+
+## Hides the selection glow without freeing it — shown again cheaply if re-selected.
+func hide_selection_glow() -> void:
+	if _selection_glow != null:
+		_selection_glow.visible = false
 
 
 ## Adds one flat irregular blob to parent at pos.

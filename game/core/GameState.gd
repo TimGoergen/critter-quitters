@@ -60,6 +60,10 @@ signal wave_skip_requested
 ## Emitted when the player skips the countdown and receives a coin bonus for the remaining time.
 signal early_wave_bonus_awarded(coins: int)
 
+## Emitted whenever the "send next wave early" reward changes — at wave launch with
+## the full amount, after each enemy spawns as it decreases, and at 0 once exhausted.
+signal early_send_reward_changed(amount: int)
+
 ## Emitted when the player picks a different trap type to place.
 ## type is an int matching the Trap.TrapType enum — stored as int here to
 ## avoid importing Trap.gd into GameState and creating a circular dependency.
@@ -131,9 +135,20 @@ var exit_cell: Vector2i = Vector2i.ZERO
 ## All types are always available — Bug Bucks cost is the only gate.
 var selected_trap_type: int = 0
 
-## Bug Bucks awarded per second remaining when the player clicks Send Wave Early.
-## Default 2; future meta-upgrades can increase this between runs.
+## Bug Bucks awarded per second remaining when the player clicks Send Wave Early
+## during the between-wave countdown.  Default 2; upgradeable between runs.
 var early_wave_bonus_rate: int = 2
+
+## Flat Bug Bucks bonus awarded per current-wave-number when the player sends
+## the next wave while the current wave is still active.
+## Final bonus = current_wave × WAVE_OVERLAP_BONUS_RATE.
+## Larger than the countdown bonus because the player is taking on real risk.
+const WAVE_OVERLAP_BONUS_RATE: int = 20
+
+## Bug Bucks awarded per enemy that has NOT yet spawned when the player presses
+## "Send Next Wave" during an active wave.  Small by design — the real reward
+## is the extra kill bounties from tackling two waves at once.
+const EARLY_SEND_PER_ENEMY: int = 3
 
 
 # ---------------------------------------------------------------------------
@@ -196,8 +211,8 @@ func set_countdown(seconds: int) -> void:
 
 ## Increases infestation_level by points / INFESTATION_MAX.
 ## Calls end_run() if the level reaches 1.0.
-func add_infestation(points: int) -> void:
-	infestation_level = minf(infestation_level + float(points) / float(INFESTATION_MAX), 1.0)
+func add_infestation(points: float) -> void:
+	infestation_level = minf(infestation_level + points / float(INFESTATION_MAX), 1.0)
 	infestation_changed.emit(infestation_level)
 	if infestation_level >= 1.0:
 		end_run()

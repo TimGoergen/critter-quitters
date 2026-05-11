@@ -31,6 +31,7 @@ const Projectile        = preload("res://traps/Projectile.gd")
 const FogCloud          = preload("res://traps/FogCloud.gd")
 const HUD               = preload("res://ui/HUD.gd")
 const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
+const EnemyStatsPanel   = preload("res://ui/EnemyStatsPanel.gd")
 const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
 
 
@@ -126,12 +127,33 @@ var _selected_trap: Node = null
 # True while the panel is the reason the tree is paused, so close knows to unpause.
 var _panel_paused: bool = false
 
-# Touch input state machine — classifies a finger gesture as either a tap or a drag.
-enum TouchState { IDLE, PENDING_CLASSIFY, DRAGGING }
+# Touch/mouse input state machine.
+#
+# IDLE             → no pointer down
+# PENDING_CLASSIFY → pointer down; waiting to see if this is a tap, a pan, or a hold
+# DRAGGING         → movement exceeded DRAG_THRESHOLD_PX first; panning the camera
+# DRAG_PLACING     → pointer held past HOLD_THRESHOLD_SEC without moving; dragging
+#                    a ghost preview around the arena to choose a placement cell
+enum TouchState { IDLE, PENDING_CLASSIFY, DRAGGING, DRAG_PLACING }
 var _touch_state:    TouchState = TouchState.IDLE
-var _touch_down_pos: Vector2    = Vector2.ZERO   # screen position where the finger landed
-var _touch_last_pos: Vector2    = Vector2.ZERO   # most recent drag position
-const DRAG_THRESHOLD_PX: float  = 15.0           # movement before classifying as drag
+var _touch_down_pos: Vector2    = Vector2.ZERO   # screen position where the pointer landed
+var _touch_last_pos: Vector2    = Vector2.ZERO   # most recent drag/move position
+var _touch_hold_time: float     = 0.0            # seconds held without exceeding drag threshold
+const DRAG_THRESHOLD_PX: float  = 15.0           # movement before classifying as drag/pan
+const HOLD_THRESHOLD_SEC: float = 0.25           # hold duration before entering DRAG_PLACING
+
+# Pinch-to-zoom — two-finger gesture that toggles between the two zoom levels.
+# While _pinch_active is true all single-finger routing is suspended.
+var _pinch_active:      bool    = false
+var _pinch_finger0_pos: Vector2 = Vector2.ZERO   # current world position of finger 0
+var _pinch_finger1_pos: Vector2 = Vector2.ZERO   # current world position of finger 1
+var _pinch_start_span:  float   = 0.0            # finger distance when the gesture began
+# Minimum span change (px) required to register a zoom direction.
+const PINCH_THRESHOLD_PX: float = 40.0
+
+# Ghost preview node shown while in DRAG_PLACING mode.
+var _drag_place_preview: Node3D  = null
+var _drag_place_anchor:  Vector2i = Vector2i(-1, -1)
 
 # Camera zoom — two discrete levels: overview (full-arena fit) and zoomed-in (2×).
 enum ZoomState { OVERVIEW, ZOOMED_IN }
@@ -139,8 +161,13 @@ var _zoom_state:           ZoomState = ZoomState.OVERVIEW
 var _overview_camera_size: float     = 0.0   # camera.size at the overview level; set by _fit_camera_to_grid
 var _camera_base_h_offset: float     = 0.0   # h_offset that centres the arena between the two panels
 var _pan_world_pos:         Vector2  = Vector2.ZERO   # current camera XZ pan offset (world units)
-var _arena_world_half:      float    = 0.0   # half the grid world size; used for pan clamping
+var _arena_world_half:      float    = 0.0   # half the grid world width (X); used for pan clamping
+var _arena_world_half_z:    float    = 0.0   # half the grid world height (Z); used for pan clamping
 var _followed_enemy:        Node3D   = null  # non-null while enemy-follow mode is active
+var _enemy_stats_panel:    Node     = null  # EnemyStatsPanel instance
+var _floor_mi:           MeshInstance3D = null  # floor mesh; material_override swapped on zoom
+var _floor_mat_overview: ShaderMaterial  = null  # no grid lines (overview)
+var _floor_mat_zoomed:   ShaderMaterial  = null  # grid lines visible (zoomed in)
 
 # Reference to the playtest setup dialog while it is open; null after it confirms.
 var _debug_dialog: Node = null
@@ -158,11 +185,15 @@ var _entrance_rows: Array[int] = []
 # ---------------------------------------------------------------------------
 
 func _ready() -> void:
+	# Keep processing input even when the scene tree is paused (user-triggered pause
+	# or upgrade panel pause) so camera pan and trap placement remain available.
+	process_mode = Node.PROCESS_MODE_ALWAYS
+
 	# Phase 1: entrance and exit are hardcoded for the prototype.
-	# Grid is 31×31 (odd) so row 15 is the exact vertical centre — both gaps
-	# land there, spanning rows 14–16 (3 rows each).
-	var entrance := Vector2i(0, 15)
-	var exit     := Vector2i(30, 15)
+	# Grid is 31×29; row 14 is the exact vertical centre — both gaps
+	# land there, spanning rows 13–15 (3 rows each).
+	var entrance := Vector2i(0, 14)
+	var exit     := Vector2i(30, 14)
 
 	_spawn_cell   = Vector2i(entrance.x - 1, entrance.y)
 	_despawn_cell = Vector2i(exit.x + 1, exit.y)
@@ -185,20 +216,20 @@ func _ready() -> void:
 	# only passable openings in those columns.
 	var ent_gap := [entrance.y - 1, entrance.y, entrance.y + 1]
 	var ex_gap  := [exit.y - 1, exit.y, exit.y + 1]
-	for row in range(Grid.GRID_SIZE):
+	for row in range(Grid.GRID_ROWS):
 		if row not in ent_gap:
 			_grid.set_cell(Vector2i(entrance.x, row), Grid.CellState.WALL)
 		if row not in ex_gap:
 			_grid.set_cell(Vector2i(exit.x, row), Grid.CellState.WALL)
 
-	# Mark the top and bottom border rows (0 and GRID_SIZE-1) as WALL for all
-	# interior columns. Geometry placed outside the grid at z = ±15.5 consistently
+	# Mark the top and bottom border rows (0 and GRID_ROWS-1) as WALL for all
+	# interior columns. Geometry placed outside the grid at z = ±14.5 consistently
 	# failed to render regardless of mesh type, so walls are placed on the outermost
 	# grid rows instead — symmetric with the left/right approach using columns 0/30.
 	# Columns 0 and GRID_SIZE-1 are already WALL from the column loop above.
 	for col in range(1, Grid.GRID_SIZE - 1):
 		_grid.set_cell(Vector2i(col, 0),                   Grid.CellState.WALL)
-		_grid.set_cell(Vector2i(col, Grid.GRID_SIZE - 1),  Grid.CellState.WALL)
+		_grid.set_cell(Vector2i(col, Grid.GRID_ROWS - 1),  Grid.CellState.WALL)
 
 	GameState.start_run(entrance, exit)
 	_pathfinder.initialize(_grid)
@@ -219,6 +250,8 @@ func _ready() -> void:
 
 	_pathfinder.recalculate()
 	add_child(HUD.new())
+	_enemy_stats_panel = EnemyStatsPanel.new()
+	add_child(_enemy_stats_panel)
 	GameState.wave_skip_requested.connect(_on_wave_skip_requested)
 	GameState.run_ended.connect(_close_upgrade_panel)
 	GameState.run_ended.connect(_on_run_ended_camera)
@@ -227,7 +260,7 @@ func _ready() -> void:
 	# Release enemy follow when a new wave launches (countdown expires).
 	GameState.wave_countdown_changed.connect(func(sec: int) -> void:
 		if sec == 0:
-			_followed_enemy = null
+			_set_followed_enemy(null)
 	)
 
 	# Size the camera to fit the arena inside the usable area between side panels,
@@ -247,44 +280,184 @@ func _ready() -> void:
 # ---------------------------------------------------------------------------
 
 func _unhandled_input(event: InputEvent) -> void:
+	# --- Touch ---
 	if event is InputEventScreenTouch:
-		if event.index != 0:
-			return   # ignore second finger
-		if event.pressed:
-			_touch_state    = TouchState.PENDING_CLASSIFY
-			_touch_down_pos = event.position
-			_touch_last_pos = event.position
-		else:
-			if _touch_state == TouchState.PENDING_CLASSIFY:
-				_handle_tap(_touch_down_pos)
-			_touch_state = TouchState.IDLE
+		if event.index == 0:
+			_pinch_finger0_pos = event.position
+			if event.pressed:
+				_on_pointer_down(event.position)
+			elif _pinch_active:
+				_end_pinch()   # finger 0 lifted while pinching — evaluate and clear
+			else:
+				_on_pointer_released(event.position)
+		elif event.index == 1:
+			if event.pressed:
+				# Second finger landed — fold the in-progress single-finger gesture
+				# into a pinch.  _touch_last_pos holds finger 0's current position.
+				_pinch_finger0_pos = _touch_last_pos
+				_pinch_finger1_pos = event.position
+				_begin_pinch()
+			elif _pinch_active:
+				_end_pinch()   # finger 1 lifted while pinching — evaluate and clear
 		return
 
 	if event is InputEventScreenDrag:
-		if event.index != 0:
-			return
-		_touch_last_pos = event.position
-		if _touch_state == TouchState.PENDING_CLASSIFY:
-			if event.position.distance_to(_touch_down_pos) >= DRAG_THRESHOLD_PX:
-				_touch_state = TouchState.DRAGGING
-		if _touch_state == TouchState.DRAGGING:
-			# Drag pans the camera only when zoomed in and not following an enemy.
-			if _zoom_state == ZoomState.ZOOMED_IN and _followed_enemy == null:
-				var vp          := get_viewport().get_visible_rect().size
-				var world_per_px := _camera.size / vp.y
-				_apply_pan(_pan_world_pos - event.relative * world_per_px)
+		if event.index == 0:
+			_pinch_finger0_pos = event.position
+			if _pinch_active:
+				return   # swallow single-finger routing during pinch
+			_on_pointer_dragged(event.position, event.relative)
+		elif event.index == 1 and _pinch_active:
+			_pinch_finger1_pos = event.position
 		return
 
-	# Keep right-click removal and keyboard shortcuts for desktop/dev use.
-	if event is InputEventKey:
-		if event.pressed and not event.echo:
-			_handle_key(event.keycode)
+	# --- Mouse ---
+	if event is InputEventMouseButton:
+		if event.button_index == MOUSE_BUTTON_LEFT:
+			if event.pressed:
+				_on_pointer_down(event.position)
+			else:
+				_on_pointer_released(event.position)
+		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
+			_try_remove_trap(_screen_to_grid(event.position))
 		return
 
-	if event is InputEventMouseButton and event.pressed:
-		var cell := _screen_to_grid(event.position)
-		if event.button_index == MOUSE_BUTTON_RIGHT:
-			_try_remove_trap(cell)
+	# InputEventMouseMotion carries no button state — guard with is_mouse_button_pressed.
+	if event is InputEventMouseMotion and Input.is_mouse_button_pressed(MOUSE_BUTTON_LEFT):
+		_on_pointer_dragged(event.position, event.relative)
+		return
+
+	# Keyboard shortcuts for desktop/dev use.
+	if event is InputEventKey and event.pressed and not event.echo:
+		_handle_key(event.keycode)
+
+
+# ---------------------------------------------------------------------------
+# Unified pointer dispatch (touch + mouse share the same state machine)
+# ---------------------------------------------------------------------------
+
+## Called on finger-down or left mouse button press.
+func _on_pointer_down(screen_pos: Vector2) -> void:
+	_touch_state     = TouchState.PENDING_CLASSIFY
+	_touch_down_pos  = screen_pos
+	_touch_last_pos  = screen_pos
+	_touch_hold_time = 0.0
+
+
+## Called on finger-up or left mouse button release.
+func _on_pointer_released(screen_pos: Vector2) -> void:
+	match _touch_state:
+		TouchState.PENDING_CLASSIFY:
+			_handle_tap(_touch_down_pos)
+		TouchState.DRAG_PLACING:
+			_commit_drag_place()
+	_clear_drag_preview()
+	_touch_state = TouchState.IDLE
+
+
+## Called on finger drag or mouse motion while left button is held.
+func _on_pointer_dragged(screen_pos: Vector2, relative: Vector2) -> void:
+	_touch_last_pos = screen_pos
+
+	if _touch_state == TouchState.PENDING_CLASSIFY:
+		if screen_pos.distance_to(_touch_down_pos) >= DRAG_THRESHOLD_PX:
+			_touch_state = TouchState.DRAGGING
+
+	if _touch_state == TouchState.DRAGGING:
+		# Pan when zoomed in and either free (no follow target) or paused (follow is suspended).
+		if _zoom_state == ZoomState.ZOOMED_IN and (_followed_enemy == null or get_tree().paused):
+			var vp           := get_viewport().get_visible_rect().size
+			var world_per_px := _camera.size / vp.y
+			_apply_pan(_pan_world_pos - relative * world_per_px)
+	elif _touch_state == TouchState.DRAG_PLACING:
+		_update_drag_preview(screen_pos)
+
+
+# ---------------------------------------------------------------------------
+# Drag-to-place
+# ---------------------------------------------------------------------------
+
+## Transitions PENDING_CLASSIFY → DRAG_PLACING after the hold threshold.
+## Called from _process when the hold timer fires.
+## Does nothing if the player cannot afford a trap.
+func _enter_drag_placing(screen_pos: Vector2) -> void:
+	if not _can_afford_trap():
+		# Nothing to drag-place; treat the rest of the gesture as inert.
+		_touch_state = TouchState.IDLE
+		return
+	_touch_state = TouchState.DRAG_PLACING
+	_update_drag_preview(screen_pos)
+
+
+## Positions or repositions the ghost preview at the cell under screen_pos.
+## Rebuilds the preview node only when the anchor cell changes.
+## Shows a valid (semi-transparent) or invalid (grey) ghost based on placement rules.
+func _update_drag_preview(screen_pos: Vector2) -> void:
+	var anchor := _clamp_to_anchor(_screen_to_grid(screen_pos))
+	if anchor == _drag_place_anchor:
+		return   # still on the same cell — nothing to rebuild
+
+	# Clear the old preview first, then record the new anchor.
+	# Order matters: _clear_drag_preview() resets _drag_place_anchor to (-1,-1),
+	# so the assignment must come after the clear or the anchor is lost on release.
+	_clear_drag_preview()
+	_drag_place_anchor = anchor
+
+	if not _is_in_arena(anchor):
+		return
+
+	var cells := _get_trap_cells(anchor)
+	var valid  := not cells.is_empty() \
+		and not _footprint_overlaps_enemy(cells) \
+		and _can_place_at(cells)
+	_drag_place_preview = _make_trap_preview(GameState.selected_trap_type, 0.5, valid)
+	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
+	_drag_place_preview.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
+
+
+## Places a trap at the last previewed anchor and frees the preview.
+func _commit_drag_place() -> void:
+	var anchor := _drag_place_anchor
+	_clear_drag_preview()
+	if anchor == Vector2i(-1, -1) or not _can_afford_trap():
+		return
+	var cells := _get_trap_cells(anchor)
+	if not cells.is_empty() and not _footprint_overlaps_enemy(cells):
+		_try_place_trap(anchor)
+
+
+## Frees the ghost preview node and resets the tracked anchor.
+func _clear_drag_preview() -> void:
+	if _drag_place_preview != null and is_instance_valid(_drag_place_preview):
+		_drag_place_preview.queue_free()
+	_drag_place_preview   = null
+	_drag_place_anchor    = Vector2i(-1, -1)
+
+
+# ---------------------------------------------------------------------------
+# Pinch-to-zoom
+# ---------------------------------------------------------------------------
+
+## Called when a second finger lands while finger 0 is already down.
+## Cancels any in-progress single-finger operation and begins tracking span.
+func _begin_pinch() -> void:
+	_clear_drag_preview()
+	_touch_state      = TouchState.IDLE
+	_pinch_active     = true
+	_pinch_start_span = _pinch_finger0_pos.distance_to(_pinch_finger1_pos)
+
+
+## Called when either finger lifts during a pinch.
+## Compares final span to starting span and toggles zoom if the change is large enough.
+## Spreading fingers (span grows) zooms in; pinching (span shrinks) zooms out.
+func _end_pinch() -> void:
+	_pinch_active = false
+	_touch_state  = TouchState.IDLE
+	var delta := _pinch_finger0_pos.distance_to(_pinch_finger1_pos) - _pinch_start_span
+	if delta > PINCH_THRESHOLD_PX and _zoom_state == ZoomState.OVERVIEW:
+		_toggle_zoom()
+	elif delta < -PINCH_THRESHOLD_PX and _zoom_state == ZoomState.ZOOMED_IN:
+		_toggle_zoom()
 
 
 # ---------------------------------------------------------------------------
@@ -299,19 +472,23 @@ func _handle_tap(screen_pos: Vector2) -> void:
 		_handle_enemy_tap(tapped_enemy)
 		return
 
+	# Any tap that does not land on the followed enemy clears the follow and
+	# closes the stats panel — this covers empty cells, trap taps, and anything else.
+	_set_followed_enemy(null)
+
 	var cell := _screen_to_grid(screen_pos)
 
 	# Tap on a placed trap → center camera (if zoomed) and open upgrade panel.
 	if _trap_anchors.has(cell):
 		if _zoom_state == ZoomState.ZOOMED_IN:
-			_followed_enemy = null
+			_set_followed_enemy(null)
 			var wp := _cell_to_world(_trap_anchors[cell])
 			_apply_pan(Vector2(wp.x, wp.z))
 		_open_upgrade_panel(_trap_anchors[cell])
 		return
 
 	# Tap on an empty arena cell → place trap if affordable and not obstructed.
-	if not get_tree().paused and _is_in_arena(cell):
+	if _is_in_arena(cell):
 		_close_upgrade_panel()
 		if _can_afford_trap():
 			var anchor := _clamp_to_anchor(cell)
@@ -336,20 +513,36 @@ func _find_enemy_near_screen(screen_pos: Vector2, max_dist_px: float) -> Node3D:
 	return best
 
 
+## Sets the followed enemy, keeps the selection glow in sync, and
+## shows or hides the stats panel for the new target.
+func _set_followed_enemy(enemy: Node3D) -> void:
+	if _followed_enemy == enemy:
+		return
+	if is_instance_valid(_followed_enemy):
+		_followed_enemy.hide_selection_glow()
+	_followed_enemy = enemy
+	if is_instance_valid(_followed_enemy):
+		_followed_enemy.show_selection_glow()
+	if _enemy_stats_panel != null:
+		_enemy_stats_panel.set_enemy(_followed_enemy)
+
+
 ## Handles a tap on an enemy: zooms in and follows, or cancels follow.
 func _handle_enemy_tap(enemy: Node3D) -> void:
 	if _zoom_state == ZoomState.OVERVIEW:
 		# Zoom in and begin following this enemy.
-		_zoom_state = ZoomState.ZOOMED_IN
+		_zoom_state  = ZoomState.ZOOMED_IN
 		_camera.size = _overview_camera_size * 0.5
-		_followed_enemy = enemy
+		if _floor_mi != null:
+			_floor_mi.material_override = _floor_mat_zoomed
+		_set_followed_enemy(enemy)
 		GameState.zoom_state_changed.emit(true)
 	elif _followed_enemy == enemy:
 		# Tap the same enemy again → back to overview.
 		_toggle_zoom()
 	else:
 		# Switch follow to this new enemy (stay zoomed).
-		_followed_enemy = enemy
+		_set_followed_enemy(enemy)
 
 
 # ---------------------------------------------------------------------------
@@ -425,7 +618,7 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 		return
 
 	if _zoom_state == ZoomState.ZOOMED_IN:
-		_followed_enemy = null
+		_set_followed_enemy(null)
 		var wp := _cell_to_world(anchor)
 		_apply_pan(Vector2(wp.x, wp.z))
 
@@ -626,20 +819,22 @@ func _screen_to_grid(screen_pos: Vector2) -> Vector2i:
 	var world_pos := ray_origin + ray_dir * t
 
 	# Convert world XZ position to grid column and row.
-	# The grid is centred on the world origin, so we offset by half the
-	# total grid width before dividing by cell size.
-	var half_grid := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
-	var col       := floori((world_pos.x + half_grid) / Grid.CELL_SIZE)
-	var row       := floori((world_pos.z + half_grid) / Grid.CELL_SIZE)
+	# The grid is centred on the world origin; X and Z use separate half-extents
+	# because the grid is no longer square (31 cols × 29 rows).
+	var half_w := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
+	var half_h := (Grid.GRID_ROWS * Grid.CELL_SIZE) / 2.0
+	var col    := floori((world_pos.x + half_w) / Grid.CELL_SIZE)
+	var row    := floori((world_pos.z + half_h) / Grid.CELL_SIZE)
 
 	return Vector2i(col, row)
 
 
 ## Converts a grid coordinate to its world-space centre position at y = 0.
 func _cell_to_world(cell: Vector2i) -> Vector3:
-	var half_grid := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
-	var x         := cell.x * Grid.CELL_SIZE - half_grid + Grid.CELL_SIZE * 0.5
-	var z         := cell.y * Grid.CELL_SIZE - half_grid + Grid.CELL_SIZE * 0.5
+	var half_w := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
+	var half_h := (Grid.GRID_ROWS * Grid.CELL_SIZE) / 2.0
+	var x      := cell.x * Grid.CELL_SIZE - half_w + Grid.CELL_SIZE * 0.5
+	var z      := cell.y * Grid.CELL_SIZE - half_h + Grid.CELL_SIZE * 0.5
 	return Vector3(x, 0.0, z)
 
 
@@ -693,6 +888,9 @@ func _spawn_enemy(path: Array[Vector2i], enemy_type: Enemy.EnemyType) -> void:
 	enemy.died.connect(_on_enemy_died.bind(enemy))
 	enemy.cell_advanced.connect(_redraw_path_display)
 
+	# Arena is PROCESS_MODE_ALWAYS so input works during pause; override here
+	# so enemies actually stop when the player pauses.
+	enemy.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(enemy)
 	enemy.initialize(path, enemy_type, GameState.current_wave)
 
@@ -700,6 +898,8 @@ func _spawn_enemy(path: Array[Vector2i], enemy_type: Enemy.EnemyType) -> void:
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
 	GameState.add_infestation(enemy.get_infestation_damage())
 	_active_enemies.erase(enemy)
+	if enemy == _followed_enemy:
+		_set_followed_enemy(null)
 	# enemy.queue_free() is called inside Enemy.gd — no double-free needed.
 
 	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
@@ -709,6 +909,8 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 func _on_enemy_died(enemy: Node3D) -> void:
 	GameState.add_bug_bucks(enemy.get_bounty())
 	_active_enemies.erase(enemy)
+	if enemy == _followed_enemy:
+		_set_followed_enemy(null)
 	# enemy.queue_free() is called inside Enemy._die() after the flash tween.
 
 	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
@@ -754,10 +956,10 @@ func _on_trap_type_changed(_type: int) -> void:
 	pass   # reserved for future type-change side effects
 
 
-## Skips any active countdown and starts the wave immediately.
-## Triggered by the "Send Wave Early" HUD button via GameState.wave_skip_requested.
-## Awards coins based on how many seconds were left, and emits early_wave_bonus_awarded
-## so the HUD can play the particle burst.
+## Handles the "Send Wave Early" button.
+## Between waves (countdown active): skips the countdown and awards a time-remaining bonus.
+## During a wave (enemies active): launches the next wave immediately for a larger bonus
+## scaled by the current wave number.  Both paths are available at any time.
 func _on_wave_skip_requested() -> void:
 	if _countdown_active:
 		_countdown_active = false
@@ -766,6 +968,16 @@ func _on_wave_skip_requested() -> void:
 			GameState.add_bug_bucks(bonus)
 			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.set_countdown(0)
+		_launch_wave()
+	elif not (_active_enemies.is_empty() and _enemies_left_to_spawn == 0):
+		# Wave is active — send the next wave immediately.  Reward equals the
+		# per-enemy bounty for each enemy that has not yet spawned; once all
+		# enemies are out the reward is 0.
+		var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY
+		GameState.add_bug_bucks(bonus)
+		GameState.early_wave_bonus_awarded.emit(bonus)
+		GameState.early_send_reward_changed.emit(0)
+		GameState.current_wave += 1
 		_launch_wave()
 
 
@@ -790,6 +1002,8 @@ func _launch_wave() -> void:
 		_enemies_left_to_spawn = _static_spawn_queue.size()
 	else:
 		_enemies_left_to_spawn = _wave_size
+	# Publish the full reward so the HUD can display it before the first spawn.
+	GameState.early_send_reward_changed.emit(_enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY)
 	get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
 
 
@@ -799,6 +1013,7 @@ func _spawn_next_in_wave() -> void:
 	if _enemies_left_to_spawn <= 0:
 		return
 	_enemies_left_to_spawn -= 1
+	GameState.early_send_reward_changed.emit(_enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY)
 
 	var open_rows: Array[int] = []
 	for row in _entrance_rows:
@@ -930,18 +1145,18 @@ func _hide_selected_trap_outline() -> void:
 func _clamp_to_anchor(cell: Vector2i) -> Vector2i:
 	return Vector2i(
 		clampi(cell.x, 0, Grid.GRID_SIZE - 2),
-		clampi(cell.y, 0, Grid.GRID_SIZE - 2)
+		clampi(cell.y, 0, Grid.GRID_ROWS - 2)
 	)
 
 
 
 
-## Returns true when a cell is within the arena, defined as the 31x31 floor
-## plus the 1-cell-wide wall border surrounding it (x: -1..31, y: -1..31).
+## Returns true when a cell is within the arena, defined as the 31×29 floor
+## plus the 1-cell-wide wall border surrounding it (x: -1..31, y: -1..29).
 ## Cells beyond that boundary are outside the arena entirely.
 func _is_in_arena(cell: Vector2i) -> bool:
 	return cell.x >= -1 and cell.x <= Grid.GRID_SIZE \
-		and cell.y >= -1 and cell.y <= Grid.GRID_SIZE
+		and cell.y >= -1 and cell.y <= Grid.GRID_ROWS
 
 
 ## Returns the Manhattan distance from cell to the nearest cell in the
@@ -1142,9 +1357,26 @@ uniform float crop_size   = 0.400;
 // Darkens the floor so game objects read clearly against it.
 const float BRIGHTNESS = 0.7;
 
+// Grid dimensions — must match Grid.GRID_SIZE and Grid.GRID_ROWS.
+const vec2 GRID_CELLS = vec2(31.0, 29.0);
+
+// Line fade: distance (as fraction of a cell) where the line reaches zero opacity.
+const float LINE_HALF_WIDTH = 0.04;
+// Set at material-build time: 0.0 for overview material, 0.15 for zoomed material.
+uniform float line_alpha = 0.0;
+
 void fragment() {
 	vec2 uv = crop_offset + UV * crop_size;
-	ALBEDO = texture(floor_texture, uv).rgb * BRIGHTNESS;
+	vec3 floor_color = texture(floor_texture, uv).rgb * BRIGHTNESS;
+
+	// Map UV to cell space; fract gives position within each cell (0..1).
+	// min(f, 1-f) gives distance to the nearest grid line edge (0..0.5).
+	vec2 f = fract(UV * GRID_CELLS);
+	float nearest = min(min(f.x, 1.0 - f.x), min(f.y, 1.0 - f.y));
+	float line = 1.0 - smoothstep(0.0, LINE_HALF_WIDTH, nearest);
+
+	vec3 line_color = vec3(0.92, 0.90, 0.85);
+	ALBEDO = mix(floor_color, line_color, line * line_alpha);
 }
 """
 
@@ -1163,23 +1395,28 @@ func _spawn_floor() -> void:
 	var shader := Shader.new()
 	shader.code = _FLOOR_SHADER_CODE
 
-	var mat := ShaderMaterial.new()
-	mat.shader = shader
-	mat.set_shader_parameter("floor_texture", texture)
-	mat.set_shader_parameter("crop_offset",   crop_offset)
-	mat.set_shader_parameter("crop_size",     CROP_SIZE)
+	# Build a helper so both materials share the same texture bindings.
+	var _make_mat := func(alpha: float) -> ShaderMaterial:
+		var m := ShaderMaterial.new()
+		m.shader = shader
+		m.set_shader_parameter("floor_texture", texture)
+		m.set_shader_parameter("crop_offset",   crop_offset)
+		m.set_shader_parameter("crop_size",     CROP_SIZE)
+		m.set_shader_parameter("line_alpha",    alpha)
+		return m
 
-	# Plane sized to the full 31×31 grid. The border-column wall slabs render
-	# on top of the edges; the floor texture shows through the entrance and
-	# exit gap columns.
-	var grid_world := Grid.GRID_SIZE * Grid.CELL_SIZE
-	var plane      := PlaneMesh.new()
-	plane.size      = Vector2(grid_world, grid_world)
-	var mi         := MeshInstance3D.new()
-	mi.mesh         = plane
-	mi.position     = Vector3(0.0, 0.010, 0.0)
-	mi.material_override = mat
-	add_child(mi)
+	_floor_mat_overview = _make_mat.call(0.0)
+	_floor_mat_zoomed   = _make_mat.call(0.15)
+
+	var grid_w := Grid.GRID_SIZE * Grid.CELL_SIZE
+	var grid_h := Grid.GRID_ROWS * Grid.CELL_SIZE
+	var plane   := PlaneMesh.new()
+	plane.size   = Vector2(grid_w, grid_h)
+	_floor_mi               = MeshInstance3D.new()
+	_floor_mi.mesh          = plane
+	_floor_mi.position      = Vector3(0.0, 0.010, 0.0)
+	_floor_mi.material_override = _floor_mat_overview
+	add_child(_floor_mi)
 
 
 ## Renders the inner arena border — the outermost row/column ring of the 31×31 grid.
@@ -1193,13 +1430,13 @@ func _spawn_arena_border() -> void:
 	var ex_gap  := [ex_row  - 1, ex_row,  ex_row  + 1]
 
 	var cells: Array[Vector2i] = []
-	# Top row (row 0) and bottom row (row GRID_SIZE-1) — full width
+	# Top row (row 0) and bottom row (row GRID_ROWS-1) — full width
 	for col in range(Grid.GRID_SIZE):
 		cells.append(Vector2i(col, 0))
-		cells.append(Vector2i(col, Grid.GRID_SIZE - 1))
-	# Left column (col 0) and right column (col GRID_SIZE-1), rows 1..GRID_SIZE-2.
-	# Rows 0 and GRID_SIZE-1 are already in the top/bottom sets above.
-	for row in range(1, Grid.GRID_SIZE - 1):
+		cells.append(Vector2i(col, Grid.GRID_ROWS - 1))
+	# Left column (col 0) and right column (col GRID_SIZE-1), rows 1..GRID_ROWS-2.
+	# Rows 0 and GRID_ROWS-1 are already in the top/bottom sets above.
+	for row in range(1, Grid.GRID_ROWS - 1):
 		if row not in ent_gap:
 			cells.append(Vector2i(0, row))
 		if row not in ex_gap:
@@ -1513,9 +1750,9 @@ func _spawn_outer_border_ring() -> void:
 	# Top and bottom outer rows — full width including corner cells
 	for col in range(-1, Grid.GRID_SIZE + 1):
 		cells.append(Vector2i(col, -1))
-		cells.append(Vector2i(col, Grid.GRID_SIZE))
-	# Left and right outer columns — rows 0..GRID_SIZE-1 (corners covered by top/bottom above)
-	for row in range(Grid.GRID_SIZE):
+		cells.append(Vector2i(col, Grid.GRID_ROWS))
+	# Left and right outer columns — rows 0..GRID_ROWS-1 (corners covered by top/bottom above)
+	for row in range(Grid.GRID_ROWS):
 		if row not in ent_gap:
 			cells.append(Vector2i(-1, row))
 		if row not in ex_gap:
@@ -1563,6 +1800,8 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	trap.fired.connect(_on_trap_fired)
 	trap.aoe_fired.connect(_on_fogger_aoe_fired)
 	trap.initialize(GameState.selected_trap_type as Trap.TrapType, _active_enemies)
+	# Arena is PROCESS_MODE_ALWAYS; override so traps pause with the game.
+	trap.process_mode = Node.PROCESS_MODE_PAUSABLE
 	_trap_container.add_child(trap)
 	GameState.spend_bug_bucks(trap.get_cost())
 	_trap_nodes[anchor] = trap
@@ -1571,12 +1810,16 @@ func _spawn_trap(anchor: Vector2i) -> void:
 func _on_trap_fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, trap_type: int) -> void:
 	var proj := Projectile.new()
 	proj.initialize(from_pos, to_pos, target, damage, trap_type)
+	# Arena is PROCESS_MODE_ALWAYS; override so projectiles pause with the game.
+	proj.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(proj)
 
 
 func _on_fogger_aoe_fired(from_pos: Vector3, aoe_range: float, damage: float, active_enemies: Array) -> void:
 	var cloud := FogCloud.new()
 	cloud.initialize(from_pos, aoe_range, damage, active_enemies)
+	# Arena is PROCESS_MODE_ALWAYS; override so fog clouds pause with the game.
+	cloud.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(cloud)
 
 
@@ -1594,44 +1837,60 @@ func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
 
 
 ## Sizes and positions the orthographic camera so the arena fills the space
-## between the left and right HUD panels, with ARENA_MARGIN_PX of breathing room
-## on all sides.  Stores the resulting size as _overview_camera_size for zoom logic.
+## between the left and right HUD panels, with the same margins as the HUD
+## panel content: MARGIN on the inner panel edges, SCREEN_EDGE_MARGIN on the
+## top and bottom screen edges (which may have rounded corners on mobile).
+## Stores the resulting size as _overview_camera_size for zoom logic.
 ##
 ## v_offset sign convention for this top-down camera (local Y = world −Z):
 ##   positive → aim shifts toward world −Z → origin appears lower on screen.
 func _fit_camera_to_grid() -> void:
 	var vp       := get_viewport().get_visible_rect().size
-	var usable_w := vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W
-	var usable_h := vp.y - HUD.ARENA_MARGIN_PX * 2.0
+	# Left/right: match the HUD panel inner padding (MARGIN).
+	# Top/bottom: match the HUD panel screen-edge inset (SCREEN_EDGE_MARGIN)
+	# which clears rounded corners on mobile devices.
+	var usable_w := vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.MARGIN * 2.0
+	var usable_h := vp.y - HUD.SCREEN_EDGE_MARGIN * 2.0
 	if usable_h <= 0.0 or usable_w <= 0.0:
 		return
 
 	# +3 keeps a minimal margin beyond the outer wall ring; zoom mode pans within this space.
-	var arena_world := Grid.GRID_SIZE * Grid.CELL_SIZE + 3.0
+	var arena_w := Grid.GRID_SIZE * Grid.CELL_SIZE + 3.0
+	var arena_h := Grid.GRID_ROWS * Grid.CELL_SIZE + 3.0
 
 	# With KEEP_HEIGHT, horizontal world coverage = size × (vp.x / vp.y).
-	# For the arena to fit usable_w pixels wide: size × (usable_w / vp.y) ≥ arena_world.
-	var size_for_height  := arena_world * vp.y / usable_h
-	var size_for_width   := arena_world * vp.y / usable_w
+	# arena_w and arena_h differ now that the grid is not square.
+	var size_for_height  := arena_h * vp.y / usable_h
+	var size_for_width   := arena_w * vp.y / usable_w
 	_overview_camera_size = maxf(size_for_height, size_for_width)
-	_arena_world_half     = (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
+	# Store separate half-extents so pan clamping uses the correct bound per axis.
+	_arena_world_half   = arena_w / 2.0
+	_arena_world_half_z = arena_h / 2.0
 
 	if _zoom_state == ZoomState.OVERVIEW:
 		_camera.size = _overview_camera_size
 
-	# Shift the camera centre to the midpoint of the usable horizontal band.
+	# Shift the camera centre to the midpoint of the usable horizontal band
+	# (left panel + MARGIN … right panel + MARGIN).
 	var world_per_px     := _overview_camera_size / vp.y
-	var h_center_px      := HUD.LEFT_PANEL_W + usable_w * 0.5
+	var h_center_px      := HUD.LEFT_PANEL_W + HUD.MARGIN + usable_w * 0.5
 	_camera_base_h_offset = (h_center_px - vp.x * 0.5) * world_per_px
 	_camera.h_offset      = _camera_base_h_offset
 	_camera.v_offset      = 0.0
 
 
-## Each frame: track the followed enemy's position when in enemy-follow mode.
-func _process(_delta: float) -> void:
-	if _followed_enemy != null and is_instance_valid(_followed_enemy):
+## Each frame: track the followed enemy, and promote a held pointer to DRAG_PLACING.
+func _process(delta: float) -> void:
+	# Don't track enemies while paused — the enemy is frozen, and the player
+	# should be able to pan freely to inspect the arena during pause.
+	if not get_tree().paused and _followed_enemy != null and is_instance_valid(_followed_enemy):
 		var p := _followed_enemy.global_position
 		_apply_pan(Vector2(p.x, p.z))
+
+	if _touch_state == TouchState.PENDING_CLASSIFY:
+		_touch_hold_time += delta
+		if _touch_hold_time >= HOLD_THRESHOLD_SEC:
+			_enter_drag_placing(_touch_down_pos)
 
 
 ## Toggles between OVERVIEW and ZOOMED_IN camera levels.
@@ -1644,21 +1903,24 @@ func _toggle_zoom() -> void:
 		_apply_pan(_pan_world_pos)
 	else:
 		_zoom_state      = ZoomState.OVERVIEW
-		_followed_enemy  = null
+		_set_followed_enemy(null)
 		_camera.size     = _overview_camera_size
 		_camera.h_offset = _camera_base_h_offset
 		_camera.v_offset = 0.0
-	GameState.zoom_state_changed.emit(_zoom_state == ZoomState.ZOOMED_IN)
+	var zoomed_in := _zoom_state == ZoomState.ZOOMED_IN
+	if _floor_mi != null:
+		_floor_mi.material_override = _floor_mat_zoomed if zoomed_in else _floor_mat_overview
+	GameState.zoom_state_changed.emit(zoomed_in)
 
 
 ## Pans the camera to pos (world XZ), clamped so the arena never scrolls off-screen.
 func _apply_pan(pos: Vector2) -> void:
 	var vp            := get_viewport().get_visible_rect().size
 	var world_per_px  := _camera.size / vp.y
-	var visible_half_w := (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * world_per_px * 0.5
-	var visible_half_h := (vp.y - HUD.ARENA_MARGIN_PX * 2.0) * world_per_px * 0.5
-	var cx := clampf(pos.x, -_arena_world_half + visible_half_w, _arena_world_half - visible_half_w)
-	var cz := clampf(pos.y, -_arena_world_half + visible_half_h, _arena_world_half - visible_half_h)
+	var visible_half_w := (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.MARGIN * 2.0) * world_per_px * 0.5
+	var visible_half_h := (vp.y - HUD.SCREEN_EDGE_MARGIN * 2.0) * world_per_px * 0.5
+	var cx := clampf(pos.x, -_arena_world_half   + visible_half_w, _arena_world_half   - visible_half_w)
+	var cz := clampf(pos.y, -_arena_world_half_z + visible_half_h, _arena_world_half_z - visible_half_h)
 	_pan_world_pos   = Vector2(cx, cz)
 	_camera.h_offset = _camera_base_h_offset + cx
 	_camera.v_offset = -cz
@@ -1666,7 +1928,7 @@ func _apply_pan(pos: Vector2) -> void:
 
 ## Resets camera to overview when a run ends.
 func _on_run_ended_camera() -> void:
-	_followed_enemy = null
+	_set_followed_enemy(null)
 	if _zoom_state == ZoomState.ZOOMED_IN:
 		_toggle_zoom()
 

@@ -30,6 +30,7 @@ extends Node3D
 const Grid               = preload("res://arena/Grid.gd")
 const Projectile         = preload("res://traps/Projectile.gd")
 const FogCloud           = preload("res://traps/FogCloud.gd")
+const UIFonts            = preload("res://ui/UIFonts.gd")
 const SHADOW_OUTLINE_SHADER = preload("res://assets/shadow_outline.gdshader")
 
 
@@ -49,7 +50,7 @@ const STATS := {
 	TrapType.SNAP_TRAP:  { "damage": 5.0,  "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.52, 0.27, 0.08) },
 	TrapType.ZAPPER:     { "damage": 30.0, "range": 9.6, "cooldown": 2.5, "cost": 75, "color": Color(0.10, 0.50, 1.00) },
 	TrapType.FOGGER:     { "damage": 3.0,  "range": 4.0, "cooldown": 2.2, "cost": 60, "color": Color(0.35, 0.88, 0.18) },
-	TrapType.GLUE_BOARD: { "damage": 0.0,  "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(0.92, 0.89, 0.78) },
+	TrapType.GLUE_BOARD: { "damage": 0.50, "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(0.92, 0.89, 0.78) },
 }
 
 ## Each stat can be upgraded this many times independently.
@@ -140,6 +141,15 @@ var _hover_area:      Area3D = null
 # When true, the indicator stays visible regardless of hover state (upgrade panel open).
 var _indicator_pinned: bool  = false
 
+# Star display — one Label3D per possible star (max 3).
+# All three labels are pre-spawned; _update_star_display() shows/hides and repositions them.
+var _star_labels: Array[Label3D] = []
+
+# Upgrade tint — materials updated in _update_star_display() to lerp toward gold.
+var _base_color:   Color                       = Color.WHITE
+var _outline_mats: Array[StandardMaterial3D]   = []
+var _bg_mat:       StandardMaterial3D          = null
+
 # Snap Trap animation nodes — null for all other trap types.
 var _snap_bar_pivot: Node3D         = null
 var _snap_cheese:    MeshInstance3D = null
@@ -189,7 +199,9 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	_base_cooldown = _cooldown
 
 	_spawn_visual(stats["color"])
+	_spawn_star_display()
 	stats_changed.connect(_rebuild_range_indicator)
+	stats_changed.connect(_update_star_display)
 
 
 ## Lightweight setup for placement preview ghosts.
@@ -341,6 +353,27 @@ func get_type_name() -> String:
 func get_cost() -> int:
 	return _cost
 
+## Glue Board only — adhesion strength as a percentage (e.g. 50.0 for 50% slow).
+func get_adhesion_pct() -> float:
+	return _damage * 100.0
+
+## Glue Board only — adhesion after the next damage upgrade, as a percentage.
+func get_adhesion_after_upgrade_pct() -> float:
+	return (_damage + _base_damage * UPGRADE_DAMAGE_FACTOR) * 100.0
+
+## Returns how many stats are currently at MAX_UPGRADE_LEVEL.
+func get_maxed_stat_count() -> int:
+	var count := 0
+	if is_damage_maxed():  count += 1
+	if is_range_maxed():   count += 1
+	if not is_passive() and is_rate_maxed():  count += 1
+	return count
+
+## Returns the total number of independently upgradeable stats for this trap.
+## Passive traps (Glue Board) have 2; active traps have 3.
+func get_total_upgradeable_stats() -> int:
+	return 2 if is_passive() else 3
+
 
 # ---------------------------------------------------------------------------
 # Combat loop
@@ -389,7 +422,7 @@ func _exit_tree() -> void:
 	# Release the slow source so the enemy returns to normal speed immediately
 	# when the trap is sold or overwritten.
 	if is_instance_valid(_slowed_enemy):
-		_slowed_enemy.remove_slow_source()
+		_slowed_enemy.remove_slow_source(self)
 	_slowed_enemy = null
 
 
@@ -428,7 +461,7 @@ func _update_glue_slow() -> void:
 	# so the slot is free — we don't wait for the interval to expire.
 	if is_instance_valid(_slowed_enemy):
 		if _xz_distance(_slowed_enemy.global_position) > _range:
-			_slowed_enemy.remove_slow_source()
+			_slowed_enemy.remove_slow_source(self)
 			_slowed_enemy = null
 	elif _slowed_enemy != null:
 		# Instance is no longer valid (enemy died).
@@ -452,10 +485,10 @@ func _update_glue_slow() -> void:
 	# Switch to the new target if it differs from the current one.
 	if closest != _slowed_enemy:
 		if is_instance_valid(_slowed_enemy):
-			_slowed_enemy.remove_slow_source()
+			_slowed_enemy.remove_slow_source(self)
 		_slowed_enemy = closest
 		if _slowed_enemy != null:
-			_slowed_enemy.add_slow_source()
+			_slowed_enemy.add_slow_source(self, _damage)
 			# Cosmetic glue projectile — damage is 0, slow is the only effect.
 			fired.emit(global_position, _slowed_enemy.global_position, _slowed_enemy, 0.0, _trap_type)
 
@@ -514,6 +547,74 @@ func _check_full_upgrade_bonus() -> void:
 	if _base_cooldown > 0.0:
 		_cooldown = maxf(_cooldown / 1.075, 0.1)
 	_bonus_applied = true
+
+
+## Spawns the star label and glow disc that reflect how many stats are maxed.
+## Called once from initialize() — not spawned for preview instances.
+## Spawns three Label3D nodes in fixed slots:
+##   [0] = center (large)   always shown for the first maxed stat
+##   [1] = left   (small)   shown for the second maxed stat
+##   [2] = right  (small)   shown for the third maxed stat
+func _spawn_star_display() -> void:
+	# Center star is larger; side stars are smaller to signal hierarchy.
+	# pixel_size=0.009 throughout so world-unit sizes scale directly with font_size.
+	var sizes := [88, 66, 66]   # [center, left, right] font sizes
+	for sz: int in sizes:
+		var lbl                  := Label3D.new()
+		lbl.font                  = UIFonts.primary_bold()
+		lbl.font_size             = sz
+		lbl.pixel_size            = 0.009
+		lbl.modulate              = Color(1.0, 0.92, 0.30, 1.0)
+		lbl.outline_size          = 8
+		lbl.outline_modulate      = Color(0.0, 0.0, 0.0, 0.90)
+		lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.billboard             = BaseMaterial3D.BILLBOARD_ENABLED
+		lbl.no_depth_test         = true
+		lbl.text                  = "★"
+		lbl.visible               = false
+		add_child(lbl)
+		_star_labels.append(lbl)
+
+
+## Refreshes star labels and tints the outline + background toward gold as stats are maxed.
+## frac = maxed_stats / total_upgradeable_stats, so each maxed stat moves the tint forward.
+## At frac=1.0 the outline is fully gold and the background is a rich darkened gold.
+func _update_star_display() -> void:
+	if _star_labels.is_empty():
+		return
+	var maxed: int = get_maxed_stat_count()
+
+	# --- Stars ---
+	# Layout: [left-small]  [center-large]  [right-small]
+	# center ★ is 88pt  → ~0.79 world units wide (half = 0.395)
+	# side   ★ is 54pt  → ~0.49 world units wide (half = 0.243)
+	# STAR_Z chosen so the center star's bottom edge (~z+0.395) clears the inner
+	# edge of the outline bar (~z=0.874): 0.45 + 0.395 = 0.845, just inside the line.
+	const STAR_Z:       float = 0.45
+	const STAR_Y:       float = 0.65
+	const SIDE_OFFSET:  float = 0.24
+
+	# Slot 0 = center, 1 = left, 2 = right
+	var positions := [
+		Vector3(0.0,          STAR_Y, STAR_Z),
+		Vector3(-SIDE_OFFSET, STAR_Y, STAR_Z),
+		Vector3( SIDE_OFFSET, STAR_Y, STAR_Z),
+	]
+	for i in range(_star_labels.size()):
+		_star_labels[i].visible  = i < maxed
+		_star_labels[i].position = positions[i]
+
+	# --- Outline + background tint ---
+	const GOLD: Color = Color(1.0, 0.82, 0.18)
+	var frac := float(maxed) / float(get_total_upgradeable_stats())
+	var tint := _base_color.lerp(GOLD, frac)
+
+	for mat: StandardMaterial3D in _outline_mats:
+		mat.albedo_color = tint
+
+	if _bg_mat != null:
+		var bg_brightness := lerpf(0.65, 0.80, frac)
+		_bg_mat.albedo_color = Color(tint.r * bg_brightness, tint.g * bg_brightness, tint.b * bg_brightness, 0.92)
 
 
 ## Forces the range indicator visible and pins it so hover-exit cannot hide it.
@@ -652,15 +753,16 @@ func _spawn_footprint_outline(color: Color) -> void:
 	var thickness := fp * 0.04   # thin enough to read as a border line
 	var y         := 0.005       # just above floor, below all trap body elements
 
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	# Each bar gets its own material so albedo_color updates in _update_star_display()
+	# affect all four bars independently without material aliasing.
+	var bar_h    := 0.008
+	var inner_d  := fp - thickness * 2.0
 
-	var bar_h    := 0.008           # visually flat; avoids z-fighting with floor
-	var inner_d  := fp - thickness * 2.0   # span for side bars, no corner overlap
-
-	# Top and bottom horizontal bars (full footprint width)
 	for sz: float in [-(fp * 0.5 - thickness * 0.5), fp * 0.5 - thickness * 0.5]:
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = color
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_outline_mats.append(mat)
 		var mi   := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
 		mesh.size            = Vector3(fp, bar_h, thickness)
@@ -669,8 +771,11 @@ func _spawn_footprint_outline(color: Color) -> void:
 		mi.material_override = mat
 		add_child(mi)
 
-	# Left and right vertical bars (inner span only; corners are covered above)
 	for sx: float in [-(fp * 0.5 - thickness * 0.5), fp * 0.5 - thickness * 0.5]:
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = color
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_outline_mats.append(mat)
 		var mi   := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
 		mesh.size            = Vector3(thickness, bar_h, inner_d)
@@ -728,6 +833,7 @@ func _spawn_background(color: Color) -> void:
 	mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	bg_mi.material_override = mat
+	_bg_mat = mat
 
 	# Just above the shadow (world y = 0.07) so the shadow peeks out at the edges.
 	bg_mi.position.y = 0.07 - 0.25
@@ -746,6 +852,7 @@ func _spawn_visual(_color: Color) -> void:
 		TrapType.FOGGER:     c = Color(0.46, 0.96, 0.38)
 		TrapType.GLUE_BOARD: c = Color(0.96, 0.82, 0.34)
 		_:                   c = Color(0.80, 0.80, 0.80)
+	_base_color = c
 	_spawn_shadow(c)
 	_spawn_background(c)
 	if _trap_type == TrapType.SNAP_TRAP:
@@ -1150,21 +1257,22 @@ func _spawn_zapper_visual() -> void:
 	glow_mesh.radial_segments = 16
 	glow_mi.mesh              = glow_mesh
 	var glow_mat              := StandardMaterial3D.new()
-	glow_mat.albedo_color      = Color(0.20, 0.60, 1.00, 0.55)
+	glow_mat.albedo_color      = Color(0.00, 0.50, 1.00, 0.70)   # saturated neon blue
 	glow_mat.shading_mode      = BaseMaterial3D.SHADING_MODE_UNSHADED
 	glow_mat.transparency      = BaseMaterial3D.TRANSPARENCY_ALPHA
 	glow_mi.material_override  = glow_mat
 	_zapper_uv_light.add_child(glow_mi)
 
-	# Lightning bolt — replaces the rectangular UV tube.  Built as a flat polygon
-	# on the XZ plane so it reads as a bolt silhouette from the top-down camera.
+	# Lightning bolt — large flat polygon on the XZ plane, always rendered on top
+	# of all other trap geometry via no_depth_test so it reads clearly from above.
 	var bolt_mi              := MeshInstance3D.new()
-	bolt_mi.mesh              = _build_bolt_mesh(fp * 0.20, Color(0.15, 0.72, 1.00))
+	bolt_mi.mesh              = _build_bolt_mesh(fp * 0.42, Color(0.00, 0.50, 1.00))
 	var bolt_mat             := StandardMaterial3D.new()
 	bolt_mat.albedo_color     = Color.WHITE
 	bolt_mat.vertex_color_use_as_albedo = true
 	bolt_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	bolt_mat.cull_mode        = BaseMaterial3D.CULL_DISABLED
+	bolt_mat.no_depth_test    = true   # always draw on top of cage, ring, and floor
 	bolt_mi.material_override  = bolt_mat
 	_zapper_uv_light.add_child(bolt_mi)
 
