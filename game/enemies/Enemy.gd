@@ -298,7 +298,8 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 
 ## Reduces HP by amount. Triggers death if HP reaches zero.
 ## Has no effect if the enemy is already dead.
-func take_damage(amount: float, flash_color: Color = Color.WHITE) -> void:
+## trap_type is a Trap.TrapType int value; -1 means unknown (no audio cue).
+func take_damage(amount: float, flash_color: Color = Color.WHITE, trap_type: int = -1) -> void:
 	if _is_dead:
 		return
 	_current_hp = maxf(_current_hp - amount, 0.0)
@@ -307,6 +308,7 @@ func take_damage(amount: float, flash_color: Color = Color.WHITE) -> void:
 		_die()
 	else:
 		_flash_hit(flash_color)
+		AudioManager.play_enemy_hit(trap_type)
 
 
 ## Called by a Glue Board when this enemy enters its range circle.
@@ -444,11 +446,13 @@ func _process(delta: float) -> void:
 
 		if _path_index >= _path.size():
 			reached_exit.emit()
+			AudioManager.unregister_enemy(self)
 			queue_free()
 			return
 
 		_target_cell = _path[_path_index]
 		cell_advanced.emit()
+		AudioManager.play_enemy_footstep(self, _enemy_type)
 	else:
 		var move_amount := _move_speed * Grid.CELL_SIZE * delta
 		global_position += offset.normalized() * minf(move_amount, distance)
@@ -476,6 +480,8 @@ func _process(delta: float) -> void:
 func _die() -> void:
 	_is_dead = true
 	died.emit()
+	AudioManager.play_enemy_death(_enemy_type)
+	AudioManager.unregister_enemy(self)
 
 	if _visual == null:
 		queue_free()

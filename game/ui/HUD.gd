@@ -93,6 +93,9 @@ var _is_fast:        bool = false
 var _is_paused:      bool = false
 var _countdown_active: bool = false
 
+var _music_slider: HSlider
+var _sfx_slider:   HSlider
+
 var _selector_buttons: Array[Button] = []
 
 var _blink_time: float = 0.0
@@ -385,7 +388,7 @@ void fragment() {
 	_zoom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_zoom_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
 	_zoom_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_zoom_btn.pressed.connect(func() -> void: GameState.zoom_toggle_requested.emit())
+	_zoom_btn.pressed.connect(_on_zoom_btn_pressed)
 	vbox.add_child(_zoom_btn)
 
 	_build_early_bonus_particles()
@@ -496,6 +499,13 @@ void fragment() {
 	_send_wave_reward_label.add_theme_font_size_override("font_size", 20)
 	_send_wave_reward_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
 	bot_row.add_child(_send_wave_reward_label)
+
+	# --- Volume controls ---
+	_music_slider = _build_volume_row(vbox, "MUS")
+	_sfx_slider   = _build_volume_row(vbox, "SFX")
+	_load_volume_settings()
+	_music_slider.value_changed.connect(_on_music_volume_changed)
+	_sfx_slider.value_changed.connect(_on_sfx_volume_changed)
 
 	# --- Exit + Restart ---
 	# In the vbox like every other button row so the vbox separation constant
@@ -617,6 +627,11 @@ func _process(delta: float) -> void:
 		_countdown_wave_label.modulate.a = 1.0 if on else 0.0
 
 
+func _on_zoom_btn_pressed() -> void:
+	AudioManager.play_ui("button")
+	GameState.zoom_toggle_requested.emit()
+
+
 func _on_zoom_state_changed(is_zoomed: bool) -> void:
 	_zoom_btn.text = "OVERVIEW" if is_zoomed else "ZOOM"
 
@@ -626,6 +641,7 @@ func _on_viewport_resized() -> void:
 
 
 func _on_speed_btn_pressed() -> void:
+	AudioManager.play_ui("button")
 	_is_fast = not _is_fast
 	Engine.time_scale    = 2.0 if _is_fast else 1.0
 	_speed_mult_lbl.text = "2x" if _is_fast else "1x"
@@ -633,6 +649,7 @@ func _on_speed_btn_pressed() -> void:
 
 
 func _on_pause_btn_pressed() -> void:
+	AudioManager.play_ui("button")
 	_is_paused = not _is_paused
 	get_tree().paused = _is_paused
 	if _is_paused:
@@ -644,6 +661,7 @@ func _on_pause_btn_pressed() -> void:
 
 
 func _on_send_wave_pressed() -> void:
+	AudioManager.play_ui("button")
 	GameState.wave_skip_requested.emit()
 
 
@@ -686,11 +704,13 @@ func _on_run_ended() -> void:
 
 
 func _on_restart_pressed() -> void:
+	AudioManager.play_ui("button")
 	get_tree().paused = false
 	get_tree().reload_current_scene()
 
 
 func _on_exit_pressed() -> void:
+	AudioManager.play_ui("button")
 	get_tree().quit()
 
 
@@ -972,6 +992,69 @@ func _apply_send_wave_btn_style(btn: Button) -> void:
 		box.content_margin_bottom = 6.0
 		btn.add_theme_stylebox_override(state[0], box)
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
+
+
+# ---------------------------------------------------------------------------
+# Volume controls
+# ---------------------------------------------------------------------------
+
+## Builds a compact label + slider row for one audio bus.
+## Returns the HSlider so the caller can read/write its value.
+func _build_volume_row(parent: VBoxContainer, label_text: String) -> HSlider:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.size_flags_vertical = Control.SIZE_SHRINK_END
+	parent.add_child(row)
+
+	var lbl := Label.new()
+	lbl.text = label_text
+	lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	lbl.custom_minimum_size = Vector2(32, 0)
+	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(lbl)
+
+	var slider := HSlider.new()
+	slider.min_value             = 0.0
+	slider.max_value             = 1.0
+	slider.step                  = 0.01
+	slider.value                 = 1.0
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	slider.custom_minimum_size   = Vector2(0, 24)
+	row.add_child(slider)
+
+	return slider
+
+
+func _on_music_volume_changed(value: float) -> void:
+	AudioManager.set_music_volume(value)
+	_save_volume_settings()
+
+
+func _on_sfx_volume_changed(value: float) -> void:
+	AudioManager.set_sfx_volume(value)
+	_save_volume_settings()
+
+
+func _save_volume_settings() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("audio", "music", _music_slider.value)
+	cfg.set_value("audio", "sfx",   _sfx_slider.value)
+	cfg.save("user://settings.cfg")
+
+
+func _load_volume_settings() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://settings.cfg") != OK:
+		return
+	var music_vol: float = cfg.get_value("audio", "music", 1.0)
+	var sfx_vol:   float = cfg.get_value("audio", "sfx",   1.0)
+	_music_slider.value = music_vol
+	_sfx_slider.value   = sfx_vol
+	AudioManager.set_music_volume(music_vol)
+	AudioManager.set_sfx_volume(sfx_vol)
 
 
 # ---------------------------------------------------------------------------

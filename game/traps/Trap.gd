@@ -491,6 +491,7 @@ func _update_glue_slow() -> void:
 			_slowed_enemy.add_slow_source(self, _damage)
 			# Cosmetic glue projectile — damage is 0, slow is the only effect.
 			fired.emit(global_position, _slowed_enemy.global_position, _slowed_enemy, 0.0, _trap_type)
+			AudioManager.play_trap_fire(TrapType.GLUE_BOARD)
 
 	_glue_apply_cooldown = GLUE_APPLY_INTERVAL
 
@@ -1309,6 +1310,7 @@ func _play_zapper_animation() -> void:
 	if _zapper_uv_light == null or _zapper_animating:
 		return
 	_zapper_animating = true
+	AudioManager.play_trap_fire(TrapType.ZAPPER)
 
 	var burst := create_tween()
 	burst.tween_property(_zapper_uv_light, "scale",
@@ -1335,6 +1337,7 @@ func _play_fogger_animation() -> void:
 	if _fogger_root == null or _fogger_animating:
 		return
 	_fogger_animating = true
+	AudioManager.play_trap_fire(TrapType.FOGGER)
 
 	# Fast squish: expand XZ, compress Y — the "exhale" burst.
 	var squish := create_tween()
@@ -1359,6 +1362,7 @@ func _play_snap_animation() -> void:
 		return
 	_snap_animating      = true
 	_snap_cheese.visible = false
+	AudioManager.play_trap_fire(TrapType.SNAP_TRAP)
 
 	var snap_tween := create_tween()
 	snap_tween.tween_property(_snap_bar_pivot, "rotation_degrees:x", 8.0, 0.07)

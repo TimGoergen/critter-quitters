@@ -18,6 +18,7 @@ config/icon="res://assets/icon.svg"
 [autoload]
 
 GameState="*res://core/GameState.gd"
+AudioManager="*res://core/AudioManager.gd"
 
 [display]
 

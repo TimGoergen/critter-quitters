@@ -81,7 +81,7 @@ func _process(delta: float) -> void:
 		# within the original range (enemies that fled the area are not hit).
 		if dist <= _aoe_range and dist <= _cloud_radius:
 			var hit_pos: Vector3 = enemy.global_position
-			enemy.take_damage(_damage, COLOR_FOGGER_KILL)
+			enemy.take_damage(_damage, COLOR_FOGGER_KILL, 2)  # 2 = TrapType.FOGGER
 			_hit_enemies.append(enemy)
 			if enemy.get_hp_fraction() == 0.0:
 				_spawn_kill_burst(hit_pos)

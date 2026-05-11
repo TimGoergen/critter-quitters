@@ -92,7 +92,7 @@ func _process(delta: float) -> void:
 			# Glue Board deals no damage and we skip take_damage entirely — calling
 			# it with 0 would still trigger the white hit-flash, which is misleading.
 			if _trap_type != _GLUE_BOARD_TYPE:
-				_target.take_damage(_damage, _trap_flash_color())
+				_target.take_damage(_damage, _trap_flash_color(), _trap_type)
 				killed = _target.get_hp_fraction() == 0.0
 		_spawn_impact_effect(killed, enemy_color)
 		queue_free()
