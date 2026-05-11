@@ -141,10 +141,14 @@ var _hover_area:      Area3D = null
 # When true, the indicator stays visible regardless of hover state (upgrade panel open).
 var _indicator_pinned: bool  = false
 
-# Star display — Label3D showing filled stars for each maxed stat, plus a gold glow disc.
-# Both are null until _spawn_star_display() is called from initialize().
-var _star_label: Label3D        = null
-var _star_glow:  MeshInstance3D = null
+# Star display — one Label3D per possible star (max 3).
+# All three labels are pre-spawned; _update_star_display() shows/hides and repositions them.
+var _star_labels: Array[Label3D] = []
+
+# Upgrade tint — materials updated in _update_star_display() to lerp toward gold.
+var _base_color:   Color                       = Color.WHITE
+var _outline_mats: Array[StandardMaterial3D]   = []
+var _bg_mat:       StandardMaterial3D          = null
 
 # Snap Trap animation nodes — null for all other trap types.
 var _snap_bar_pivot: Node3D         = null
@@ -547,71 +551,70 @@ func _check_full_upgrade_bonus() -> void:
 
 ## Spawns the star label and glow disc that reflect how many stats are maxed.
 ## Called once from initialize() — not spawned for preview instances.
+## Spawns three Label3D nodes in fixed slots:
+##   [0] = center (large)   always shown for the first maxed stat
+##   [1] = left   (small)   shown for the second maxed stat
+##   [2] = right  (small)   shown for the third maxed stat
 func _spawn_star_display() -> void:
-	# Radial gradient gold glow disc — same technique as the enemy selection glow.
-	# Opacity driven by the max_alpha shader uniform, updated in _update_star_display().
-	var glow_radius := Grid.CELL_SIZE * 1.6
-	var shader := Shader.new()
-	shader.code = """
-shader_type spatial;
-render_mode unshaded, blend_mix, depth_draw_never, cull_disabled;
-uniform float radius = 1.0;
-uniform float max_alpha = 0.0;
-varying float frag_dist;
-void vertex() {
-    frag_dist = length(VERTEX.xz) / radius;
-}
-void fragment() {
-    float d = clamp(frag_dist, 0.0, 1.0);
-    ALBEDO = vec3(0.96, 0.82, 0.15);
-    ALPHA  = max_alpha * (1.0 - d * d);
-}
-"""
-	var glow_mi   := MeshInstance3D.new()
-	var glow_mesh := CylinderMesh.new()
-	glow_mesh.top_radius      = glow_radius
-	glow_mesh.bottom_radius   = glow_radius
-	glow_mesh.height          = 0.001
-	glow_mesh.radial_segments = 48
-	glow_mi.mesh              = glow_mesh
-	# Sit just above the shadow, below all trap body elements.
-	glow_mi.position.y        = 0.065 - 0.25
-	var glow_mat := ShaderMaterial.new()
-	glow_mat.shader = shader
-	glow_mat.set_shader_parameter("radius", glow_radius)
-	glow_mat.set_shader_parameter("max_alpha", 0.0)
-	glow_mi.material_override = glow_mat
-	_star_glow = glow_mi
-	add_child(_star_glow)
-
-	# Label3D — large gold stars centered on the trap, always rendered on top.
-	# pixel_size controls how many world units one font pixel occupies; at 0.010
-	# a 96pt star glyph is roughly 0.96 world units (≈ one cell) tall.
-	_star_label                  = Label3D.new()
-	_star_label.font             = UIFonts.primary_bold()
-	_star_label.font_size        = 96
-	_star_label.pixel_size       = 0.010
-	_star_label.modulate         = Color(0.96, 0.84, 0.12, 1.0)
-	_star_label.outline_size     = 10
-	_star_label.outline_modulate = Color(0.0, 0.0, 0.0, 0.90)
-	_star_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_star_label.position         = Vector3(0.0, 0.65, 0.0)
-	_star_label.billboard        = BaseMaterial3D.BILLBOARD_ENABLED
-	_star_label.no_depth_test    = true
-	_star_label.text             = ""
-	add_child(_star_label)
+	# Center star is larger; side stars are smaller to signal hierarchy.
+	# pixel_size=0.009 throughout so world-unit sizes scale directly with font_size.
+	var sizes := [88, 54, 54]   # [center, left, right] font sizes
+	for sz: int in sizes:
+		var lbl                  := Label3D.new()
+		lbl.font                  = UIFonts.primary_bold()
+		lbl.font_size             = sz
+		lbl.pixel_size            = 0.009
+		lbl.modulate              = Color(1.0, 0.92, 0.30, 1.0)
+		lbl.outline_size          = 8
+		lbl.outline_modulate      = Color(0.0, 0.0, 0.0, 0.90)
+		lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
+		lbl.billboard             = BaseMaterial3D.BILLBOARD_ENABLED
+		lbl.no_depth_test         = true
+		lbl.text                  = "★"
+		lbl.visible               = false
+		add_child(lbl)
+		_star_labels.append(lbl)
 
 
-## Refreshes the star label and glow disc after any upgrade.
+## Refreshes star labels and tints the outline + background toward gold as stats are maxed.
+## frac = maxed_stats / total_upgradeable_stats, so each maxed stat moves the tint forward.
+## At frac=1.0 the outline is fully gold and the background is a rich darkened gold.
 func _update_star_display() -> void:
-	if _star_label == null:
+	if _star_labels.is_empty():
 		return
 	var maxed: int = get_maxed_stat_count()
-	_star_label.text = "★".repeat(maxed)
+
+	# --- Stars ---
+	# Layout: [left-small]  [center-large]  [right-small]
+	# center ★ is 88pt  → ~0.79 world units wide (half = 0.395)
+	# side   ★ is 54pt  → ~0.49 world units wide (half = 0.243)
+	# STAR_Z chosen so the center star's bottom edge (~z+0.395) clears the inner
+	# edge of the outline bar (~z=0.874): 0.45 + 0.395 = 0.845, just inside the line.
+	const STAR_Z:       float = 0.45
+	const STAR_Y:       float = 0.65
+	const SIDE_OFFSET:  float = 0.48
+
+	# Slot 0 = center, 1 = left, 2 = right
+	var positions := [
+		Vector3(0.0,          STAR_Y, STAR_Z),
+		Vector3(-SIDE_OFFSET, STAR_Y, STAR_Z),
+		Vector3( SIDE_OFFSET, STAR_Y, STAR_Z),
+	]
+	for i in range(_star_labels.size()):
+		_star_labels[i].visible  = i < maxed
+		_star_labels[i].position = positions[i]
+
+	# --- Outline + background tint ---
+	const GOLD: Color = Color(1.0, 0.82, 0.18)
 	var frac := float(maxed) / float(get_total_upgradeable_stats())
-	var mat: ShaderMaterial = _star_glow.material_override
-	# max_alpha peaks at 0.75 when fully upgraded — bright gold halo, not blinding.
-	mat.set_shader_parameter("max_alpha", frac * 0.75)
+	var tint := _base_color.lerp(GOLD, frac)
+
+	for mat: StandardMaterial3D in _outline_mats:
+		mat.albedo_color = tint
+
+	if _bg_mat != null:
+		var bg_brightness := lerpf(0.65, 0.80, frac)
+		_bg_mat.albedo_color = Color(tint.r * bg_brightness, tint.g * bg_brightness, tint.b * bg_brightness, 0.92)
 
 
 ## Forces the range indicator visible and pins it so hover-exit cannot hide it.
@@ -750,15 +753,16 @@ func _spawn_footprint_outline(color: Color) -> void:
 	var thickness := fp * 0.04   # thin enough to read as a border line
 	var y         := 0.005       # just above floor, below all trap body elements
 
-	var mat := StandardMaterial3D.new()
-	mat.albedo_color = color
-	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	# Each bar gets its own material so albedo_color updates in _update_star_display()
+	# affect all four bars independently without material aliasing.
+	var bar_h    := 0.008
+	var inner_d  := fp - thickness * 2.0
 
-	var bar_h    := 0.008           # visually flat; avoids z-fighting with floor
-	var inner_d  := fp - thickness * 2.0   # span for side bars, no corner overlap
-
-	# Top and bottom horizontal bars (full footprint width)
 	for sz: float in [-(fp * 0.5 - thickness * 0.5), fp * 0.5 - thickness * 0.5]:
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = color
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_outline_mats.append(mat)
 		var mi   := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
 		mesh.size            = Vector3(fp, bar_h, thickness)
@@ -767,8 +771,11 @@ func _spawn_footprint_outline(color: Color) -> void:
 		mi.material_override = mat
 		add_child(mi)
 
-	# Left and right vertical bars (inner span only; corners are covered above)
 	for sx: float in [-(fp * 0.5 - thickness * 0.5), fp * 0.5 - thickness * 0.5]:
+		var mat := StandardMaterial3D.new()
+		mat.albedo_color = color
+		mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+		_outline_mats.append(mat)
 		var mi   := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
 		mesh.size            = Vector3(thickness, bar_h, inner_d)
@@ -826,6 +833,7 @@ func _spawn_background(color: Color) -> void:
 	mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	bg_mi.material_override = mat
+	_bg_mat = mat
 
 	# Just above the shadow (world y = 0.07) so the shadow peeks out at the edges.
 	bg_mi.position.y = 0.07 - 0.25
@@ -844,6 +852,7 @@ func _spawn_visual(_color: Color) -> void:
 		TrapType.FOGGER:     c = Color(0.46, 0.96, 0.38)
 		TrapType.GLUE_BOARD: c = Color(0.96, 0.82, 0.34)
 		_:                   c = Color(0.80, 0.80, 0.80)
+	_base_color = c
 	_spawn_shadow(c)
 	_spawn_background(c)
 	if _trap_type == TrapType.SNAP_TRAP:

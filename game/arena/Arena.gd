@@ -165,6 +165,9 @@ var _arena_world_half:      float    = 0.0   # half the grid world width (X); us
 var _arena_world_half_z:    float    = 0.0   # half the grid world height (Z); used for pan clamping
 var _followed_enemy:        Node3D   = null  # non-null while enemy-follow mode is active
 var _enemy_stats_panel:    Node     = null  # EnemyStatsPanel instance
+var _floor_mi:           MeshInstance3D = null  # floor mesh; material_override swapped on zoom
+var _floor_mat_overview: ShaderMaterial  = null  # no grid lines (overview)
+var _floor_mat_zoomed:   ShaderMaterial  = null  # grid lines visible (zoomed in)
 
 # Reference to the playtest setup dialog while it is open; null after it confirms.
 var _debug_dialog: Node = null
@@ -1352,8 +1355,8 @@ const vec2 GRID_CELLS = vec2(31.0, 29.0);
 
 // Line fade: distance (as fraction of a cell) where the line reaches zero opacity.
 const float LINE_HALF_WIDTH = 0.04;
-// Maximum opacity of the grid overlay — keep very low so the texture reads first.
-const float LINE_ALPHA = 0.04;
+// Set at material-build time: 0.0 for overview material, 0.15 for zoomed material.
+uniform float line_alpha = 0.0;
 
 void fragment() {
 	vec2 uv = crop_offset + UV * crop_size;
@@ -1366,7 +1369,7 @@ void fragment() {
 	float line = 1.0 - smoothstep(0.0, LINE_HALF_WIDTH, nearest);
 
 	vec3 line_color = vec3(0.92, 0.90, 0.85);
-	ALBEDO = mix(floor_color, line_color, line * LINE_ALPHA);
+	ALBEDO = mix(floor_color, line_color, line * line_alpha);
 }
 """
 
@@ -1385,24 +1388,28 @@ func _spawn_floor() -> void:
 	var shader := Shader.new()
 	shader.code = _FLOOR_SHADER_CODE
 
-	var mat := ShaderMaterial.new()
-	mat.shader = shader
-	mat.set_shader_parameter("floor_texture", texture)
-	mat.set_shader_parameter("crop_offset",   crop_offset)
-	mat.set_shader_parameter("crop_size",     CROP_SIZE)
+	# Build a helper so both materials share the same texture bindings.
+	var _make_mat := func(alpha: float) -> ShaderMaterial:
+		var m := ShaderMaterial.new()
+		m.shader = shader
+		m.set_shader_parameter("floor_texture", texture)
+		m.set_shader_parameter("crop_offset",   crop_offset)
+		m.set_shader_parameter("crop_size",     CROP_SIZE)
+		m.set_shader_parameter("line_alpha",    alpha)
+		return m
 
-	# Plane sized to the full 31×29 grid. The border-column wall slabs render
-	# on top of the edges; the floor texture shows through the entrance and
-	# exit gap columns.
+	_floor_mat_overview = _make_mat.call(0.0)
+	_floor_mat_zoomed   = _make_mat.call(0.15)
+
 	var grid_w := Grid.GRID_SIZE * Grid.CELL_SIZE
 	var grid_h := Grid.GRID_ROWS * Grid.CELL_SIZE
 	var plane   := PlaneMesh.new()
 	plane.size   = Vector2(grid_w, grid_h)
-	var mi         := MeshInstance3D.new()
-	mi.mesh         = plane
-	mi.position     = Vector3(0.0, 0.010, 0.0)
-	mi.material_override = mat
-	add_child(mi)
+	_floor_mi               = MeshInstance3D.new()
+	_floor_mi.mesh          = plane
+	_floor_mi.position      = Vector3(0.0, 0.010, 0.0)
+	_floor_mi.material_override = _floor_mat_overview
+	add_child(_floor_mi)
 
 
 ## Renders the inner arena border — the outermost row/column ring of the 31×31 grid.
@@ -1893,7 +1900,10 @@ func _toggle_zoom() -> void:
 		_camera.size     = _overview_camera_size
 		_camera.h_offset = _camera_base_h_offset
 		_camera.v_offset = 0.0
-	GameState.zoom_state_changed.emit(_zoom_state == ZoomState.ZOOMED_IN)
+	var zoomed_in := _zoom_state == ZoomState.ZOOMED_IN
+	if _floor_mi != null:
+		_floor_mi.material_override = _floor_mat_zoomed if zoomed_in else _floor_mat_overview
+	GameState.zoom_state_changed.emit(zoomed_in)
 
 
 ## Pans the camera to pos (world XZ), clamped so the arena never scrolls off-screen.
