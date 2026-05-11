@@ -217,7 +217,7 @@ func _build_right_panel() -> void:
 	# --- Wave label ---
 	_wave_label = Label.new()
 	_wave_label.text = "WAVE  1"
-	_wave_label.add_theme_font_size_override("font_size", 42)
+	_wave_label.add_theme_font_size_override("font_size", 52)
 	_wave_label.add_theme_font_override("font", UIFonts.header())
 	_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -230,10 +230,10 @@ func _build_right_panel() -> void:
 
 	var coin_icon := TextureRect.new()
 	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
-	coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	coin_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	coin_icon.custom_minimum_size = Vector2(44, 44)
-	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	coin_icon.size_flags_vertical = Control.SIZE_FILL
 	bucks_row.add_child(coin_icon)
 
 	_bucks_label = Label.new()
@@ -245,41 +245,76 @@ func _build_right_panel() -> void:
 	_bucks_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bucks_row.add_child(_bucks_label)
 
-	# --- Infestation section ---
-	var inf_row := HBoxContainer.new()
-	inf_row.add_theme_constant_override("separation", 4)
-	vbox.add_child(inf_row)
+	# --- Infestation section — single bar element ---
+	# The bar background is the root container; the fill grows from the left;
+	# the icon and percentage are overlaid and centered vertically inside it.
+	var inf_container := Control.new()
+	inf_container.custom_minimum_size   = Vector2(0, 52)  # 8px taller than the 44px icon
+	inf_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(inf_container)
+
+	var inf_track := ColorRect.new()
+	inf_track.color = COLOR_BAR_BG
+	inf_track.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inf_container.add_child(inf_track)
+
+	# Fill grows rightward; anchor_bottom=1 keeps it full height automatically.
+	_infestation_fill                  = ColorRect.new()
+	_infestation_fill.color            = COLOR_BAR_FILL
+	_infestation_fill.anchor_bottom    = 1.0
+	_infestation_fill.offset_right     = 0.0
+	inf_container.add_child(_infestation_fill)
+
+	# Overlay: icon on the left, percentage on the right, both centered vertically.
+	var inf_overlay := HBoxContainer.new()
+	inf_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inf_overlay.add_theme_constant_override("separation", 4)
+	inf_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	inf_container.add_child(inf_overlay)
 
 	var inf_icon := TextureRect.new()
-	inf_icon.texture              = load("res://assets/infestation_level.png")
-	inf_icon.stretch_mode         = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	inf_icon.expand_mode          = TextureRect.EXPAND_IGNORE_SIZE
-	inf_icon.custom_minimum_size  = Vector2(44, 44)
-	inf_icon.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
-	inf_row.add_child(inf_icon)
+	inf_icon.texture             = load("res://assets/infestation_level.png")
+	inf_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	inf_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+	inf_icon.custom_minimum_size = Vector2(44, 44)
+	inf_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	inf_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	# Outline shader: samples 4 cardinal neighbours; draws black on transparent
+	# pixels that border an opaque pixel, leaving the image itself unchanged.
+	var outline_shader := Shader.new()
+	outline_shader.code = """
+shader_type canvas_item;
+uniform float outline_px = 1.5;
+void fragment() {
+	vec2 step = outline_px / vec2(textureSize(TEXTURE, 0));
+	vec4 col = texture(TEXTURE, UV);
+	if (col.a < 0.5) {
+		float n = texture(TEXTURE, UV + vec2( step.x,     0.0)).a
+		        + texture(TEXTURE, UV + vec2(-step.x,     0.0)).a
+		        + texture(TEXTURE, UV + vec2(    0.0,  step.y)).a
+		        + texture(TEXTURE, UV + vec2(    0.0, -step.y)).a;
+		if (n > 0.0) { COLOR = vec4(0.0, 0.0, 0.0, 1.0); return; }
+	}
+	COLOR = col;
+}
+"""
+	var outline_mat := ShaderMaterial.new()
+	outline_mat.shader = outline_shader
+	inf_icon.material  = outline_mat
+	inf_overlay.add_child(inf_icon)
 
 	_infestation_label = Label.new()
 	_infestation_label.text = "0%"
 	_infestation_label.add_theme_font_size_override("font_size", 32)
 	_infestation_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_infestation_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	_infestation_label.add_theme_color_override("font_outline_color", Color.BLACK)
+	_infestation_label.add_theme_constant_override("outline_size", 3)
 	_infestation_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_infestation_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_infestation_label.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
-	inf_row.add_child(_infestation_label)
-
-	# Bar track below the row
-	var track := ColorRect.new()
-	track.color                 = COLOR_BAR_BG
-	track.custom_minimum_size   = Vector2(0, 14)
-	track.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	vbox.add_child(track)
-
-	_infestation_fill          = ColorRect.new()
-	_infestation_fill.color    = COLOR_BAR_FILL
-	_infestation_fill.size.y   = 10
-	_infestation_fill.position = Vector2.ZERO
-	track.add_child(_infestation_fill)
+	_infestation_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	inf_overlay.add_child(_infestation_label)
 
 	# --- Speed + Pause ---
 	var speed_pause_row := HBoxContainer.new()
@@ -386,7 +421,7 @@ func _build_right_panel() -> void:
 	# instead of visible keeps the labels' height reserved so the action/reward
 	# rows below never shift position when the countdown appears or disappears.
 	_countdown_wave_label = Label.new()
-	_countdown_wave_label.text               = "Incoming!"
+	_countdown_wave_label.text               = "INCOMING"
 	_countdown_wave_label.add_theme_font_size_override("font_size", 27)
 	_countdown_wave_label.add_theme_color_override("font_color", COLOR_INCOMING)
 	_countdown_wave_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
@@ -440,7 +475,7 @@ func _build_right_panel() -> void:
 	_send_wave_reward_row.alignment    = BoxContainer.ALIGNMENT_CENTER
 	_send_wave_reward_row.add_theme_constant_override("separation", 4)
 	_send_wave_reward_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_send_wave_reward_row.visible      = false
+	_send_wave_reward_row.modulate.a   = 0.0
 	btn_vbox.add_child(_send_wave_reward_row)
 	var bot_row := _send_wave_reward_row
 
@@ -545,9 +580,9 @@ func _on_bucks_changed(amount: int) -> void:
 
 
 func _on_infestation_changed(level: float) -> void:
-	var track: Control = _infestation_fill.get_parent()
-	_infestation_fill.size.x = track.size.x * level
-	_infestation_label.text  = "%d%%" % roundi(level * 100.0)
+	var container: Control = _infestation_fill.get_parent()
+	_infestation_fill.offset_right = container.size.x * level
+	_infestation_label.text        = "%d%%" % roundi(level * 100.0)
 
 
 func _on_wave_changed(wave: int) -> void:
@@ -560,20 +595,17 @@ func _on_wave_changed(wave: int) -> void:
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 	if seconds_remaining > 0:
 		# Between-wave countdown — button sends the wave early for a time-based bonus.
-		_countdown_wave_label.text      = "Incoming!"
-		_countdown_number_label.text    = "%d..." % seconds_remaining
-		_countdown_wave_label.modulate.a   = 1.0
-		_countdown_number_label.modulate.a = 1.0
-		_countdown_active               = true
-		_send_wave_text_label.text      = "Send Early"
-		_send_wave_reward_label.text    = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
+		# "INCOMING" flashes; the number label is kept in layout (for space) but never shown.
+		_countdown_wave_label.modulate.a = 1.0
+		_countdown_active                = true
+		_send_wave_text_label.text       = "Send Early"
+		_send_wave_reward_label.text     = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
 		_blink_time = 0.0
 	else:
 		# Wave launched — hide the countdown, switch button to "Send Next Wave".
 		# Reward label is driven by early_send_reward_changed as enemies spawn.
-		_countdown_wave_label.modulate.a   = 0.0
-		_countdown_number_label.modulate.a = 0.0
-		_countdown_active               = false
+		_countdown_wave_label.modulate.a = 0.0
+		_countdown_active                = false
 		_blink_time = 0.0
 		_send_wave_text_label.text = "Send Next Wave"
 
@@ -582,7 +614,7 @@ func _process(delta: float) -> void:
 	if _countdown_active:
 		_blink_time += delta
 		var on: bool = fmod(_blink_time, 1.0 / 2.0) < (1.0 / 4.0)
-		_countdown_number_label.modulate.a = 1.0 if on else 0.0
+		_countdown_wave_label.modulate.a = 1.0 if on else 0.0
 
 
 func _on_zoom_state_changed(is_zoomed: bool) -> void:
@@ -640,8 +672,8 @@ func _on_early_bonus_awarded(coins: int) -> void:
 
 
 func _on_early_send_reward_changed(amount: int) -> void:
-	_send_wave_reward_row.visible  = amount > 0
-	_send_wave_reward_label.text   = "%d" % amount
+	_send_wave_reward_row.modulate.a = 1.0 if amount > 0 else 0.0
+	_send_wave_reward_label.text     = "%d" % amount
 
 
 func _on_run_ended() -> void:
@@ -775,8 +807,8 @@ func _build_btn_content(btn: Button, type: int) -> void:
 
 	var coin_icon := TextureRect.new()
 	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
-	coin_icon.custom_minimum_size = Vector2(18, 18)
-	coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	coin_icon.custom_minimum_size = Vector2(24, 24)
+	coin_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	coin_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
@@ -786,7 +818,7 @@ func _build_btn_content(btn: Button, type: int) -> void:
 	cost_lbl.text                = str(Trap.STATS[type]["cost"])
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	cost_lbl.add_theme_font_size_override("font_size", 16)
+	cost_lbl.add_theme_font_size_override("font_size", 22)
 	cost_lbl.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
 	cost_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)

@@ -531,8 +531,10 @@ func _set_followed_enemy(enemy: Node3D) -> void:
 func _handle_enemy_tap(enemy: Node3D) -> void:
 	if _zoom_state == ZoomState.OVERVIEW:
 		# Zoom in and begin following this enemy.
-		_zoom_state = ZoomState.ZOOMED_IN
+		_zoom_state  = ZoomState.ZOOMED_IN
 		_camera.size = _overview_camera_size * 0.5
+		if _floor_mi != null:
+			_floor_mi.material_override = _floor_mat_zoomed
 		_set_followed_enemy(enemy)
 		GameState.zoom_state_changed.emit(true)
 	elif _followed_enemy == enemy:
