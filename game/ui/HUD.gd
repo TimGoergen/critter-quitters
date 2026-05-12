@@ -235,9 +235,9 @@ func _build_right_panel() -> void:
 	_settings_btn.text             = ""
 	_settings_btn.icon             = load("res://assets/van_gear.png")
 	_settings_btn.expand_icon      = true
-	_settings_btn.custom_minimum_size = Vector2(48, 48)
+	_settings_btn.custom_minimum_size = Vector2(56, 56)
 	_settings_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_apply_button_style(_settings_btn)
+	_apply_icon_button_style(_settings_btn)
 	_settings_btn.pressed.connect(_on_settings_btn_pressed)
 	settings_row.add_child(_settings_btn)
 
@@ -430,26 +430,12 @@ void fragment() {
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	vbox.add_child(_send_wave_btn)
 
-	var btn_vbox := VBoxContainer.new()
-	btn_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	btn_vbox.offset_left   = 8.0
-	btn_vbox.offset_right  = -8.0
-	btn_vbox.offset_top    = 4.0
-	btn_vbox.offset_bottom = -4.0
-	btn_vbox.alignment     = BoxContainer.ALIGNMENT_CENTER
-	btn_vbox.add_theme_constant_override("separation", 4)
-	btn_vbox.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	# clip_contents prevents wide reward numbers from rendering outside the button.
-	btn_vbox.clip_contents = true
-	_send_wave_btn.add_child(btn_vbox)
-
-	# Countdown section — "Incoming!" + flashing seconds, always present in the
-	# layout but invisible (modulate.a = 0) when no wave is due.  Using modulate
-	# instead of visible keeps the labels' height reserved so the action/reward
-	# rows below never shift position when the countdown appears or disappears.
+	# Countdown labels — anchored to the TOP of the button as direct children,
+	# completely outside the btn_vbox flow.  This means showing or hiding them
+	# never shifts the action/reward rows in btn_vbox.
 	_countdown_wave_label = Label.new()
 	_countdown_wave_label.text               = "INCOMING"
-	_countdown_wave_label.add_theme_font_size_override("font_size", 27)
+	_countdown_wave_label.add_theme_font_size_override("font_size", 24)
 	_countdown_wave_label.add_theme_color_override("font_color", COLOR_INCOMING)
 	_countdown_wave_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
 	_countdown_wave_label.add_theme_constant_override("shadow_offset_x", 1)
@@ -457,11 +443,19 @@ void fragment() {
 	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
 	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_wave_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	_countdown_wave_label.modulate.a          = 0.0
-	btn_vbox.add_child(_countdown_wave_label)
+	_countdown_wave_label.anchor_left         = 0.0
+	_countdown_wave_label.anchor_right        = 1.0
+	_countdown_wave_label.anchor_top          = 0.0
+	_countdown_wave_label.anchor_bottom       = 0.0
+	_countdown_wave_label.offset_left         = 8.0
+	_countdown_wave_label.offset_right        = -8.0
+	_countdown_wave_label.offset_top          = 6.0
+	_countdown_wave_label.offset_bottom       = 32.0
+	_countdown_wave_label.visible             = false
+	_send_wave_btn.add_child(_countdown_wave_label)
 
 	_countdown_number_label = Label.new()
-	_countdown_number_label.add_theme_font_size_override("font_size", 18)
+	_countdown_number_label.add_theme_font_size_override("font_size", 16)
 	_countdown_number_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
 	_countdown_number_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
 	_countdown_number_label.add_theme_constant_override("shadow_offset_x", 1)
@@ -469,8 +463,30 @@ void fragment() {
 	_countdown_number_label.add_theme_font_override("font", UIFonts.header())
 	_countdown_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_number_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	_countdown_number_label.modulate.a          = 0.0
-	btn_vbox.add_child(_countdown_number_label)
+	_countdown_number_label.anchor_left         = 0.0
+	_countdown_number_label.anchor_right        = 1.0
+	_countdown_number_label.anchor_top          = 0.0
+	_countdown_number_label.anchor_bottom       = 0.0
+	_countdown_number_label.offset_left         = 8.0
+	_countdown_number_label.offset_right        = -8.0
+	_countdown_number_label.offset_top          = 34.0
+	_countdown_number_label.offset_bottom       = 54.0
+	_countdown_number_label.visible             = false
+	_send_wave_btn.add_child(_countdown_number_label)
+
+	# btn_vbox holds only the action row and the reward row.
+	# ALIGNMENT_CENTER keeps both items together in the vertical middle of the
+	# button regardless of whether the countdown labels above are showing.
+	var btn_vbox := VBoxContainer.new()
+	btn_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	btn_vbox.offset_left   = 8.0
+	btn_vbox.offset_right  = -8.0
+	btn_vbox.offset_top    = 4.0
+	btn_vbox.offset_bottom = -4.0
+	btn_vbox.alignment     = BoxContainer.ALIGNMENT_CENTER
+	btn_vbox.add_theme_constant_override("separation", 6)
+	btn_vbox.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	_send_wave_btn.add_child(btn_vbox)
 
 	# Action row — pest icon + "Send Early" / "Send Next Wave" text.
 	var top_row := HBoxContainer.new()
@@ -714,17 +730,19 @@ func _on_wave_changed(wave: int) -> void:
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 	if seconds_remaining > 0:
-		# Between-wave countdown — button sends the wave early for a time-based bonus.
-		# "INCOMING" flashes; the number label is kept in layout (for space) but never shown.
-		_countdown_wave_label.modulate.a = 1.0
+		# Between-wave countdown — show the anchor-positioned labels at the top
+		# of the button and switch the action row to "Send Early".
+		_countdown_wave_label.visible    = true
+		_countdown_number_label.visible  = true
 		_countdown_active                = true
 		_send_wave_text_label.text       = "Send Early"
 		_send_wave_reward_label.text     = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
 		_blink_time = 0.0
 	else:
-		# Wave launched — hide the countdown, switch button to "Send Next Wave".
+		# Wave launched — hide the countdown labels, switch to "Send Next Wave".
 		# Reward label is driven by early_send_reward_changed as enemies spawn.
-		_countdown_wave_label.modulate.a = 0.0
+		_countdown_wave_label.visible    = false
+		_countdown_number_label.visible  = false
 		_countdown_active                = false
 		_blink_time = 0.0
 		_send_wave_text_label.text = "Send Next Wave"
@@ -734,6 +752,7 @@ func _process(delta: float) -> void:
 	if _countdown_active:
 		_blink_time += delta
 		var on: bool = fmod(_blink_time, 1.0 / 2.0) < (1.0 / 4.0)
+		# Blink the "INCOMING" label via alpha; the number label stays solid.
 		_countdown_wave_label.modulate.a = 1.0 if on else 0.0
 
 
@@ -1058,6 +1077,23 @@ func _add_btn_cost_label(btn: Button, type: int, font_size: int) -> void:
 # ---------------------------------------------------------------------------
 # Button styles
 # ---------------------------------------------------------------------------
+
+## Like _apply_button_style but with 4 px content margins so an icon fills
+## nearly the entire button face.  Used for the settings (van-gear) button.
+func _apply_icon_button_style(btn: Button) -> void:
+	for state in [["normal", COLOR_BTN_NORMAL], ["hover", COLOR_BTN_HOVER], ["pressed", COLOR_BTN_PRESSED]]:
+		var box := StyleBoxFlat.new()
+		box.bg_color           = state[1]
+		box.border_color       = COLOR_BTN_BORDER
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(5)
+		box.content_margin_left   = 4.0
+		box.content_margin_right  = 4.0
+		box.content_margin_top    = 4.0
+		box.content_margin_bottom = 4.0
+		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_color_override("font_color", COLOR_TEXT)
+
 
 func _apply_gold_button_style(btn: Button) -> void:
 	for state in [["normal", COLOR_GOLD_BG_NORMAL], ["hover", COLOR_GOLD_BG_HOVER], ["pressed", COLOR_GOLD_BG_PRESSED]]:
