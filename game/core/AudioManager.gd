@@ -32,10 +32,10 @@ extends Node
 var music_bgm_arena:       AudioStream = null
 
 # Trap fire sounds (one per trap type; index matches Trap.TrapType enum)
-var sfx_trap_snap_fire:    AudioStream = null
-var sfx_trap_zapper_fire:  AudioStream = null
-var sfx_trap_fogger_fire:  AudioStream = null
-var sfx_trap_glue_apply:   AudioStream = null
+var sfx_trap_snap_fire:    AudioStream = preload("res://assets/audio/sfx/traps/snap_fire.wav")
+var sfx_trap_zapper_fire:  AudioStream = preload("res://assets/audio/sfx/traps/zapper_fire.wav")
+var sfx_trap_fogger_fire:  AudioStream = preload("res://assets/audio/sfx/traps/fogger_fire.wav")
+var sfx_trap_glue_apply:   AudioStream = preload("res://assets/audio/sfx/traps/glue_apply.wav")
 
 # Enemy hit sounds (one per trap type — what hit them, not who was hit)
 var sfx_hit_snap:          AudioStream = null
