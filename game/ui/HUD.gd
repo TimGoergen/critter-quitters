@@ -96,6 +96,9 @@ var _countdown_active: bool = false
 var _music_slider: HSlider
 var _sfx_slider:   HSlider
 
+var _settings_btn:    Button  = null
+var _settings_dialog: Control = null
+
 var _selector_buttons: Array[Button] = []
 
 var _blink_time: float = 0.0
@@ -123,6 +126,7 @@ func _ready() -> void:
 func _build_ui() -> void:
 	_build_left_panel()
 	_build_right_panel()
+	_build_settings_dialog()   # must be after right panel so it draws on top
 	_build_run_over_overlay()
 
 
@@ -217,10 +221,30 @@ func _build_right_panel() -> void:
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
-	# --- Wave label ---
+	# --- Settings button — top-right corner, opens the Settings dialog ---
+	var settings_row := HBoxContainer.new()
+	settings_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_row.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+	vbox.add_child(settings_row)
+
+	var settings_spacer := Control.new()
+	settings_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_row.add_child(settings_spacer)
+
+	_settings_btn = Button.new()
+	_settings_btn.text             = ""
+	_settings_btn.icon             = load("res://assets/van_gear.png")
+	_settings_btn.expand_icon      = true
+	_settings_btn.custom_minimum_size = Vector2(48, 48)
+	_settings_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_apply_button_style(_settings_btn)
+	_settings_btn.pressed.connect(_on_settings_btn_pressed)
+	settings_row.add_child(_settings_btn)
+
+	# --- Wave label (font reduced 20% to make room above) ---
 	_wave_label = Label.new()
 	_wave_label.text = "WAVE  1"
-	_wave_label.add_theme_font_size_override("font_size", 52)
+	_wave_label.add_theme_font_size_override("font_size", 42)
 	_wave_label.add_theme_font_override("font", UIFonts.header())
 	_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -243,7 +267,7 @@ func _build_right_panel() -> void:
 	_bucks_label.text = "0"
 	_bucks_label.add_theme_font_size_override("font_size", 42)
 	_bucks_label.add_theme_font_override("font", UIFonts.primary_bold())
-	_bucks_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
+	_bucks_label.add_theme_color_override("font_color", Color(1.00, 0.82, 0.18))
 	_bucks_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_bucks_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bucks_row.add_child(_bucks_label)
@@ -500,13 +524,6 @@ void fragment() {
 	_send_wave_reward_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
 	bot_row.add_child(_send_wave_reward_label)
 
-	# --- Volume controls ---
-	_music_slider = _build_volume_row(vbox, "MUS")
-	_sfx_slider   = _build_volume_row(vbox, "SFX")
-	_load_volume_settings()
-	_music_slider.value_changed.connect(_on_music_volume_changed)
-	_sfx_slider.value_changed.connect(_on_sfx_volume_changed)
-
 	# --- Exit + Restart ---
 	# In the vbox like every other button row so the vbox separation constant
 	# controls the gap above it consistently.
@@ -578,6 +595,99 @@ func _build_run_over_overlay() -> void:
 	_apply_button_style(btn)
 	btn.pressed.connect(_on_restart_pressed)
 	_run_over_overlay.add_child(btn)
+
+
+# ---------------------------------------------------------------------------
+# Settings dialog
+# ---------------------------------------------------------------------------
+
+## Builds the modal settings panel.  Hidden by default; shown when the user
+## taps the van-gear button in the top-right corner of the right panel.
+## The dialog lives at the CanvasLayer root so it floats above the side panels.
+func _build_settings_dialog() -> void:
+	_settings_dialog = Control.new()
+	_settings_dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_settings_dialog.visible      = false
+	# MOUSE_FILTER_STOP prevents taps on the dim area from reaching the arena.
+	_settings_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_settings_dialog)
+
+	# Full-screen dimmer behind the panel.
+	var dim        := ColorRect.new()
+	dim.color       = Color(0.0, 0.0, 0.0, 0.60)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_settings_dialog.add_child(dim)
+
+	# Centered dialog panel — anchored to the viewport centre with fixed offsets.
+	# 380×290 px fits comfortably within the 1280×600 virtual resolution.
+	var panel := Panel.new()
+	panel.anchor_left   = 0.5
+	panel.anchor_right  = 0.5
+	panel.anchor_top    = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left   = -190.0
+	panel.offset_right  =  190.0
+	panel.offset_top    = -145.0
+	panel.offset_bottom =  145.0
+	panel.mouse_filter  = Control.MOUSE_FILTER_STOP
+
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.12, 0.12, 0.22, 0.97)
+	panel_style.border_color = Color(0.50, 0.50, 0.68, 1.0)
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(8)
+	panel.add_theme_stylebox_override("panel", panel_style)
+	_settings_dialog.add_child(panel)
+
+	var inner := MarginContainer.new()
+	inner.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inner.add_theme_constant_override("margin_left",   24)
+	inner.add_theme_constant_override("margin_right",  24)
+	inner.add_theme_constant_override("margin_top",    18)
+	inner.add_theme_constant_override("margin_bottom", 18)
+	panel.add_child(inner)
+
+	var dialog_vbox := VBoxContainer.new()
+	dialog_vbox.add_theme_constant_override("separation", 14)
+	inner.add_child(dialog_vbox)
+
+	var title := Label.new()
+	title.text                 = "SETTINGS"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_override("font", UIFonts.header())
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", COLOR_TEXT)
+	dialog_vbox.add_child(title)
+
+	var sep := HSeparator.new()
+	dialog_vbox.add_child(sep)
+
+	# Volume sliders — class members so the existing save/load handlers still work.
+	_music_slider = _build_volume_row(dialog_vbox, "MUSIC")
+	_sfx_slider   = _build_volume_row(dialog_vbox, "SFX")
+	_load_volume_settings()
+	_music_slider.value_changed.connect(_on_music_volume_changed)
+	_sfx_slider.value_changed.connect(_on_sfx_volume_changed)
+
+	var close_btn := Button.new()
+	close_btn.text = "CLOSE"
+	close_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	close_btn.add_theme_font_size_override("font_size", 22)
+	close_btn.custom_minimum_size = Vector2(0, RIGHT_BTN_H)
+	_apply_button_style(close_btn)
+	close_btn.pressed.connect(_on_settings_close_pressed)
+	dialog_vbox.add_child(close_btn)
+
+
+func _on_settings_btn_pressed() -> void:
+	AudioManager.play_ui("button")
+	_settings_dialog.visible = true
+
+
+func _on_settings_close_pressed() -> void:
+	AudioManager.play_ui("button")
+	_settings_dialog.visible = false
 
 
 # ---------------------------------------------------------------------------

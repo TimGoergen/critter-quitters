@@ -80,9 +80,9 @@ const UPGRADE_COSTS := {
 ## a Projectile in response so the trap does not need a scene tree reference.
 signal fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, trap_type: TrapType)
 
-## Emitted once per Fogger firing cycle. Arena spawns a FogCloud that owns
-## the damage logic — it expands outward and damages each enemy when the wave
-## reaches them, so hits are staggered by distance rather than instant.
+## Emitted once per Fogger firing cycle. Arena spawns a FogCloud that persists
+## for its full visual lifetime and ticks damage to any enemy in range on a
+## fixed interval — including enemies that enter the area after the cloud forms.
 signal aoe_fired(from_pos: Vector3, aoe_range: float, damage: float, active_enemies: Array)
 
 ## Emitted after any upgrade is applied. TrapUpgradePanel connects here to
@@ -440,7 +440,7 @@ func _find_target() -> Node3D:
 
 
 ## Returns true if at least one enemy is in range and the batch cap has not been reached.
-## Damage is NOT applied here — FogCloud applies it as the wave expands.
+## Damage is NOT applied here — FogCloud ticks it on a fixed interval while alive.
 func _fire_fogger() -> bool:
 	if _active_fog_batches >= FOG_BATCH_CAP:
 		return false
