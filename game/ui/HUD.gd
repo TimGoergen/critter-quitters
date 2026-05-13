@@ -5,7 +5,8 @@
 ##
 ## Left panel (LEFT_PANEL_W wide):  vertical stack of 4 trap selector buttons.
 ## Right panel (RIGHT_PANEL_W wide): wave, bug bucks, infestation bar,
-##   speed/pause, zoom toggle, countdown/send-wave-early, exit/restart.
+##   INCOMING label, send-wave button, and a bottom row of three control buttons
+##   (zoom, pause, speed).  Exit and Restart live inside the Settings dialog.
 
 extends CanvasLayer
 
@@ -67,12 +68,10 @@ const SCREEN_EDGE_MARGIN: float = 24.0 # extra inset on the screen-edge side and
 const RIGHT_BTN_H: float = 52.0        # fixed height for all right-panel buttons
 const INNER_BORDER_W: float = 2.0      # black separator line at the arena-facing edge of each panel
 
-var _wave_label:        Label
-var _bucks_label:       Label
-var _infestation_fill:  ColorRect
-var _infestation_label: Label
+# "INCOMING" label — large semi-transparent overlay centred over the arena.
 var _countdown_wave_label:   Label
-var _countdown_number_label: Label
+var _incoming_font:          Font   # bold Bebas Neue — stored so layout can measure it
+
 var _send_wave_btn:          Button
 var _send_wave_text_label:   Label   # "Send Early" / "Send Next Wave"
 var _send_wave_reward_row:   HBoxContainer
@@ -81,17 +80,28 @@ var _early_bonus_particles:  CPUParticles2D
 var _run_over_overlay:       Control
 
 var _speed_btn:      Button
-var _speed_mult_lbl: Label
-var _speed_icon_lbl: Label
+var _speed_icon_lbl: Label   # ">>" icon; black at 1×, bright gold at 2×
 var _pause_btn:      Button
 var _pause_bar_icon: Control
 var _exit_btn:       Button
 var _restart_btn:    Button
-var _zoom_btn:       Button   # toggles overview ↔ zoomed-in
+var _zoom_btn:       Button  # toggles overview ↔ zoomed-in
+var _zoom_icon:      Control # procedural magnifying glass inside _zoom_btn
+
+var _wave_label:        Label
+var _bucks_label:       Label
+var _infestation_fill:  ColorRect
+var _infestation_label: Label
 
 var _is_fast:        bool = false
 var _is_paused:      bool = false
 var _countdown_active: bool = false
+
+var _music_slider: HSlider
+var _sfx_slider:   HSlider
+
+var _settings_btn:    Button  = null
+var _settings_dialog: Control = null
 
 var _selector_buttons: Array[Button] = []
 
@@ -120,6 +130,8 @@ func _ready() -> void:
 func _build_ui() -> void:
 	_build_left_panel()
 	_build_right_panel()
+	_build_incoming_overlay()  # arena overlay; drawn above panels, below dialogs
+	_build_settings_dialog()   # must be after right panel so it draws on top
 	_build_run_over_overlay()
 
 
@@ -214,10 +226,56 @@ func _build_right_panel() -> void:
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
+	# --- Settings button — top-right corner, opens the Settings dialog.
+	# No background or border — only the van-gear icon is visible.
+	# Height is derived from the image aspect ratio so the button fits snugly
+	# around the icon with only a small vertical margin.
+	var settings_row := HBoxContainer.new()
+	settings_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_row.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+	vbox.add_child(settings_row)
+
+	var van_tex   := load("res://assets/van_gear.png") as Texture2D
+	# Icon width = 50% of the full panel width, centered in the row.
+	# Height derived from the tight visible-pixel bounds of the artwork.
+	var icon_w    := RIGHT_PANEL_W * 0.5
+	var used_rect := van_tex.get_image().get_used_rect()
+	# Cast to float before dividing — used_rect.size is Vector2i and int/int truncates to 0.
+	var icon_h    := icon_w * (used_rect.size.y as float / used_rect.size.x as float)
+
+	# Equal spacers on both sides force reliable horizontal centering in the HBoxContainer.
+	var left_spacer := Control.new()
+	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_row.add_child(left_spacer)
+
+	_settings_btn = Button.new()
+	_settings_btn.text                  = ""
+	# Height adds 8 px total (4 top + 4 bottom) around the visible artwork.
+	_settings_btn.custom_minimum_size   = Vector2(icon_w, icon_h + 8.0)
+	_settings_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_settings_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_apply_icon_button_style(_settings_btn)
+	_settings_btn.pressed.connect(_on_settings_btn_pressed)
+	settings_row.add_child(_settings_btn)
+
+	var right_spacer := Control.new()
+	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_row.add_child(right_spacer)
+
+	# TextureRect fills the button face and handles proportional scaling reliably.
+	# Using a child node rather than Button.icon avoids expand_icon quirks with StyleBoxEmpty.
+	var van_rect := TextureRect.new()
+	van_rect.texture      = van_tex
+	van_rect.expand_mode  = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	van_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	van_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	van_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_settings_btn.add_child(van_rect)
+
 	# --- Wave label ---
 	_wave_label = Label.new()
 	_wave_label.text = "WAVE  1"
-	_wave_label.add_theme_font_size_override("font_size", 52)
+	_wave_label.add_theme_font_size_override("font_size", 42)
 	_wave_label.add_theme_font_override("font", UIFonts.header())
 	_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -240,7 +298,7 @@ func _build_right_panel() -> void:
 	_bucks_label.text = "0"
 	_bucks_label.add_theme_font_size_override("font_size", 42)
 	_bucks_label.add_theme_font_override("font", UIFonts.primary_bold())
-	_bucks_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
+	_bucks_label.add_theme_color_override("font_color", Color(1.00, 0.82, 0.18))
 	_bucks_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_bucks_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bucks_row.add_child(_bucks_label)
@@ -316,84 +374,9 @@ void fragment() {
 	_infestation_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	inf_overlay.add_child(_infestation_label)
 
-	# --- Speed + Pause ---
-	var speed_pause_row := HBoxContainer.new()
-	speed_pause_row.add_theme_constant_override("separation", 4)
-	speed_pause_row.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
-	vbox.add_child(speed_pause_row)
-
-	_pause_btn = Button.new()
-	_pause_btn.text = ""
-	_pause_btn.add_theme_font_size_override("font_size", 26)
-	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_pause_btn)
-	_pause_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_pause_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_pause_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_pause_btn.pressed.connect(_on_pause_btn_pressed)
-	speed_pause_row.add_child(_pause_btn)
-
-	_pause_bar_icon = _PauseBarIcon.new()
-	_pause_bar_icon.target_height = UIFonts.primary_bold().get_ascent(26)
-	_pause_bar_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_pause_bar_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pause_btn.add_child(_pause_bar_icon)
-
-	_speed_btn = Button.new()
-	_speed_btn.text = ""
-	_speed_btn.add_theme_font_size_override("font_size", 26)
-	_speed_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_speed_btn)
-	_speed_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_speed_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_speed_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_speed_btn.pressed.connect(_on_speed_btn_pressed)
-	speed_pause_row.add_child(_speed_btn)
-
-	_speed_mult_lbl = Label.new()
-	_speed_mult_lbl.text                 = "1x"
-	_speed_mult_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_speed_mult_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_speed_mult_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_speed_mult_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_speed_mult_lbl.offset_left  = 8.0
-	_speed_mult_lbl.offset_right = -8.0
-	_speed_mult_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_speed_mult_lbl.add_theme_font_size_override("font_size", 26)
-	_speed_mult_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
-	_speed_btn.add_child(_speed_mult_lbl)
-
-	_speed_icon_lbl = Label.new()
-	_speed_icon_lbl.text                 = "▶▶"
-	_speed_icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_speed_icon_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_speed_icon_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_speed_icon_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_speed_icon_lbl.offset_left  = 8.0
-	_speed_icon_lbl.offset_right = -8.0
-	_speed_icon_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_speed_icon_lbl.add_theme_font_size_override("font_size", 26)
-	_speed_icon_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
-	_speed_btn.add_child(_speed_icon_lbl)
-
-	# --- Zoom toggle ---
-	_zoom_btn = Button.new()
-	_zoom_btn.text = "ZOOM"
-	_zoom_btn.add_theme_font_size_override("font_size", 26)
-	_zoom_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_zoom_btn)
-	_zoom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_zoom_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
-	_zoom_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_zoom_btn.pressed.connect(func() -> void: GameState.zoom_toggle_requested.emit())
-	vbox.add_child(_zoom_btn)
-
-	_build_early_bonus_particles()
-
-	# --- Send Wave button — fills all remaining vbox space. ---
-	# The countdown labels live inside this button so they always share the same
-	# visual region.  btn_vbox is ALIGNMENT_CENTER so when the countdown labels
-	# are hidden the action/reward rows remain vertically centered.
+	# --- Send Wave button — fills all remaining vbox space.
+	# Contains a centred action row (house icon + label) and a reward row
+	# (coin icon + early-bonus amount).
 	_send_wave_btn = Button.new()
 	_send_wave_btn.text = ""
 	_send_wave_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -410,42 +393,11 @@ void fragment() {
 	btn_vbox.offset_top    = 4.0
 	btn_vbox.offset_bottom = -4.0
 	btn_vbox.alignment     = BoxContainer.ALIGNMENT_CENTER
-	btn_vbox.add_theme_constant_override("separation", 4)
+	btn_vbox.add_theme_constant_override("separation", 6)
 	btn_vbox.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	# clip_contents prevents wide reward numbers from rendering outside the button.
-	btn_vbox.clip_contents = true
 	_send_wave_btn.add_child(btn_vbox)
 
-	# Countdown section — "Incoming!" + flashing seconds, always present in the
-	# layout but invisible (modulate.a = 0) when no wave is due.  Using modulate
-	# instead of visible keeps the labels' height reserved so the action/reward
-	# rows below never shift position when the countdown appears or disappears.
-	_countdown_wave_label = Label.new()
-	_countdown_wave_label.text               = "INCOMING"
-	_countdown_wave_label.add_theme_font_size_override("font_size", 27)
-	_countdown_wave_label.add_theme_color_override("font_color", COLOR_INCOMING)
-	_countdown_wave_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
-	_countdown_wave_label.add_theme_constant_override("shadow_offset_x", 1)
-	_countdown_wave_label.add_theme_constant_override("shadow_offset_y", 1)
-	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
-	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_countdown_wave_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	_countdown_wave_label.modulate.a          = 0.0
-	btn_vbox.add_child(_countdown_wave_label)
-
-	_countdown_number_label = Label.new()
-	_countdown_number_label.add_theme_font_size_override("font_size", 18)
-	_countdown_number_label.add_theme_color_override("font_color", COLOR_COUNTDOWN)
-	_countdown_number_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
-	_countdown_number_label.add_theme_constant_override("shadow_offset_x", 1)
-	_countdown_number_label.add_theme_constant_override("shadow_offset_y", 1)
-	_countdown_number_label.add_theme_font_override("font", UIFonts.header())
-	_countdown_number_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_countdown_number_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	_countdown_number_label.modulate.a          = 0.0
-	btn_vbox.add_child(_countdown_number_label)
-
-	# Action row — pest icon + "Send Early" / "Send Next Wave" text.
+	# Action row — house icon + text label.
 	var top_row := HBoxContainer.new()
 	top_row.alignment    = BoxContainer.ALIGNMENT_CENTER
 	top_row.add_theme_constant_override("separation", 5)
@@ -462,22 +414,21 @@ void fragment() {
 	top_row.add_child(game_icon)
 
 	_send_wave_text_label              = Label.new()
-	_send_wave_text_label.text         = "Send Early"
+	_send_wave_text_label.text         = "Send Next Wave"
 	_send_wave_text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_send_wave_text_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_send_wave_text_label.add_theme_font_size_override("font_size", 18)
 	_send_wave_text_label.add_theme_color_override("font_color", COLOR_TEXT)
 	top_row.add_child(_send_wave_text_label)
 
-	# Reward row — coin icon + gold amount earned for sending early.
+	# Reward row — coin icon + bug bucks earned for sending early.
 	# Hidden when the reward is zero (no early bonus available).
-	_send_wave_reward_row         = HBoxContainer.new()
+	_send_wave_reward_row              = HBoxContainer.new()
 	_send_wave_reward_row.alignment    = BoxContainer.ALIGNMENT_CENTER
 	_send_wave_reward_row.add_theme_constant_override("separation", 4)
 	_send_wave_reward_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_send_wave_reward_row.modulate.a   = 0.0
 	btn_vbox.add_child(_send_wave_reward_row)
-	var bot_row := _send_wave_reward_row
 
 	var btn_coin_icon := TextureRect.new()
 	btn_coin_icon.texture             = load("res://assets/bug_buck_coin.png") as Texture2D
@@ -486,7 +437,7 @@ void fragment() {
 	btn_coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	btn_coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	btn_coin_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	bot_row.add_child(btn_coin_icon)
+	_send_wave_reward_row.add_child(btn_coin_icon)
 
 	_send_wave_reward_label = Label.new()
 	_send_wave_reward_label.text                = "0"
@@ -495,37 +446,125 @@ void fragment() {
 	_send_wave_reward_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_send_wave_reward_label.add_theme_font_size_override("font_size", 20)
 	_send_wave_reward_label.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
-	bot_row.add_child(_send_wave_reward_label)
+	_send_wave_reward_row.add_child(_send_wave_reward_label)
 
-	# --- Exit + Restart ---
-	# In the vbox like every other button row so the vbox separation constant
-	# controls the gap above it consistently.
-	var exit_restart_row := HBoxContainer.new()
-	exit_restart_row.add_theme_constant_override("separation", 4)
-	exit_restart_row.size_flags_vertical = Control.SIZE_SHRINK_END
-	vbox.add_child(exit_restart_row)
+	_build_early_bonus_particles()
 
-	_exit_btn = Button.new()
-	_exit_btn.text = "EXIT"
-	_exit_btn.add_theme_font_size_override("font_size", 24)
-	_exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_exit_btn)
-	_exit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_exit_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
-	_exit_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_exit_btn.pressed.connect(_on_exit_pressed)
-	exit_restart_row.add_child(_exit_btn)
+	# --- Bottom 3-button row: Zoom | Pause | Speed ---
+	# Three equal-width gold buttons at a fixed height.
+	var bottom_row := HBoxContainer.new()
+	bottom_row.add_theme_constant_override("separation", 4)
+	bottom_row.size_flags_vertical = Control.SIZE_SHRINK_END
+	vbox.add_child(bottom_row)
 
-	_restart_btn = Button.new()
-	_restart_btn.text = "RESTART"
-	_restart_btn.add_theme_font_size_override("font_size", 24)
-	_restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_restart_btn)
-	_restart_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_restart_btn.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
-	_restart_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_restart_btn.pressed.connect(_on_restart_pressed)
-	exit_restart_row.add_child(_restart_btn)
+	# Zoom button — magnifying glass with + (zoom in) or − (zoom out).
+	_zoom_btn = Button.new()
+	_zoom_btn.text = ""
+	_apply_gold_button_style(_zoom_btn)
+	_zoom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_zoom_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_zoom_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
+	_zoom_btn.pressed.connect(_on_zoom_btn_pressed)
+	bottom_row.add_child(_zoom_btn)
+
+	# _ZoomIcon fills the button face and redraws when show_plus changes.
+	_zoom_icon = _ZoomIcon.new()
+	_zoom_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_zoom_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_zoom_btn.add_child(_zoom_icon)
+
+	# Pause button — procedural pause bars when playing, ▶ text when paused.
+	_pause_btn = Button.new()
+	_pause_btn.text = ""
+	_pause_btn.add_theme_font_size_override("font_size", 26)
+	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_gold_button_style(_pause_btn)
+	_pause_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_pause_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_pause_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
+	_pause_btn.pressed.connect(_on_pause_btn_pressed)
+	bottom_row.add_child(_pause_btn)
+
+	_pause_bar_icon = _PauseBarIcon.new()
+	_pause_bar_icon.target_height = UIFonts.primary_bold().get_ascent(26)
+	_pause_bar_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_pause_bar_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pause_btn.add_child(_pause_bar_icon)
+
+	# Speed button — always shows "▶▶"; black at 1× speed, bright gold at 2×.
+	_speed_btn = Button.new()
+	_speed_btn.text = ""
+	_apply_gold_button_style(_speed_btn)
+	_speed_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_speed_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_speed_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
+	_speed_btn.pressed.connect(_on_speed_btn_pressed)
+	bottom_row.add_child(_speed_btn)
+
+	_speed_icon_lbl = Label.new()
+	_speed_icon_lbl.text                 = "▶▶"
+	_speed_icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_speed_icon_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_speed_icon_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	_speed_icon_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_speed_icon_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	_speed_icon_lbl.add_theme_font_size_override("font_size", 26)
+	_speed_icon_lbl.add_theme_color_override("font_color", Color.BLACK)  # black at 1× speed
+	_speed_btn.add_child(_speed_icon_lbl)
+
+
+# ---------------------------------------------------------------------------
+# INCOMING arena overlay
+# ---------------------------------------------------------------------------
+
+func _build_incoming_overlay() -> void:
+	# Synthesise bold Bebas Neue — no bold file exists, so use FontVariation embolden.
+	var fv := FontVariation.new()
+	fv.base_font          = UIFonts.header()
+	fv.variation_embolden = 1.2
+	_incoming_font = fv
+
+	# Large semi-transparent "INCOMING" text centred over the arena.
+	# Purely visual — MOUSE_FILTER_IGNORE means it never blocks input.
+	# Anchors mirror the panel pattern so the engine keeps the rect correct on
+	# any viewport change (including zoom) without manual position/size writes.
+	_countdown_wave_label = Label.new()
+	_countdown_wave_label.text                 = "INCOMING"
+	_countdown_wave_label.anchor_left          = 0.0
+	_countdown_wave_label.anchor_right         = 1.0
+	_countdown_wave_label.anchor_top           = 0.0
+	_countdown_wave_label.anchor_bottom        = 1.0
+	_countdown_wave_label.offset_left          = LEFT_PANEL_W
+	_countdown_wave_label.offset_right         = -RIGHT_PANEL_W
+	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown_wave_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_countdown_wave_label.add_theme_font_override("font", _incoming_font)
+	# Baked-in alpha keeps the text translucent at the "on" phase of the blink.
+	_countdown_wave_label.add_theme_color_override("font_color", Color(0.90, 0.15, 0.15, 0.48))
+	# Counter-clockwise tilt: text rises from right to left.
+	_countdown_wave_label.rotation_degrees = -10.0
+	_countdown_wave_label.mouse_filter     = Control.MOUSE_FILTER_IGNORE
+	_countdown_wave_label.modulate.a       = 0.0   # hidden until countdown starts
+	add_child(_countdown_wave_label)
+	_update_incoming_overlay_layout()
+
+
+func _update_incoming_overlay_layout() -> void:
+	if _countdown_wave_label == null or _incoming_font == null:
+		return
+	var vp_size := get_viewport().get_visible_rect().size
+	var arena_w := vp_size.x - LEFT_PANEL_W - RIGHT_PANEL_W
+	var arena_h := vp_size.y
+
+	# Measure "INCOMING" at a reference size, then scale so it spans 90% of arena width.
+	var ref_size : int = 200
+	var measured := _incoming_font.get_string_size(
+			"INCOMING", HORIZONTAL_ALIGNMENT_LEFT, -1, ref_size).x
+	var font_size := int(ref_size * (arena_w * 0.9) / measured)
+	_countdown_wave_label.add_theme_font_size_override("font_size", font_size)
+
+	# Pivot at the label's centre so the tilt rotates in place over the arena.
+	_countdown_wave_label.pivot_offset = Vector2(arena_w * 0.5, arena_h * 0.5)
 
 
 # ---------------------------------------------------------------------------
@@ -551,23 +590,176 @@ func _build_run_over_overlay() -> void:
 	infested_label.anchor_bottom        = 0.55
 	infested_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	infested_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	infested_label.add_theme_font_size_override("font_size", 96)
+	infested_label.add_theme_font_size_override("font_size", 144)
 	infested_label.add_theme_color_override("font_color", COLOR_INFESTED)
 	infested_label.add_theme_font_override("font", UIFonts.header())
 	_run_over_overlay.add_child(infested_label)
 
 	var btn := Button.new()
-	btn.text                 = "Restart"
-	btn.anchor_left          = 0.30
-	btn.anchor_right         = 0.70
-	btn.anchor_top           = 0.70
-	btn.anchor_bottom        = 0.80
-	btn.add_theme_font_size_override("font_size", 32)
-	btn.add_theme_font_override("font", UIFonts.primary())
-	btn.process_mode         = Node.PROCESS_MODE_ALWAYS
-	_apply_button_style(btn)
+	btn.text         = ""
+	btn.anchor_left  = 0.30
+	btn.anchor_right = 0.70
+	btn.anchor_top   = 0.70
+	btn.anchor_bottom = 0.80
+	btn.process_mode = Node.PROCESS_MODE_ALWAYS
+	_apply_send_wave_btn_style(btn)
 	btn.pressed.connect(_on_restart_pressed)
 	_run_over_overlay.add_child(btn)
+
+	# Inner layout mirrors the Send Next Wave button: icon + label in an HBox.
+	var btn_hbox := HBoxContainer.new()
+	btn_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	btn_hbox.alignment   = BoxContainer.ALIGNMENT_CENTER
+	btn_hbox.add_theme_constant_override("separation", 5)
+	btn_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(btn_hbox)
+
+	var restart_icon := TextureRect.new()
+	restart_icon.texture             = load("res://assets/uninfested.png") as Texture2D
+	restart_icon.custom_minimum_size = Vector2(36, 36)
+	restart_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	restart_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	restart_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	restart_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	btn_hbox.add_child(restart_icon)
+
+	var restart_label := Label.new()
+	restart_label.text         = "Restart"
+	restart_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	restart_label.add_theme_font_override("font", UIFonts.primary_bold())
+	restart_label.add_theme_font_size_override("font_size", 24)
+	restart_label.add_theme_color_override("font_color", COLOR_TEXT)
+	btn_hbox.add_child(restart_label)
+
+
+# ---------------------------------------------------------------------------
+# Settings dialog
+# ---------------------------------------------------------------------------
+
+## Builds the modal settings panel.  Hidden by default; shown when the user
+## taps the van-gear button in the top-right corner of the right panel.
+## The dialog lives at the CanvasLayer root so it floats above the side panels.
+## Exit and Restart buttons are located here rather than on the right panel.
+func _build_settings_dialog() -> void:
+	_settings_dialog = Control.new()
+	_settings_dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_settings_dialog.visible      = false
+	# MOUSE_FILTER_STOP prevents taps on the dim area from reaching the arena.
+	_settings_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(_settings_dialog)
+
+	# Full-screen dimmer behind the panel.
+	var dim        := ColorRect.new()
+	dim.color       = Color(0.0, 0.0, 0.0, 0.60)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_STOP
+	_settings_dialog.add_child(dim)
+
+	# Centered dialog panel — anchored to the viewport centre with fixed offsets.
+	# Taller than before to accommodate the Exit/Restart row below the close button.
+	var panel := Panel.new()
+	panel.anchor_left   = 0.5
+	panel.anchor_right  = 0.5
+	panel.anchor_top    = 0.5
+	panel.anchor_bottom = 0.5
+	panel.offset_left   = -190.0
+	panel.offset_right  =  190.0
+	panel.offset_top    = -155.0
+	panel.offset_bottom =  155.0
+	panel.mouse_filter  = Control.MOUSE_FILTER_STOP
+
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.12, 0.12, 0.22, 0.97)
+	panel_style.border_color = Color(0.50, 0.50, 0.68, 1.0)
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(8)
+	panel.add_theme_stylebox_override("panel", panel_style)
+	_settings_dialog.add_child(panel)
+
+	var inner := MarginContainer.new()
+	inner.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inner.add_theme_constant_override("margin_left",   24)
+	inner.add_theme_constant_override("margin_right",  24)
+	inner.add_theme_constant_override("margin_top",    18)
+	inner.add_theme_constant_override("margin_bottom", 18)
+	panel.add_child(inner)
+
+	var dialog_vbox := VBoxContainer.new()
+	dialog_vbox.add_theme_constant_override("separation", 14)
+	inner.add_child(dialog_vbox)
+
+	var title := Label.new()
+	title.text                 = "SETTINGS"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_override("font", UIFonts.header())
+	title.add_theme_font_size_override("font_size", 30)
+	title.add_theme_color_override("font_color", COLOR_TEXT)
+	dialog_vbox.add_child(title)
+
+	var sep := HSeparator.new()
+	dialog_vbox.add_child(sep)
+
+	# Volume sliders — class members so the existing save/load handlers still work.
+	_music_slider = _build_volume_row(dialog_vbox, "MUSIC")
+	_sfx_slider   = _build_volume_row(dialog_vbox, "SFX")
+	_load_volume_settings()
+	_music_slider.value_changed.connect(_on_music_volume_changed)
+	_sfx_slider.value_changed.connect(_on_sfx_volume_changed)
+
+	# X button — square, top-right corner of the panel, outside the vbox flow.
+	var close_btn := Button.new()
+	close_btn.text                = "X"
+	close_btn.anchor_left         = 1.0
+	close_btn.anchor_right        = 1.0
+	close_btn.anchor_top          = 0.0
+	close_btn.anchor_bottom       = 0.0
+	close_btn.offset_left         = -48.0
+	close_btn.offset_right        = -8.0
+	close_btn.offset_top          =  8.0
+	close_btn.offset_bottom       =  48.0
+	close_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	close_btn.add_theme_font_size_override("font_size", 20)
+	_apply_button_style(close_btn)
+	close_btn.pressed.connect(_on_settings_close_pressed)
+	panel.add_child(close_btn)
+
+	var exit_sep := HSeparator.new()
+	dialog_vbox.add_child(exit_sep)
+
+	# Exit and Restart live in the settings dialog so the right panel stays clean.
+	var exit_restart_row := HBoxContainer.new()
+	exit_restart_row.add_theme_constant_override("separation", 4)
+	dialog_vbox.add_child(exit_restart_row)
+
+	_exit_btn = Button.new()
+	_exit_btn.text = "EXIT"
+	_exit_btn.add_theme_font_size_override("font_size", 24)
+	_exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_gold_button_style(_exit_btn)
+	_exit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_exit_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
+	_exit_btn.pressed.connect(_on_exit_pressed)
+	exit_restart_row.add_child(_exit_btn)
+
+	_restart_btn = Button.new()
+	_restart_btn.text = "RESTART"
+	_restart_btn.add_theme_font_size_override("font_size", 24)
+	_restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_apply_gold_button_style(_restart_btn)
+	_restart_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_restart_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
+	_restart_btn.pressed.connect(_on_restart_pressed)
+	exit_restart_row.add_child(_restart_btn)
+
+
+func _on_settings_btn_pressed() -> void:
+	AudioManager.play_ui("button")
+	_settings_dialog.visible = true
+
+
+func _on_settings_close_pressed() -> void:
+	AudioManager.play_ui("button")
+	_settings_dialog.visible = false
 
 
 # ---------------------------------------------------------------------------
@@ -587,52 +779,63 @@ func _on_infestation_changed(level: float) -> void:
 
 func _on_wave_changed(wave: int) -> void:
 	_wave_label.text = "WAVE  %d" % wave
-	if not _countdown_number_label.visible:
+	if not _countdown_active:
 		_send_wave_text_label.text = "Send Next Wave"
-		# Reward label is driven by early_send_reward_changed — no update needed here.
 
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 	if seconds_remaining > 0:
-		# Between-wave countdown — button sends the wave early for a time-based bonus.
-		# "INCOMING" flashes; the number label is kept in layout (for space) but never shown.
-		_countdown_wave_label.modulate.a = 1.0
+		# Between-wave countdown — reveal the INCOMING label and switch button text.
+		# The label is shown by restoring full alpha; _process will blink it.
 		_countdown_active                = true
+		_countdown_wave_label.modulate.a = 1.0
 		_send_wave_text_label.text       = "Send Early"
 		_send_wave_reward_label.text     = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
 		_blink_time = 0.0
 	else:
-		# Wave launched — hide the countdown, switch button to "Send Next Wave".
-		# Reward label is driven by early_send_reward_changed as enemies spawn.
-		_countdown_wave_label.modulate.a = 0.0
+		# Wave launched — hide the INCOMING label and restore the button text.
 		_countdown_active                = false
+		_countdown_wave_label.modulate.a = 0.0
+		_send_wave_text_label.text       = "Send Next Wave"
 		_blink_time = 0.0
-		_send_wave_text_label.text = "Send Next Wave"
 
 
 func _process(delta: float) -> void:
 	if _countdown_active:
 		_blink_time += delta
 		var on: bool = fmod(_blink_time, 1.0 / 2.0) < (1.0 / 4.0)
+		# Blink the INCOMING label via alpha; the button content stays solid.
 		_countdown_wave_label.modulate.a = 1.0 if on else 0.0
 
 
+func _on_zoom_btn_pressed() -> void:
+	AudioManager.play_ui("button")
+	GameState.zoom_toggle_requested.emit()
+
+
 func _on_zoom_state_changed(is_zoomed: bool) -> void:
-	_zoom_btn.text = "OVERVIEW" if is_zoomed else "ZOOM"
+	# When already zoomed in, the action is to zoom out — show the minus sign.
+	# When in overview, the action is to zoom in — show the plus sign.
+	(_zoom_icon as _ZoomIcon).show_plus = not is_zoomed
+	_zoom_icon.queue_redraw()
+	_update_incoming_overlay_layout()
 
 
 func _on_viewport_resized() -> void:
-	pass   # panels are anchored — they resize automatically
+	_update_incoming_overlay_layout()
 
 
 func _on_speed_btn_pressed() -> void:
+	AudioManager.play_ui("button")
 	_is_fast = not _is_fast
-	Engine.time_scale    = 2.0 if _is_fast else 1.0
-	_speed_mult_lbl.text = "2x" if _is_fast else "1x"
-	_speed_icon_lbl.text = "▶"  if _is_fast else "▶▶"
+	Engine.time_scale = 2.0 if _is_fast else 1.0
+	# Icon colour signals the active speed: bright gold for 2×, black for 1×.
+	_speed_icon_lbl.add_theme_color_override("font_color",
+		COLOR_HAZARD_YELLOW if _is_fast else Color.BLACK)
 
 
 func _on_pause_btn_pressed() -> void:
+	AudioManager.play_ui("button")
 	_is_paused = not _is_paused
 	get_tree().paused = _is_paused
 	if _is_paused:
@@ -644,6 +847,7 @@ func _on_pause_btn_pressed() -> void:
 
 
 func _on_send_wave_pressed() -> void:
+	AudioManager.play_ui("button")
 	GameState.wave_skip_requested.emit()
 
 
@@ -686,11 +890,13 @@ func _on_run_ended() -> void:
 
 
 func _on_restart_pressed() -> void:
+	AudioManager.play_ui("button")
 	get_tree().paused = false
 	get_tree().reload_current_scene()
 
 
 func _on_exit_pressed() -> void:
+	AudioManager.play_ui("button")
 	get_tree().quit()
 
 
@@ -805,14 +1011,14 @@ func _build_btn_content(btn: Button, type: int) -> void:
 	cost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cvbox.add_child(cost_row)
 
-	var coin_icon := TextureRect.new()
-	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
-	coin_icon.custom_minimum_size = Vector2(24, 24)
-	coin_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
-	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	coin_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	cost_row.add_child(coin_icon)
+	var cost_coin_icon := TextureRect.new()
+	cost_coin_icon.texture             = load("res://assets/bug_buck_coin.png")
+	cost_coin_icon.custom_minimum_size = Vector2(24, 24)
+	cost_coin_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+	cost_coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	cost_coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cost_coin_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	cost_row.add_child(cost_coin_icon)
 
 	var cost_lbl := Label.new()
 	cost_lbl.text                = str(Trap.STATS[type]["cost"])
@@ -929,6 +1135,14 @@ func _add_btn_cost_label(btn: Button, type: int, font_size: int) -> void:
 # Button styles
 # ---------------------------------------------------------------------------
 
+## Settings (van-gear) button style: no background, no border, no padding.
+## StyleBoxEmpty tells Godot to draw nothing for every interactive state, so
+## only the icon texture is visible.
+func _apply_icon_button_style(btn: Button) -> void:
+	for state in ["normal", "hover", "pressed", "focus"]:
+		btn.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+
+
 func _apply_gold_button_style(btn: Button) -> void:
 	for state in [["normal", COLOR_GOLD_BG_NORMAL], ["hover", COLOR_GOLD_BG_HOVER], ["pressed", COLOR_GOLD_BG_PRESSED]]:
 		var box := StyleBoxFlat.new()
@@ -975,9 +1189,73 @@ func _apply_send_wave_btn_style(btn: Button) -> void:
 
 
 # ---------------------------------------------------------------------------
-# Pause icon
+# Volume controls
 # ---------------------------------------------------------------------------
 
+## Builds a compact label + slider row for one audio bus.
+## Returns the HSlider so the caller can read/write its value.
+func _build_volume_row(parent: VBoxContainer, label_text: String) -> HSlider:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 6)
+	row.size_flags_vertical = Control.SIZE_SHRINK_END
+	parent.add_child(row)
+
+	var lbl := Label.new()
+	lbl.text = label_text
+	lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	lbl.custom_minimum_size = Vector2(32, 0)
+	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(lbl)
+
+	var slider := HSlider.new()
+	slider.min_value             = 0.0
+	slider.max_value             = 1.0
+	slider.step                  = 0.01
+	slider.value                 = 1.0
+	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	slider.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	slider.custom_minimum_size   = Vector2(0, 24)
+	row.add_child(slider)
+
+	return slider
+
+
+func _on_music_volume_changed(value: float) -> void:
+	AudioManager.set_music_volume(value)
+	_save_volume_settings()
+
+
+func _on_sfx_volume_changed(value: float) -> void:
+	AudioManager.set_sfx_volume(value)
+	_save_volume_settings()
+
+
+func _save_volume_settings() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("audio", "music", _music_slider.value)
+	cfg.set_value("audio", "sfx",   _sfx_slider.value)
+	cfg.save("user://settings.cfg")
+
+
+func _load_volume_settings() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://settings.cfg") != OK:
+		return
+	var music_vol: float = cfg.get_value("audio", "music", 1.0)
+	var sfx_vol:   float = cfg.get_value("audio", "sfx",   1.0)
+	_music_slider.value = music_vol
+	_sfx_slider.value   = sfx_vol
+	AudioManager.set_music_volume(music_vol)
+	AudioManager.set_sfx_volume(sfx_vol)
+
+
+# ---------------------------------------------------------------------------
+# Procedural icons
+# ---------------------------------------------------------------------------
+
+## Two vertical bars drawn at the correct cap height for the pause button.
 class _PauseBarIcon extends Control:
 	var target_height: float = 0.0
 
@@ -994,3 +1272,34 @@ class _PauseBarIcon extends Control:
 		var color := Color(0.08, 0.05, 0.00)
 		draw_rect(Rect2(x0,               y0, bar_w, bar_h), color)
 		draw_rect(Rect2(x0 + bar_w + gap, y0, bar_w, bar_h), color)
+
+
+## Magnifying glass with a + (zoom-in) or − (zoom-out) symbol in the lens.
+## Used as the icon inside the zoom toggle button.
+class _ZoomIcon extends Control:
+	var show_plus: bool = true  # true → zoom in available; false → zoom out available
+	var icon_color: Color = Color(0.08, 0.05, 0.00)  # matches COLOR_GOLD_TEXT
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	func _draw() -> void:
+		var cx   := size.x * 0.42
+		var cy   := size.y * 0.43
+		var r    := minf(size.x, size.y) * 0.26
+		var arm  := r * 0.50
+		var line := maxf(4.0, r * 0.26)
+
+		# Lens circle
+		draw_arc(Vector2(cx, cy), r, 0.0, TAU, 32, icon_color, line)
+
+		# Handle — diagonal line from the lower-right of the lens outward
+		var h_start := Vector2(cx + r * 0.68, cy + r * 0.68)
+		var h_end   := h_start + Vector2(r * 0.65, r * 0.65)
+		draw_line(h_start, h_end, icon_color, line)
+
+		# Horizontal bar (present for both + and −)
+		draw_line(Vector2(cx - arm, cy), Vector2(cx + arm, cy), icon_color, line)
+		if show_plus:
+			draw_line(Vector2(cx, cy - arm), Vector2(cx, cy + arm), icon_color, line)

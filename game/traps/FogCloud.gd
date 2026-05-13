@@ -1,42 +1,44 @@
 ## FogCloud.gd
-## Single-instance AoE effect spawned once each time the Fogger fires.
-## Owns the damage logic: an invisible wave expands outward from the trap
-## at EXPAND_SPEED and applies damage to each enemy the first time the
-## wave radius reaches that enemy's current distance.
+## Persistent AoE hazard spawned once each time the Fogger fires.
+## The cloud lingers for PARTICLE_LIFETIME seconds and ticks damage every
+## DAMAGE_TICK_INTERVAL to any enemy currently within the hazard radius.
 ##
-## The particle visual is spawned under the parent (Arena) so it can
-## outlive this node — FogCloud frees itself once the wave has covered
-## the full range and all in-range enemies have been checked.
+## Because _active_enemies is a live reference to Arena's enemy list, enemies
+## that path into the cloud after it forms are hit the same as those already
+## in range at spawn — the hazard is spatial, not a snapshot.
+##
+## The particle visual is spawned under the parent (Arena) so it outlives this
+## node. FogCloud frees itself once PARTICLE_LIFETIME has elapsed.
 
 extends Node3D
 
 const Grid = preload("res://arena/Grid.gd")
 
-## Wave expansion speed in world units per second.
-## Chosen so the wave crosses the full range (~6.4 units) in approximately
-## CLOUD_LIFETIME seconds — damage and visual dissipate together.
-const EXPAND_SPEED: float = 4.44
+## How often (in seconds) the cloud deals damage to all enemies in range.
+## Lower values = higher effective DPS; tuned alongside the fogger's damage
+## stat in Trap.STATS to get the feel right.
+const DAMAGE_TICK_INTERVAL: float = 0.75
 
-const CLOUD_LIFETIME: float = 0.90
-const COLOR_CLOUD      := Color(0.68, 0.95, 0.22, 0.02)
-const COLOR_FOGGER_KILL := Color(0.40, 0.95, 0.25)   # bright green — fogger kill burst
+## Visual and damage zone both last this long.
 # Exposed so Trap.gd can compute the batch visual lifetime for the cloud cap timer.
 const PARTICLE_LIFETIME: float = 2.80
+
+const COLOR_CLOUD       := Color(0.68, 0.95, 0.22, 0.02)
+const COLOR_FOGGER_KILL := Color(0.40, 0.95, 0.25)   # bright green — fogger hit/kill burst
 
 
 # ---------------------------------------------------------------------------
 # Private state
 # ---------------------------------------------------------------------------
 
-var _aoe_range:     float        = 0.0
-var _damage:        float        = 0.0
-var _active_enemies: Array       = []
+var _aoe_range:      float = 0.0
+var _damage:         float = 0.0
+var _active_enemies: Array = []
 
-# Grows each frame; enemies are hit the first time this reaches their distance.
-var _cloud_radius:  float        = 0.0
-
-# Tracks which enemies have already been damaged this cycle (one hit each).
-var _hit_enemies:   Array[Node3D] = []
+var _time_alive: float = 0.0
+# Pre-set to the interval so the very first tick fires at _ready() immediately,
+# catching enemies already standing in the cloud when it spawns.
+var _tick_timer: float = DAMAGE_TICK_INTERVAL
 
 
 # ---------------------------------------------------------------------------
@@ -47,10 +49,10 @@ var _hit_enemies:   Array[Node3D] = []
 ## Must be called by Arena immediately after instantiation and before
 ## adding to the scene tree.
 func initialize(from_pos: Vector3, aoe_range: float, damage: float, active_enemies: Array) -> void:
-	global_position  = from_pos
-	_aoe_range       = aoe_range
-	_damage          = damage
-	_active_enemies  = active_enemies
+	global_position = from_pos
+	_aoe_range      = aoe_range
+	_damage         = damage
+	_active_enemies = active_enemies
 
 
 # ---------------------------------------------------------------------------
@@ -64,33 +66,35 @@ func _ready() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Wave expansion
+# Damage tick
 # ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
-	_cloud_radius += EXPAND_SPEED * delta
+	_time_alive += delta
+	if _time_alive >= PARTICLE_LIFETIME:
+		queue_free()
+		return
 
+	_tick_timer += delta
+	if _tick_timer >= DAMAGE_TICK_INTERVAL:
+		_tick_timer -= DAMAGE_TICK_INTERVAL
+		_apply_damage_tick()
+
+
+## Damages every valid enemy currently within the hazard radius.
+## Called on a fixed interval for as long as the cloud is alive.
+func _apply_damage_tick() -> void:
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
 			continue
-		var already_hit: bool = enemy in _hit_enemies
-		if already_hit:
+		if _xz_distance(enemy.global_position) > _aoe_range:
 			continue
-		var dist: float = _xz_distance(enemy.global_position)
-		# Hit the enemy when the wave reaches them, but only if they are still
-		# within the original range (enemies that fled the area are not hit).
-		if dist <= _aoe_range and dist <= _cloud_radius:
-			var hit_pos: Vector3 = enemy.global_position
-			enemy.take_damage(_damage, COLOR_FOGGER_KILL)
-			_hit_enemies.append(enemy)
-			if enemy.get_hp_fraction() == 0.0:
-				_spawn_kill_burst(hit_pos)
-			else:
-				_spawn_hit_particles(hit_pos)
-
-	# Free once the wave has swept the full range — all possible hits are done.
-	if _cloud_radius >= _aoe_range:
-		queue_free()
+		var hit_pos: Vector3 = enemy.global_position
+		enemy.take_damage(_damage, COLOR_FOGGER_KILL, 2)  # 2 = TrapType.FOGGER
+		if enemy.get_hp_fraction() == 0.0:
+			_spawn_kill_burst(hit_pos)
+		else:
+			_spawn_hit_particles(hit_pos)
 
 
 # ---------------------------------------------------------------------------
@@ -135,9 +139,9 @@ func _spawn_cloud_visual(aoe_range: float) -> void:
 
 	# Bloom in quickly, hold at full size, then dissolve slowly.
 	# Absolute timings at PARTICLE_LIFETIME = 2.80 s:
-	#   bloom  0.09 × 2.80 = 0.25 s  (unchanged — appears just as fast)
-	#   hold   0.36 × 2.80 = 1.00 s  (reduced from 1.95 s — dissipation starts sooner)
-	#   fade   0.55 × 2.80 = 1.54 s  (extended from 0.55 s — dissipation is slower)
+	#   bloom  0.09 × 2.80 = 0.25 s
+	#   hold   0.36 × 2.80 = 1.00 s
+	#   fade   0.55 × 2.80 = 1.54 s
 	var scale_curve := Curve.new()
 	scale_curve.add_point(Vector2(0.0,  0.0))
 	scale_curve.add_point(Vector2(0.09, 1.0))
@@ -174,7 +178,7 @@ func _spawn_cloud_visual(aoe_range: float) -> void:
 	get_tree().create_timer(particles.lifetime * 2.0 + 0.20).timeout.connect(particles.queue_free)
 
 
-## Spawns a small green hit burst at pos when the fog wave damages but does not kill.
+## Spawns a small green hit burst at pos when the fog damages but does not kill.
 func _spawn_hit_particles(pos: Vector3) -> void:
 	var particles              := CPUParticles3D.new()
 	particles.one_shot          = true
@@ -203,7 +207,7 @@ func _spawn_hit_particles(pos: Vector3) -> void:
 	get_tree().create_timer(particles.lifetime + 0.15).timeout.connect(particles.queue_free)
 
 
-## Spawns a green explosion burst at pos when the fog wave kills an enemy.
+## Spawns a green explosion burst at pos when the fog kills an enemy.
 ## Mirrors the kill-burst pattern in Projectile._spawn_particles (round_mesh = true).
 func _spawn_kill_burst(pos: Vector3) -> void:
 	var particles              := CPUParticles3D.new()

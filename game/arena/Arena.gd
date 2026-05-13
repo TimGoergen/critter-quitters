@@ -263,6 +263,17 @@ func _ready() -> void:
 			_set_followed_enemy(null)
 	)
 
+	# Audio — music and phase-change sounds.
+	GameState.run_started.connect(AudioManager.start_music)
+	GameState.run_ended.connect(func() -> void:
+		AudioManager.play_ui("run_end")
+		AudioManager.stop_music()
+	)
+	GameState.phase_changed.connect(_on_phase_changed_audio)
+	GameState.bug_bucks_changed.connect(func(_amt: int) -> void:
+		AudioManager.play_ui("bucks_earn")
+	)
+
 	# Size the camera to fit the arena inside the usable area between side panels,
 	# and re-fit whenever the window is resized.
 	_fit_camera_to_grid()
@@ -1931,6 +1942,18 @@ func _on_run_ended_camera() -> void:
 	_set_followed_enemy(null)
 	if _zoom_state == ZoomState.ZOOMED_IN:
 		_toggle_zoom()
+
+
+## Plays phase-transition audio cues.
+## wave_start fires when a wave begins; wave_clear fires between waves
+## (but not before wave 1 — there is nothing to clear yet).
+func _on_phase_changed_audio(new_phase: GameState.Phase) -> void:
+	match new_phase:
+		GameState.Phase.WAVE:
+			AudioManager.play_ui("wave_start")
+		GameState.Phase.PLACING:
+			if GameState.current_wave > 0:
+				AudioManager.play_ui("wave_clear")
 
 
 ## Builds a Trap preview node: full mesh hierarchy, no combat logic, no hover area.

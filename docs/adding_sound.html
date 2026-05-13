@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Adding Sound — Critter Quitters Pest Control</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0f0f13;
+      color: #d8d8e0;
+      line-height: 1.6;
+      padding: 40px 24px 80px;
+    }
+
+    .page {
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* ---- Header ---- */
+    header {
+      border-bottom: 2px solid #2a2a3a;
+      padding-bottom: 24px;
+      margin-bottom: 40px;
+    }
+
+    header h1 {
+      font-size: 2rem;
+      color: #f0f0f5;
+      letter-spacing: 0.01em;
+    }
+
+    header .subtitle {
+      color: #7070a0;
+      font-size: 0.95rem;
+      margin-top: 6px;
+    }
+
+    /* ---- Section headings ---- */
+    h2 {
+      font-size: 1.25rem;
+      color: #c8c0f0;
+      margin: 48px 0 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #22222e;
+    }
+
+    h3 {
+      font-size: 1rem;
+      color: #a0a8d0;
+      margin: 28px 0 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      font-size: 0.82rem;
+    }
+
+    /* ---- Body text ---- */
+    p {
+      margin-bottom: 12px;
+      color: #b8b8cc;
+    }
+
+    ul, ol {
+      margin: 10px 0 16px 20px;
+      color: #b8b8cc;
+    }
+
+    li { margin-bottom: 6px; }
+
+    /* ---- Callout boxes ---- */
+    .callout {
+      border-left: 3px solid #4a4a8a;
+      background: #17171f;
+      padding: 14px 18px;
+      border-radius: 0 6px 6px 0;
+      margin: 20px 0;
+      font-size: 0.92rem;
+      color: #a8a8c4;
+    }
+
+    .callout.tip    { border-color: #3a7a3a; }
+    .callout.warn   { border-color: #8a6030; }
+    .callout strong { color: #d8d8f0; }
+
+    /* ---- Code ---- */
+    code {
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      background: #1c1c28;
+      color: #88d4a8;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-size: 0.88em;
+    }
+
+    pre {
+      background: #1a1a24;
+      border: 1px solid #2a2a3c;
+      border-radius: 6px;
+      padding: 18px 20px;
+      overflow-x: auto;
+      margin: 16px 0 24px;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      font-size: 0.875rem;
+      line-height: 1.55;
+      color: #c0c8e8;
+    }
+
+    pre .comment { color: #5a6080; }
+    pre .string  { color: #88d4a8; }
+    pre .kw      { color: #9090d8; }
+
+    /* ---- Sound tables ---- */
+    .sound-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 28px;
+      font-size: 0.88rem;
+    }
+
+    .sound-table thead th {
+      background: #1c1c2c;
+      color: #8888b8;
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 0.78rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom: 1px solid #2a2a3c;
+    }
+
+    .sound-table tbody tr:nth-child(even) {
+      background: #141420;
+    }
+
+    .sound-table tbody td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #1e1e2c;
+      vertical-align: top;
+      color: #c0c0d8;
+    }
+
+    .sound-table .slot  { font-family: 'Cascadia Code', monospace; color: #88d4a8; white-space: nowrap; }
+    .sound-table .file  { font-family: 'Cascadia Code', monospace; color: #d4aa88; white-space: nowrap; }
+    .sound-table .terms { color: #8888a8; font-size: 0.82rem; font-style: italic; }
+
+    /* ---- Step badges ---- */
+    .steps { list-style: none; margin-left: 0; counter-reset: step; }
+    .steps li {
+      counter-increment: step;
+      display: flex;
+      gap: 16px;
+      align-items: flex-start;
+      margin-bottom: 18px;
+    }
+    .steps li::before {
+      content: counter(step);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 28px;
+      height: 28px;
+      background: #2a2a4a;
+      color: #9090d0;
+      border-radius: 50%;
+      font-size: 0.82rem;
+      font-weight: bold;
+      margin-top: 2px;
+    }
+
+    /* ---- File tree ---- */
+    .tree {
+      background: #1a1a24;
+      border: 1px solid #2a2a3c;
+      border-radius: 6px;
+      padding: 16px 20px;
+      font-family: 'Cascadia Code', 'Consolas', monospace;
+      font-size: 0.875rem;
+      line-height: 1.8;
+      color: #a0a8c8;
+      margin: 14px 0 24px;
+    }
+
+    .tree .dir  { color: #9090c8; }
+    .tree .file { color: #88d4a8; }
+    .tree .note { color: #505070; font-style: italic; }
+
+    /* ---- Source badges ---- */
+    .source-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+      margin: 16px 0 24px;
+    }
+
+    .source-card {
+      background: #17171f;
+      border: 1px solid #2a2a3c;
+      border-radius: 8px;
+      padding: 16px 18px;
+    }
+
+    .source-card h4 {
+      color: #c8c0f0;
+      font-size: 0.95rem;
+      margin-bottom: 8px;
+    }
+
+    .source-card p {
+      font-size: 0.85rem;
+      color: #7878a0;
+      margin-bottom: 6px;
+    }
+
+    .source-card .url {
+      font-family: 'Cascadia Code', monospace;
+      color: #6888c8;
+      font-size: 0.82rem;
+    }
+
+    .tag {
+      display: inline-block;
+      background: #222236;
+      color: #7878b8;
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 3px;
+      margin: 2px 2px 0 0;
+    }
+
+    .tag.green  { background: #1a2e1a; color: #70a870; }
+    .tag.amber  { background: #2e2010; color: #a08030; }
+    .tag.purple { background: #221a2e; color: #9070c0; }
+
+    hr.divider {
+      border: none;
+      border-top: 1px solid #1e1e2c;
+      margin: 36px 0;
+    }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>Adding Sound to Critter Quitters</h1>
+    <p class="subtitle">Phase 6 — Sound infrastructure is wired. This document covers how to source audio files and drop them in.</p>
+  </header>
+
+
+  <!-- ================================================================ -->
+  <h2>How it works</h2>
+
+  <p>
+    All audio routes through <code>AudioManager.gd</code>, an autoloaded singleton at
+    <code>game/core/AudioManager.gd</code>. Every sound slot is a variable initialised to
+    <code>null</code>. Each play method checks for null first and returns silently if the
+    slot is empty — so the game runs without error until real files are assigned.
+  </p>
+
+  <p>
+    Three audio buses are defined: <strong>Music</strong>, <strong>SFX</strong>, and
+    <strong>UI</strong>, all routing to Master. Volume is controlled independently per bus.
+    Music and SFX sliders appear in the right panel during play; UI is always at full volume.
+  </p>
+
+  <div class="callout tip">
+    <strong>No code changes needed anywhere else.</strong> Every hook (trap fires, enemy
+    dies, wave starts, button pressed) is already wired. Adding a sound only requires
+    dropping a file in the right folder and assigning one <code>preload()</code> line
+    in AudioManager.gd.
+  </div>
+
+
+  <!-- ================================================================ -->
+  <h2>Step-by-step: adding one sound</h2>
+
+  <ol class="steps">
+    <li>
+      <div>
+        <strong>Drop the file in the correct folder.</strong><br>
+        Use <code>.ogg</code> for the music loop (smaller, streamed). Use <code>.wav</code>
+        for all short SFX (no decode latency on play). See the folder map below.
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Set import options in Godot.</strong><br>
+        For the music OGG: open the Import dock, tick <strong>Loop</strong>, click
+        Re-import. For WAV files: defaults are fine — no changes needed.
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Assign the stream in AudioManager.gd.</strong><br>
+        Replace the <code>null</code> for that slot with a <code>preload()</code>.
+        See the pattern below.
+      </div>
+    </li>
+    <li>
+      <div>
+        <strong>Test in-game.</strong><br>
+        Run the game and trigger the event. If it doesn't play, check: file path matches
+        exactly, import completed, variable name matches the slot.
+      </div>
+    </li>
+  </ol>
+
+
+  <!-- ================================================================ -->
+  <h2>Folder structure</h2>
+
+  <div class="tree">
+    <span class="dir">game/assets/audio/</span><br>
+    &nbsp;&nbsp;<span class="dir">music/</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="file">bgm_arena_loop.ogg</span> &nbsp;<span class="note">← background music; enable Loop in import</span><br>
+    &nbsp;&nbsp;<span class="dir">sfx/</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">traps/</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">snap_fire.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">zapper_fire.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">fogger_fire.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">glue_apply.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">enemies/</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">hit_snap.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">hit_zapper.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">hit_fogger.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">hit_glue.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">death_small.wav</span> &nbsp;<span class="note">← Ant, Gnat</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">death_medium.wav</span> &nbsp;<span class="note">← Cricket, Beetle</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">death_large.wav</span> &nbsp;<span class="note">← Cockroach</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">death_rat.wav</span> &nbsp;<span class="note">← Rat boss</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">step_ant.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">step_gnat.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">step_cricket.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">step_beetle.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">step_cockroach.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">step_rat.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;<span class="dir">ui/</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">button.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">wave_start.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">wave_clear.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">run_end.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">bucks_earn.wav</span><br>
+    &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="file">upgrade.wav</span>
+  </div>
+
+
+  <!-- ================================================================ -->
+  <h2>Assignment pattern</h2>
+
+  <p>
+    Open <code>game/core/AudioManager.gd</code>. The stream slots are all near the top
+    of the file. Replace any <code>null</code> with a <code>preload()</code>:
+  </p>
+
+<pre><span class="comment"># Before — slot is empty, sound plays silently</span>
+<span class="kw">var</span> sfx_trap_snap_fire: AudioStream = <span class="kw">null</span>
+
+<span class="comment"># After — file is assigned, sound plays on every Snap Trap fire</span>
+<span class="kw">var</span> sfx_trap_snap_fire: AudioStream = preload(<span class="string">"res://assets/audio/sfx/traps/snap_fire.wav"</span>)</pre>
+
+  <p>
+    You can assign them one at a time. Every slot is independent — a missing file
+    in one slot never affects any other sound.
+  </p>
+
+  <div class="callout warn">
+    <strong>File paths are case-sensitive on Android and Linux.</strong> The folder names
+    in the tree above are all lowercase with underscores. Match them exactly.
+  </div>
+
+
+  <!-- ================================================================ -->
+  <h2>Adding bus effects (optional)</h2>
+
+  <p>
+    The buses are created with no effects. You can add them at any time in the Godot
+    editor without touching code:
+  </p>
+
+  <ol>
+    <li>Open <strong>Project &gt; Audio</strong> in the Godot editor.</li>
+    <li>Click the <strong>Add Effect</strong> button on the Music bus. Add a
+        <strong>Compressor</strong> to prevent the music from clipping over SFX.</li>
+    <li>On the SFX bus, add an <strong>AudioEffectLimiter</strong> to prevent loud
+        simultaneous hits from distorting.</li>
+    <li>The UI bus needs no effects — it must always be audible and clean.</li>
+  </ol>
+
+  <div class="callout">
+    Bus effect settings are saved automatically to <code>default_bus_layout.tres</code>
+    and committed with the project. You only need to do this once.
+  </div>
+
+
+  <!-- ================================================================ -->
+  <h2>Where to find audio files</h2>
+
+  <div class="source-grid">
+
+    <div class="source-card">
+      <h4>ElevenLabs Sound Effects</h4>
+      <p>AI-generated SFX from a text prompt. Free tier gives a usable monthly allowance.
+         Good for: trap fires, hit reactions, UI sounds.</p>
+      <p class="url">elevenlabs.io/sound-effects</p>
+      <span class="tag green">Free tier</span>
+      <span class="tag purple">AI-generated</span>
+    </div>
+
+    <div class="source-card">
+      <h4>Suno / Udio</h4>
+      <p>AI music generation. Describe the mood and style; download as MP3, convert to
+         OGG. Good for: background music loop.</p>
+      <p class="url">suno.com &nbsp;·&nbsp; udio.com</p>
+      <span class="tag green">Free tier</span>
+      <span class="tag purple">AI-generated</span>
+    </div>
+
+    <div class="source-card">
+      <h4>freesound.org</h4>
+      <p>Community library of CC-licensed recordings. Large selection of insect, mechanical,
+         and UI sounds. Filter by license: CC0 = no attribution required.</p>
+      <p class="url">freesound.org</p>
+      <span class="tag green">Free</span>
+      <span class="tag amber">Check license per file</span>
+    </div>
+
+    <div class="source-card">
+      <h4>OpenGameArt.org</h4>
+      <p>Game-focused assets. Mostly CC0 or CC-BY. Good starting point for footsteps,
+         death sounds, and UI clicks.</p>
+      <p class="url">opengameart.org</p>
+      <span class="tag green">Free</span>
+      <span class="tag amber">Check license per file</span>
+    </div>
+
+  </div>
+
+
+  <!-- ================================================================ -->
+  <h2>Sound inventory</h2>
+  <p>25 audio assets total. Each table below shows the variable name in
+     <code>AudioManager.gd</code>, the filename to create, the intended character,
+     and suggested search terms for finding or generating the file.</p>
+
+  <hr class="divider">
+
+  <h3>Background Music (1)</h3>
+
+  <table class="sound-table">
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>File</th>
+        <th>Character</th>
+        <th>Search terms</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="slot">music_bgm_arena</td>
+        <td class="file">music/bgm_arena_loop.ogg</td>
+        <td>60–90 second ambient loop. Understated and slightly quirky — pest control
+            vibe. Should sit underneath SFX without competing. Think lo-fi procedural
+            score with occasional odd organic sounds.</td>
+        <td class="terms">"ambient game loop quirky", "pest control comedy background",
+            "lo-fi procedural loop", "quirky exterminator theme"</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout tip">
+    <strong>Import setting:</strong> After dropping the OGG in, open the
+    <strong>Import</strong> dock in Godot, tick <strong>Loop</strong>, and click
+    Re-import. Without this the music stops after one play.
+  </div>
+
+  <hr class="divider">
+
+  <h3>Trap fire sounds (4)</h3>
+  <p>Played at the start of each trap's fire animation. One per trap type.</p>
+
+  <table class="sound-table">
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>File</th>
+        <th>Character</th>
+        <th>Search terms</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="slot">sfx_trap_snap_fire</td>
+        <td class="file">sfx/traps/snap_fire.wav</td>
+        <td>Sharp mechanical snap — a coiled spring releasing. Short (&lt;0.3s). Should feel
+            punchy and satisfying at high fire rates.</td>
+        <td class="terms">"mousetrap snap", "spring release", "mechanical snap short"</td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_trap_zapper_fire</td>
+        <td class="file">sfx/traps/zapper_fire.wav</td>
+        <td>Electric zap or buzz with a brief crackle. Medium length (0.4–0.8s). Should
+            feel powerful — the Zapper is a high-damage slow-fire trap.</td>
+        <td class="terms">"electric zap", "bug zapper sound", "electricity crackle short"</td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_trap_fogger_fire</td>
+        <td class="file">sfx/traps/fogger_fire.wav</td>
+        <td>Pressurised hiss or spray burst — aerosol can releasing. Short (0.3–0.5s).</td>
+        <td class="terms">"spray can hiss", "aerosol burst", "fogger spray sound"</td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_trap_glue_apply</td>
+        <td class="file">sfx/traps/glue_apply.wav</td>
+        <td>Soft wet squelch or sticky slap — played when the board latches onto a new
+            enemy. Short (&lt;0.3s). Subtle; the Glue Board is a passive support trap.</td>
+        <td class="terms">"sticky slap", "glue squelch", "adhesive sound effect"</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="divider">
+
+  <h3>Enemy hit sounds (4)</h3>
+  <p>Played when a trap damages an enemy. The sound reflects <em>what hit them</em>,
+     not which enemy type was hit. One per trap type.</p>
+
+  <table class="sound-table">
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>File</th>
+        <th>Character</th>
+        <th>Search terms</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="slot">sfx_hit_snap</td>
+        <td class="file">sfx/enemies/hit_snap.wav</td>
+        <td>Solid thwack or crunch — the bar landed. Should feel satisfying.</td>
+        <td class="terms">"impact thwack", "hit crunch short", "smack sound effect"</td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_hit_zapper</td>
+        <td class="file">sfx/enemies/hit_zapper.wav</td>
+        <td>Brief electric sting with a slight sizzle tail.</td>
+        <td class="terms">"electric sting hit", "zap impact", "electricity hit short"</td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_hit_fogger</td>
+        <td class="file">sfx/enemies/hit_fogger.wav</td>
+        <td>Soft chemical impact — slightly muffled, wet. The fog wave reaching an enemy.</td>
+        <td class="terms">"soft impact muffled", "chemical splash", "fog hit"</td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_hit_glue</td>
+        <td class="file">sfx/enemies/hit_glue.wav</td>
+        <td>Muted thud with a slight stickiness — subtle, since the Glue Board deals
+            minimal direct damage.</td>
+        <td class="terms">"sticky thud", "glue impact", "muted hit soft"</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="divider">
+
+  <h3>Enemy death sounds (4)</h3>
+  <p>Played when an enemy's HP reaches zero. Keyed by enemy tier, not individual type.</p>
+
+  <table class="sound-table">
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>File</th>
+        <th>Applies to</th>
+        <th>Character &amp; search terms</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="slot">sfx_death_small</td>
+        <td class="file">sfx/enemies/death_small.wav</td>
+        <td>Ant, Gnat</td>
+        <td>Light pop or crunch. Very short (&lt;0.2s). High-pitched — these are tiny
+            fast enemies.<br>
+            <span class="terms">"small crunch pop", "insect death short", "tiny pop sound"</span></td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_death_medium</td>
+        <td class="file">sfx/enemies/death_medium.wav</td>
+        <td>Cricket, Beetle</td>
+        <td>Heavier crunch. Short (0.2–0.4s). More body than the small death.<br>
+            <span class="terms">"crunch impact medium", "bug squash", "satisfying crunch short"</span></td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_death_large</td>
+        <td class="file">sfx/enemies/death_large.wav</td>
+        <td>Cockroach</td>
+        <td>Wet crunch with a little more resonance. Satisfying but not gross.<br>
+            <span class="terms">"large crunch wet", "heavy squash", "thick crunch impact"</span></td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_death_rat</td>
+        <td class="file">sfx/enemies/death_rat.wav</td>
+        <td>Rat (boss)</td>
+        <td>Heavy thud plus a brief squeal or grunt. Distinctly larger than insect deaths
+            — should feel like a boss kill milestone.<br>
+            <span class="terms">"rat squeak impact", "heavy thud boss death", "large animal defeat sound"</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <hr class="divider">
+
+  <h3>Enemy footstep sounds (6)</h3>
+  <p>
+    Played each time an enemy advances to a new grid cell. Each file is triggered repeatedly
+    at a rate proportional to enemy speed, rate-limited to at most once per 0.1s per enemy
+    instance. Files must be <strong>very short</strong> (&lt;0.12s ideally) with no
+    reverb tail — they loop rapidly and tails cause muddiness.
+  </p>
+
+  <table class="sound-table">
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>File</th>
+        <th>Enemy</th>
+        <th>Character &amp; search terms</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="slot">sfx_step_ant</td>
+        <td class="file">sfx/enemies/step_ant.wav</td>
+        <td>Ant (fast)</td>
+        <td>Rapid light skitter — tiny tapping on a surface.<br>
+            <span class="terms">"ant footstep", "tiny scuttle tap", "insect light step"</span></td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_step_gnat</td>
+        <td class="file">sfx/enemies/step_gnat.wav</td>
+        <td>Gnat (very fast)</td>
+        <td>Extremely light — near-silence, possibly a faint wing-buzz or tiny tap.
+            Gnats are the smallest enemy; their audio presence should be minimal.<br>
+            <span class="terms">"tiny insect sound", "very quiet tap", "gnat buzz tiny"</span></td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_step_cricket</td>
+        <td class="file">sfx/enemies/step_cricket.wav</td>
+        <td>Cricket</td>
+        <td>Chirpy skitter — slightly erratic feel to match the cricket's fast movement.<br>
+            <span class="terms">"cricket scuttle", "chirpy step insect", "light erratic skitter"</span></td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_step_beetle</td>
+        <td class="file">sfx/enemies/step_beetle.wav</td>
+        <td>Beetle (slow, heavy)</td>
+        <td>Heavier click-clack — hard shell on a surface, slower rhythm to match
+            the beetle's plodding movement.<br>
+            <span class="terms">"beetle footstep click", "hard shell step", "heavy insect walk"</span></td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_step_cockroach</td>
+        <td class="file">sfx/enemies/step_cockroach.wav</td>
+        <td>Cockroach</td>
+        <td>Medium scrabbling — six-legged scramble, slightly skittery but with
+            more weight than the ant or cricket.<br>
+            <span class="terms">"cockroach scuttle", "medium insect step", "scrabble skitter"</span></td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_step_rat</td>
+        <td class="file">sfx/enemies/step_rat.wav</td>
+        <td>Rat (boss, very slow)</td>
+        <td>Padding thud — clearly heavier than any insect. Slow, deliberate footfall.<br>
+            <span class="terms">"rat footstep", "small animal heavy step", "padding thud soft"</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout tip">
+    <strong>Footstep tip:</strong> If a footstep file sounds too clean or long, trim it
+    in Audacity or any audio editor to remove the tail. The goal is a single transient
+    click or tap with no sustain.
+  </div>
+
+  <hr class="divider">
+
+  <h3>UI sounds (6)</h3>
+
+  <table class="sound-table">
+    <thead>
+      <tr>
+        <th>Variable</th>
+        <th>File</th>
+        <th>Trigger</th>
+        <th>Character &amp; search terms</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="slot">sfx_ui_button</td>
+        <td class="file">sfx/ui/button.wav</td>
+        <td>Any HUD button press (pause, speed, zoom, send wave, exit, restart)</td>
+        <td>Generic tap or click. Neutral and clean — heard constantly, should not be
+            distracting.<br>
+            <span class="terms">"ui click", "button tap short", "soft click interface"</span></td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_ui_wave_start</td>
+        <td class="file">sfx/ui/wave_start.wav</td>
+        <td>Wave begins (phase transitions to WAVE)</td>
+        <td>Short announcement sting — something starting, slight urgency.<br>
+            <span class="terms">"wave start sting", "game round begin", "alert sting short"</span></td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_ui_wave_clear</td>
+        <td class="file">sfx/ui/wave_clear.wav</td>
+        <td>Wave ends, countdown begins for next wave</td>
+        <td>Satisfying short chime or flourish — a small reward for surviving the wave.<br>
+            <span class="terms">"wave clear chime", "success sting short", "round complete sound"</span></td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_ui_run_end</td>
+        <td class="file">sfx/ui/run_end.wav</td>
+        <td>Infestation Level hits 100% — run ends</td>
+        <td>Ominous low sting or failure stab. Should feel final — the run is over.
+            Not a harsh buzzer; something atmospheric.<br>
+            <span class="terms">"game over sting", "failure ominous stab", "defeat low tone"</span></td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_ui_bucks_earn</td>
+        <td class="file">sfx/ui/bucks_earn.wav</td>
+        <td>Bug Bucks increases (throttled — plays at most once per 150ms)</td>
+        <td>Light coin chime. Non-intrusive — heard constantly during waves. Must be
+            very short with no ring-out.<br>
+            <span class="terms">"coin chime tiny", "currency pickup short", "light ding collect"</span></td>
+      </tr>
+      <tr>
+        <td class="slot">sfx_ui_upgrade</td>
+        <td class="file">sfx/ui/upgrade.wav</td>
+        <td>Any stat upgrade applied to a placed trap</td>
+        <td>Positive confirmation ding — trap just got better. Brighter than the bucks
+            chime, shorter than the wave clear.<br>
+            <span class="terms">"upgrade confirm ding", "level up short", "stat boost chime"</span></td>
+      </tr>
+    </tbody>
+  </table>
+
+
+  <!-- ================================================================ -->
+  <h2>Quick-reference: all variable names</h2>
+
+  <p>Copy-paste ready list of every slot in <code>AudioManager.gd</code>, in file order:</p>
+
+<pre><span class="comment">## Music</span>
+music_bgm_arena
+
+<span class="comment">## Trap fire</span>
+sfx_trap_snap_fire
+sfx_trap_zapper_fire
+sfx_trap_fogger_fire
+sfx_trap_glue_apply
+
+<span class="comment">## Enemy hit (by trap type)</span>
+sfx_hit_snap
+sfx_hit_zapper
+sfx_hit_fogger
+sfx_hit_glue
+
+<span class="comment">## Enemy death (by tier)</span>
+sfx_death_small      <span class="comment">← Ant, Gnat</span>
+sfx_death_medium     <span class="comment">← Cricket, Beetle</span>
+sfx_death_large      <span class="comment">← Cockroach</span>
+sfx_death_rat        <span class="comment">← Rat boss</span>
+
+<span class="comment">## Footsteps (by enemy type)</span>
+sfx_step_ant
+sfx_step_gnat
+sfx_step_cricket
+sfx_step_beetle
+sfx_step_cockroach
+sfx_step_rat
+
+<span class="comment">## UI</span>
+sfx_ui_button
+sfx_ui_wave_start
+sfx_ui_wave_clear
+sfx_ui_run_end
+sfx_ui_bucks_earn
+sfx_ui_upgrade</pre>
+
+</div>
+</body>
+</html>

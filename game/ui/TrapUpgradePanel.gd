@@ -324,6 +324,7 @@ func _on_btn_a() -> void:
 	if not GameState.spend_bug_bucks(_trap.get_damage_upgrade_cost()):
 		return
 	_trap.apply_damage_upgrade()
+	AudioManager.play_ui("upgrade")
 
 
 func _on_btn_b() -> void:
@@ -332,6 +333,7 @@ func _on_btn_b() -> void:
 	if not GameState.spend_bug_bucks(_trap.get_range_upgrade_cost()):
 		return
 	_trap.apply_range_upgrade()
+	AudioManager.play_ui("upgrade")
 
 
 func _on_btn_c() -> void:
@@ -340,6 +342,7 @@ func _on_btn_c() -> void:
 	if not GameState.spend_bug_bucks(_trap.get_rate_upgrade_cost()):
 		return
 	_trap.apply_fire_rate_upgrade()
+	AudioManager.play_ui("upgrade")
 
 
 func _on_btn_sell() -> void:
