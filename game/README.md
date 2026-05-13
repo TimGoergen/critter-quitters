@@ -4,7 +4,7 @@ A mobile tower defense game built on the open maze-building mechanic pioneered b
 
 **Platform:** Mobile (iOS / Android) / Web  
 **Engine:** Godot 4 · GDScript · Mobile renderer  
-**Status:** Phase 2 complete (combat loop)
+**Status:** Phase 5 complete (Mobile UI Rework) · Phase 6 (Sound) in progress
 
 ---
 
@@ -20,8 +20,8 @@ Damage output is a function of path engineering. A trap no enemy walks past is w
 
 1. **Run start** — 3 trap types are offered; player picks 2 to start with
 2. **Pre-wave countdown** — place traps before pests arrive; trigger early for a Bug Bucks bonus
-3. **Wave** — pests enter sequentially, pathfinding in real time; place and sell traps freely during combat
-4. **Store** — spend Bug Bucks on trap upgrades, player upgrades, or trap unlocks
+3. **Wave** — pests enter sequentially, pathfinding in real time; place, upgrade, and sell traps freely at any time
+4. **Direct trap upgrades** — tap any placed trap to open its upgrade panel; spend Bug Bucks to upgrade Damage, Range, or Fire Rate independently
 5. **Every 10 waves** — boss wave (The Rat leads); the following wave triggers Arena Evolution (random obstacles added)
 6. **Run ends** — when the Infestation Level reaches its maximum threshold
 
@@ -31,12 +31,12 @@ Damage output is a function of path engineering. A trap no enemy walks past is w
 
 | Trap | Archetype | Notes |
 |---|---|---|
-| Snap Trap | Basic / single-target | Cheap, fast trigger, low damage |
+| Snap Trap | Basic / single-target | Cheap, fast trigger, low damage; targets nearest pest |
 | Zapper | Long range / high damage | Slow trigger; targets pest farthest along path |
-| Fogger | AoE burst | Damages all pests in range circle simultaneously |
-| Glue Board | Ice slow / passive | Slows any pest inside its range circle continuously |
+| Fogger | AoE burst | Damages pests outward from centre — closer pests hit first |
+| Glue Board | Ice slow / passive | Continuously slows any pest inside its range circle |
 
-All traps occupy a **2×2 cell footprint**. Each can be upgraded up to 5 stars; fully upgraded traps unlock a variation with DoT effects (fire or ice).
+All traps occupy a **2×2 cell footprint**. Each has three independently upgradeable stats (Damage, Range, Fire Rate), each up to 3 levels, displayed as ★★★ stars. Fire Rate is not upgradeable on the Glue Board (passive). A full 3/3/3 upgrade awards a one-time +10% bonus to all stats.
 
 ---
 
@@ -67,7 +67,7 @@ All traps occupy a **2×2 cell footprint**. Each can be upgraded up to 5 stars; 
 
 | Resource | Description |
 |---|---|
-| Bug Bucks | Earned per kill; spent on traps, upgrades, repositioning, store rerolls |
+| Bug Bucks | Earned per kill; spent on trap placement, upgrades, repositioning |
 | Service Fees | Meta currency earned at run end; spent on permanent upgrades in The Truck |
 
 Sell value is 70% of buy price. Infestation Level fills as pests exit; run ends when it maxes out.
@@ -80,10 +80,10 @@ Sell value is 70% of buy price. Infestation Level fills as pests exit; run ends 
 game/
 ├── arena/          # Grid, Pathfinder, Arena controller
 ├── enemies/        # Enemy movement and behavior
-├── traps/          # Trap logic (Phase 2+)
-├── core/           # GameState autoload
-├── ui/             # HUD and menus (Phase 2+)
-├── assets/         # Icons and static assets
+├── traps/          # Trap logic
+├── core/           # GameState and AudioManager autoloads
+├── ui/             # HUD, start screen, upgrade panels
+├── assets/         # Icons, audio, and static assets
 ├── CLAUDE.md       # Code standards and AI collaboration notes
 └── project.godot
 ```
@@ -94,13 +94,17 @@ game/
 
 | Phase | Focus | Status |
 |---|---|---|
-| 1 | Core mechanic prototype — grid, A\*, pathfinding, placeholder enemies | **Complete** |
+| 1 | Core mechanic — grid, A\*, pathfinding, placeholder enemies | **Complete** |
 | 2 | Combat loop — HP, damage, Bug Bucks, Infestation Level, run-over state | **Complete** |
-| 3 | ASCII aesthetic — 3D billboards, physical movement, palette | Upcoming |
-| 4 | Full game loop — all traps/enemies, waves, store, Arena Evolution | Upcoming |
-| 4b | Meta progression — Service Fees, The Truck, upgrade trees | Upcoming |
-| 5 | Depth and polish — DoT, store tiers, audio, HUD | Upcoming |
-| 6 | Platform — mobile export, web export, performance | Upcoming |
+| 3 | Visual style — Sprite3D illustrated enemies, hit/death reactions, Snap Trap procedural mesh | **Complete** |
+| 4 | Build & deploy pipeline — GitHub Actions CI, Windows installer, signed Android APK, Firebase distribution | **Complete** |
+| 5 | Mobile UI rework — landscape layout, touch input, two-level zoom, enemy follow, upgrade panel | **Complete** |
+| 6 | Sound — AudioManager, audio buses, trap fire SFX; enemy/UI/music audio pending | **In Progress** |
+| 7 | Sprite art migration — illustrated Sprite3D for all 5 enemies and 4 traps; procedural background | Upcoming |
+| 8 | Full game loop — all trap/enemy types, wave composition, starting selection, Arena Evolution, save files | Upcoming |
+| 8b | Meta progression — Service Fees, The Truck hub, equipment and business upgrade trees | Upcoming |
+| 9 | Depth & polish — DoT system, store tiers, full upgrade trees, HUD polish | Upcoming |
+| 10 | Platform — final mobile/web export, performance optimisation, Play Store submission | Upcoming |
 
 ---
 

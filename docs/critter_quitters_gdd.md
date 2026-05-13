@@ -1,6 +1,6 @@
 ﻿# **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.25 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
+**Version:** Draft v0.27 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
 
 ---
 
@@ -34,6 +34,7 @@
 | v0.24 | Phase 5 design decisions recorded. Landscape-only orientation confirmed; portrait code paths to be removed. Trap placement: tap-to-select / tap-to-place confirmed; drag-to-place mechanic dropped. Input model: movement threshold (~15px) distinguishes tap from drag; drag always pans camera. Zoom: two fixed levels (overview = full arena, zoomed-in = 2× magnification); zoom toggle button in UI; panning only active when zoomed in. Enemy follow: tap enemy to follow (camera tracks at zoomed-in level); tap same enemy to cancel; tap different enemy or trap to switch focus; focus released on wave end or run end. Tap placed trap: centers camera and opens upgrade panel. Arena visual changes: smaller footprint (more margin), lighter wall colour. Upgrade panel redesigned for touch (larger tap targets). Phase 4 marked complete. |
 | v0.25 | Phase 5 (Mobile UI Rework) complete. Viewport scaling: `stretch/mode=viewport` + `stretch/aspect=expand` at 1280×600 base resolution — all UI coordinates are virtual pixels, consistent across physical screen sizes. Safe area margins (24px) added to side panels to keep controls away from screen edges and camera cutouts. Orientation: `SCREEN_SENSOR_LANDSCAPE` (allows normal and upside-down landscape; blocks portrait). Firebase App Distribution integrated into CI: signed APK deployed automatically to testers group on every push to main or feature/** branches. Build version format changed from `0.0.<sha>` to `0.0.0.<NNNN>` (zero-padded GitHub run number, always incrementing); Firebase release notes show branch name + short SHA + commit message. Section 10 updated to reflect implemented mobile UX model. Art style tag in header corrected. Phase 5 marked complete. |
 | v0.26 | Sound added as Phase 6. Previous phases 6, 7, 7b, 8, 9 renumbered to 7, 8, 8b, 9, 10. Audio removed from Phase 9 (Depth & Polish) as it is now covered by Phase 6. |
+| v0.27 | GDD audited against implemented code. Section 2 step 5 corrected (no between-wave store). Section 10 upgrade panel description updated to match implementation (3-level per-stat, not star 0–5/tier-up). Section 11 upgrade system entry clarified. Phase 6 status updated to reflect partial completion (AudioManager infrastructure and trap fire sounds done; enemy/UI/music audio pending). README updated to reflect Phase 5 complete. |
 
 ---
 
@@ -95,7 +96,7 @@ Before the first wave, the player is presented with 3 randomly selected trap typ
 
 4. Each pest that is killed before reaching the exit awards Bug Bucks based on pest type, scaled by wave number. Each pest that reaches the exit increases the Infestation Level by an amount based on pest type.
 
-5. Wave ends — the player visits the store before the next wave begins.
+5. Wave ends — a pre-wave countdown begins for the next wave. The player may tap any placed trap at any time (during or between waves) to open its upgrade panel and spend Bug Bucks.
 
 6. Every 10 waves is a boss wave. The wave immediately following each boss wave triggers Arena Evolution — see Section 6a.
 
@@ -497,16 +498,15 @@ A zoom toggle button in the right panel switches between levels. Zoom resets to 
 
 When the player taps an already-placed trap, an upgrade panel appears showing:
 
-- Trap type name and current tier
-- Star level (0–5, displayed as filled/empty stars)
-- Current damage, range, and fire rate
-- Upgrade cost in Bug Bucks
-- Three upgrade buttons (Damage, Range, Fire Rate) — each shows the current value and the value after that upgrade, so the choice is informed
-- Sell button — refunds 70% of the trap's buy price
-
-At star 5, the three buttons are replaced by three tier-up variation options. These offer dramatic stat changes and advance the trap to the next tier with the star resetting to 0.
+- Trap type name
+- Three stat rows (Damage, Range, Fire Rate) — each showing the stat name, current upgrade level as filled/empty stars (★★★, 0–3), current value, the delta after upgrade (+X), and the Bug Bucks cost
+- Fire Rate row is hidden for passive traps (Glue Board)
+- A button is disabled when the stat is already at max level (shows MAX) or the player cannot afford it
+- Sell button — refunds 70% of the trap's buy price (shown with coin icon and amount)
 
 The panel is dismissed by tapping the close button or tapping outside the panel.
+
+*Design target (not yet implemented):* the long-term upgrade model uses a star level (0–5) and tier (0+) system. At star 5, the upgrade buttons are replaced by three tier-up variation options offering dramatic stat changes; the trap advances to the next tier and the star level resets to 0. The current per-stat 3-level system is the implemented foundation; the star/tier layer is a future pass.
 
 **Future considerations (not yet implemented)**
 
@@ -530,7 +530,7 @@ The panel is dismissed by tapping the close button or tapping outside the panel.
 | Resolved | Boss wave structure: Rat leads, escorts follow; escort count = half standard wave; Rat HP = 60% of standard wave total HP |
 | Resolved | Arena Evolution: every 10 waves, small chance of 1–few obstacles added; overwrites traps with no refund |
 | Resolved | Starting trap selection: 3 offered, player picks 2; remaining unlockable in store |
-| Resolved | Upgrade system: direct per-trap upgrades via tap; star level 0–5, tier 0+; cost formula defined; tier-up at star 5 |
+| Resolved | Upgrade system: direct per-trap upgrades via tap; three independent stat levels (Damage, Range, Fire Rate), each 0–3, displayed as ★★★ stars; cost formula defined. Star 0–5 / tier-up system is the design target for a future pass — not yet implemented. |
 | Resolved | Infestation healing: store option (one-time reduction) and trap modifier (lifesteal-style per kill) |
 | Resolved | Pathfinding: minimum one valid path always enforced |
 | Resolved | Trap footprint: 2×2, anchored at top-left cell |
@@ -648,15 +648,16 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: the full game is comfortably playable one-handed on a phone in landscape mode*
 
-### **Phase 6 — Sound**
-- Background music — understated and quirky ambient loop, appropriate to the pest control theme; tone sits between minimal and playfully odd
-- Per-enemy footstep / movement sounds, scaled to enemy type (e.g. skittering for Ant, heavier for Beetle)
-- Enemy hit reaction sound — brief impact per trap type
-- Enemy death sound — short, satisfying; distinct from hit
-- Per-trap fire sounds — each trap type has a unique firing sound (snap, zap, hiss, stick)
-- UI sounds — button press, wave start announcement, wave clear, run-end (infestation maxed)
-- Bug Bucks earned chime — light, non-intrusive
-- Audio bus setup — separate buses for music, SFX, and UI with independent volume controls
+### **Phase 6 — Sound** *(In Progress)*
+- ✓ Audio bus setup — Music, SFX, UI buses; Music and SFX volume sliders in the settings dialog; settings persisted to `user://settings.cfg`
+- ✓ AudioManager autoload — full infrastructure with null-guarded stream slots; pool-based playback (8 SFX, 4 footstep, 3 UI players); footstep rate limiting; Bug Bucks chime throttle
+- ✓ Call hooks wired in Enemy.gd, Trap.gd, Arena.gd, HUD.gd, TrapUpgradePanel.gd
+- ✓ Per-trap fire sounds — all 4 trap types have audio files assigned (snap, zap, fogger hiss, glue apply)
+- ✗ Background music — stream slot exists; no audio file yet
+- ✗ Enemy hit sounds — one per trap type; stream slots exist; no audio files yet
+- ✗ Enemy death sounds — keyed by tier (small/medium/large/rat); stream slots exist; no audio files yet
+- ✗ Enemy footstep sounds — one per enemy type; stream slots exist; no audio files yet
+- ✗ UI sounds — button, wave start, wave clear, run end, Bug Bucks chime, upgrade; stream slots exist; no audio files yet
 
 *Goal: the game is playable with the screen off and every meaningful event has an audio identity*
 
