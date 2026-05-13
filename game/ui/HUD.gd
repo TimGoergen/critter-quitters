@@ -68,9 +68,9 @@ const SCREEN_EDGE_MARGIN: float = 24.0 # extra inset on the screen-edge side and
 const RIGHT_BTN_H: float = 52.0        # fixed height for all right-panel buttons
 const INNER_BORDER_W: float = 2.0      # black separator line at the arena-facing edge of each panel
 
-# "INCOMING" label — lives below the infestation bar as a standalone vbox entry.
-# Hidden via modulate.a so the reserved space never collapses.
+# "INCOMING" label — large semi-transparent overlay centred over the arena.
 var _countdown_wave_label:   Label
+var _incoming_font:          Font   # bold Bebas Neue — stored so layout can measure it
 
 var _send_wave_btn:          Button
 var _send_wave_text_label:   Label   # "Send Early" / "Send Next Wave"
@@ -130,6 +130,7 @@ func _ready() -> void:
 func _build_ui() -> void:
 	_build_left_panel()
 	_build_right_panel()
+	_build_incoming_overlay()  # arena overlay; drawn above panels, below dialogs
 	_build_settings_dialog()   # must be after right panel so it draws on top
 	_build_run_over_overlay()
 
@@ -226,26 +227,50 @@ func _build_right_panel() -> void:
 	margin.add_child(vbox)
 
 	# --- Settings button — top-right corner, opens the Settings dialog.
-	# Icon size is 75% larger than the default button minimum to make the
-	# van-gear image prominent enough at mobile touch scale.
+	# No background or border — only the van-gear icon is visible.
+	# Height is derived from the image aspect ratio so the button fits snugly
+	# around the icon with only a small vertical margin.
 	var settings_row := HBoxContainer.new()
 	settings_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_row.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
 	vbox.add_child(settings_row)
 
-	var settings_spacer := Control.new()
-	settings_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	settings_row.add_child(settings_spacer)
+	var van_tex   := load("res://assets/van_gear.png") as Texture2D
+	# Icon width = 50% of the full panel width, centered in the row.
+	# Height derived from the tight visible-pixel bounds of the artwork.
+	var icon_w    := RIGHT_PANEL_W * 0.5
+	var used_rect := van_tex.get_image().get_used_rect()
+	# Cast to float before dividing — used_rect.size is Vector2i and int/int truncates to 0.
+	var icon_h    := icon_w * (used_rect.size.y as float / used_rect.size.x as float)
+
+	# Equal spacers on both sides force reliable horizontal centering in the HBoxContainer.
+	var left_spacer := Control.new()
+	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_row.add_child(left_spacer)
 
 	_settings_btn = Button.new()
-	_settings_btn.text             = ""
-	_settings_btn.icon             = load("res://assets/van_gear.png")
-	_settings_btn.expand_icon      = true
-	_settings_btn.custom_minimum_size = Vector2(98, 98)
-	_settings_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_settings_btn.text                  = ""
+	# Height adds 8 px total (4 top + 4 bottom) around the visible artwork.
+	_settings_btn.custom_minimum_size   = Vector2(icon_w, icon_h + 8.0)
+	_settings_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_settings_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_apply_icon_button_style(_settings_btn)
 	_settings_btn.pressed.connect(_on_settings_btn_pressed)
 	settings_row.add_child(_settings_btn)
+
+	var right_spacer := Control.new()
+	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	settings_row.add_child(right_spacer)
+
+	# TextureRect fills the button face and handles proportional scaling reliably.
+	# Using a child node rather than Button.icon avoids expand_icon quirks with StyleBoxEmpty.
+	var van_rect := TextureRect.new()
+	van_rect.texture      = van_tex
+	van_rect.expand_mode  = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	van_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	van_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	van_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_settings_btn.add_child(van_rect)
 
 	# --- Wave label ---
 	_wave_label = Label.new()
@@ -349,26 +374,9 @@ void fragment() {
 	_infestation_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	inf_overlay.add_child(_infestation_label)
 
-	# --- INCOMING label — below the infestation bar.
-	# Always occupies its reserved height; visibility is driven by modulate.a
-	# so that the layout never shifts when the label appears or disappears.
-	_countdown_wave_label = Label.new()
-	_countdown_wave_label.text                = "INCOMING"
-	_countdown_wave_label.custom_minimum_size = Vector2(0, 30)
-	_countdown_wave_label.add_theme_font_size_override("font_size", 24)
-	_countdown_wave_label.add_theme_color_override("font_color", COLOR_INCOMING)
-	_countdown_wave_label.add_theme_color_override("font_shadow_color", COLOR_COUNTDOWN_SHADOW)
-	_countdown_wave_label.add_theme_constant_override("shadow_offset_x", 1)
-	_countdown_wave_label.add_theme_constant_override("shadow_offset_y", 1)
-	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
-	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_countdown_wave_label.modulate.a           = 0.0  # hidden but space is reserved
-	vbox.add_child(_countdown_wave_label)
-
 	# --- Send Wave button — fills all remaining vbox space.
 	# Contains a centred action row (house icon + label) and a reward row
-	# (coin icon + early-bonus amount).  The INCOMING label is now outside
-	# this button so the button's internal layout stays constant.
+	# (coin icon + early-bonus amount).
 	_send_wave_btn = Button.new()
 	_send_wave_btn.text = ""
 	_send_wave_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -506,6 +514,60 @@ void fragment() {
 
 
 # ---------------------------------------------------------------------------
+# INCOMING arena overlay
+# ---------------------------------------------------------------------------
+
+func _build_incoming_overlay() -> void:
+	# Synthesise bold Bebas Neue — no bold file exists, so use FontVariation embolden.
+	var fv := FontVariation.new()
+	fv.base_font          = UIFonts.header()
+	fv.variation_embolden = 1.2
+	_incoming_font = fv
+
+	# Large semi-transparent "INCOMING" text centred over the arena.
+	# Purely visual — MOUSE_FILTER_IGNORE means it never blocks input.
+	# Anchors mirror the panel pattern so the engine keeps the rect correct on
+	# any viewport change (including zoom) without manual position/size writes.
+	_countdown_wave_label = Label.new()
+	_countdown_wave_label.text                 = "INCOMING"
+	_countdown_wave_label.anchor_left          = 0.0
+	_countdown_wave_label.anchor_right         = 1.0
+	_countdown_wave_label.anchor_top           = 0.0
+	_countdown_wave_label.anchor_bottom        = 1.0
+	_countdown_wave_label.offset_left          = LEFT_PANEL_W
+	_countdown_wave_label.offset_right         = -RIGHT_PANEL_W
+	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown_wave_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_countdown_wave_label.add_theme_font_override("font", _incoming_font)
+	# Baked-in alpha keeps the text translucent at the "on" phase of the blink.
+	_countdown_wave_label.add_theme_color_override("font_color", Color(0.90, 0.15, 0.15, 0.48))
+	# Counter-clockwise tilt: text rises from right to left.
+	_countdown_wave_label.rotation_degrees = -10.0
+	_countdown_wave_label.mouse_filter     = Control.MOUSE_FILTER_IGNORE
+	_countdown_wave_label.modulate.a       = 0.0   # hidden until countdown starts
+	add_child(_countdown_wave_label)
+	_update_incoming_overlay_layout()
+
+
+func _update_incoming_overlay_layout() -> void:
+	if _countdown_wave_label == null or _incoming_font == null:
+		return
+	var vp_size := get_viewport().get_visible_rect().size
+	var arena_w := vp_size.x - LEFT_PANEL_W - RIGHT_PANEL_W
+	var arena_h := vp_size.y
+
+	# Measure "INCOMING" at a reference size, then scale so it spans 90% of arena width.
+	var ref_size : int = 200
+	var measured := _incoming_font.get_string_size(
+			"INCOMING", HORIZONTAL_ALIGNMENT_LEFT, -1, ref_size).x
+	var font_size := int(ref_size * (arena_w * 0.9) / measured)
+	_countdown_wave_label.add_theme_font_size_override("font_size", font_size)
+
+	# Pivot at the label's centre so the tilt rotates in place over the arena.
+	_countdown_wave_label.pivot_offset = Vector2(arena_w * 0.5, arena_h * 0.5)
+
+
+# ---------------------------------------------------------------------------
 # Run-over overlay
 # ---------------------------------------------------------------------------
 
@@ -528,23 +590,46 @@ func _build_run_over_overlay() -> void:
 	infested_label.anchor_bottom        = 0.55
 	infested_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	infested_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	infested_label.add_theme_font_size_override("font_size", 96)
+	infested_label.add_theme_font_size_override("font_size", 144)
 	infested_label.add_theme_color_override("font_color", COLOR_INFESTED)
 	infested_label.add_theme_font_override("font", UIFonts.header())
 	_run_over_overlay.add_child(infested_label)
 
 	var btn := Button.new()
-	btn.text                 = "Restart"
-	btn.anchor_left          = 0.30
-	btn.anchor_right         = 0.70
-	btn.anchor_top           = 0.70
-	btn.anchor_bottom        = 0.80
-	btn.add_theme_font_size_override("font_size", 32)
-	btn.add_theme_font_override("font", UIFonts.primary())
-	btn.process_mode         = Node.PROCESS_MODE_ALWAYS
-	_apply_button_style(btn)
+	btn.text         = ""
+	btn.anchor_left  = 0.30
+	btn.anchor_right = 0.70
+	btn.anchor_top   = 0.70
+	btn.anchor_bottom = 0.80
+	btn.process_mode = Node.PROCESS_MODE_ALWAYS
+	_apply_send_wave_btn_style(btn)
 	btn.pressed.connect(_on_restart_pressed)
 	_run_over_overlay.add_child(btn)
+
+	# Inner layout mirrors the Send Next Wave button: icon + label in an HBox.
+	var btn_hbox := HBoxContainer.new()
+	btn_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	btn_hbox.alignment   = BoxContainer.ALIGNMENT_CENTER
+	btn_hbox.add_theme_constant_override("separation", 5)
+	btn_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(btn_hbox)
+
+	var restart_icon := TextureRect.new()
+	restart_icon.texture             = load("res://assets/uninfested.png") as Texture2D
+	restart_icon.custom_minimum_size = Vector2(36, 36)
+	restart_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	restart_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	restart_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	restart_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	btn_hbox.add_child(restart_icon)
+
+	var restart_label := Label.new()
+	restart_label.text         = "Restart"
+	restart_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	restart_label.add_theme_font_override("font", UIFonts.primary_bold())
+	restart_label.add_theme_font_size_override("font_size", 24)
+	restart_label.add_theme_color_override("font_color", COLOR_TEXT)
+	btn_hbox.add_child(restart_label)
 
 
 # ---------------------------------------------------------------------------
@@ -579,8 +664,8 @@ func _build_settings_dialog() -> void:
 	panel.anchor_bottom = 0.5
 	panel.offset_left   = -190.0
 	panel.offset_right  =  190.0
-	panel.offset_top    = -185.0
-	panel.offset_bottom =  185.0
+	panel.offset_top    = -155.0
+	panel.offset_bottom =  155.0
 	panel.mouse_filter  = Control.MOUSE_FILTER_STOP
 
 	var panel_style := StyleBoxFlat.new()
@@ -621,14 +706,22 @@ func _build_settings_dialog() -> void:
 	_music_slider.value_changed.connect(_on_music_volume_changed)
 	_sfx_slider.value_changed.connect(_on_sfx_volume_changed)
 
+	# X button — square, top-right corner of the panel, outside the vbox flow.
 	var close_btn := Button.new()
-	close_btn.text = "CLOSE"
+	close_btn.text                = "X"
+	close_btn.anchor_left         = 1.0
+	close_btn.anchor_right        = 1.0
+	close_btn.anchor_top          = 0.0
+	close_btn.anchor_bottom       = 0.0
+	close_btn.offset_left         = -48.0
+	close_btn.offset_right        = -8.0
+	close_btn.offset_top          =  8.0
+	close_btn.offset_bottom       =  48.0
 	close_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	close_btn.add_theme_font_size_override("font_size", 22)
-	close_btn.custom_minimum_size = Vector2(0, RIGHT_BTN_H)
+	close_btn.add_theme_font_size_override("font_size", 20)
 	_apply_button_style(close_btn)
 	close_btn.pressed.connect(_on_settings_close_pressed)
-	dialog_vbox.add_child(close_btn)
+	panel.add_child(close_btn)
 
 	var exit_sep := HSeparator.new()
 	dialog_vbox.add_child(exit_sep)
@@ -725,10 +818,11 @@ func _on_zoom_state_changed(is_zoomed: bool) -> void:
 	# When in overview, the action is to zoom in — show the plus sign.
 	(_zoom_icon as _ZoomIcon).show_plus = not is_zoomed
 	_zoom_icon.queue_redraw()
+	_update_incoming_overlay_layout()
 
 
 func _on_viewport_resized() -> void:
-	pass   # panels are anchored — they resize automatically
+	_update_incoming_overlay_layout()
 
 
 func _on_speed_btn_pressed() -> void:
@@ -1041,21 +1135,12 @@ func _add_btn_cost_label(btn: Button, type: int, font_size: int) -> void:
 # Button styles
 # ---------------------------------------------------------------------------
 
-## Like _apply_button_style but with 4 px content margins so an icon fills
-## nearly the entire button face.  Used for the settings (van-gear) button.
+## Settings (van-gear) button style: no background, no border, no padding.
+## StyleBoxEmpty tells Godot to draw nothing for every interactive state, so
+## only the icon texture is visible.
 func _apply_icon_button_style(btn: Button) -> void:
-	for state in [["normal", COLOR_BTN_NORMAL], ["hover", COLOR_BTN_HOVER], ["pressed", COLOR_BTN_PRESSED]]:
-		var box := StyleBoxFlat.new()
-		box.bg_color           = state[1]
-		box.border_color       = COLOR_BTN_BORDER
-		box.set_border_width_all(2)
-		box.set_corner_radius_all(5)
-		box.content_margin_left   = 4.0
-		box.content_margin_right  = 4.0
-		box.content_margin_top    = 4.0
-		box.content_margin_bottom = 4.0
-		btn.add_theme_stylebox_override(state[0], box)
-	btn.add_theme_color_override("font_color", COLOR_TEXT)
+	for state in ["normal", "hover", "pressed", "focus"]:
+		btn.add_theme_stylebox_override(state, StyleBoxEmpty.new())
 
 
 func _apply_gold_button_style(btn: Button) -> void:
@@ -1204,7 +1289,7 @@ class _ZoomIcon extends Control:
 		var cy   := size.y * 0.43
 		var r    := minf(size.x, size.y) * 0.26
 		var arm  := r * 0.50
-		var line := maxf(2.0, r * 0.13)
+		var line := maxf(4.0, r * 0.26)
 
 		# Lens circle
 		draw_arc(Vector2(cx, cy), r, 0.0, TAU, 32, icon_color, line)

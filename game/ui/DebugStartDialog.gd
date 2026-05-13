@@ -121,7 +121,9 @@ func _build_ui() -> void:
 	static_row.add_child(static_lbl)
 
 	_check_static = CheckBox.new()
-	_check_static.button_pressed = false
+	_check_static.button_pressed        = false
+	_check_static.custom_minimum_size   = Vector2(44, 44)
+	_check_static.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_check_static.add_theme_font_override("font", UIFonts.primary())
 	_style_checkbox(_check_static)
 	static_row.add_child(_check_static)
@@ -249,7 +251,7 @@ func _style_start_button(btn: Button) -> void:
 		box.bg_color           = state[1]
 		box.border_color       = COLOR_BTN_BORDER
 		box.set_border_width_all(4)
-		box.set_corner_radius_all(4)
+		box.set_corner_radius_all(0)
 		box.content_margin_left   = 8.0
 		box.content_margin_right  = 8.0
 		box.content_margin_top    = 4.0
@@ -264,7 +266,7 @@ func _style_button(btn: Button) -> void:
 		box.bg_color           = state[1]
 		box.border_color       = COLOR_BTN_BORDER
 		box.set_border_width_all(2)
-		box.set_corner_radius_all(4)
+		box.set_corner_radius_all(0)
 		box.content_margin_left   = 8.0
 		box.content_margin_right  = 8.0
 		box.content_margin_top    = 4.0
@@ -280,14 +282,14 @@ func _style_checkbox(cb: CheckBox) -> void:
 		box.bg_color     = Color(0.0, 0.0, 0.0, 0.0)
 		box.border_color = Color(0.10, 0.35, 0.02, 1.0)
 		box.set_border_width_all(2)
-		box.set_corner_radius_all(4)
+		box.set_corner_radius_all(0)
 		cb.add_theme_stylebox_override(state, box)
 	# Hover: full-brightness outline signals interactivity.
 	var hover_box := StyleBoxFlat.new()
 	hover_box.bg_color     = Color(0.0, 0.0, 0.0, 0.0)
 	hover_box.border_color = COLOR_OUTLINE
 	hover_box.set_border_width_all(2)
-	hover_box.set_corner_radius_all(4)
+	hover_box.set_corner_radius_all(0)
 	cb.add_theme_stylebox_override("hover", hover_box)
 
 
