@@ -16,10 +16,15 @@ const COLOR_BG     := Color(0.06, 0.06, 0.10, 1.0)
 const COLOR_SLOGAN := Color(0.75, 0.75, 0.78, 1.0)
 const COLOR_TEXT   := Color(0.90, 0.90, 0.90, 1.0)
 
-const COLOR_BTN_NORMAL  := Color(0.20, 0.20, 0.22, 1.0)
-const COLOR_BTN_HOVER   := Color(0.30, 0.30, 0.33, 1.0)
-const COLOR_BTN_PRESSED := Color(0.14, 0.14, 0.16, 1.0)
-const COLOR_BTN_BORDER  := Color(0.60, 0.60, 0.65, 1.0)
+const COLOR_GREEN_NORMAL  := Color(0.04, 0.25, 0.00, 1.0)
+const COLOR_GREEN_HOVER   := Color(0.07, 0.33, 0.01, 1.0)
+const COLOR_GREEN_PRESSED := Color(0.02, 0.16, 0.00, 1.0)
+const COLOR_GREEN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
+
+const COLOR_RED_NORMAL  := Color(0.25, 0.04, 0.04, 1.0)
+const COLOR_RED_HOVER   := Color(0.33, 0.07, 0.07, 1.0)
+const COLOR_RED_PRESSED := Color(0.16, 0.02, 0.02, 1.0)
+const COLOR_RED_BORDER  := Color(0.65, 0.18, 0.04, 1.0)
 
 # "Contain" scaling: the van is as large as possible while fully visible.
 # scale = min(screen_w / REF_W, screen_h / REF_H) — computed against the
@@ -93,7 +98,9 @@ func _build_ui() -> void:
 	add_child(slogan)
 
 	# --- Buttons: side by side, equal width, centred ---
-	_start_btn = _make_button("Start Buggin'")
+	# Each button shows a house icon beside its label to mirror the in-game
+	# Send Wave button aesthetic: green/uninfested for start, red/infested for quit.
+	_start_btn = _make_icon_button("Start Buggin'", "res://assets/uninfested.png", true)
 	_start_btn.anchor_left   = 0.25
 	_start_btn.anchor_right  = 0.48
 	_start_btn.anchor_top    = 0.82
@@ -101,7 +108,7 @@ func _build_ui() -> void:
 	_start_btn.pressed.connect(_on_start_pressed)
 	add_child(_start_btn)
 
-	_quit_btn = _make_button("Bug Out")
+	_quit_btn = _make_icon_button("Bug Out", "res://assets/infestation_level.png", false)
 	_quit_btn.anchor_left   = 0.52
 	_quit_btn.anchor_right  = 0.75
 	_quit_btn.anchor_top    = 0.82
@@ -110,12 +117,43 @@ func _build_ui() -> void:
 	add_child(_quit_btn)
 
 
-func _make_button(label: String) -> Button:
+## Creates a button with an icon+label row inside, styled green (is_green=true)
+## or red (is_green=false).  Mirrors the Send Wave button layout from HUD.gd.
+func _make_icon_button(label_text: String, icon_path: String, is_green: bool) -> Button:
 	var btn := Button.new()
-	btn.text = label
-	btn.add_theme_font_override("font", UIFonts.primary_bold())
-	btn.add_theme_font_size_override("font_size", 22)
-	_apply_button_style(btn)
+	btn.text = ""  # content provided by the child HBox, not the Button text property
+
+	if is_green:
+		_apply_green_btn_style(btn)
+	else:
+		_apply_red_btn_style(btn)
+
+	# Centred HBox containing the house icon and the button label.
+	var row := HBoxContainer.new()
+	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.alignment   = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 6)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(row)
+
+	var icon := TextureRect.new()
+	icon.texture             = load(icon_path) as Texture2D
+	icon.custom_minimum_size = Vector2(32, 32)
+	icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	row.add_child(icon)
+
+	var lbl := Label.new()
+	lbl.text                = label_text
+	lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_color_override("font_color", COLOR_TEXT)
+	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(lbl)
+
 	return btn
 
 
@@ -188,15 +226,34 @@ func _on_quit_pressed() -> void:
 	get_tree().quit()
 
 
-func _apply_button_style(btn: Button) -> void:
+func _apply_green_btn_style(btn: Button) -> void:
 	for state: Array in [
-		["normal",  COLOR_BTN_NORMAL],
-		["hover",   COLOR_BTN_HOVER],
-		["pressed", COLOR_BTN_PRESSED],
+		["normal",  COLOR_GREEN_NORMAL],
+		["hover",   COLOR_GREEN_HOVER],
+		["pressed", COLOR_GREEN_PRESSED],
 	]:
 		var box := StyleBoxFlat.new()
 		box.bg_color              = state[1]
-		box.border_color          = COLOR_BTN_BORDER
+		box.border_color          = COLOR_GREEN_BORDER
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(6)
+		box.content_margin_left   = 16.0
+		box.content_margin_right  = 16.0
+		box.content_margin_top    = 8.0
+		box.content_margin_bottom = 8.0
+		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_color_override("font_color", COLOR_TEXT)
+
+
+func _apply_red_btn_style(btn: Button) -> void:
+	for state: Array in [
+		["normal",  COLOR_RED_NORMAL],
+		["hover",   COLOR_RED_HOVER],
+		["pressed", COLOR_RED_PRESSED],
+	]:
+		var box := StyleBoxFlat.new()
+		box.bg_color              = state[1]
+		box.border_color          = COLOR_RED_BORDER
 		box.set_border_width_all(2)
 		box.set_corner_radius_all(6)
 		box.content_margin_left   = 16.0
