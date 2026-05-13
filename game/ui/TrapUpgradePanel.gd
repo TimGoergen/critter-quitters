@@ -1,15 +1,14 @@
 ## TrapUpgradePanel.gd
 ## Appears when the player taps a placed trap. Shows current stats and
-## presents one upgrade button per stat (Damage, Range, Fire Rate), plus
-## a SELL button at the bottom that refunds 70% of the trap's purchase price.
+## lets the player upgrade each stat by tapping its row, or sell the trap.
 ##
-## Each stat upgrades independently up to Trap.MAX_UPGRADE_LEVEL (3) times.
-## The cost for the next upgrade of each stat is shown on its button.
-## A button shows "MAX" and is disabled when that stat is fully upgraded.
-## A button is also disabled when the player cannot afford it.
+## Each stat is a tappable row: stat name and star level on the left, the
+## current value (large) and a preview of the post-upgrade value (slightly
+## smaller, below) on the right, and the cost at the far right. Tapping the
+## row purchases that upgrade if the player can afford it.
 ##
-## Panel dimensions are derived from the viewport at build time so the
-## touch targets scale appropriately across phone screen sizes.
+## Panel dimensions are derived from the viewport at build time so touch
+## targets scale appropriately across phone screen sizes.
 ##
 ## process_mode is ALWAYS so the panel stays interactive while the game
 ## tree is paused (which Arena does while this panel is open).
@@ -19,14 +18,15 @@ extends CanvasLayer
 signal closed
 signal sell_requested   # Arena connects this to _on_sell_trap_requested(anchor)
 
-const HUD      = preload("res://ui/HUD.gd")
-const UIFonts  = preload("res://ui/UIFonts.gd")
-const Trap     = preload("res://traps/Trap.gd")
+const HUD     = preload("res://ui/HUD.gd")
+const UIFonts = preload("res://ui/UIFonts.gd")
+const Trap    = preload("res://traps/Trap.gd")
 
-const PADDING:   float = 10.0
-const BORDER_W:  float = 2.0
-# Upgrade buttons are intentionally smaller than the sell touch target.
-const UPBTN_H:   float = 40.0
+const PADDING:    float = 10.0
+const BORDER_W:   float = 2.0
+# Stat rows double as upgrade buttons — taller than the old separate buttons
+# so they work well as touch targets in their own right.
+const STAT_ROW_H: float = 76.0
 
 # Green palette — matches the DebugStartDialog aesthetic.
 const COLOR_BG          := Color(0.04, 0.22, 0.00, 0.95)
@@ -45,6 +45,13 @@ const COLOR_BTN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
 # Max state — dark so it reads as "done, nothing left to upgrade."
 const COLOR_BTN_MAX     := Color(0.06, 0.14, 0.06, 1.0)
 
+# Cost label — gold to match the Bug Bucks coin icon.
+const COLOR_GOLD := Color(1.00, 0.82, 0.10, 1.0)
+# Delta label — green when the player can buy, amber when they cannot.
+# Green signals opportunity; amber signals desire-but-blocked (cost risk).
+const COLOR_DELTA_AFFORDABLE   := Color(0.40, 0.90, 0.30, 1.0)
+const COLOR_DELTA_UNAFFORDABLE := Color(0.85, 0.50, 0.10, 1.0)
+
 # Neutral close button — gray, visually quiet.
 const COLOR_NEUTRAL_NORMAL  := Color(0.24, 0.24, 0.28, 1.0)
 const COLOR_NEUTRAL_HOVER   := Color(0.34, 0.34, 0.40, 1.0)
@@ -62,22 +69,21 @@ const COLOR_BTN_SELL_BORDER  := Color(0.75, 0.22, 0.12, 1.0)
 # State
 # ---------------------------------------------------------------------------
 
-var _trap:        Node       = null
-var _panel_rect:  Rect2     = Rect2()
+var _trap:        Node   = null
+var _panel_rect:  Rect2  = Rect2()
 
 var _border:     ColorRect = null
 var _bg:         ColorRect = null
 var _lbl_title:  Label     = null
-var _lbl_damage:       Label = null
-var _lbl_damage_stars: Label = null
-var _lbl_range:        Label = null
-var _lbl_range_stars:  Label = null
-var _lbl_rate:         Label = null
-var _lbl_rate_stars:   Label = null
-var _btn_a:      Button    = null   # Damage upgrade
-var _btn_b:      Button    = null   # Range upgrade
-var _btn_c:      Button    = null   # Fire Rate upgrade
-var _btn_sell:   Button    = null   # Sell trap (70% refund)
+
+# Each stat row is a Button containing child labels.
+# Dictionary keys: btn, name, stars, cur, after, cost.
+var _dmg_row:  Dictionary = {}
+var _rng_row:  Dictionary = {}
+var _rate_row: Dictionary = {}
+
+var _btn_sell:       Button = null
+var _lbl_sell_value: Label  = null
 
 
 # ---------------------------------------------------------------------------
@@ -86,7 +92,7 @@ var _btn_sell:   Button    = null   # Sell trap (70% refund)
 
 ## Wires the panel to trap and builds the UI. Call immediately after instantiation.
 func initialize(trap: Node) -> void:
-	_trap  = trap
+	_trap = trap
 	_trap.stats_changed.connect(_refresh)
 	GameState.bug_bucks_changed.connect(_on_bug_bucks_changed)
 	# Stay interactive while Arena pauses the tree.
@@ -101,11 +107,8 @@ func initialize(trap: Node) -> void:
 
 func _build_ui() -> void:
 	var vp      := get_viewport().get_visible_rect().size
-
-	# Taller panel to accommodate the enlarged stat rows.
 	var panel_w := maxf(360.0, vp.x * 0.50)
 	var panel_h := vp.y * 0.88
-	# Sell button scales with the viewport; upgrade buttons use the fixed UPBTN_H.
 	var sell_h  := maxf(52.0, panel_h / 12.0)
 
 	# Centre the panel in the arena zone (the space between the two HUD panels).
@@ -148,8 +151,12 @@ func _build_ui() -> void:
 	_lbl_title.add_theme_font_override("font", UIFonts.header())
 	header.add_child(_lbl_title)
 
+	# Square close button — custom_minimum_size forces equal width and height;
+	# _apply_neutral_button_style uses equal margins on all four sides so the X
+	# sits at the visual centre of the square, not off-centre.
 	var btn_close := Button.new()
-	btn_close.text = "X"
+	btn_close.text                = "X"
+	btn_close.custom_minimum_size = Vector2(64.0, 64.0)
 	btn_close.add_theme_font_size_override("font_size", 26)
 	btn_close.add_theme_font_override("font", UIFonts.primary_bold())
 	btn_close.pressed.connect(_on_close)
@@ -158,145 +165,143 @@ func _build_ui() -> void:
 
 	y += 74.0
 
-	# --- Current stats ---
-	# Each row is an HBoxContainer: value label expands to fill, stars label
-	# is right-aligned — this keeps the three star columns vertically aligned.
-	var dmg_row := _add_stat_row(y, inner_w)
-	_lbl_damage       = _make_stat_value_label()
-	_lbl_damage_stars = _make_stat_stars_label()
-	dmg_row.add_child(_lbl_damage)
-	dmg_row.add_child(_lbl_damage_stars)
-	y += 54.0
+	# --- Stat rows: each row IS the upgrade button for that stat ---
+	_dmg_row  = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_rng_row  = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_rate_row = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
 
-	var rng_row := _add_stat_row(y, inner_w)
-	_lbl_range       = _make_stat_value_label()
-	_lbl_range_stars = _make_stat_stars_label()
-	rng_row.add_child(_lbl_range)
-	rng_row.add_child(_lbl_range_stars)
-	y += 54.0
-
-	var rate_row := _add_stat_row(y, inner_w)
-	_lbl_rate       = _make_stat_value_label()
-	_lbl_rate_stars = _make_stat_stars_label()
-	rate_row.add_child(_lbl_rate)
-	rate_row.add_child(_lbl_rate_stars)
-	y += 54.0
-
-	# --- Horizontal divider ---
-	_add_divider(y, inner_w)
-	y += 14.0
-
-	# --- Upgrade buttons (smaller height than touch-target sell button) ---
-	_btn_a = _add_upgrade_button(y, inner_w); y += UPBTN_H + 6.0
-	_btn_b = _add_upgrade_button(y, inner_w); y += UPBTN_H + 6.0
-	_btn_c = _add_upgrade_button(y, inner_w); y += UPBTN_H + 6.0
-
-	_btn_a.pressed.connect(_on_btn_a)
-	_btn_b.pressed.connect(_on_btn_b)
-	_btn_c.pressed.connect(_on_btn_c)
+	_dmg_row["btn"].pressed.connect(_on_btn_a)
+	_rng_row["btn"].pressed.connect(_on_btn_b)
+	_rate_row["btn"].pressed.connect(_on_btn_c)
 
 	# --- Divider before sell ---
 	_add_divider(y, inner_w)
 	y += 14.0
 
-	# --- Sell button ---
+	# --- Sell button: trash icon on the left, coin + refund amount on the right.
+	# Full inner width gives a generous touch target matching the stat rows.
 	_btn_sell = Button.new()
+	_btn_sell.text                = ""   # all content provided by child labels
 	_btn_sell.position            = Vector2(PADDING, y)
 	_btn_sell.custom_minimum_size = Vector2(inner_w, sell_h)
-	_btn_sell.add_theme_font_size_override("font_size", 28)
-	_btn_sell.add_theme_font_override("font", UIFonts.primary_bold())
 	_apply_sell_button_style(_btn_sell)
 	_bg.add_child(_btn_sell)
 	_btn_sell.pressed.connect(_on_btn_sell)
+
+	var sell_hbox := HBoxContainer.new()
+	sell_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sell_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	sell_hbox.add_theme_constant_override("separation", 12)
+	_btn_sell.add_child(sell_hbox)
+
+	# Trash icon — default system font for emoji coverage.
+	var lbl_trash := Label.new()
+	lbl_trash.text                 = "🗑"
+	lbl_trash.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	lbl_trash.add_theme_font_size_override("font_size", 36)
+	sell_hbox.add_child(lbl_trash)
+
+	# Refund amount: coin icon + number, gold so it reads as currency.
+	# Text is set in _refresh() each time stats change.
+	_lbl_sell_value = Label.new()
+	_lbl_sell_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_lbl_sell_value.add_theme_font_size_override("font_size", 28)
+	_lbl_sell_value.add_theme_color_override("font_color", COLOR_GOLD)
+	_lbl_sell_value.add_theme_font_override("font", UIFonts.primary_bold())
+	sell_hbox.add_child(_lbl_sell_value)
+
+	_set_mouse_passthrough(sell_hbox)
 
 
 # ---------------------------------------------------------------------------
 # Refresh
 # ---------------------------------------------------------------------------
 
-## Rebuilds all labels and button states from the trap's current values.
+## Rebuilds all row labels and button states from the trap's current values.
 func _refresh() -> void:
 	if _trap == null or not is_instance_valid(_trap):
 		_on_close()
 		return
 
-	_lbl_title.text  = _trap.get_type_name()
+	_lbl_title.text = _trap.get_type_name()
 
 	var trap_type: int = _trap.get_type()
-	_lbl_range.text        = "Range:     %.1f" % _trap.get_range_radius()
-	_lbl_range_stars.text  = _stars(_trap.get_range_level())
 
+	# Damage row — label and value format depend on trap type.
+	# after_text is always a delta ("+X") so the player sees the gain, not a second absolute value.
 	if trap_type == Trap.TrapType.GLUE_BOARD:
-		_lbl_damage.text       = "Adhesion:  %d%%" % int(_trap.get_adhesion_pct())
-		_lbl_damage_stars.text = _stars(_trap.get_damage_level())
-		_lbl_rate.text         = "Fire Rate: passive"
-		_lbl_rate_stars.text   = ""
-	elif trap_type == Trap.TrapType.FOGGER:
-		_lbl_damage.text       = "Potency:   %.1f" % _trap.get_damage()
-		_lbl_damage_stars.text = _stars(_trap.get_damage_level())
-		_lbl_rate.text         = "Fire Rate: %.2f /s" % _trap.get_shots_per_sec()
-		_lbl_rate_stars.text   = _stars(_trap.get_rate_level())
-	else:
-		_lbl_damage.text       = "Damage:    %.1f" % _trap.get_damage()
-		_lbl_damage_stars.text = _stars(_trap.get_damage_level())
-		_lbl_rate.text         = "Fire Rate: %.2f /s" % _trap.get_shots_per_sec()
-		_lbl_rate_stars.text   = _stars(_trap.get_rate_level())
-
-	# Upgrade button A — label depends on trap type.
-	if trap_type == Trap.TrapType.GLUE_BOARD:
-		_refresh_button(
-			_btn_a,
-			_trap.is_damage_maxed(),
-			_trap.get_damage_upgrade_cost(),
-			"Adhesion  %d%% → %d%%" % [int(_trap.get_adhesion_pct()), int(_trap.get_adhesion_after_upgrade_pct())]
+		_refresh_stat_row(
+			_dmg_row, "Adhesion", _trap.get_damage_level(),
+			"%d%%" % int(_trap.get_adhesion_pct()),
+			"+%d%%" % int(_trap.get_adhesion_after_upgrade_pct() - _trap.get_adhesion_pct()),
+			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
 		)
 	elif trap_type == Trap.TrapType.FOGGER:
-		_refresh_button(
-			_btn_a,
-			_trap.is_damage_maxed(),
-			_trap.get_damage_upgrade_cost(),
-			"Potency  %.1f → %.1f" % [_trap.get_damage(), _trap.get_damage_after_upgrade()]
+		_refresh_stat_row(
+			_dmg_row, "Potency", _trap.get_damage_level(),
+			"%.1f" % _trap.get_damage(),
+			"+%.1f" % (_trap.get_damage_after_upgrade() - _trap.get_damage()),
+			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
 		)
 	else:
-		_refresh_button(
-			_btn_a,
-			_trap.is_damage_maxed(),
-			_trap.get_damage_upgrade_cost(),
-			"Damage   %.1f → %.1f" % [_trap.get_damage(), _trap.get_damage_after_upgrade()]
+		_refresh_stat_row(
+			_dmg_row, "Damage", _trap.get_damage_level(),
+			"%.1f" % _trap.get_damage(),
+			"+%.1f" % (_trap.get_damage_after_upgrade() - _trap.get_damage()),
+			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
 		)
-	_refresh_button(
-		_btn_b,
-		_trap.is_range_maxed(),
-		_trap.get_range_upgrade_cost(),
-		"Range    %.1f → %.1f" % [_trap.get_range_radius(), _trap.get_range_after_upgrade()]
+
+	# Range row — same label for all trap types.
+	_refresh_stat_row(
+		_rng_row, "Range", _trap.get_range_level(),
+		"%.1f" % _trap.get_range_radius(),
+		"+%.1f" % (_trap.get_range_after_upgrade() - _trap.get_range_radius()),
+		_trap.is_range_maxed(), _trap.get_range_upgrade_cost()
 	)
 
+	# Fire Rate row — hidden for passive traps (Glue Board).
 	if _trap.is_passive():
-		_btn_c.visible = false
+		_rate_row["btn"].visible = false
 	else:
-		_btn_c.visible = true
-		_refresh_button(
-			_btn_c,
-			_trap.is_rate_maxed(),
-			_trap.get_rate_upgrade_cost(),
-			"Fire Rate  %.2f → %.2f /s" % [_trap.get_shots_per_sec(), _trap.get_shots_per_sec_after_upgrade()]
+		_rate_row["btn"].visible = true
+		_refresh_stat_row(
+			_rate_row, "Fire Rate", _trap.get_rate_level(),
+			"%.2f /s" % _trap.get_shots_per_sec(),
+			"+%.2f /s" % (_trap.get_shots_per_sec_after_upgrade() - _trap.get_shots_per_sec()),
+			_trap.is_rate_maxed(), _trap.get_rate_upgrade_cost()
 		)
 
-	# Show current sell value on the SELL button.
-	var sell_value := int(_trap.get_cost() * 0.70)
-	_btn_sell.text = "SELL   +$%d" % sell_value
+	# Sell button: update the refund amount so it reflects any upgrades purchased this session.
+	if _lbl_sell_value != null:
+		_lbl_sell_value.text = "🪙%d" % _trap.get_sell_value()
 
 
-## Updates one upgrade button: sets text, cost suffix, disabled state, and dim style.
-func _refresh_button(btn: Button, maxed: bool, cost: int, label: String) -> void:
+## Updates one stat row's labels and interactive state.
+func _refresh_stat_row(
+	row: Dictionary,
+	name_text: String, level: int,
+	cur_text: String, after_text: String,
+	maxed: bool, cost: int
+) -> void:
+	row["name"].text  = name_text
+	row["stars"].text = _stars(level)
+	row["cur"].text   = cur_text
+
 	if maxed:
-		btn.text     = label.split("  ")[0] + "   MAX"
-		btn.disabled = true
-		_apply_button_style(btn, true)
+		row["after"].text   = ""
+		row["cost"].text    = "MAX"
+		row["btn"].disabled = true
+		_apply_button_style(row["btn"], true)
 	else:
-		btn.text     = "%s   $%d" % [label, cost]
-		btn.disabled = GameState.bug_bucks < cost
-		_apply_button_style(btn, false)
+		row["after"].text = after_text  # already formatted as "+X.X" by _refresh
+		# Color the delta green when affordable (you can gain this now) or amber when not
+		# (you can see what you'd gain but can't yet pay — the cost risk is visible).
+		var can_afford := GameState.bug_bucks >= cost
+		var delta_color := COLOR_DELTA_AFFORDABLE if can_afford else COLOR_DELTA_UNAFFORDABLE
+		row["after"].add_theme_color_override("font_color", delta_color)
+		row["cost"].text    = "🪙%d" % cost
+		row["btn"].disabled = not can_afford
+		_apply_button_style(row["btn"], false)
 
 
 # ---------------------------------------------------------------------------
@@ -367,40 +372,102 @@ func _on_bug_bucks_changed(_amount: int) -> void:
 # UI helpers
 # ---------------------------------------------------------------------------
 
-func _add_stat_row(y: float, inner_w: float) -> HBoxContainer:
-	var row := HBoxContainer.new()
-	row.position            = Vector2(PADDING, y)
-	row.custom_minimum_size = Vector2(inner_w, 48.0)
-	_bg.add_child(row)
-	return row
-
-func _make_stat_value_label() -> Label:
-	var lbl := Label.new()
-	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", 39)
-	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
-	lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	return lbl
-
-func _make_stat_stars_label() -> Label:
-	var lbl := Label.new()
-	lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	lbl.add_theme_font_size_override("font_size", 39)
-	lbl.add_theme_color_override("font_color", COLOR_STARS)
-	lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	return lbl
-
-
-func _add_upgrade_button(y: float, inner_w: float) -> Button:
-	var btn               := Button.new()
-	btn.position           = Vector2(PADDING, y)
-	btn.custom_minimum_size = Vector2(inner_w, UPBTN_H)
-	btn.add_theme_font_size_override("font_size", 26)
-	btn.add_theme_font_override("font", UIFonts.primary_bold())
+## Builds one combined stat-display / upgrade-button row.
+## Left column: stat name (bold) with star rating below.
+## Right column: current value (large) with after-upgrade preview below (smaller).
+## Far right: cost label (or "MAX").
+## Returns a dict of label refs so _refresh_stat_row() can update in place.
+func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
+	var btn := Button.new()
+	btn.text                = ""  # All visual content is provided by child labels.
+	btn.position            = Vector2(PADDING, y)
+	btn.custom_minimum_size = Vector2(inner_w, STAT_ROW_H)
 	_apply_button_style(btn, false)
 	_bg.add_child(btn)
-	return btn
+
+	# HBoxContainer fills the button face with horizontal padding.
+	var hbox := HBoxContainer.new()
+	hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hbox.offset_left  =  8.0
+	hbox.offset_right = -8.0
+	hbox.add_theme_constant_override("separation", 12)
+	btn.add_child(hbox)
+
+	# Left column: stat name on top, star rating below.
+	var vbox_left := VBoxContainer.new()
+	vbox_left.custom_minimum_size = Vector2(140.0, 0.0)
+	vbox_left.alignment           = BoxContainer.ALIGNMENT_CENTER
+	hbox.add_child(vbox_left)
+
+	var lbl_name := Label.new()
+	lbl_name.add_theme_font_size_override("font_size", 28)
+	lbl_name.add_theme_color_override("font_color", COLOR_TEXT)
+	lbl_name.add_theme_font_override("font", UIFonts.primary_bold())
+	vbox_left.add_child(lbl_name)
+
+	var lbl_stars := Label.new()
+	lbl_stars.add_theme_font_size_override("font_size", 22)
+	lbl_stars.add_theme_color_override("font_color", COLOR_STARS)
+	lbl_stars.add_theme_font_override("font", UIFonts.primary_bold())
+	vbox_left.add_child(lbl_stars)
+
+	# Flexible spacer separates the name/stars from the value section.
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	hbox.add_child(spacer)
+
+	# Right section: current value and delta side by side on one horizontal line.
+	# Using HBoxContainer so the player reads: "current  +gain" in a single glance.
+	var hbox_vals := HBoxContainer.new()
+	hbox_vals.alignment = BoxContainer.ALIGNMENT_CENTER
+	hbox_vals.add_theme_constant_override("separation", 8)
+	hbox.add_child(hbox_vals)
+
+	var lbl_cur := Label.new()
+	lbl_cur.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl_cur.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
+	lbl_cur.add_theme_font_size_override("font_size", 36)
+	lbl_cur.add_theme_color_override("font_color", COLOR_TEXT)
+	lbl_cur.add_theme_font_override("font", UIFonts.primary_bold())
+	hbox_vals.add_child(lbl_cur)
+
+	# "+X.X" delta — colored by _refresh_stat_row to signal affordability.
+	var lbl_after := Label.new()
+	lbl_after.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	lbl_after.add_theme_font_size_override("font_size", 26)
+	lbl_after.add_theme_color_override("font_color", COLOR_DELTA_AFFORDABLE)
+	lbl_after.add_theme_font_override("font", UIFonts.primary_bold())
+	hbox_vals.add_child(lbl_after)
+
+	# Cost label: coin icon + amount in gold, vertically centered in the row.
+	var lbl_cost := Label.new()
+	lbl_cost.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl_cost.add_theme_font_size_override("font_size", 26)
+	lbl_cost.add_theme_color_override("font_color", COLOR_GOLD)
+	lbl_cost.add_theme_font_override("font", UIFonts.primary_bold())
+	hbox.add_child(lbl_cost)
+
+	# Child controls must not consume input — clicks anywhere in the row must
+	# reach the Button itself, not be swallowed by the labels or containers.
+	_set_mouse_passthrough(hbox)
+
+	return {
+		"btn":   btn,
+		"name":  lbl_name,
+		"stars": lbl_stars,
+		"cur":   lbl_cur,
+		"after": lbl_after,
+		"cost":  lbl_cost,
+	}
+
+
+## Recursively marks every Control child as mouse-transparent so clicks
+## anywhere inside a stat row reach the Button rather than its children.
+func _set_mouse_passthrough(node: Control) -> void:
+	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	for child in node.get_children():
+		if child is Control:
+			_set_mouse_passthrough(child)
 
 
 ## Returns filled/empty star characters for the given upgrade level out of 3.
@@ -416,8 +483,8 @@ func _add_divider(y: float, inner_w: float) -> void:
 	_bg.add_child(line)
 
 
-## Upgrade button style. maxed=true shows a flat dark box that clearly differs
-## from an unaffordable button — maxed can never become available, unaffordable can.
+## Upgrade button / stat row style. maxed=true shows a flat dark box that clearly
+## differs from an unaffordable button — maxed can never become available, unaffordable can.
 ## The disabled state is also overridden so it stays green-dimmed rather than
 ## falling back to Godot's default gray.
 func _apply_button_style(btn: Button, maxed: bool) -> void:
@@ -457,6 +524,8 @@ func _apply_button_style(btn: Button, maxed: bool) -> void:
 
 
 ## Utility button style — no brand color. Used for the close button.
+## All four content margins are equal so the label sits at the visual centre
+## of the button regardless of its width or height.
 func _apply_neutral_button_style(btn: Button) -> void:
 	for state: Array in [
 		["normal",  COLOR_NEUTRAL_NORMAL],
@@ -468,10 +537,7 @@ func _apply_neutral_button_style(btn: Button) -> void:
 		box.border_color       = COLOR_NEUTRAL_BORDER
 		box.set_border_width_all(2)
 		box.set_corner_radius_all(4)
-		box.content_margin_left   = 8.0
-		box.content_margin_right  = 8.0
-		box.content_margin_top    = 4.0
-		box.content_margin_bottom = 4.0
+		box.set_content_margin_all(8.0)
 		btn.add_theme_stylebox_override(state[0], box)
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
 

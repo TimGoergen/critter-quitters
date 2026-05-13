@@ -655,10 +655,10 @@ func _on_sell_trap_requested(anchor: Vector2i) -> void:
 	_try_remove_trap_by_anchor(anchor)
 
 
-## Removes the trap at anchor and refunds 70% of its cost.
+## Removes the trap at anchor and refunds placement cost plus all upgrade costs at 70%.
 func _try_remove_trap_by_anchor(anchor: Vector2i) -> void:
 	if _trap_nodes.has(anchor):
-		GameState.add_bug_bucks(int(_trap_nodes[anchor].get_cost() * 0.7))
+		GameState.add_bug_bucks(_trap_nodes[anchor].get_sell_value())
 		_trap_nodes[anchor].queue_free()
 		_trap_nodes.erase(anchor)
 	if _trap_outlines.has(anchor):

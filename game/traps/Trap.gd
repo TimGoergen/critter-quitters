@@ -374,6 +374,22 @@ func get_maxed_stat_count() -> int:
 func get_total_upgradeable_stats() -> int:
 	return 2 if is_passive() else 3
 
+## Fraction of total spending returned when the trap is sold.
+const SELL_REFUND_FRACTION: float = 0.70
+
+## Returns the Bug Bucks refunded when this trap is sold.
+## Covers the placement cost plus every upgrade level purchased across all stats.
+## Passive traps have no fire-rate level, so _rate_level stays 0 and its loop is a no-op.
+func get_sell_value() -> int:
+	var total_spent := _cost
+	for lvl in range(_damage_level):
+		total_spent += UPGRADE_COSTS[_trap_type][lvl]
+	for lvl in range(_range_level):
+		total_spent += UPGRADE_COSTS[_trap_type][lvl]
+	for lvl in range(_rate_level):
+		total_spent += UPGRADE_COSTS[_trap_type][lvl]
+	return int(total_spent * SELL_REFUND_FRACTION)
+
 
 # ---------------------------------------------------------------------------
 # Combat loop
