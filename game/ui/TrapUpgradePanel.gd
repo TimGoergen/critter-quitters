@@ -417,8 +417,6 @@ func _on_bug_bucks_changed(_amount: int) -> void:
 ## "row" key controls visibility (e.g. Fire Rate on passive traps).
 ## "btn" key is the clickable upgrade button.
 func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
-	# How many pixels of panel background show around the inset upgrade button.
-	var inset     := 6.0
 	# Width reserved for the name+stars column.
 	var left_col  := 140.0
 	# Horizontal split: value label ends here, button begins here.
@@ -481,13 +479,15 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 	row_ctrl.add_child(lbl_cur)
 
 	# Upgrade button — inset inside the right 40% of the panel.
-	# "inset" pixels of panel background remain visible on all four sides.
-	var btn_x := split_x + inset
-	var btn_w := inner_w - btn_x - inset
-	var btn_h := STAT_ROW_H - inset * 2.0
+	# Height is 60% of the row (≈40% shorter). Top/bottom margin is derived from
+	# that height so all three exposed sides (top, bottom, right) show equal panel background.
+	var btn_h   := STAT_ROW_H * 0.60
+	var v_inset := (STAT_ROW_H - btn_h) * 0.5   # = 20px; applied to top, bottom, and right
+	var btn_x   := split_x + v_inset
+	var btn_w   := inner_w - btn_x - v_inset
 	var btn := Button.new()
 	btn.text     = ""
-	btn.position = Vector2(btn_x, inset)
+	btn.position = Vector2(btn_x, v_inset)
 	btn.size     = Vector2(btn_w, btn_h)
 	_apply_button_style(btn, false)
 	row_ctrl.add_child(btn)
