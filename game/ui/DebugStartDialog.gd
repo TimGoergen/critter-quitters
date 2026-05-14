@@ -140,6 +140,7 @@ func _build_ui() -> void:
 	# Start button
 	var btn               := Button.new()
 	btn.text               = "Start"
+	btn.focus_mode         = Control.FOCUS_NONE
 	btn.position           = Vector2(PADDING, y)
 	btn.custom_minimum_size = Vector2(inner_w, 64.0)
 	btn.add_theme_font_size_override("font_size", 30)
@@ -170,6 +171,7 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 
 	var minus_btn := Button.new()
 	minus_btn.text              = "−"
+	minus_btn.focus_mode        = Control.FOCUS_NONE
 	minus_btn.custom_minimum_size = Vector2(56.0, 56.0)
 	minus_btn.add_theme_font_size_override("font_size", 30)
 	minus_btn.add_theme_font_override("font", UIFonts.primary())
@@ -187,6 +189,7 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 
 	var plus_btn := Button.new()
 	plus_btn.text               = "+"
+	plus_btn.focus_mode         = Control.FOCUS_NONE
 	plus_btn.custom_minimum_size = Vector2(56.0, 56.0)
 	plus_btn.add_theme_font_size_override("font_size", 30)
 	plus_btn.add_theme_font_override("font", UIFonts.primary())

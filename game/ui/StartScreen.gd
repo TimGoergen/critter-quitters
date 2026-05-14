@@ -121,7 +121,8 @@ func _build_ui() -> void:
 ## or red (is_green=false).  Mirrors the Send Wave button layout from HUD.gd.
 func _make_icon_button(label_text: String, icon_path: String, is_green: bool) -> Button:
 	var btn := Button.new()
-	btn.text = ""  # content provided by the child HBox, not the Button text property
+	btn.text       = ""  # content provided by the child HBox, not the Button text property
+	btn.focus_mode = Control.FOCUS_NONE
 
 	if is_green:
 		_apply_green_btn_style(btn)
