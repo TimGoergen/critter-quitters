@@ -227,21 +227,11 @@ func _build_right_panel() -> void:
 	margin.add_child(vbox)
 
 	# --- Settings button — top-right corner, opens the Settings dialog.
-	# No background or border — only the van-gear icon is visible.
-	# Height is derived from the image aspect ratio so the button fits snugly
-	# around the icon with only a small vertical margin.
+	# Standard button: gray background, silver border, SVG gear icon centered inside.
 	var settings_row := HBoxContainer.new()
 	settings_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_row.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
 	vbox.add_child(settings_row)
-
-	var van_tex   := load("res://assets/van_gear.png") as Texture2D
-	# Icon width = 50% of the full panel width, centered in the row.
-	# Height derived from the tight visible-pixel bounds of the artwork.
-	var icon_w    := RIGHT_PANEL_W * 0.5
-	var used_rect := van_tex.get_image().get_used_rect()
-	# Cast to float before dividing — used_rect.size is Vector2i and int/int truncates to 0.
-	var icon_h    := icon_w * (used_rect.size.y as float / used_rect.size.x as float)
 
 	# Equal spacers on both sides force reliable horizontal centering in the HBoxContainer.
 	var left_spacer := Control.new()
@@ -250,11 +240,10 @@ func _build_right_panel() -> void:
 
 	_settings_btn = Button.new()
 	_settings_btn.text                  = ""
-	# Height adds 8 px total (4 top + 4 bottom) around the visible artwork.
-	_settings_btn.custom_minimum_size   = Vector2(icon_w, icon_h + 8.0)
+	_settings_btn.custom_minimum_size   = Vector2(60.0, 60.0)
 	_settings_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_settings_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_apply_icon_button_style(_settings_btn)
+	_apply_gear_button_style(_settings_btn)
 	_settings_btn.pressed.connect(_on_settings_btn_pressed)
 	settings_row.add_child(_settings_btn)
 
@@ -262,15 +251,20 @@ func _build_right_panel() -> void:
 	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_row.add_child(right_spacer)
 
-	# TextureRect fills the button face and handles proportional scaling reliably.
-	# Using a child node rather than Button.icon avoids expand_icon quirks with StyleBoxEmpty.
-	var van_rect := TextureRect.new()
-	van_rect.texture      = van_tex
-	van_rect.expand_mode  = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	van_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	van_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	van_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_settings_btn.add_child(van_rect)
+	# TextureRect child centers the SVG gear inside the button with equal inset on all sides.
+	# SVG fill is #000000 so the icon is always solid black regardless of font/emoji settings.
+	var gear_rect := TextureRect.new()
+	gear_rect.texture      = load("res://assets/gear_icon.svg") as Texture2D
+	gear_rect.expand_mode  = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	gear_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	gear_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# 8 px inset on all sides keeps the gear clear of the button border.
+	gear_rect.offset_left   = 8.0
+	gear_rect.offset_top    = 8.0
+	gear_rect.offset_right  = -8.0
+	gear_rect.offset_bottom = -8.0
+	gear_rect.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	_settings_btn.add_child(gear_rect)
 
 	# --- Wave label ---
 	_wave_label = Label.new()
@@ -1138,9 +1132,21 @@ func _add_btn_cost_label(btn: Button, type: int, font_size: int) -> void:
 ## Settings (van-gear) button style: no background, no border, no padding.
 ## StyleBoxEmpty tells Godot to draw nothing for every interactive state, so
 ## only the icon texture is visible.
-func _apply_icon_button_style(btn: Button) -> void:
-	for state in ["normal", "hover", "pressed", "focus"]:
-		btn.add_theme_stylebox_override(state, StyleBoxEmpty.new())
+func _apply_gear_button_style(btn: Button) -> void:
+	# Backgrounds are COLOR_BTN_* lightened by 25% (multiply each channel by 1.25).
+	var states := [
+		["normal",  Color(0.375, 0.375, 0.375)],
+		["hover",   Color(0.475, 0.475, 0.475)],
+		["pressed", Color(0.275, 0.275, 0.275)],
+	]
+	for state in states:
+		var box := StyleBoxFlat.new()
+		box.bg_color     = state[1]
+		box.border_color = COLOR_BTN_BORDER
+		box.set_border_width_all(3)
+		box.set_corner_radius_all(6)
+		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 
 
 func _apply_gold_button_style(btn: Button) -> void:
