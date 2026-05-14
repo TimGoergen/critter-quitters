@@ -391,7 +391,7 @@ void fragment() {
 	_send_wave_btn.text = ""
 	_send_wave_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_send_wave_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_send_wave_btn.custom_minimum_size   = Vector2(0, 52)
+	_send_wave_btn.custom_minimum_size   = Vector2(0, 104)
 	_apply_send_wave_btn_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	vbox.add_child(_send_wave_btn)
