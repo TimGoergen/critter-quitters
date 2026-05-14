@@ -146,6 +146,7 @@ func _build_ui() -> void:
 	var header := HBoxContainer.new()
 	header.position            = Vector2(PADDING, y)
 	header.custom_minimum_size = Vector2(inner_w, 64.0)
+	header.add_theme_constant_override("separation", 8)
 	_bg.add_child(header)
 
 	_lbl_title = Label.new()
