@@ -233,7 +233,7 @@ func _build_right_panel() -> void:
 	settings_row.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
 	vbox.add_child(settings_row)
 
-	# Equal spacers on both sides force reliable horizontal centering in the HBoxContainer.
+	# Left spacer pushes the button to the right edge of the panel.
 	var left_spacer := Control.new()
 	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	settings_row.add_child(left_spacer)
@@ -241,15 +241,11 @@ func _build_right_panel() -> void:
 	_settings_btn = Button.new()
 	_settings_btn.text                  = ""
 	_settings_btn.custom_minimum_size   = Vector2(60.0, 60.0)
-	_settings_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_settings_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
 	_settings_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_apply_gear_button_style(_settings_btn)
 	_settings_btn.pressed.connect(_on_settings_btn_pressed)
 	settings_row.add_child(_settings_btn)
-
-	var right_spacer := Control.new()
-	right_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	settings_row.add_child(right_spacer)
 
 	# TextureRect child centers the SVG gear inside the button with equal inset on all sides.
 	# SVG fill is #000000 so the icon is always solid black regardless of font/emoji settings.
@@ -266,14 +262,29 @@ func _build_right_panel() -> void:
 	gear_rect.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	_settings_btn.add_child(gear_rect)
 
-	# --- Wave label ---
+	# --- Wave row: "WAVE" left-aligned, number right-aligned ---
+	var wave_row := HBoxContainer.new()
+	wave_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wave_row.add_theme_constant_override("separation", 0)
+	vbox.add_child(wave_row)
+
+	var wave_text_lbl := Label.new()
+	wave_text_lbl.text                  = "WAVE"
+	wave_text_lbl.add_theme_font_size_override("font_size", 42)
+	wave_text_lbl.add_theme_font_override("font", UIFonts.header())
+	wave_text_lbl.add_theme_color_override("font_color", COLOR_TEXT)
+	wave_text_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
+	wave_text_lbl.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	wave_row.add_child(wave_text_lbl)
+
 	_wave_label = Label.new()
-	_wave_label.text = "WAVE  1"
+	_wave_label.text                  = "1"
 	_wave_label.add_theme_font_size_override("font_size", 42)
 	_wave_label.add_theme_font_override("font", UIFonts.header())
 	_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
-	_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	vbox.add_child(_wave_label)
+	_wave_label.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
+	_wave_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wave_row.add_child(_wave_label)
 
 	# --- Bug Bucks row ---
 	var bucks_row := HBoxContainer.new()
@@ -293,8 +304,9 @@ func _build_right_panel() -> void:
 	_bucks_label.add_theme_font_size_override("font_size", 42)
 	_bucks_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_bucks_label.add_theme_color_override("font_color", Color(1.00, 0.82, 0.18))
-	_bucks_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_bucks_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_bucks_label.size_flags_vertical    = Control.SIZE_SHRINK_CENTER
+	_bucks_label.size_flags_horizontal  = Control.SIZE_EXPAND_FILL
+	_bucks_label.horizontal_alignment   = HORIZONTAL_ALIGNMENT_RIGHT
 	bucks_row.add_child(_bucks_label)
 
 	# --- Infestation section — single bar element ---
@@ -368,17 +380,25 @@ void fragment() {
 	_infestation_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	inf_overlay.add_child(_infestation_label)
 
-	# --- Send Wave button — fills all remaining vbox space.
-	# Contains a centred action row (house icon + label) and a reward row
-	# (coin icon + early-bonus amount).
+	# --- Send Wave button — fixed height, centered in remaining vertical space.
+	# Equal expand-fill spacers above and below float it between the infestation
+	# bar and the bottom button row without stretching to fill all available space.
+	var send_spacer_top := Control.new()
+	send_spacer_top.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(send_spacer_top)
+
 	_send_wave_btn = Button.new()
 	_send_wave_btn.text = ""
 	_send_wave_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_send_wave_btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-	_send_wave_btn.custom_minimum_size   = Vector2(0, 70)
+	_send_wave_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_send_wave_btn.custom_minimum_size   = Vector2(0, 52)
 	_apply_send_wave_btn_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	vbox.add_child(_send_wave_btn)
+
+	var send_spacer_bottom := Control.new()
+	send_spacer_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(send_spacer_bottom)
 
 	var btn_vbox := VBoxContainer.new()
 	btn_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -772,7 +792,7 @@ func _on_infestation_changed(level: float) -> void:
 
 
 func _on_wave_changed(wave: int) -> void:
-	_wave_label.text = "WAVE  %d" % wave
+	_wave_label.text = "%d" % wave  # "WAVE" is a static sibling label; only the number changes
 	if not _countdown_active:
 		_send_wave_text_label.text = "Send Next Wave"
 
