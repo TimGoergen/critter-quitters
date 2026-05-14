@@ -207,7 +207,7 @@ func _build_left_panel() -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
 		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+		row.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
 		vbox.add_child(row)
 
 		_build_info_panel(row, i)
@@ -1116,9 +1116,9 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 	style.shadow_offset = Vector2(2, 3)
 
 	var panel := Panel.new()
-	panel.size_flags_horizontal  = Control.SIZE_EXPAND_FILL
-	panel.size_flags_vertical    = Control.SIZE_EXPAND_FILL
-	panel.size_flags_stretch_ratio = 3.0   # 75% of the row
+	panel.size_flags_horizontal    = Control.SIZE_EXPAND_FILL
+	panel.size_flags_vertical      = Control.SIZE_EXPAND_FILL
+	panel.size_flags_stretch_ratio = 3.0   # 60% of the row
 	panel.mouse_filter           = Control.MOUSE_FILTER_STOP
 	panel.add_theme_stylebox_override("panel", style)
 	row.add_child(panel)
@@ -1197,7 +1197,7 @@ func _build_icon_panel(row: HBoxContainer, type: int) -> Control:
 	var icon_ctrl := Control.new()
 	icon_ctrl.size_flags_horizontal    = Control.SIZE_EXPAND_FILL
 	icon_ctrl.size_flags_vertical      = Control.SIZE_EXPAND_FILL
-	icon_ctrl.size_flags_stretch_ratio = 1.0   # 25% of the row
+	icon_ctrl.size_flags_stretch_ratio = 2.0   # 40% of the row
 	# STOP so this Control receives gui_input events for hold detection.
 	icon_ctrl.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.add_child(icon_ctrl)
@@ -1227,6 +1227,9 @@ func _build_icon_panel(row: HBoxContainer, type: int) -> Control:
 	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
 	svc.stretch      = true
 	svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# SubViewportContainer draws a "panel" stylebox before compositing the texture.
+	# Override it with StyleBoxEmpty so no background or border appears behind the trap.
+	svc.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	svc.add_child(svp)
 	icon_ctrl.add_child(svc)
 
