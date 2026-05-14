@@ -58,6 +58,11 @@ const COLOR_NEUTRAL_HOVER   := Color(0.34, 0.34, 0.40, 1.0)
 const COLOR_NEUTRAL_PRESSED := Color(0.16, 0.16, 0.20, 1.0)
 const COLOR_NEUTRAL_BORDER  := Color(0.55, 0.55, 0.62, 1.0)
 
+# Stat display panel — static, not interactive.
+# Slightly darker and grayer than COLOR_BTN_NORMAL so "info" reads differently from "action."
+const COLOR_STAT_DISPLAY        := Color(0.06, 0.10, 0.06, 1.0)
+const COLOR_STAT_DISPLAY_BORDER := Color(0.18, 0.42, 0.06, 1.0)
+
 # Sell button — red to signal a destructive action, distinct from all green buttons.
 const COLOR_BTN_SELL         := Color(0.28, 0.10, 0.06, 1.0)
 const COLOR_BTN_SELL_HOVER   := Color(0.38, 0.14, 0.08, 1.0)
@@ -255,9 +260,9 @@ func _refresh() -> void:
 
 	# Fire Rate row — hidden for passive traps (Glue Board).
 	if _trap.is_passive():
-		_rate_row["btn"].visible = false
+		_rate_row["row"].visible = false
 	else:
-		_rate_row["btn"].visible = true
+		_rate_row["row"].visible = true
 		_refresh_stat_row(
 			_rate_row, "Fire Rate", _trap.get_rate_level(),
 			"%.2f /s" % _trap.get_shots_per_sec(),
@@ -400,32 +405,48 @@ func _on_bug_bucks_changed(_amount: int) -> void:
 # UI helpers
 # ---------------------------------------------------------------------------
 
-## Builds one combined stat-display / upgrade-button row.
-## Left column: stat name (bold) with star rating below.
-## Right column: current value (large) with after-upgrade preview below (smaller).
-## Far right: cost label (or "MAX").
-## Returns a dict of label refs so _refresh_stat_row() can update in place.
+## Builds one stat row split into two side-by-side elements:
+##   Left (60%): static panel — stat name, stars, current value. Not interactive.
+##   Right (40%): upgrade button — "+X" gain (left-aligned) and cost (right-aligned).
+## Returns a dict of refs so _refresh_stat_row() can update labels in place.
+## "row" = root container (used for visibility on passive traps).
+## "btn" = the clickable upgrade button (used for press signal and disabled state).
 func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
-	var btn := Button.new()
-	btn.text                = ""  # All visual content is provided by child labels.
-	btn.position            = Vector2(PADDING, y)
-	btn.custom_minimum_size = Vector2(inner_w, STAT_ROW_H)
-	_apply_button_style(btn, false)
-	_bg.add_child(btn)
+	# Root HBoxContainer holds both elements and defines the row's position and size.
+	var row_hbox := HBoxContainer.new()
+	row_hbox.position = Vector2(PADDING, y)
+	row_hbox.size     = Vector2(inner_w, STAT_ROW_H)
+	row_hbox.add_theme_constant_override("separation", 4)
+	_bg.add_child(row_hbox)
 
-	# HBoxContainer fills the button face with horizontal padding.
-	var hbox := HBoxContainer.new()
-	hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	hbox.offset_left  =  8.0
-	hbox.offset_right = -8.0
-	hbox.add_theme_constant_override("separation", 12)
-	btn.add_child(hbox)
+	# --- Left: static stat display (60% of row width) ---
+	# Styled like a button but has MOUSE_FILTER_IGNORE throughout — no hover, no click.
+	var static_panel := PanelContainer.new()
+	static_panel.size_flags_horizontal    = Control.SIZE_EXPAND_FILL
+	static_panel.size_flags_stretch_ratio = 0.6
+	static_panel.size_flags_vertical      = Control.SIZE_FILL
+	var static_style := StyleBoxFlat.new()
+	static_style.bg_color     = COLOR_STAT_DISPLAY
+	static_style.border_color = COLOR_STAT_DISPLAY_BORDER
+	static_style.set_border_width_all(2)
+	static_style.set_corner_radius_all(4)
+	static_style.content_margin_left   = 8.0
+	static_style.content_margin_right  = 8.0
+	static_style.content_margin_top    = 4.0
+	static_style.content_margin_bottom = 4.0
+	static_panel.add_theme_stylebox_override("panel", static_style)
+	row_hbox.add_child(static_panel)
 
-	# Left column: stat name on top, star rating below.
+	# Inner layout: name+stars on left, current value right-aligned on far right.
+	var static_inner := HBoxContainer.new()
+	static_inner.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	static_inner.alignment           = BoxContainer.ALIGNMENT_CENTER
+	static_inner.add_theme_constant_override("separation", 8)
+	static_panel.add_child(static_inner)
+
 	var vbox_left := VBoxContainer.new()
-	vbox_left.custom_minimum_size = Vector2(140.0, 0.0)
-	vbox_left.alignment           = BoxContainer.ALIGNMENT_CENTER
-	hbox.add_child(vbox_left)
+	vbox_left.alignment = BoxContainer.ALIGNMENT_CENTER
+	static_inner.add_child(vbox_left)
 
 	var lbl_name := Label.new()
 	lbl_name.add_theme_font_size_override("font_size", 28)
@@ -441,47 +462,60 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 	lbl_stars.add_theme_font_override("font", UIFonts.primary_bold())
 	vbox_left.add_child(lbl_stars)
 
-	# Flexible spacer separates the name/stars from the value section.
-	var spacer := Control.new()
-	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	hbox.add_child(spacer)
-
-	# Right section: current value and delta side by side on one horizontal line.
-	# Using HBoxContainer so the player reads: "current  +gain" in a single glance.
-	var hbox_vals := HBoxContainer.new()
-	hbox_vals.alignment = BoxContainer.ALIGNMENT_CENTER
-	hbox_vals.add_theme_constant_override("separation", 8)
-	hbox.add_child(hbox_vals)
-
+	# Current value: expands to fill remaining space so right-alignment is meaningful.
 	var lbl_cur := Label.new()
 	lbl_cur.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl_cur.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
+	lbl_cur.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 	lbl_cur.add_theme_font_size_override("font_size", 36)
 	lbl_cur.add_theme_color_override("font_color", COLOR_TEXT)
 	lbl_cur.add_theme_font_override("font", UIFonts.primary_bold())
-	hbox_vals.add_child(lbl_cur)
+	static_inner.add_child(lbl_cur)
 
-	# "+X.X" delta — colored by _refresh_stat_row to signal affordability.
+	# Make the entire static panel non-interactive.
+	_set_mouse_passthrough(static_panel)
+
+	# --- Right: upgrade button (40% of row width) ---
+	var btn := Button.new()
+	btn.text                     = ""
+	btn.size_flags_horizontal    = Control.SIZE_EXPAND_FILL
+	btn.size_flags_stretch_ratio = 0.4
+	btn.size_flags_vertical      = Control.SIZE_FILL
+	_apply_button_style(btn, false)
+	row_hbox.add_child(btn)
+
+	var btn_hbox := HBoxContainer.new()
+	btn_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	btn_hbox.offset_left  =  8.0
+	btn_hbox.offset_right = -8.0
+	btn_hbox.alignment    = BoxContainer.ALIGNMENT_CENTER
+	btn.add_child(btn_hbox)
+
+	# "+X" gain — left-aligned, expands to fill its half.
 	var lbl_after := Label.new()
-	lbl_after.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	lbl_after.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl_after.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
+	lbl_after.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 	lbl_after.add_theme_font_size_override("font_size", 26)
 	lbl_after.add_theme_color_override("font_color", COLOR_DELTA_AFFORDABLE)
 	lbl_after.add_theme_font_override("font", UIFonts.primary_bold())
-	hbox_vals.add_child(lbl_after)
+	btn_hbox.add_child(lbl_after)
 
-	# Cost label: coin icon + amount in gold, vertically centered in the row.
+	# Cost — right-aligned, expands to fill its half.
 	var lbl_cost := Label.new()
-	lbl_cost.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	lbl_cost.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl_cost.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
+	lbl_cost.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 	lbl_cost.add_theme_font_size_override("font_size", 26)
 	lbl_cost.add_theme_color_override("font_color", COLOR_GOLD)
 	lbl_cost.add_theme_font_override("font", UIFonts.primary_bold())
-	hbox.add_child(lbl_cost)
+	btn_hbox.add_child(lbl_cost)
 
-	# Child controls must not consume input — clicks anywhere in the row must
-	# reach the Button itself, not be swallowed by the labels or containers.
-	_set_mouse_passthrough(hbox)
+	# Child labels must not consume input — clicks must reach the Button.
+	_set_mouse_passthrough(btn_hbox)
 
 	return {
+		"row":   row_hbox,
 		"btn":   btn,
 		"name":  lbl_name,
 		"stars": lbl_stars,
