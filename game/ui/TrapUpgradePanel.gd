@@ -494,9 +494,12 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 	var btn_x   := split_x + v_inset
 	var btn_w   := inner_w - btn_x - v_inset
 	var btn := Button.new()
-	btn.text     = ""
-	btn.position = Vector2(btn_x, v_inset)
-	btn.size     = Vector2(btn_w, btn_h)
+	btn.text       = ""
+	btn.position   = Vector2(btn_x, v_inset)
+	btn.size       = Vector2(btn_w, btn_h)
+	# FOCUS_NONE prevents the button from showing a focus ring after being tapped,
+	# which would otherwise appear as a white outline even on disabled buttons.
+	btn.focus_mode = Control.FOCUS_NONE
 	_apply_button_style(btn, false)
 	row_ctrl.add_child(btn)
 
