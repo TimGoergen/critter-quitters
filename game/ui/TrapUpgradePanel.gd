@@ -170,6 +170,7 @@ func _build_ui() -> void:
 	sell_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	sell_hbox.offset_left  =  6.0
 	sell_hbox.offset_right = -6.0
+	sell_hbox.offset_top   = 19.0   # shift content ~30% down within the 64px button
 	sell_hbox.alignment    = BoxContainer.ALIGNMENT_CENTER
 	sell_hbox.add_theme_constant_override("separation", 6)
 	_btn_sell.add_child(sell_hbox)
