@@ -129,11 +129,13 @@ var _drag_tween:     Tween   = null
 # Hold must be sustained for this long (without moving ICON_CANCEL_PX) to begin a drag.
 const ICON_HOLD_SEC:  float = 0.25
 const ICON_CANCEL_PX: float = 10.0
-# Size of the floating drag icon in pixels.
+# SubViewport render resolution for trap preview icons (panel and floating).
 const DRAG_ICON_SIZE: float = 90.0
-# Offset applied to the cursor position to place the floating icon above the finger/cursor
-# so the user can see the trap and the arena cell beneath it while dragging.
-const DRAG_OFFSET: Vector2 = Vector2(0.0, -110.0)
+# Screen-space size of the floating drag icon.  Matches the panel icon width.
+const DRAG_ICON_DISPLAY: float = 72.0
+# Offset from the cursor/finger to the floating icon center.
+# Above-and-left so the placement zone cell is visible at the icon's lower-right corner.
+const DRAG_OFFSET: Vector2 = Vector2(-30.0, -95.0)
 
 var _blink_time: float = 0.0
 
@@ -207,7 +209,7 @@ func _build_left_panel() -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 6)
 		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+		row.size_flags_vertical   = Control.SIZE_EXPAND_FILL
 		vbox.add_child(row)
 
 		_build_info_panel(row, i)
@@ -861,7 +863,7 @@ func _process(delta: float) -> void:
 	# We do this in _process (rather than only in _input) so the icon stays
 	# locked to position even when the cursor is stationary.
 	if _drag_active and _drag_icon_ctrl != null and is_instance_valid(_drag_icon_ctrl):
-		var half := DRAG_ICON_SIZE * 0.5
+		var half := DRAG_ICON_DISPLAY * 0.5
 		_drag_icon_ctrl.global_position = _drag_cursor_pos + DRAG_OFFSET - Vector2(half, half)
 
 
@@ -946,7 +948,7 @@ func _start_drag(trap_type: int) -> void:
 
 	# Floating trap icon — starts at the original icon position, then tweens upward.
 	_drag_icon_ctrl = _build_floating_trap_icon(_drag_overlay, trap_type)
-	var half := DRAG_ICON_SIZE * 0.5
+	var half := DRAG_ICON_DISPLAY * 0.5
 	_drag_icon_ctrl.global_position = icon_center - Vector2(half, half)
 
 	_drag_active     = true
@@ -1124,7 +1126,7 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 	var panel := PanelContainer.new()
 	panel.size_flags_horizontal    = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical      = Control.SIZE_EXPAND_FILL
-	panel.size_flags_stretch_ratio = 3.0   # 60% of row width
+	# No stretch_ratio needed — info panel fills whatever width the icon doesn't take.
 	panel.mouse_filter             = Control.MOUSE_FILTER_STOP
 	panel.add_theme_stylebox_override("panel", style)
 	row.add_child(panel)
@@ -1142,34 +1144,18 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 	cvbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(cvbox)
 
-	# Top row: trap name (expands left) + brand badge (right-aligned).
-	var name_row := HBoxContainer.new()
-	name_row.add_theme_constant_override("separation", 4)
-	name_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	cvbox.add_child(name_row)
-
+	# Line 1: trap name — left-aligned.
 	var name_lbl := Label.new()
 	name_lbl.text                  = TRAP_LABELS[type][0]
 	name_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	name_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.add_theme_font_size_override("font_size", 18)
 	name_lbl.add_theme_color_override("font_color", Color.WHITE)
 	name_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
-	name_row.add_child(name_lbl)
+	cvbox.add_child(name_lbl)
 
-	var badge_lbl := Label.new()
-	badge_lbl.text                  = TRAP_BRAND[type]["badge"]
-	badge_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
-	badge_lbl.size_flags_horizontal = Control.SIZE_SHRINK_END
-	badge_lbl.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	badge_lbl.add_theme_font_size_override("font_size", 10)
-	badge_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	badge_lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
-	badge_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
-	name_row.add_child(badge_lbl)
-
-	# Cost row: coin icon + numeric amount.
+	# Line 2: cost — coin icon + numeric amount, left-aligned.
 	var cost_row := HBoxContainer.new()
 	cost_row.add_theme_constant_override("separation", 4)
 	cost_row.alignment    = BoxContainer.ALIGNMENT_BEGIN
@@ -1178,7 +1164,7 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 
 	var coin_icon := TextureRect.new()
 	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
-	coin_icon.custom_minimum_size = Vector2(18, 18)
+	coin_icon.custom_minimum_size = Vector2(20, 20)
 	coin_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -1189,10 +1175,21 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 	cost_lbl.text                = str(Trap.STATS[type]["cost"])
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	cost_lbl.add_theme_font_size_override("font_size", 16)
-	cost_lbl.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
+	cost_lbl.add_theme_font_size_override("font_size", 18)
+	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.20))
 	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
+
+	# Line 3: brand tagline — right-aligned.
+	var badge_lbl := Label.new()
+	badge_lbl.text                  = TRAP_BRAND[type]["badge"]
+	badge_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
+	badge_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	badge_lbl.add_theme_font_size_override("font_size", 12)
+	badge_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	badge_lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
+	badge_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	cvbox.add_child(badge_lbl)
 
 
 ## Builds the right portion of a trap row: the draggable trap icon.
@@ -1200,9 +1197,12 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 ## Returns the Control so _icon_controls can store it for affordability updates.
 func _build_icon_panel(row: HBoxContainer, type: int) -> Control:
 	var icon_ctrl := Control.new()
-	icon_ctrl.size_flags_horizontal    = Control.SIZE_EXPAND_FILL
-	icon_ctrl.size_flags_vertical      = Control.SIZE_EXPAND_FILL
-	icon_ctrl.size_flags_stretch_ratio = 2.0   # 40% of the row
+	# Fixed width so all 4 icons are the same size and pin to the right edge.
+	# SIZE_SHRINK_END places it at the trailing (right) side; info panel gets the rest.
+	icon_ctrl.custom_minimum_size   = Vector2(72.0, 0.0)
+	# SIZE_SHRINK_CENTER: don't expand; info panel (SIZE_EXPAND_FILL) pushes this naturally to the right.
+	icon_ctrl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	icon_ctrl.size_flags_vertical   = Control.SIZE_EXPAND_FILL
 	# STOP so this Control receives gui_input events for hold detection.
 	icon_ctrl.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.add_child(icon_ctrl)
@@ -1217,7 +1217,7 @@ func _build_icon_panel(row: HBoxContainer, type: int) -> Control:
 
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.size       = 2.2
+	cam.size       = 3.1   # larger = more world units visible = smaller-appearing trap
 	cam.position   = Vector3(0.0, 5.0, 0.0)
 	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
 	svp.add_child(cam)
@@ -1247,26 +1247,11 @@ func _build_icon_panel(row: HBoxContainer, type: int) -> Control:
 ## Builds a floating drag icon identical to the in-panel icon, sized DRAG_ICON_SIZE.
 ## Adds it as a child of parent.  Used for the overlay shown during drag.
 func _build_floating_trap_icon(parent: Control, type: int) -> Control:
+	# Square, no background — matches the panel icon appearance exactly.
 	var icon_ctrl := Control.new()
-	icon_ctrl.custom_minimum_size = Vector2(DRAG_ICON_SIZE, DRAG_ICON_SIZE)
-	icon_ctrl.size_flags_vertical = Control.SIZE_SHRINK_BEGIN
+	icon_ctrl.custom_minimum_size = Vector2(DRAG_ICON_DISPLAY, DRAG_ICON_DISPLAY)
 	icon_ctrl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(icon_ctrl)
-
-	var style := StyleBoxFlat.new()
-	style.bg_color      = TRAP_BRAND[type]["normal"]
-	style.set_corner_radius_all(6)
-	style.set_border_width_all(2)
-	style.border_color  = Color(0.72, 0.72, 0.72, 1.0)
-	style.shadow_color  = COLOR_BTN_SHADOW
-	style.shadow_size   = 4
-	style.shadow_offset = Vector2(3, 4)
-
-	var bg_panel := Panel.new()
-	bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bg_panel.add_theme_stylebox_override("panel", style)
-	icon_ctrl.add_child(bg_panel)
 
 	var svp := SubViewport.new()
 	svp.size                      = Vector2i(int(DRAG_ICON_SIZE), int(DRAG_ICON_SIZE))
@@ -1276,7 +1261,7 @@ func _build_floating_trap_icon(parent: Control, type: int) -> Control:
 
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.size       = 2.2
+	cam.size       = 3.1   # larger = more world units visible = smaller-appearing trap
 	cam.position   = Vector3(0.0, 5.0, 0.0)
 	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
 	svp.add_child(cam)
@@ -1292,6 +1277,8 @@ func _build_floating_trap_icon(parent: Control, type: int) -> Control:
 	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
 	svc.stretch      = true
 	svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# Remove the default stylebox so no background or border renders behind the trap.
+	svc.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	svc.add_child(svp)
 	icon_ctrl.add_child(svc)
 
