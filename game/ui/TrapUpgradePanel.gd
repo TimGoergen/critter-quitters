@@ -405,53 +405,58 @@ func _on_bug_bucks_changed(_amount: int) -> void:
 # UI helpers
 # ---------------------------------------------------------------------------
 
-## Builds one stat row split into two side-by-side elements:
-##   Left (60%): static panel — stat name, stars, current value. Not interactive.
-##   Right (40%): upgrade button — "+X" gain (left-aligned) and cost (right-aligned).
-## Returns a dict of refs so _refresh_stat_row() can update labels in place.
-## "row" = root container (used for visibility on passive traps).
-## "btn" = the clickable upgrade button (used for press signal and disabled state).
+## Builds one stat row: a full-width background panel with an inset upgrade button
+## overlaid on the right portion.
+##
+## Layout (absolute coordinates within row_ctrl):
+##   panel_bg  — full width, decorative background only (no child content)
+##   vbox_left — name + stars, anchored to left edge
+##   lbl_cur   — current value, spans x=0..60% of row, text right-aligned to the split
+##   btn       — upgrade button, inset inside the right 40%, smaller than the panel
+##
+## "row" key controls visibility (e.g. Fire Rate on passive traps).
+## "btn" key is the clickable upgrade button.
 func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
-	# Root HBoxContainer holds both elements and defines the row's position and size.
-	var row_hbox := HBoxContainer.new()
-	row_hbox.position = Vector2(PADDING, y)
-	row_hbox.size     = Vector2(inner_w, STAT_ROW_H)
-	row_hbox.add_theme_constant_override("separation", 4)
-	_bg.add_child(row_hbox)
+	# How many pixels of panel background show around the inset upgrade button.
+	var inset     := 6.0
+	# Width reserved for the name+stars column.
+	var left_col  := 140.0
+	# Horizontal split: value label ends here, button begins here.
+	var split_x   := inner_w * 0.60
 
-	# --- Left: static stat display (60% of row width) ---
-	# Styled like a button but has MOUSE_FILTER_IGNORE throughout — no hover, no click.
-	var static_panel := PanelContainer.new()
-	static_panel.size_flags_horizontal    = Control.SIZE_EXPAND_FILL
-	static_panel.size_flags_stretch_ratio = 0.6
-	static_panel.size_flags_vertical      = Control.SIZE_FILL
-	var static_style := StyleBoxFlat.new()
-	static_style.bg_color     = COLOR_STAT_DISPLAY
-	static_style.border_color = COLOR_STAT_DISPLAY_BORDER
-	static_style.set_border_width_all(2)
-	static_style.set_corner_radius_all(4)
-	static_style.content_margin_left   = 8.0
-	static_style.content_margin_right  = 8.0
-	static_style.content_margin_top    = 4.0
-	static_style.content_margin_bottom = 4.0
-	static_panel.add_theme_stylebox_override("panel", static_style)
-	row_hbox.add_child(static_panel)
+	# Root plain Control — holds all row elements as absolutely-positioned children.
+	# MOUSE_FILTER_IGNORE on the root so it does not eat events from the Button child.
+	var row_ctrl := Control.new()
+	row_ctrl.position     = Vector2(PADDING, y)
+	row_ctrl.size         = Vector2(inner_w, STAT_ROW_H)
+	row_ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bg.add_child(row_ctrl)
 
-	# Inner layout: name+stars on left, current value right-aligned on far right.
-	var static_inner := HBoxContainer.new()
-	static_inner.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	static_inner.alignment           = BoxContainer.ALIGNMENT_CENTER
-	static_inner.add_theme_constant_override("separation", 8)
-	static_panel.add_child(static_inner)
+	# Full-width background panel — purely decorative, no children, no interaction.
+	var panel_bg := Panel.new()
+	panel_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var bg_style := StyleBoxFlat.new()
+	bg_style.bg_color     = COLOR_STAT_DISPLAY
+	bg_style.border_color = COLOR_STAT_DISPLAY_BORDER
+	bg_style.set_border_width_all(2)
+	bg_style.set_corner_radius_all(4)
+	panel_bg.add_theme_stylebox_override("panel", bg_style)
+	row_ctrl.add_child(panel_bg)
 
+	# Name + stars — left-aligned, vertically centred.
 	var vbox_left := VBoxContainer.new()
-	vbox_left.alignment = BoxContainer.ALIGNMENT_CENTER
-	static_inner.add_child(vbox_left)
+	vbox_left.position     = Vector2(8.0, 0.0)
+	vbox_left.size         = Vector2(left_col, STAT_ROW_H)
+	vbox_left.alignment    = BoxContainer.ALIGNMENT_CENTER
+	vbox_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row_ctrl.add_child(vbox_left)
 
 	var lbl_name := Label.new()
 	lbl_name.add_theme_font_size_override("font_size", 28)
 	lbl_name.add_theme_color_override("font_color", COLOR_TEXT)
 	lbl_name.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox_left.add_child(lbl_name)
 
 	var lbl_stars := Label.new()
@@ -460,29 +465,32 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 	lbl_stars.add_theme_color_override("font_outline_color", Color(0.08, 0.08, 0.08, 1.0))
 	lbl_stars.add_theme_constant_override("outline_size", 4)
 	lbl_stars.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl_stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	vbox_left.add_child(lbl_stars)
 
-	# Current value: expands to fill remaining space so right-alignment is meaningful.
+	# Current value — spans x=0 to x=split_x so right-alignment lands at the split point.
 	var lbl_cur := Label.new()
-	lbl_cur.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lbl_cur.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
-	lbl_cur.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+	lbl_cur.position             = Vector2(0.0, 0.0)
+	lbl_cur.size                 = Vector2(split_x, STAT_ROW_H)
+	lbl_cur.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	lbl_cur.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	lbl_cur.add_theme_font_size_override("font_size", 36)
 	lbl_cur.add_theme_color_override("font_color", COLOR_TEXT)
 	lbl_cur.add_theme_font_override("font", UIFonts.primary_bold())
-	static_inner.add_child(lbl_cur)
+	lbl_cur.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	row_ctrl.add_child(lbl_cur)
 
-	# Make the entire static panel non-interactive.
-	_set_mouse_passthrough(static_panel)
-
-	# --- Right: upgrade button (40% of row width) ---
+	# Upgrade button — inset inside the right 40% of the panel.
+	# "inset" pixels of panel background remain visible on all four sides.
+	var btn_x := split_x + inset
+	var btn_w := inner_w - btn_x - inset
+	var btn_h := STAT_ROW_H - inset * 2.0
 	var btn := Button.new()
-	btn.text                     = ""
-	btn.size_flags_horizontal    = Control.SIZE_EXPAND_FILL
-	btn.size_flags_stretch_ratio = 0.4
-	btn.size_flags_vertical      = Control.SIZE_FILL
+	btn.text     = ""
+	btn.position = Vector2(btn_x, inset)
+	btn.size     = Vector2(btn_w, btn_h)
 	_apply_button_style(btn, false)
-	row_hbox.add_child(btn)
+	row_ctrl.add_child(btn)
 
 	var btn_hbox := HBoxContainer.new()
 	btn_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -491,31 +499,31 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 	btn_hbox.alignment    = BoxContainer.ALIGNMENT_CENTER
 	btn.add_child(btn_hbox)
 
-	# "+X" gain — left-aligned, expands to fill its half.
+	# "+X" gain — left-aligned, expands to push cost to the far right.
 	var lbl_after := Label.new()
 	lbl_after.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl_after.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
 	lbl_after.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
-	lbl_after.add_theme_font_size_override("font_size", 26)
+	lbl_after.add_theme_font_size_override("font_size", 24)
 	lbl_after.add_theme_color_override("font_color", COLOR_DELTA_AFFORDABLE)
 	lbl_after.add_theme_font_override("font", UIFonts.primary_bold())
 	btn_hbox.add_child(lbl_after)
 
-	# Cost — right-aligned, expands to fill its half.
+	# Cost (coin + amount) — right-aligned, expands to fill its side.
 	var lbl_cost := Label.new()
 	lbl_cost.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl_cost.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
 	lbl_cost.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
-	lbl_cost.add_theme_font_size_override("font_size", 26)
+	lbl_cost.add_theme_font_size_override("font_size", 24)
 	lbl_cost.add_theme_color_override("font_color", COLOR_GOLD)
 	lbl_cost.add_theme_font_override("font", UIFonts.primary_bold())
 	btn_hbox.add_child(lbl_cost)
 
-	# Child labels must not consume input — clicks must reach the Button.
+	# Labels must not absorb input — clicks anywhere on the button face reach the Button.
 	_set_mouse_passthrough(btn_hbox)
 
 	return {
-		"row":   row_hbox,
+		"row":   row_ctrl,
 		"btn":   btn,
 		"name":  lbl_name,
 		"stars": lbl_stars,
