@@ -169,7 +169,7 @@ func _build_ui() -> void:
 	_btn_sell.add_child(sell_hbox)
 
 	var icon := TrashcanIcon.new()
-	icon.custom_minimum_size = Vector2(44.0, 0.0)
+	icon.custom_minimum_size = Vector2(54.0, 0.0)
 	icon.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sell_hbox.add_child(icon)
@@ -344,10 +344,45 @@ func _on_btn_c() -> void:
 
 
 func _on_btn_sell() -> void:
+	_spawn_coin_burst()
 	# Signal Arena to refund the player and remove the trap from the grid.
 	# Arena handles both the Bug Bucks credit and the node cleanup.
 	sell_requested.emit()
 	# _on_close is not called here — Arena's handler calls queue_free() on us.
+
+
+func _spawn_coin_burst() -> void:
+	# Particles must outlive this panel, so they get their own CanvasLayer
+	# parented to root. PROCESS_MODE_ALWAYS because the tree is paused while
+	# the upgrade panel is open.
+	var btn_center := _btn_sell.get_global_rect().get_center()
+
+	var host := CanvasLayer.new()
+	host.layer        = 10
+	host.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(host)
+
+	var particles := CPUParticles2D.new()
+	particles.process_mode         = Node.PROCESS_MODE_ALWAYS
+	particles.position             = btn_center
+	particles.amount               = 28
+	particles.lifetime             = 0.9
+	particles.one_shot             = true
+	particles.explosiveness        = 1.0   # all particles emit simultaneously
+	particles.emitting             = true
+	particles.direction            = Vector2(0.0, -1.0)
+	particles.spread               = 180.0
+	particles.initial_velocity_min = 100.0
+	particles.initial_velocity_max = 260.0
+	particles.gravity              = Vector2(0.0, 380.0)
+	particles.scale_amount_min     = 5.0
+	particles.scale_amount_max     = 10.0
+	particles.color                = Color(1.00, 0.82, 0.10, 1.0)  # gold
+	host.add_child(particles)
+
+	# process_always=true (default) keeps the timer ticking while tree is paused.
+	var timer := get_tree().create_timer(particles.lifetime + 0.2)
+	timer.timeout.connect(host.queue_free)
 
 
 func _on_close() -> void:
@@ -564,7 +599,7 @@ func _apply_sell_button_style(btn: Button) -> void:
 # ---------------------------------------------------------------------------
 class TrashcanIcon extends Control:
 	func _draw() -> void:
-		var s  := minf(size.x, size.y) * 0.68
+		var s  := minf(size.x, size.y) * 1.02  # 50% larger than the original 0.68
 		var cx := size.x * 0.5
 		var cy := size.y * 0.5
 
@@ -587,12 +622,12 @@ class TrashcanIcon extends Control:
 		# Handle — small knob centered on top of the lid.
 		var handle_rect := Rect2(cx - handle_w * 0.5, top_y, handle_w, handle_h)
 		draw_rect(handle_rect, black)
-		draw_rect(handle_rect, edge, false, 1.5)
+		draw_rect(handle_rect, edge, false, 2.0, true)
 
 		# Lid — flat rect, slightly wider than the body.
 		var lid_rect := Rect2(cx - lid_w * 0.5, top_y + handle_h, lid_w, lid_h)
 		draw_rect(lid_rect, black)
-		draw_rect(lid_rect, edge, false, 1.5)
+		draw_rect(lid_rect, edge, false, 2.0, true)
 
 		# Body — tapered trapezoid: full width at top, narrower at base.
 		var body_poly := PackedVector2Array([
@@ -605,10 +640,10 @@ class TrashcanIcon extends Control:
 		var outline_pts := PackedVector2Array([
 			body_poly[0], body_poly[1], body_poly[2], body_poly[3], body_poly[0],
 		])
-		draw_polyline(outline_pts, edge, 1.5)
+		draw_polyline(outline_pts, edge, 2.0, true)
 
 		# Vertical panel lines — stay within the safe inner width (base_w) so they
 		# don't clip outside the tapered shape at the bottom.
 		for i in 2:
 			var lx := cx - base_w * 0.5 + base_w * ((i + 1.0) / 3.0)
-			draw_line(Vector2(lx, body_top + 1.0), Vector2(lx, body_bot - 1.0), edge, 1.5)
+			draw_line(Vector2(lx, body_top + 1.0), Vector2(lx, body_bot - 1.0), edge, 2.0, true)
