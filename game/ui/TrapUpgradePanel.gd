@@ -43,7 +43,8 @@ const COLOR_BTN_PRESSED := Color(0.01, 0.10, 0.00, 1.0)
 const COLOR_BTN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
 
 # Max state — dark so it reads as "done, nothing left to upgrade."
-const COLOR_BTN_MAX     := Color(0.06, 0.14, 0.06, 1.0)
+const COLOR_BTN_MAX        := Color(0.06, 0.14, 0.06, 1.0)
+const COLOR_BTN_MAX_BORDER := Color(0.55, 0.55, 0.55, 1.0)
 
 # Cost label — gold to match the Bug Bucks coin icon.
 const COLOR_GOLD := Color(1.00, 0.82, 0.10, 1.0)
@@ -287,12 +288,16 @@ func _refresh_stat_row(
 	row["cur"].text   = cur_text
 
 	if maxed:
-		row["after"].text   = ""
-		row["cost"].text    = "MAX"
+		# Hide the delta label so "MAX" fills the full button width and can center itself.
+		row["after"].visible              = false
+		row["cost"].text                  = "MAX"
+		row["cost"].horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
 		row["btn"].disabled = true
 		_apply_button_style(row["btn"], true)
 	else:
-		row["after"].text = after_text  # already formatted as "+X.X" by _refresh
+		row["after"].visible              = true
+		row["after"].text                 = after_text  # already formatted as "+X.X" by _refresh
+		row["cost"].horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
 		# Color the delta green when affordable (you can gain this now) or amber when not
 		# (you can see what you'd gain but can't yet pay — the cost risk is visible).
 		var can_afford := GameState.bug_bucks >= cost
@@ -567,7 +572,7 @@ func _apply_button_style(btn: Button, maxed: bool) -> void:
 		for state: String in ["normal", "hover", "pressed", "disabled"]:
 			var box := StyleBoxFlat.new()
 			box.bg_color           = COLOR_BTN_MAX
-			box.border_color       = COLOR_BTN_MAX.lightened(0.12)
+			box.border_color       = COLOR_BTN_MAX_BORDER
 			box.set_border_width_all(2)
 			box.set_corner_radius_all(4)
 			box.content_margin_left   = 8.0
