@@ -384,6 +384,18 @@ func get_bounty() -> int:
 	return _bounty
 
 
+## Returns true if at least one slow source is currently active.
+func is_slowed() -> bool:
+	return not _slow_sources.is_empty()
+
+
+## Returns the strongest active slow factor (0.0 = no slow, 1.0 = fully stopped).
+func get_slow_factor() -> float:
+	if _slow_sources.is_empty():
+		return 0.0
+	return _slow_sources.values().max()
+
+
 ## Returns the base color for this enemy type (used by kill-burst particles).
 func get_color() -> Color:
 	return _base_color
