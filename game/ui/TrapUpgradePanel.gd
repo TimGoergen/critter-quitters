@@ -448,6 +448,7 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 	vbox_left.size         = Vector2(left_col, STAT_ROW_H)
 	vbox_left.alignment    = BoxContainer.ALIGNMENT_CENTER
 	vbox_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	vbox_left.add_theme_constant_override("separation", 0)
 	row_ctrl.add_child(vbox_left)
 
 	var lbl_name := Label.new()
