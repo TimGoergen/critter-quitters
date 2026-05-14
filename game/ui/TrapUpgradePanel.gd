@@ -26,7 +26,7 @@ const PADDING:    float = 10.0
 const BORDER_W:   float = 2.0
 # Stat rows double as upgrade buttons — taller than the old separate buttons
 # so they work well as touch targets in their own right.
-const STAT_ROW_H: float = 76.0
+const STAT_ROW_H: float = 100.0
 
 # Green palette — matches the DebugStartDialog aesthetic.
 const COLOR_BG          := Color(0.04, 0.22, 0.00, 0.95)
@@ -82,8 +82,7 @@ var _dmg_row:  Dictionary = {}
 var _rng_row:  Dictionary = {}
 var _rate_row: Dictionary = {}
 
-var _btn_sell:       Button = null
-var _lbl_sell_value: Label  = null
+var _btn_sell: Button = null
 
 
 # ---------------------------------------------------------------------------
@@ -108,8 +107,8 @@ func initialize(trap: Node) -> void:
 func _build_ui() -> void:
 	var vp      := get_viewport().get_visible_rect().size
 	var panel_w := maxf(360.0, vp.x * 0.50)
-	var panel_h := vp.y * 0.88
-	var sell_h  := maxf(52.0, panel_h / 12.0)
+	# Height is content-driven: top padding + header gap + three stat rows + bottom padding.
+	var panel_h := PADDING + 74.0 + (STAT_ROW_H + 8.0) * 2.0 + STAT_ROW_H + PADDING
 
 	# Centre the panel in the arena zone (the space between the two HUD panels).
 	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
@@ -137,7 +136,7 @@ func _build_ui() -> void:
 	var inner_w := panel_w - PADDING * 2.0
 	var y       := PADDING
 
-	# --- Header: trap name | close button ---
+	# --- Header: trap name | sell button | close button ---
 	var header := HBoxContainer.new()
 	header.position            = Vector2(PADDING, y)
 	header.custom_minimum_size = Vector2(inner_w, 64.0)
@@ -150,6 +149,19 @@ func _build_ui() -> void:
 	_lbl_title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	_lbl_title.add_theme_font_override("font", UIFonts.header())
 	header.add_child(_lbl_title)
+
+	# Sell button — red, twice as wide as the close button, lives in the header row.
+	# The trashcan icon fills the button face; no text label needed.
+	_btn_sell = Button.new()
+	_btn_sell.text                = ""
+	_btn_sell.custom_minimum_size = Vector2(128.0, 64.0)
+	_apply_sell_button_style(_btn_sell)
+	_btn_sell.pressed.connect(_on_btn_sell)
+	header.add_child(_btn_sell)
+	var icon := TrashcanIcon.new()
+	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_btn_sell.add_child(icon)
 
 	# Square close button — custom_minimum_size forces equal width and height;
 	# _apply_neutral_button_style uses equal margins on all four sides so the X
@@ -168,49 +180,11 @@ func _build_ui() -> void:
 	# --- Stat rows: each row IS the upgrade button for that stat ---
 	_dmg_row  = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
 	_rng_row  = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
-	_rate_row = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_rate_row = _build_stat_button_row(y, inner_w)
 
 	_dmg_row["btn"].pressed.connect(_on_btn_a)
 	_rng_row["btn"].pressed.connect(_on_btn_b)
 	_rate_row["btn"].pressed.connect(_on_btn_c)
-
-	# --- Divider before sell ---
-	_add_divider(y, inner_w)
-	y += 14.0
-
-	# --- Sell button: trash icon on the left, coin + refund amount on the right.
-	# Full inner width gives a generous touch target matching the stat rows.
-	_btn_sell = Button.new()
-	_btn_sell.text                = ""   # all content provided by child labels
-	_btn_sell.position            = Vector2(PADDING, y)
-	_btn_sell.custom_minimum_size = Vector2(inner_w, sell_h)
-	_apply_sell_button_style(_btn_sell)
-	_bg.add_child(_btn_sell)
-	_btn_sell.pressed.connect(_on_btn_sell)
-
-	var sell_hbox := HBoxContainer.new()
-	sell_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	sell_hbox.alignment = BoxContainer.ALIGNMENT_CENTER
-	sell_hbox.add_theme_constant_override("separation", 12)
-	_btn_sell.add_child(sell_hbox)
-
-	# Trash icon — default system font for emoji coverage.
-	var lbl_trash := Label.new()
-	lbl_trash.text                 = "🗑"
-	lbl_trash.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	lbl_trash.add_theme_font_size_override("font_size", 36)
-	sell_hbox.add_child(lbl_trash)
-
-	# Refund amount: coin icon + number, gold so it reads as currency.
-	# Text is set in _refresh() each time stats change.
-	_lbl_sell_value = Label.new()
-	_lbl_sell_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_lbl_sell_value.add_theme_font_size_override("font_size", 28)
-	_lbl_sell_value.add_theme_color_override("font_color", COLOR_GOLD)
-	_lbl_sell_value.add_theme_font_override("font", UIFonts.primary_bold())
-	sell_hbox.add_child(_lbl_sell_value)
-
-	_set_mouse_passthrough(sell_hbox)
 
 
 # ---------------------------------------------------------------------------
@@ -270,11 +244,6 @@ func _refresh() -> void:
 			"+%.2f /s" % (_trap.get_shots_per_sec_after_upgrade() - _trap.get_shots_per_sec()),
 			_trap.is_rate_maxed(), _trap.get_rate_upgrade_cost()
 		)
-
-	# Sell button: update the refund amount so it reflects any upgrades purchased this session.
-	if _lbl_sell_value != null:
-		_lbl_sell_value.text = "🪙%d" % _trap.get_sell_value()
-
 
 ## Updates one stat row's labels and interactive state.
 func _refresh_stat_row(
@@ -406,8 +375,10 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 	vbox_left.add_child(lbl_name)
 
 	var lbl_stars := Label.new()
-	lbl_stars.add_theme_font_size_override("font_size", 22)
+	lbl_stars.add_theme_font_size_override("font_size", 44)
 	lbl_stars.add_theme_color_override("font_color", COLOR_STARS)
+	lbl_stars.add_theme_color_override("font_outline_color", Color(0.08, 0.08, 0.08, 1.0))
+	lbl_stars.add_theme_constant_override("outline_size", 4)
 	lbl_stars.add_theme_font_override("font", UIFonts.primary_bold())
 	vbox_left.add_child(lbl_stars)
 
@@ -560,3 +531,51 @@ func _apply_sell_button_style(btn: Button) -> void:
 		box.content_margin_bottom = 4.0
 		btn.add_theme_stylebox_override(state[0], box)
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
+
+
+# ---------------------------------------------------------------------------
+# Trashcan icon — drawn procedurally to represent an old-fashioned round
+# steel can: cylindrical body with horizontal ribs, flat lid, and a small
+# knob handle on top. All black with subtle dark-gray edge lines.
+# ---------------------------------------------------------------------------
+class TrashcanIcon extends Control:
+	func _draw() -> void:
+		var s  := minf(size.x, size.y) * 0.68
+		var cx := size.x * 0.5
+		var cy := size.y * 0.5
+
+		var body_w   := s * 0.56
+		var body_h   := s * 0.62
+		var lid_w    := body_w * 1.22
+		var lid_h    := s * 0.10
+		var handle_w := lid_w * 0.28
+		var handle_h := s * 0.09
+		var total_h  := handle_h + lid_h + body_h
+		var top_y    := cy - total_h * 0.5
+
+		var black := Color(0.0, 0.0, 0.0, 1.0)
+		var edge  := Color(0.28, 0.28, 0.28, 1.0)  # subtle highlight on edges
+
+		# Handle — small knob centered on top of the lid.
+		var handle_rect := Rect2(cx - handle_w * 0.5, top_y, handle_w, handle_h)
+		draw_rect(handle_rect, black)
+		draw_rect(handle_rect, edge, false, 1.5)
+
+		# Lid — flat rect, slightly wider than the body.
+		var lid_rect := Rect2(cx - lid_w * 0.5, top_y + handle_h, lid_w, lid_h)
+		draw_rect(lid_rect, black)
+		draw_rect(lid_rect, edge, false, 1.5)
+
+		# Body — the cylindrical can.
+		var body_rect := Rect2(cx - body_w * 0.5, top_y + handle_h + lid_h, body_w, body_h)
+		draw_rect(body_rect, black)
+		draw_rect(body_rect, edge, false, 1.5)
+
+		# Horizontal ribs — suggest the metal hoops on an old-fashioned steel can.
+		for i in 2:
+			var rib_y := body_rect.position.y + body_h * ((i + 1) / 3.0)
+			draw_line(
+				Vector2(body_rect.position.x + 1.0, rib_y),
+				Vector2(body_rect.end.x - 1.0, rib_y),
+				edge, 1.5
+			)
