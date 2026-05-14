@@ -330,8 +330,11 @@ func _build_right_panel() -> void:
 	inf_container.add_child(_infestation_fill)
 
 	# Overlay: icon on the left, percentage on the right, both centered vertically.
+	# offset_left/right add a small inset so neither element touches the bar edge.
 	var inf_overlay := HBoxContainer.new()
 	inf_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inf_overlay.offset_left  =  6.0
+	inf_overlay.offset_right = -6.0
 	inf_overlay.add_theme_constant_override("separation", 4)
 	inf_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	inf_container.add_child(inf_overlay)
@@ -371,7 +374,7 @@ void fragment() {
 	_infestation_label.text = "0%"
 	_infestation_label.add_theme_font_size_override("font_size", 32)
 	_infestation_label.add_theme_font_override("font", UIFonts.primary_bold())
-	_infestation_label.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	_infestation_label.add_theme_color_override("font_color", Color(0.82, 0.82, 0.86, 1.0))
 	_infestation_label.add_theme_color_override("font_outline_color", Color.BLACK)
 	_infestation_label.add_theme_constant_override("outline_size", 3)
 	_infestation_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
