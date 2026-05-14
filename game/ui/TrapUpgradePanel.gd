@@ -82,7 +82,8 @@ var _dmg_row:  Dictionary = {}
 var _rng_row:  Dictionary = {}
 var _rate_row: Dictionary = {}
 
-var _btn_sell: Button = null
+var _btn_sell:       Button = null
+var _lbl_sell_value: Label  = null
 
 
 # ---------------------------------------------------------------------------
@@ -150,18 +151,37 @@ func _build_ui() -> void:
 	_lbl_title.add_theme_font_override("font", UIFonts.header())
 	header.add_child(_lbl_title)
 
-	# Sell button — red, twice as wide as the close button, lives in the header row.
-	# The trashcan icon fills the button face; no text label needed.
+	# Sell button — red, in the header row next to the close button.
+	# Left side: trashcan icon. Right side: coin icon + refund amount.
 	_btn_sell = Button.new()
 	_btn_sell.text                = ""
-	_btn_sell.custom_minimum_size = Vector2(128.0, 64.0)
+	_btn_sell.custom_minimum_size = Vector2(160.0, 64.0)
 	_apply_sell_button_style(_btn_sell)
 	_btn_sell.pressed.connect(_on_btn_sell)
 	header.add_child(_btn_sell)
+
+	var sell_hbox := HBoxContainer.new()
+	sell_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	sell_hbox.offset_left  =  6.0
+	sell_hbox.offset_right = -6.0
+	sell_hbox.alignment    = BoxContainer.ALIGNMENT_CENTER
+	sell_hbox.add_theme_constant_override("separation", 6)
+	_btn_sell.add_child(sell_hbox)
+
 	var icon := TrashcanIcon.new()
-	icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_btn_sell.add_child(icon)
+	icon.custom_minimum_size = Vector2(44.0, 0.0)
+	icon.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	sell_hbox.add_child(icon)
+
+	_lbl_sell_value = Label.new()
+	_lbl_sell_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_lbl_sell_value.add_theme_font_size_override("font_size", 24)
+	_lbl_sell_value.add_theme_color_override("font_color", COLOR_GOLD)
+	_lbl_sell_value.add_theme_font_override("font", UIFonts.primary_bold())
+	sell_hbox.add_child(_lbl_sell_value)
+
+	_set_mouse_passthrough(sell_hbox)
 
 	# Square close button — custom_minimum_size forces equal width and height;
 	# _apply_neutral_button_style uses equal margins on all four sides so the X
@@ -244,6 +264,10 @@ func _refresh() -> void:
 			"+%.2f /s" % (_trap.get_shots_per_sec_after_upgrade() - _trap.get_shots_per_sec()),
 			_trap.is_rate_maxed(), _trap.get_rate_upgrade_cost()
 		)
+
+	# Sell button: keep the refund amount current as upgrades are purchased.
+	if _lbl_sell_value != null:
+		_lbl_sell_value.text = "🪙%d" % _trap.get_sell_value()
 
 ## Updates one stat row's labels and interactive state.
 func _refresh_stat_row(
@@ -535,8 +559,8 @@ func _apply_sell_button_style(btn: Button) -> void:
 
 # ---------------------------------------------------------------------------
 # Trashcan icon — drawn procedurally to represent an old-fashioned round
-# steel can: cylindrical body with horizontal ribs, flat lid, and a small
-# knob handle on top. All black with subtle dark-gray edge lines.
+# steel can: tapered body (narrower at base) with vertical panel lines,
+# flat lid, and a small knob handle on top. All black with bright gray edges.
 # ---------------------------------------------------------------------------
 class TrashcanIcon extends Control:
 	func _draw() -> void:
@@ -544,7 +568,8 @@ class TrashcanIcon extends Control:
 		var cx := size.x * 0.5
 		var cy := size.y * 0.5
 
-		var body_w   := s * 0.56
+		var body_w   := s * 0.56   # width at the top of the body
+		var base_w   := body_w * 0.72  # narrower at the bottom
 		var body_h   := s * 0.62
 		var lid_w    := body_w * 1.22
 		var lid_h    := s * 0.10
@@ -554,7 +579,10 @@ class TrashcanIcon extends Control:
 		var top_y    := cy - total_h * 0.5
 
 		var black := Color(0.0, 0.0, 0.0, 1.0)
-		var edge  := Color(0.28, 0.28, 0.28, 1.0)  # subtle highlight on edges
+		var edge  := Color(0.62, 0.62, 0.62, 1.0)
+
+		var body_top := top_y + handle_h + lid_h
+		var body_bot := body_top + body_h
 
 		# Handle — small knob centered on top of the lid.
 		var handle_rect := Rect2(cx - handle_w * 0.5, top_y, handle_w, handle_h)
@@ -566,16 +594,21 @@ class TrashcanIcon extends Control:
 		draw_rect(lid_rect, black)
 		draw_rect(lid_rect, edge, false, 1.5)
 
-		# Body — the cylindrical can.
-		var body_rect := Rect2(cx - body_w * 0.5, top_y + handle_h + lid_h, body_w, body_h)
-		draw_rect(body_rect, black)
-		draw_rect(body_rect, edge, false, 1.5)
+		# Body — tapered trapezoid: full width at top, narrower at base.
+		var body_poly := PackedVector2Array([
+			Vector2(cx - body_w * 0.5, body_top),
+			Vector2(cx + body_w * 0.5, body_top),
+			Vector2(cx + base_w * 0.5, body_bot),
+			Vector2(cx - base_w * 0.5, body_bot),
+		])
+		draw_polygon(body_poly, PackedColorArray([black, black, black, black]))
+		var outline_pts := PackedVector2Array([
+			body_poly[0], body_poly[1], body_poly[2], body_poly[3], body_poly[0],
+		])
+		draw_polyline(outline_pts, edge, 1.5)
 
-		# Horizontal ribs — suggest the metal hoops on an old-fashioned steel can.
+		# Vertical panel lines — stay within the safe inner width (base_w) so they
+		# don't clip outside the tapered shape at the bottom.
 		for i in 2:
-			var rib_y := body_rect.position.y + body_h * ((i + 1) / 3.0)
-			draw_line(
-				Vector2(body_rect.position.x + 1.0, rib_y),
-				Vector2(body_rect.end.x - 1.0, rib_y),
-				edge, 1.5
-			)
+			var lx := cx - base_w * 0.5 + base_w * ((i + 1.0) / 3.0)
+			draw_line(Vector2(lx, body_top + 1.0), Vector2(lx, body_bot - 1.0), edge, 1.5)
