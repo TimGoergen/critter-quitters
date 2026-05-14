@@ -149,6 +149,11 @@ var _base_color:   Color                       = Color.WHITE
 var _outline_mats: Array[StandardMaterial3D]   = []
 var _shadow_mat:   ShaderMaterial              = null
 
+# Arena-decorator nodes: the colored background plate, shadow halo, and footprint
+# outline bars.  Populated by _spawn_background / _spawn_shadow / _spawn_footprint_outline
+# so hide_decorators() can remove them for icon-only previews (e.g. HUD panel icons).
+var _decorator_nodes: Array[Node3D] = []
+
 # Snap Trap animation nodes — null for all other trap types.
 var _snap_bar_pivot: Node3D         = null
 var _snap_cheese:    MeshInstance3D = null
@@ -662,6 +667,13 @@ func hide_range_indicator() -> void:
 		_range_indicator.visible = _is_hovered
 
 
+## Hides the colored background plate, shadow halo, and footprint outline bars.
+## Called on icon-only previews (HUD panel, drag overlay) so only the trap model shows.
+func hide_decorators() -> void:
+	for node: Node3D in _decorator_nodes:
+		node.hide()
+
+
 func _on_hover_enter() -> void:
 	_is_hovered = true
 	if _range_indicator != null:
@@ -799,6 +811,7 @@ func _spawn_footprint_outline(color: Color) -> void:
 		mi.position          = Vector3(0.0, y, sz)
 		mi.material_override = mat
 		add_child(mi)
+		_decorator_nodes.append(mi)
 
 	for sx: float in [-(fp * 0.5 - thickness * 0.5), fp * 0.5 - thickness * 0.5]:
 		var mat := StandardMaterial3D.new()
@@ -812,6 +825,7 @@ func _spawn_footprint_outline(color: Color) -> void:
 		mi.position          = Vector3(sx, y, 0.0)
 		mi.material_override = mat
 		add_child(mi)
+		_decorator_nodes.append(mi)
 
 
 ## Adds a rectangular outline shadow matching the footprint boundary.
@@ -848,6 +862,7 @@ func _spawn_shadow(color: Color) -> void:
 
 	shadow_mi.position.y = 0.05 - 0.25
 	add_child(shadow_mi)
+	_decorator_nodes.append(shadow_mi)
 
 
 ## Adds a dark, slightly transparent background plate that fills most of the cell.
@@ -868,6 +883,7 @@ func _spawn_background(color: Color) -> void:
 	# Just above the shadow (world y = 0.07) so the shadow peeks out at the edges.
 	bg_mi.position.y = 0.07 - 0.25
 	add_child(bg_mi)
+	_decorator_nodes.append(bg_mi)
 
 
 ## Creates the trap's placeholder visual. All four trap types get multi-part

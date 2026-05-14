@@ -1227,6 +1227,7 @@ func _build_icon_panel(row: HBoxContainer, type: int) -> Control:
 	trap_preview.initialize_preview(type as Trap.TrapType)
 	svp.add_child(trap_preview)
 	trap_preview.call_deferred("hide_range_indicator")
+	trap_preview.call_deferred("hide_decorators")
 
 	var svc := SubViewportContainer.new()
 	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1285,6 +1286,7 @@ func _build_floating_trap_icon(parent: Control, type: int) -> Control:
 	trap_preview.initialize_preview(type as Trap.TrapType)
 	svp.add_child(trap_preview)
 	trap_preview.call_deferred("hide_range_indicator")
+	trap_preview.call_deferred("hide_decorators")
 
 	var svc := SubViewportContainer.new()
 	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
