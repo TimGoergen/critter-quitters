@@ -361,7 +361,8 @@ func _spawn_coin_burst() -> void:
 	# Particles must outlive this panel, so they get their own CanvasLayer
 	# parented to root. PROCESS_MODE_ALWAYS because the tree is paused while
 	# the upgrade panel is open.
-	var btn_center := _btn_sell.get_global_rect().get_center()
+	var camera    := get_viewport().get_camera_3d()
+	var burst_pos := camera.unproject_position(_trap.global_position)
 
 	var host := CanvasLayer.new()
 	host.layer        = 10
@@ -370,7 +371,7 @@ func _spawn_coin_burst() -> void:
 
 	var particles := CPUParticles2D.new()
 	particles.process_mode         = Node.PROCESS_MODE_ALWAYS
-	particles.position             = btn_center
+	particles.position             = burst_pos
 	particles.amount               = 28
 	particles.lifetime             = 0.9
 	particles.one_shot             = true
