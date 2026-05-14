@@ -1105,6 +1105,10 @@ func _trap_image_path(type: int) -> String:
 ## Builds the left portion of a trap row: brand-colored info panel containing
 ## the trap name, cost, and brand badge.  MOUSE_FILTER_STOP prevents taps from
 ## reaching the arena behind the panel.
+## Builds the left portion of a trap row: brand-colored info panel containing
+## the trap name, cost, and brand badge.
+## Uses PanelContainer (not Panel) so it auto-sizes to its content, giving the
+## row a correct minimum height when the row is SIZE_SHRINK_BEGIN.
 func _build_info_panel(row: HBoxContainer, type: int) -> void:
 	var style := StyleBoxFlat.new()
 	style.bg_color      = TRAP_BRAND[type]["normal"]
@@ -1115,39 +1119,57 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 	style.shadow_size   = 2
 	style.shadow_offset = Vector2(2, 3)
 
-	var panel := Panel.new()
+	# PanelContainer draws the background AND contributes its content height as
+	# the minimum size, so the row knows how tall to be.
+	var panel := PanelContainer.new()
 	panel.size_flags_horizontal    = Control.SIZE_EXPAND_FILL
 	panel.size_flags_vertical      = Control.SIZE_EXPAND_FILL
-	panel.size_flags_stretch_ratio = 3.0   # 60% of the row
-	panel.mouse_filter           = Control.MOUSE_FILTER_STOP
+	panel.size_flags_stretch_ratio = 3.0   # 60% of row width
+	panel.mouse_filter             = Control.MOUSE_FILTER_STOP
 	panel.add_theme_stylebox_override("panel", style)
 	row.add_child(panel)
 
-	# Content — left-aligned VBox centred vertically inside the panel.
 	var margin := MarginContainer.new()
-	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left",   8)
 	margin.add_theme_constant_override("margin_right",  8)
-	margin.add_theme_constant_override("margin_top",    8)
-	margin.add_theme_constant_override("margin_bottom", 8)
+	margin.add_theme_constant_override("margin_top",    6)
+	margin.add_theme_constant_override("margin_bottom", 6)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(margin)
 
 	var cvbox := VBoxContainer.new()
-	cvbox.add_theme_constant_override("separation", 4)
-	cvbox.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	cvbox.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	cvbox.add_theme_constant_override("separation", 3)
+	cvbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(cvbox)
 
-	var name_lbl := Label.new()
-	name_lbl.text                 = TRAP_LABELS[type][0]
-	name_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	name_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	name_lbl.add_theme_font_size_override("font_size", 16)
-	name_lbl.add_theme_color_override("font_color", Color.WHITE)
-	name_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	cvbox.add_child(name_lbl)
+	# Top row: trap name (expands left) + brand badge (right-aligned).
+	var name_row := HBoxContainer.new()
+	name_row.add_theme_constant_override("separation", 4)
+	name_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cvbox.add_child(name_row)
 
+	var name_lbl := Label.new()
+	name_lbl.text                  = TRAP_LABELS[type][0]
+	name_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	name_lbl.add_theme_font_size_override("font_size", 14)
+	name_lbl.add_theme_color_override("font_color", Color.WHITE)
+	name_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	name_row.add_child(name_lbl)
+
+	var badge_lbl := Label.new()
+	badge_lbl.text                  = TRAP_BRAND[type]["badge"]
+	badge_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
+	badge_lbl.size_flags_horizontal = Control.SIZE_SHRINK_END
+	badge_lbl.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	badge_lbl.add_theme_font_size_override("font_size", 10)
+	badge_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	badge_lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
+	badge_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	name_row.add_child(badge_lbl)
+
+	# Cost row: coin icon + numeric amount.
 	var cost_row := HBoxContainer.new()
 	cost_row.add_theme_constant_override("separation", 4)
 	cost_row.alignment    = BoxContainer.ALIGNMENT_BEGIN
@@ -1156,7 +1178,7 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 
 	var coin_icon := TextureRect.new()
 	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
-	coin_icon.custom_minimum_size = Vector2(20, 20)
+	coin_icon.custom_minimum_size = Vector2(18, 18)
 	coin_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -1167,27 +1189,10 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 	cost_lbl.text                = str(Trap.STATS[type]["cost"])
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	cost_lbl.add_theme_font_size_override("font_size", 20)
+	cost_lbl.add_theme_font_size_override("font_size", 16)
 	cost_lbl.add_theme_color_override("font_color", Color(0.80, 0.60, 0.10))
 	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
-
-	# Badge — anchored to the top-right corner of the panel.
-	var badge_lbl := Label.new()
-	badge_lbl.text         = TRAP_BRAND[type]["badge"]
-	badge_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	badge_lbl.add_theme_font_size_override("font_size", 10)
-	badge_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	badge_lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
-	badge_lbl.anchor_left   = 1.0
-	badge_lbl.anchor_right  = 1.0
-	badge_lbl.anchor_top    = 0.0
-	badge_lbl.anchor_bottom = 0.0
-	badge_lbl.offset_left   = -56.0
-	badge_lbl.offset_right  = -4.0
-	badge_lbl.offset_top    = 4.0
-	badge_lbl.offset_bottom = 14.0
-	panel.add_child(badge_lbl)
 
 
 ## Builds the right portion of a trap row: the draggable trap icon.
