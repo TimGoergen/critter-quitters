@@ -1116,9 +1116,10 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 	style.shadow_offset = Vector2(2, 3)
 
 	var panel := Panel.new()
-	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-	panel.mouse_filter          = Control.MOUSE_FILTER_STOP
+	panel.size_flags_horizontal  = Control.SIZE_EXPAND_FILL
+	panel.size_flags_vertical    = Control.SIZE_EXPAND_FILL
+	panel.size_flags_stretch_ratio = 3.0   # 75% of the row
+	panel.mouse_filter           = Control.MOUSE_FILTER_STOP
 	panel.add_theme_stylebox_override("panel", style)
 	row.add_child(panel)
 
@@ -1194,28 +1195,15 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 ## Returns the Control so _icon_controls can store it for affordability updates.
 func _build_icon_panel(row: HBoxContainer, type: int) -> Control:
 	var icon_ctrl := Control.new()
-	icon_ctrl.custom_minimum_size = Vector2(DRAG_ICON_SIZE, 0.0)
-	icon_ctrl.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	icon_ctrl.size_flags_horizontal    = Control.SIZE_EXPAND_FILL
+	icon_ctrl.size_flags_vertical      = Control.SIZE_EXPAND_FILL
+	icon_ctrl.size_flags_stretch_ratio = 1.0   # 25% of the row
 	# STOP so this Control receives gui_input events for hold detection.
 	icon_ctrl.mouse_filter = Control.MOUSE_FILTER_STOP
 	row.add_child(icon_ctrl)
 
-	var style := StyleBoxFlat.new()
-	style.bg_color      = TRAP_BRAND[type]["normal"]
-	style.set_corner_radius_all(6)
-	style.set_border_width_all(2)
-	style.border_color  = Color(0.72, 0.72, 0.72, 1.0)
-	style.shadow_color  = COLOR_BTN_SHADOW
-	style.shadow_size   = 2
-	style.shadow_offset = Vector2(2, 3)
-
-	var bg_panel := Panel.new()
-	bg_panel.set_anchors_preset(Control.PRESET_FULL_RECT)
-	bg_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bg_panel.add_theme_stylebox_override("panel", style)
-	icon_ctrl.add_child(bg_panel)
-
-	# SubViewport — own_world_3d isolates it; transparent_bg reveals the panel bg.
+	# No background — the trap image renders over the panel background behind it.
+	# SubViewport — own_world_3d isolates it; transparent_bg shows the row bg.
 	var svp := SubViewport.new()
 	svp.size                      = Vector2i(int(DRAG_ICON_SIZE), int(DRAG_ICON_SIZE))
 	svp.own_world_3d              = true
