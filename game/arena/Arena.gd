@@ -130,17 +130,15 @@ var _panel_paused: bool = false
 # Touch/mouse input state machine.
 #
 # IDLE             → no pointer down
-# PENDING_CLASSIFY → pointer down; waiting to see if this is a tap, a pan, or a hold
+# PENDING_CLASSIFY → pointer down; waiting to see if this is a tap, a pan, or a drag
 # DRAGGING         → movement exceeded DRAG_THRESHOLD_PX first; panning the camera
-# DRAG_PLACING     → pointer held past HOLD_THRESHOLD_SEC without moving; dragging
-#                    a ghost preview around the arena to choose a placement cell
+# DRAG_PLACING     → active while an HUD-initiated drag-and-drop is in progress
 enum TouchState { IDLE, PENDING_CLASSIFY, DRAGGING, DRAG_PLACING }
 var _touch_state:    TouchState = TouchState.IDLE
 var _touch_down_pos: Vector2    = Vector2.ZERO   # screen position where the pointer landed
 var _touch_last_pos: Vector2    = Vector2.ZERO   # most recent drag/move position
-var _touch_hold_time: float     = 0.0            # seconds held without exceeding drag threshold
+var _touch_hold_time: float     = 0.0            # kept for compatibility; no longer drives hold logic
 const DRAG_THRESHOLD_PX: float  = 15.0           # movement before classifying as drag/pan
-const HOLD_THRESHOLD_SEC: float = 0.25           # hold duration before entering DRAG_PLACING
 
 # Pinch-to-zoom — two-finger gesture that toggles between the two zoom levels.
 # While _pinch_active is true all single-finger routing is suspended.
@@ -154,6 +152,11 @@ const PINCH_THRESHOLD_PX: float = 40.0
 # Ghost preview node shown while in DRAG_PLACING mode.
 var _drag_place_preview: Node3D  = null
 var _drag_place_anchor:  Vector2i = Vector2i(-1, -1)
+
+# True while the HUD is driving a drag-and-drop placement gesture.
+# When set, Arena's own pointer state machine stays idle and placement
+# is controlled entirely by HUD calling begin/update/commit_hud_drag().
+var _hud_drag_active: bool = false
 
 # Camera zoom — two discrete levels: overview (full-arena fit) and zoomed-in (2×).
 enum ZoomState { OVERVIEW, ZOOMED_IN }
@@ -385,20 +388,8 @@ func _on_pointer_dragged(screen_pos: Vector2, relative: Vector2) -> void:
 
 
 # ---------------------------------------------------------------------------
-# Drag-to-place
+# Drag-to-place (driven by HUD drag-and-drop; see begin_hud_drag / update_hud_drag)
 # ---------------------------------------------------------------------------
-
-## Transitions PENDING_CLASSIFY → DRAG_PLACING after the hold threshold.
-## Called from _process when the hold timer fires.
-## Does nothing if the player cannot afford a trap.
-func _enter_drag_placing(screen_pos: Vector2) -> void:
-	if not _can_afford_trap():
-		# Nothing to drag-place; treat the rest of the gesture as inert.
-		_touch_state = TouchState.IDLE
-		return
-	_touch_state = TouchState.DRAG_PLACING
-	_update_drag_preview(screen_pos)
-
 
 ## Positions or repositions the ghost preview at the cell under screen_pos.
 ## Rebuilds the preview node only when the anchor cell changes.
@@ -446,6 +437,40 @@ func _clear_drag_preview() -> void:
 
 
 # ---------------------------------------------------------------------------
+# HUD drag-and-drop placement API
+# Called by HUD.gd when the user drags a trap icon from the left panel.
+# ---------------------------------------------------------------------------
+
+## Called by HUD when the user begins dragging a trap icon.
+## placement_screen_pos is the centre of the floating icon (cursor + offset),
+## which is the cell the trap will be placed in — not the raw cursor position.
+func begin_hud_drag(_trap_type: int, placement_screen_pos: Vector2) -> void:
+	_hud_drag_active = true
+	_touch_state     = TouchState.IDLE   # keep Arena's own state machine inert
+	# GameState.selected_trap_type is already set by HUD before this call.
+	_update_drag_preview(placement_screen_pos)
+
+
+## Called by HUD each frame as the floating icon moves.
+func update_hud_drag(placement_screen_pos: Vector2) -> void:
+	if _hud_drag_active:
+		_update_drag_preview(placement_screen_pos)
+
+
+## Called by HUD when the user releases the drag.  Attempts placement.
+func commit_hud_drag() -> void:
+	if _hud_drag_active:
+		_commit_drag_place()
+		_hud_drag_active = false
+
+
+## Called by HUD if the drag is cancelled without releasing (e.g. second finger).
+func cancel_hud_drag() -> void:
+	_clear_drag_preview()
+	_hud_drag_active = false
+
+
+# ---------------------------------------------------------------------------
 # Pinch-to-zoom
 # ---------------------------------------------------------------------------
 
@@ -453,6 +478,7 @@ func _clear_drag_preview() -> void:
 ## Cancels any in-progress single-finger operation and begins tracking span.
 func _begin_pinch() -> void:
 	_clear_drag_preview()
+	_hud_drag_active  = false   # cancel any active HUD drag when a pinch starts
 	_touch_state      = TouchState.IDLE
 	_pinch_active     = true
 	_pinch_start_span = _pinch_finger0_pos.distance_to(_pinch_finger1_pos)
@@ -498,14 +524,10 @@ func _handle_tap(screen_pos: Vector2) -> void:
 		_open_upgrade_panel(_trap_anchors[cell])
 		return
 
-	# Tap on an empty arena cell → place trap if affordable and not obstructed.
+	# Tapping an empty arena cell no longer places a trap.
+	# Traps are placed only via drag-and-drop from the HUD panel icons.
 	if _is_in_arena(cell):
 		_close_upgrade_panel()
-		if _can_afford_trap():
-			var anchor := _clamp_to_anchor(cell)
-			var cells  := _get_trap_cells(anchor)
-			if not cells.is_empty() and not _footprint_overlaps_enemy(cells):
-				_try_place_trap(anchor)
 
 
 ## Returns the nearest active enemy whose projected screen position is within
@@ -1898,10 +1920,8 @@ func _process(delta: float) -> void:
 		var p := _followed_enemy.global_position
 		_apply_pan(Vector2(p.x, p.z))
 
-	if _touch_state == TouchState.PENDING_CLASSIFY:
-		_touch_hold_time += delta
-		if _touch_hold_time >= HOLD_THRESHOLD_SEC:
-			_enter_drag_placing(_touch_down_pos)
+	# Hold-to-place from the arena is removed: placement now only initiates
+	# via drag from the HUD trap icon panel (see begin_hud_drag / update_hud_drag).
 
 
 ## Toggles between OVERVIEW and ZOOMED_IN camera levels.
