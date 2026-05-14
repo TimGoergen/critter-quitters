@@ -148,7 +148,7 @@ var _star_labels: Array[Label3D] = []
 # Upgrade tint — materials updated in _update_star_display() to lerp toward gold.
 var _base_color:   Color                       = Color.WHITE
 var _outline_mats: Array[StandardMaterial3D]   = []
-var _bg_mat:       StandardMaterial3D          = null
+var _shadow_mat:   ShaderMaterial              = null
 
 # Snap Trap animation nodes — null for all other trap types.
 var _snap_bar_pivot: Node3D         = null
@@ -375,7 +375,7 @@ func get_total_upgradeable_stats() -> int:
 	return 2 if is_passive() else 3
 
 ## Fraction of total spending returned when the trap is sold.
-const SELL_REFUND_FRACTION: float = 0.70
+const SELL_REFUND_FRACTION: float = 0.49
 
 ## Returns the Bug Bucks refunded when this trap is sold.
 ## Covers the placement cost plus every upgrade level purchased across all stats.
@@ -593,9 +593,9 @@ func _spawn_star_display() -> void:
 		_star_labels.append(lbl)
 
 
-## Refreshes star labels and tints the outline + background toward gold as stats are maxed.
-## frac = maxed_stats / total_upgradeable_stats, so each maxed stat moves the tint forward.
-## At frac=1.0 the outline is fully gold and the background is a rich darkened gold.
+## Refreshes star labels, tints the footprint outline toward gold, and brightens the
+## drop shadow as stats are maxed.  The background plate keeps its base color throughout —
+## only the border and shadow shift, so the trap's identity color is always visible.
 func _update_star_display() -> void:
 	if _star_labels.is_empty():
 		return
@@ -621,17 +621,26 @@ func _update_star_display() -> void:
 		_star_labels[i].visible  = i < maxed
 		_star_labels[i].position = positions[i]
 
-	# --- Outline + background tint ---
 	const GOLD: Color = Color(1.0, 0.82, 0.18)
 	var frac := float(maxed) / float(get_total_upgradeable_stats())
-	var tint := _base_color.lerp(GOLD, frac)
 
+	# --- Outline tint ---
+	# Lerp from base color toward gold so the border signals upgrade progress
+	# without washing out the trap's base color on the background plate.
+	var tint := _base_color.lerp(GOLD, frac)
 	for mat: StandardMaterial3D in _outline_mats:
 		mat.albedo_color = tint
 
-	if _bg_mat != null:
-		var bg_brightness := lerpf(0.65, 0.80, frac)
-		_bg_mat.albedo_color = Color(tint.r * bg_brightness, tint.g * bg_brightness, tint.b * bg_brightness, 0.92)
+	# --- Shadow brightness + tint ---
+	# At zero stars the shadow is dim (18% brightness, opacity 0.60).
+	# As stars are earned it brightens (up to 50%) and shifts toward gold, echoing the outline.
+	if _shadow_mat != null:
+		var shadow_tint    := _base_color.lerp(GOLD, frac)
+		var brightness     := lerpf(0.18, 0.50, frac)
+		var shadow_opacity := lerpf(0.60, 0.90, frac)
+		_shadow_mat.set_shader_parameter("shadow_color",
+			Vector3(shadow_tint.r * brightness, shadow_tint.g * brightness, shadow_tint.b * brightness))
+		_shadow_mat.set_shader_parameter("opacity", shadow_opacity)
 
 
 ## Forces the range indicator visible and pins it so hover-exit cannot hide it.
@@ -831,6 +840,8 @@ func _spawn_shadow(color: Color) -> void:
 	# Darken to ~18% brightness so the tinted halo reads as a shadow.
 	mat.set_shader_parameter("shadow_color", Vector3(color.r * 0.18, color.g * 0.18, color.b * 0.18))
 	shadow_mi.material_override = mat
+	# Store so _update_star_display() can brighten and tint the shadow as stars are earned.
+	_shadow_mat = mat
 
 	shadow_mi.position.y = 0.05 - 0.25
 	add_child(shadow_mi)
@@ -850,7 +861,6 @@ func _spawn_background(color: Color) -> void:
 	mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	bg_mi.material_override = mat
-	_bg_mat = mat
 
 	# Just above the shadow (world y = 0.07) so the shadow peeks out at the edges.
 	bg_mi.position.y = 0.07 - 0.25
