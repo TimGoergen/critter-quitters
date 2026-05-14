@@ -7,7 +7,7 @@
 ##     SNAP_TRAP  — nearest enemy in range
 ##     ZAPPER     — farthest-along-path enemy in range (Phase 4)
 ##     FOGGER     — all enemies in range simultaneously (Phase 4)
-##     GLUE_BOARD — passive slow; no projectile (Phase 4)
+##     GLUE_BOARD — passive AoE slow; cosmetic projectile fires when an enemy first enters range
 ##
 ##   "Farthest along path" is determined by the enemy's path index —
 ##   higher index means closer to the exit, so it is the greater threat.
@@ -50,7 +50,7 @@ const STATS := {
 	TrapType.SNAP_TRAP:  { "damage": 5.0,  "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.52, 0.27, 0.08) },
 	TrapType.ZAPPER:     { "damage": 30.0, "range": 9.6, "cooldown": 2.5, "cost": 75, "color": Color(0.10, 0.50, 1.00) },
 	TrapType.FOGGER:     { "damage": 3.0,  "range": 4.0, "cooldown": 2.2, "cost": 60, "color": Color(0.35, 0.88, 0.18) },
-	TrapType.GLUE_BOARD: { "damage": 0.50, "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(0.92, 0.89, 0.78) },
+	TrapType.GLUE_BOARD: { "damage": 0.20, "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(0.92, 0.89, 0.78) },
 }
 
 ## Each stat can be upgraded this many times independently.
@@ -60,6 +60,12 @@ const MAX_UPGRADE_LEVEL: int = 3
 const UPGRADE_DAMAGE_FACTOR:    float = 0.20  # +20% of base damage per level
 const UPGRADE_RANGE_FACTOR:     float = 0.10  # +10% of base range per level
 const UPGRADE_FIRE_RATE_FACTOR: float = 0.08  # −8% of base cooldown per level (faster shots)
+
+## Glue Board adhesion strength at each damage upgrade level (index = _damage_level).
+## Values are slow factors: 0.0 = no slow, 1.0 = fully stopped.
+## Defined as an explicit table because the intended values don't fit the shared
+## UPGRADE_DAMAGE_FACTOR formula.
+const GLUE_ADHESION_LEVELS: Array[float] = [0.20, 0.30, 0.40, 0.50]
 
 ## Bug Bucks cost for each upgrade level per trap type.
 ## Index 0 = first upgrade, 1 = second, 2 = third.
@@ -119,16 +125,9 @@ var _base_cooldown: float = 0.0
 # types, so this always reflects the live list without any extra bookkeeping.
 var _active_enemies: Array = []
 
-# The single enemy currently slowed by this Glue Board (null if none).
-# The board targets one enemy at a time — always the closest in range.
-var _slowed_enemy: Node3D = null
-
-# Seconds remaining before the board can switch to a new slow target.
-# Prevents the board from re-targeting every frame when enemies swap distance ranks.
-var _glue_apply_cooldown: float = 0.0
-
-## How often (in seconds) the Glue Board may pick a new slow target.
-const GLUE_APPLY_INTERVAL: float = 1.0
+# All enemies currently under this board's slow effect, stored as a set.
+# Dictionary is used instead of Array for O(1) membership checks and removal.
+var _glue_slowed_enemies: Dictionary = {}
 
 # When true, this node is a visual-only placement preview: no combat, no hover area,
 # no range indicator. Set by initialize_preview() before the node enters the tree.
@@ -202,6 +201,8 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	_spawn_star_display()
 	stats_changed.connect(_rebuild_range_indicator)
 	stats_changed.connect(_update_star_display)
+	if _trap_type == TrapType.GLUE_BOARD:
+		stats_changed.connect(_refresh_glue_slow)
 
 
 ## Lightweight setup for placement preview ghosts.
@@ -250,7 +251,10 @@ func get_rate_upgrade_cost() -> int:
 # ---------------------------------------------------------------------------
 
 ## Damage this trap would have after one damage upgrade.
+## For Glue Board, returns the next adhesion tier value from GLUE_ADHESION_LEVELS.
 func get_damage_after_upgrade() -> float:
+	if _trap_type == TrapType.GLUE_BOARD:
+		return GLUE_ADHESION_LEVELS[mini(_damage_level + 1, MAX_UPGRADE_LEVEL)]
 	return _damage + _base_damage * UPGRADE_DAMAGE_FACTOR
 
 ## Range this trap would have after one range upgrade.
@@ -271,10 +275,15 @@ func get_shots_per_sec_after_upgrade() -> float:
 # Upgrade — apply
 # ---------------------------------------------------------------------------
 
-## Increases damage by 20% of base. Only call when not maxed.
+## Increases damage by 20% of base (or advances to the next adhesion tier for Glue Board).
+## Only call when not maxed.
 func apply_damage_upgrade() -> void:
-	_damage += _base_damage * UPGRADE_DAMAGE_FACTOR
-	_damage_level += 1
+	if _trap_type == TrapType.GLUE_BOARD:
+		_damage_level += 1
+		_damage = GLUE_ADHESION_LEVELS[_damage_level]
+	else:
+		_damage += _base_damage * UPGRADE_DAMAGE_FACTOR
+		_damage_level += 1
 	_check_full_upgrade_bonus()
 	stats_changed.emit()
 
@@ -359,7 +368,7 @@ func get_adhesion_pct() -> float:
 
 ## Glue Board only — adhesion after the next damage upgrade, as a percentage.
 func get_adhesion_after_upgrade_pct() -> float:
-	return (_damage + _base_damage * UPGRADE_DAMAGE_FACTOR) * 100.0
+	return get_damage_after_upgrade() * 100.0
 
 ## Returns how many stats are currently at MAX_UPGRADE_LEVEL.
 func get_maxed_stat_count() -> int:
@@ -397,7 +406,7 @@ func get_sell_value() -> int:
 
 func _process(delta: float) -> void:
 	if _trap_type == TrapType.GLUE_BOARD:
-		_update_glue_slow()
+		_update_glue_aoe()
 		return
 
 	# Fogger idle animation: gentle sine-wave float between shots.
@@ -435,11 +444,12 @@ func _process(delta: float) -> void:
 
 
 func _exit_tree() -> void:
-	# Release the slow source so the enemy returns to normal speed immediately
-	# when the trap is sold or overwritten.
-	if is_instance_valid(_slowed_enemy):
-		_slowed_enemy.remove_slow_source(self)
-	_slowed_enemy = null
+	# Release all slow sources so every affected enemy returns to normal speed
+	# immediately when the trap is sold or overwritten.
+	for enemy in _glue_slowed_enemies:
+		if is_instance_valid(enemy):
+			enemy.remove_slow_source(self)
+	_glue_slowed_enemies.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -468,48 +478,41 @@ func _fire_fogger() -> bool:
 	return false
 
 
-## Targets the closest enemy in range and slows it. Switches to a new target at
-## most once per GLUE_APPLY_INTERVAL so enemies cannot be swapped every frame.
-func _update_glue_slow() -> void:
-	_glue_apply_cooldown -= get_process_delta_time()
+## Slows every enemy within range simultaneously.  Runs every frame.
+## Enemies are caught the first frame they cross the radius boundary and released
+## the first frame they leave it (or die).
+func _update_glue_aoe() -> void:
+	# Collect enemies to release — cannot erase from a Dictionary while iterating it.
+	var to_release: Array = []
+	for enemy in _glue_slowed_enemies:
+		if not is_instance_valid(enemy) or _xz_distance(enemy.global_position) > _range:
+			to_release.append(enemy)
+	for enemy in to_release:
+		if is_instance_valid(enemy):
+			enemy.remove_slow_source(self)
+		_glue_slowed_enemies.erase(enemy)
 
-	# If the current target has died or walked out of range, release it immediately
-	# so the slot is free — we don't wait for the interval to expire.
-	if is_instance_valid(_slowed_enemy):
-		if _xz_distance(_slowed_enemy.global_position) > _range:
-			_slowed_enemy.remove_slow_source(self)
-			_slowed_enemy = null
-	elif _slowed_enemy != null:
-		# Instance is no longer valid (enemy died).
-		_slowed_enemy = null
-
-	# Only re-target when the interval has elapsed.
-	if _glue_apply_cooldown > 0.0:
-		return
-
-	# Find the closest enemy in range.
-	var closest: Node3D = null
-	var closest_dist    := INF
+	# Apply slow to newly-in-range enemies and fire a cosmetic projectile for each.
+	var newly_caught := false
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
 			continue
-		var dist := _xz_distance(enemy.global_position)
-		if dist <= _range and dist < closest_dist:
-			closest_dist = dist
-			closest      = enemy
+		if _xz_distance(enemy.global_position) <= _range and not _glue_slowed_enemies.has(enemy):
+			enemy.add_slow_source(self, _damage)
+			_glue_slowed_enemies[enemy] = true
+			fired.emit(global_position, enemy.global_position, enemy, 0.0, _trap_type)
+			newly_caught = true
+	if newly_caught:
+		AudioManager.play_trap_fire(TrapType.GLUE_BOARD)
 
-	# Switch to the new target if it differs from the current one.
-	if closest != _slowed_enemy:
-		if is_instance_valid(_slowed_enemy):
-			_slowed_enemy.remove_slow_source(self)
-		_slowed_enemy = closest
-		if _slowed_enemy != null:
-			_slowed_enemy.add_slow_source(self, _damage)
-			# Cosmetic glue projectile — damage is 0, slow is the only effect.
-			fired.emit(global_position, _slowed_enemy.global_position, _slowed_enemy, 0.0, _trap_type)
-			AudioManager.play_trap_fire(TrapType.GLUE_BOARD)
 
-	_glue_apply_cooldown = GLUE_APPLY_INTERVAL
+## Re-applies the current adhesion factor to all already-slowed enemies.
+## Connected to stats_changed so an adhesion upgrade takes effect immediately
+## on enemies that are already inside the board's radius.
+func _refresh_glue_slow() -> void:
+	for enemy in _glue_slowed_enemies:
+		if is_instance_valid(enemy):
+			enemy.add_slow_source(self, _damage)
 
 
 ## Returns the enemy in range closest to this trap (used by Snap Trap).
