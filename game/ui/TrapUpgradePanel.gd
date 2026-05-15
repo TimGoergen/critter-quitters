@@ -28,43 +28,42 @@ const BORDER_W:   float = 2.0
 # so they work well as touch targets in their own right.
 const STAT_ROW_H: float = 100.0
 
-# Green palette — matches the DebugStartDialog aesthetic.
-const COLOR_BG          := Color(0.04, 0.22, 0.00, 0.50)
-const COLOR_OUTLINE     := Color(0.22, 0.60, 0.04, 1.0)
-const COLOR_DIVIDER     := Color(0.06, 0.22, 0.01, 1.0)
+# Size of the trap thumbnail rendered in the header.
+const HEADER_ICON_RENDER:  float = 90.0   # SubViewport pixel resolution
+const HEADER_ICON_DISPLAY: float = 64.0   # on-screen width and height (virtual pixels)
+
+# Theme colours — derived from the placed trap's identity colour at runtime.
+# Declared as vars so _apply_trap_theme() can assign them before _build_ui() runs
+# (GDScript const cannot be assigned after declaration).
+var COLOR_BG:                  Color  # panel background, semi-transparent dark tint
+var COLOR_OUTLINE:             Color  # panel border ring
+var COLOR_DIVIDER:             Color  # horizontal divider lines
+var COLOR_TEXT_DIM:            Color  # secondary text (stars label, affordability hint)
+var COLOR_BTN_NORMAL:          Color  # upgrade button resting state
+var COLOR_BTN_HOVER:           Color  # upgrade button hover
+var COLOR_BTN_PRESSED:         Color  # upgrade button press
+var COLOR_BTN_BORDER:          Color  # upgrade button outline (matches panel outline)
+var COLOR_BTN_MAX:             Color  # muted maxed-stat button background
+var COLOR_STAT_DISPLAY:        Color  # stat row background panel
+var COLOR_STAT_DISPLAY_BORDER: Color  # stat row panel border
+
+# Neutral colours — do not vary with trap type.
 const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
-const COLOR_TEXT_DIM    := Color(0.55, 0.78, 0.50, 1.0)
 const COLOR_STARS       := Color(0.85, 0.72, 0.10, 1.0)
-
-# Upgrade button palette — green.
-const COLOR_BTN_NORMAL  := Color(0.02, 0.15, 0.00, 1.0)
-const COLOR_BTN_HOVER   := Color(0.07, 0.32, 0.02, 1.0)
-const COLOR_BTN_PRESSED := Color(0.01, 0.10, 0.00, 1.0)
-const COLOR_BTN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
-
-# Max state — dark so it reads as "done, nothing left to upgrade."
-const COLOR_BTN_MAX        := Color(0.06, 0.14, 0.06, 1.0)
+# Max state border — always gray so it reads as permanently exhausted, not just unaffordable.
 const COLOR_BTN_MAX_BORDER := Color(0.55, 0.55, 0.55, 1.0)
-
 # Cost label — gold to match the Bug Bucks coin icon.
 const COLOR_GOLD := Color(1.00, 0.82, 0.10, 1.0)
 # Delta label — green when the player can buy, amber when they cannot.
 # Green signals opportunity; amber signals desire-but-blocked (cost risk).
 const COLOR_DELTA_AFFORDABLE   := Color(0.40, 0.90, 0.30, 1.0)
 const COLOR_DELTA_UNAFFORDABLE := Color(0.85, 0.50, 0.10, 1.0)
-
 # Neutral close button — gray, visually quiet.
 const COLOR_NEUTRAL_NORMAL  := Color(0.24, 0.24, 0.28, 1.0)
 const COLOR_NEUTRAL_HOVER   := Color(0.34, 0.34, 0.40, 1.0)
 const COLOR_NEUTRAL_PRESSED := Color(0.16, 0.16, 0.20, 1.0)
 const COLOR_NEUTRAL_BORDER  := Color(0.55, 0.55, 0.62, 1.0)
-
-# Stat display panel — static, not interactive.
-# Slightly darker and grayer than COLOR_BTN_NORMAL so "info" reads differently from "action."
-const COLOR_STAT_DISPLAY        := Color(0.06, 0.10, 0.06, 0.50)
-const COLOR_STAT_DISPLAY_BORDER := Color(0.18, 0.42, 0.06, 1.0)
-
-# Sell button — red to signal a destructive action, distinct from all green buttons.
+# Sell button — red to signal a destructive action, distinct from the themed buttons.
 const COLOR_BTN_SELL         := Color(0.28, 0.10, 0.06, 1.0)
 const COLOR_BTN_SELL_HOVER   := Color(0.38, 0.14, 0.08, 1.0)
 const COLOR_BTN_SELL_PRESSED := Color(0.18, 0.06, 0.04, 1.0)
@@ -103,6 +102,7 @@ func initialize(trap: Node) -> void:
 	GameState.bug_bucks_changed.connect(_on_bug_bucks_changed)
 	# Stay interactive while Arena pauses the tree.
 	process_mode = Node.PROCESS_MODE_ALWAYS
+	_apply_trap_theme()
 	_build_ui()
 	_refresh()
 
@@ -164,6 +164,11 @@ func _build_ui() -> void:
 	_lbl_title.add_theme_font_override("font", UIFonts.header())
 	header.add_child(_lbl_title)
 
+	# Trap thumbnail — a small top-down render of the trap type placed immediately
+	# right of the name so the player has an instant visual reference for which trap
+	# they are upgrading without reading the label.
+	header.add_child(_build_header_trap_icon())
+
 	# Sell button — red, in the header row next to the close button.
 	# Left side: trashcan icon. Right side: coin icon + refund amount.
 	_btn_sell = Button.new()
@@ -218,6 +223,71 @@ func _build_ui() -> void:
 	_dmg_row["btn"].pressed.connect(_on_btn_a)
 	_rng_row["btn"].pressed.connect(_on_btn_b)
 	_rate_row["btn"].pressed.connect(_on_btn_c)
+
+
+## Derives the panel's colour palette from the placed trap's identity colour.
+## All hue-tinted colours share the trap's hue; saturation and value factors
+## are chosen so the panel reads as clearly tinted while text stays legible.
+## Must be called after _trap is set and before _build_ui() runs.
+func _apply_trap_theme() -> void:
+	var base := _trap.get_base_color()
+	var h    := base.h
+	var s    := base.s
+	var v    := base.v
+
+	COLOR_BG                  = Color.from_hsv(h, s * 0.75, v * 0.15, 0.50)
+	COLOR_OUTLINE             = Color.from_hsv(h, s * 0.85, v * 0.62, 1.0)
+	COLOR_DIVIDER             = Color.from_hsv(h, s * 0.75, v * 0.22, 1.0)
+	COLOR_TEXT_DIM            = Color.from_hsv(h, s * 0.35, v * 0.78, 1.0)
+	COLOR_BTN_NORMAL          = Color.from_hsv(h, s * 0.90, v * 0.16, 1.0)
+	COLOR_BTN_HOVER           = Color.from_hsv(h, s * 0.90, v * 0.34, 1.0)
+	COLOR_BTN_PRESSED         = Color.from_hsv(h, s * 0.85, v * 0.10, 1.0)
+	COLOR_BTN_BORDER          = Color.from_hsv(h, s * 0.85, v * 0.62, 1.0)
+	COLOR_BTN_MAX             = Color.from_hsv(h, s * 0.20, v * 0.14, 1.0)
+	COLOR_STAT_DISPLAY        = Color.from_hsv(h, s * 0.40, v * 0.12, 0.50)
+	COLOR_STAT_DISPLAY_BORDER = Color.from_hsv(h, s * 0.70, v * 0.42, 1.0)
+
+
+## Builds a small top-down SubViewport render of the trap for the header row.
+## Keeps decorators (coloured background plate, shadow) so the trap's identity
+## colour is immediately visible; hides only the range indicator circle.
+func _build_header_trap_icon() -> Control:
+	var icon_ctrl := Control.new()
+	icon_ctrl.custom_minimum_size = Vector2(HEADER_ICON_DISPLAY, HEADER_ICON_DISPLAY)
+	icon_ctrl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon_ctrl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+
+	var svp := SubViewport.new()
+	svp.size                      = Vector2i(int(HEADER_ICON_RENDER), int(HEADER_ICON_RENDER))
+	svp.own_world_3d              = true
+	svp.transparent_bg            = true
+	svp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size       = 3.1   # same framing as the HUD selector panel icons
+	cam.position   = Vector3(0.0, 5.0, 0.0)
+	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
+	svp.add_child(cam)
+
+	var trap_preview := Node3D.new()
+	trap_preview.set_script(Trap)
+	trap_preview.initialize_preview(_trap.get_type())
+	svp.add_child(trap_preview)
+	# Range indicator is spawned and shown in _ready() for preview instances;
+	# hide it deferred so the circle does not appear in the thumbnail.
+	trap_preview.call_deferred("hide_range_indicator")
+
+	var svc := SubViewportContainer.new()
+	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	svc.stretch      = true
+	svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# StyleBoxEmpty prevents SubViewportContainer from drawing its default background.
+	svc.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	svc.add_child(svp)
+	icon_ctrl.add_child(svc)
+
+	return icon_ctrl
 
 
 # ---------------------------------------------------------------------------

@@ -404,6 +404,11 @@ func get_type_name() -> String:
 func get_cost() -> int:
 	return _cost
 
+## Returns the identity colour used for this trap's background plate, shadow, and footprint outline.
+## The upgrade panel reads this to derive its per-trap colour theme.
+func get_base_color() -> Color:
+	return _base_color
+
 ## Glue Board only — adhesion strength as a percentage (e.g. 50.0 for 50% slow).
 func get_adhesion_pct() -> float:
 	return _damage * 100.0
