@@ -1077,14 +1077,46 @@ func _on_wave_skip_requested() -> void:
 
 
 ## Handles the multiplied "Send Wave Early" button (×10, ×100).
-## Triggers the normal single-skip logic for the first wave, then stacks count-1
-## additional waves on top.  Each extra wave increments the wave counter and adds
-## enemies to the running queue without restarting the spawn timer.
+##
+## Countdown path: same logic as the single skip — cancel countdown, award the
+## time-remaining bonus, then launch count waves.  The first is non-additive (which
+## resets the spawn counter and starts the timer); the remaining count-1 are additive
+## (they extend the same counter without starting a second timer).
+##
+## Active-wave path: award the early-send bonus then stack count NEW waves onto the
+## running queue purely additively, never resetting the counter or starting a second
+## timer.  A second timer would race the existing one and cause out-of-order draining.
+## If the spawn chain had already finished (all enemies launched), restart it.
 func _on_wave_skip_multi_requested(count: int) -> void:
-	_on_wave_skip_requested()
-	for _i in range(count - 1):
-		GameState.current_wave += 1
-		_launch_wave(true)
+	if _countdown_active:
+		_countdown_active = false
+		if _seconds_remaining > 0:
+			var bonus := _seconds_remaining * GameState.early_wave_bonus_rate
+			GameState.add_bug_bucks(bonus)
+			GameState.early_wave_bonus_awarded.emit(bonus)
+		GameState.set_countdown(0)
+		# Non-additive for the first wave: sets _enemies_left_to_spawn and starts the timer.
+		# current_wave was already incremented by _start_wave() when this countdown began.
+		_launch_wave()
+		for _i in range(count - 1):
+			GameState.current_wave += 1
+			_launch_wave(true)
+	elif not (_active_enemies.is_empty() and _enemies_left_to_spawn == 0):
+		# Award the early-send bonus for all enemies not yet launched from the current wave.
+		var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY
+		GameState.add_bug_bucks(bonus)
+		GameState.early_wave_bonus_awarded.emit(bonus)
+		GameState.early_send_reward_changed.emit(0)
+		# If _enemies_left_to_spawn > 0, the spawn chain is running and its timer will
+		# drain the expanded queue automatically — no new timer needed.
+		# If it's 0 (all this wave's enemies already launched but enemies still alive),
+		# the chain has stopped and we need to restart it after adding to the queue.
+		var chain_running := _enemies_left_to_spawn > 0
+		for _i in range(count):
+			GameState.current_wave += 1
+			_launch_wave(true)
+		if not chain_running:
+			get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
 
 
 ## Begins spawning enemies for the wave.
