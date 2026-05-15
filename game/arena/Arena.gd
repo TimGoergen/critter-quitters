@@ -730,6 +730,7 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 	panel.initialize(_trap_nodes[anchor])
 	_upgrade_panel  = panel
 	_selected_trap  = _trap_nodes[anchor]
+	_selected_trap.show_range_indicator()
 	_show_selected_trap_outline(anchor)
 	_selected_trap_anchor = anchor
 	if _trap_outlines.has(anchor):
@@ -767,6 +768,8 @@ func _try_remove_trap_by_anchor(anchor: Vector2i) -> void:
 func _close_upgrade_panel() -> void:
 	if _upgrade_panel != null and is_instance_valid(_upgrade_panel):
 		_upgrade_panel.queue_free()
+	if _selected_trap != null and is_instance_valid(_selected_trap):
+		_selected_trap.hide_range_indicator()
 	_upgrade_panel = null
 	_selected_trap = null
 	_hide_selected_trap_outline()
@@ -780,6 +783,8 @@ func _close_upgrade_panel() -> void:
 
 
 func _on_upgrade_panel_closed() -> void:
+	if _selected_trap != null and is_instance_valid(_selected_trap):
+		_selected_trap.hide_range_indicator()
 	_upgrade_panel = null
 	_selected_trap = null
 	_hide_selected_trap_outline()

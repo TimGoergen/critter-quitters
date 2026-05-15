@@ -1118,6 +1118,8 @@ func _build_early_bonus_particles() -> void:
 
 
 func _on_early_bonus_awarded(coins: int) -> void:
+	if coins <= 0:
+		return
 	var particle_scale := 1 if _wave_multiplier == 1 else (2 if _wave_multiplier == 10 else 3)
 	# Divide by the multiplier first — coins is the total payout which is already scaled
 	# by wave count, so we derive a single-wave equivalent before applying the visual scale.

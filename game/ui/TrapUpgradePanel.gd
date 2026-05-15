@@ -29,7 +29,7 @@ const BORDER_W:   float = 2.0
 const STAT_ROW_H: float = 100.0
 
 # Green palette — matches the DebugStartDialog aesthetic.
-const COLOR_BG          := Color(0.04, 0.22, 0.00, 1.00)
+const COLOR_BG          := Color(0.04, 0.22, 0.00, 0.50)
 const COLOR_OUTLINE     := Color(0.22, 0.60, 0.04, 1.0)
 const COLOR_DIVIDER     := Color(0.06, 0.22, 0.01, 1.0)
 const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
@@ -61,7 +61,7 @@ const COLOR_NEUTRAL_BORDER  := Color(0.55, 0.55, 0.62, 1.0)
 
 # Stat display panel — static, not interactive.
 # Slightly darker and grayer than COLOR_BTN_NORMAL so "info" reads differently from "action."
-const COLOR_STAT_DISPLAY        := Color(0.06, 0.10, 0.06, 1.0)
+const COLOR_STAT_DISPLAY        := Color(0.06, 0.10, 0.06, 0.50)
 const COLOR_STAT_DISPLAY_BORDER := Color(0.18, 0.42, 0.06, 1.0)
 
 # Sell button — red to signal a destructive action, distinct from all green buttons.
@@ -78,7 +78,7 @@ const COLOR_BTN_SELL_BORDER  := Color(0.75, 0.22, 0.12, 1.0)
 var _trap:        Node   = null
 var _panel_rect:  Rect2  = Rect2()
 
-var _border:     ColorRect = null
+var _border:     Panel     = null
 var _bg:         ColorRect = null
 var _lbl_title:  Label     = null
 
@@ -128,20 +128,22 @@ func _build_ui() -> void:
 		Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
 	)
 
-	_border          = ColorRect.new()
-	_border.color    = COLOR_OUTLINE
+	# Panel with a transparent background so only the ring is drawn.
+	# A solid ColorRect here would block the 3D scene behind the semi-transparent _bg.
+	var border_style         := StyleBoxFlat.new()
+	border_style.bg_color     = Color(0.0, 0.0, 0.0, 0.0)
+	border_style.border_color = COLOR_OUTLINE
+	border_style.set_border_width_all(int(BORDER_W))
+	_border          = Panel.new()
 	_border.position = Vector2(px - BORDER_W, py - BORDER_W)
 	_border.size     = Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
+	_border.add_theme_stylebox_override("panel", border_style)
 	add_child(_border)
 
 	_bg            = ColorRect.new()
 	_bg.color      = COLOR_BG
 	_bg.position   = Vector2(px, py)
 	_bg.size       = Vector2(panel_w, panel_h)
-	# Moderate transparency so some arena context is visible beneath the panel.
-	# modulate propagates to all children, so stat rows and buttons are also
-	# semi-transparent without individually adjusting every color constant.
-	_bg.modulate.a = 0.50
 	add_child(_bg)
 
 	var inner_w := panel_w - PADDING * 2.0
