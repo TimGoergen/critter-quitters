@@ -141,7 +141,7 @@ func _build_ui() -> void:
 	# Moderate transparency so some arena context is visible beneath the panel.
 	# modulate propagates to all children, so stat rows and buttons are also
 	# semi-transparent without individually adjusting every color constant.
-	_bg.modulate.a = 0.82
+	_bg.modulate.a = 0.50
 	add_child(_bg)
 
 	var inner_w := panel_w - PADDING * 2.0
