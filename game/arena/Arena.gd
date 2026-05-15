@@ -29,6 +29,7 @@ const Enemy             = preload("res://enemies/Enemy.gd")
 const Trap              = preload("res://traps/Trap.gd")
 const Projectile        = preload("res://traps/Projectile.gd")
 const FogCloud          = preload("res://traps/FogCloud.gd")
+const UIFonts           = preload("res://ui/UIFonts.gd")
 const HUD               = preload("res://ui/HUD.gd")
 const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
 const EnemyStatsPanel   = preload("res://ui/EnemyStatsPanel.gd")
@@ -746,8 +747,11 @@ func _on_sell_trap_requested(anchor: Vector2i) -> void:
 ## Removes the trap at anchor and refunds placement cost plus all upgrade costs at 70%.
 func _try_remove_trap_by_anchor(anchor: Vector2i) -> void:
 	if _trap_nodes.has(anchor):
-		GameState.add_bug_bucks(_trap_nodes[anchor].get_sell_value())
-		_trap_nodes[anchor].queue_free()
+		var trap: Node3D = _trap_nodes[anchor]
+		var sell_value: int = trap.get_sell_value()
+		GameState.add_bug_bucks(sell_value)
+		_spawn_earn_label(_camera.unproject_position(trap.global_position), sell_value)
+		trap.queue_free()
 		_trap_nodes.erase(anchor)
 	if _trap_outlines.has(anchor):
 		_trap_outlines[anchor].queue_free()
@@ -1002,7 +1006,9 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 
 
 func _on_enemy_died(enemy: Node3D) -> void:
-	GameState.add_bug_bucks(enemy.get_bounty())
+	var bounty: int = enemy.get_bounty()
+	GameState.add_bug_bucks(bounty)
+	_spawn_earn_label(_camera.unproject_position(enemy.global_position), bounty)
 	_active_enemies.erase(enemy)
 	if enemy == _followed_enemy:
 		_set_followed_enemy(null)
@@ -1061,6 +1067,7 @@ func _on_wave_skip_requested() -> void:
 		if _seconds_remaining > 0:
 			var bonus := _seconds_remaining * GameState.early_wave_bonus_rate
 			GameState.add_bug_bucks(bonus)
+			_spawn_earn_label(get_viewport().get_visible_rect().get_center(), int(bonus))
 			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.set_countdown(0)
 		_launch_wave()
@@ -1070,6 +1077,7 @@ func _on_wave_skip_requested() -> void:
 		# enemies are out the reward is 0.
 		var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY
 		GameState.add_bug_bucks(bonus)
+		_spawn_earn_label(get_viewport().get_visible_rect().get_center(), int(bonus))
 		GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.early_send_reward_changed.emit(0)
 		GameState.current_wave += 1
@@ -1078,15 +1086,17 @@ func _on_wave_skip_requested() -> void:
 
 ## Handles the multiplied "Send Wave Early" button (×10, ×100).
 ##
-## Countdown path: same logic as the single skip — cancel countdown, award the
-## time-remaining bonus, then launch count waves.  The first is non-additive (which
-## resets the spawn counter and starts the timer); the remaining count-1 are additive
-## (they extend the same counter without starting a second timer).
+## All count waves begin simultaneously — each gets its own independent spawn timer so
+## enemies arrive count-per-tick rather than in a single elongated stream.
 ##
-## Active-wave path: award the early-send bonus then stack count NEW waves onto the
-## running queue purely additively, never resetting the counter or starting a second
-## timer.  A second timer would race the existing one and cause out-of-order draining.
-## If the spawn chain had already finished (all enemies launched), restart it.
+## Countdown path: cancel the countdown, award the time-remaining bonus, build the
+## combined enemy pool (count × _wave_size), then fire count timers at once.
+## The first timer is started by _launch_wave(); the remaining count-1 are started here.
+##
+## Active-wave path: award the early-send bonus for the current wave's unsent enemies,
+## discard them (paid for via the bonus), build count new waves, then start count timers.
+## If the previous spawn chain was still running its timer counts as one, so only
+## count-1 additional timers are needed.
 func _on_wave_skip_multi_requested(count: int) -> void:
 	if _countdown_active:
 		_countdown_active = false
@@ -1095,27 +1105,33 @@ func _on_wave_skip_multi_requested(count: int) -> void:
 			GameState.add_bug_bucks(bonus)
 			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.set_countdown(0)
-		# Non-additive for the first wave: sets _enemies_left_to_spawn and starts the timer.
-		# current_wave was already incremented by _start_wave() when this countdown began.
+		# Non-additive first call resets the counter and starts spawn stream 1.
+		# current_wave was already incremented by _start_wave() when the countdown began.
 		_launch_wave()
 		for _i in range(count - 1):
 			GameState.current_wave += 1
 			_launch_wave(true)
+		# Start streams 2 through count — same delay as stream 1 so all fire together.
+		for _i in range(count - 1):
+			get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
 	elif not (_active_enemies.is_empty() and _enemies_left_to_spawn == 0):
-		# Award the early-send bonus for all enemies not yet launched from the current wave.
+		# Award the early-send bonus for the current wave's unsent enemies, then discard
+		# them so count fresh waves start from a clean slate.
 		var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY
 		GameState.add_bug_bucks(bonus)
 		GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.early_send_reward_changed.emit(0)
-		# If _enemies_left_to_spawn > 0, the spawn chain is running and its timer will
-		# drain the expanded queue automatically — no new timer needed.
-		# If it's 0 (all this wave's enemies already launched but enemies still alive),
-		# the chain has stopped and we need to restart it after adding to the queue.
+		# A running spawn chain means one stream is already active; remember this before
+		# zeroing the counter so we don't start a redundant timer for it.
 		var chain_running := _enemies_left_to_spawn > 0
+		_enemies_left_to_spawn = 0
+		_wave_total_enemies    = 0
 		for _i in range(count):
 			GameState.current_wave += 1
 			_launch_wave(true)
-		if not chain_running:
+		# Start count streams total; the existing chain (if any) already counts as one.
+		var new_timers := count - (1 if chain_running else 0)
+		for _i in range(new_timers):
 			get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
 
 
@@ -2193,3 +2209,60 @@ func _set_floor_grid_lines(show_overview: bool, show_zoomed: bool) -> void:
 	if _floor_mi != null:
 		var currently_zoomed := _zoom_state == ZoomState.ZOOMED_IN
 		_floor_mi.material_override = _floor_mat_zoomed if currently_zoomed else _floor_mat_overview
+
+
+# ---------------------------------------------------------------------------
+# Earn label
+# ---------------------------------------------------------------------------
+
+## Spawns a gold "+N🪙" label at screen_pos that drifts upward and fades out over 1.4 s.
+## Called from every site that awards bug bucks so the player always sees what they earned.
+## Uses a Node2D subclass (_EarnTextNode) to draw the text — a Control (Label) would collapse
+## to zero size in a CanvasLayer because CanvasLayer bypasses the Control layout system.
+func _spawn_earn_label(screen_pos: Vector2, amount: int) -> void:
+	if amount <= 0:
+		return
+
+	var host := CanvasLayer.new()
+	host.layer        = 10
+	host.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(host)
+
+	var node := _EarnTextNode.new()
+	node.setup("+%d🪙" % amount, UIFonts.primary_bold(), 38)
+	# Offset slightly right and above the event so the text doesn't overlap the sprite.
+	node.position = screen_pos + Vector2(14.0, -10.0)
+	host.add_child(node)
+
+	# Drift upward while fading: EASE_OUT on position (starts fast, slows)
+	# and EASE_IN on alpha (holds briefly, then fades quickly) — natural "announcement" feel.
+	var tween := host.create_tween().set_parallel(true)
+	tween.tween_property(node, "position:y", node.position.y - 60.0, 1.4) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(node, "modulate:a", 0.0, 1.4) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+	get_tree().create_timer(1.6).timeout.connect(host.queue_free)
+
+
+## Draws a single line of gold text with a black outline.
+## Extends Node2D rather than Control so it renders correctly as a direct child of
+## a CanvasLayer — Control nodes need a parent Control for layout; Node2D nodes do not.
+class _EarnTextNode extends Node2D:
+	var _text:      String = ""
+	var _font:      Font   = null
+	var _font_size: int    = 38
+
+	func setup(text: String, font: Font, font_size: int) -> void:
+		_text      = text
+		_font      = font
+		_font_size = font_size
+
+	func _draw() -> void:
+		if _font == null:
+			return
+		# Outline drawn first so the gold fill sits on top.
+		draw_string_outline(_font, Vector2.ZERO, _text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			_font_size, 6, Color(0.0, 0.0, 0.0, 1.0))
+		draw_string(_font, Vector2.ZERO, _text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			_font_size, Color(1.00, 0.82, 0.10, 1.0))
