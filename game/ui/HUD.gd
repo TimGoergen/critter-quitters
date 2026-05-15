@@ -72,6 +72,10 @@ const INNER_BORDER_W: float = 2.0      # black separator line at the arena-facin
 const COLOR_SILVER_BORDER := Color(0.72, 0.72, 0.80, 1.0)
 const SILVER_BORDER_W: float = 4.0    # thickness of the silver panel border lines
 
+const PAUSE_BANNER_H:          float = 56.0
+const PAUSE_BANNER_BORDER_W:   float = 6.0
+const COLOR_PAUSE_BANNER_BG := Color(0.12, 0.12, 0.14, 0.80)  # dark gray, alpha matches upgrade panel
+
 # INCOMING arena overlay — container parents both labels so one modulate write hides both.
 var _countdown_container:      Control
 var _countdown_wave_label:     Label
@@ -94,6 +98,8 @@ var _speed_btn:      Button
 var _speed_icon_lbl: Label   # ">>" icon; black at 1×, bright gold at 2×
 var _pause_btn:      Button
 var _pause_bar_icon: Control
+var _pause_banner:       Control = null
+var _pause_banner_tween: Tween   = null
 var _exit_btn:       Button
 var _restart_btn:    Button
 var _zoom_btn:       Button  # toggles overview ↔ zoomed-in
@@ -176,6 +182,7 @@ func _build_ui() -> void:
 	_build_settings_dialog()   # must be after right panel so it draws on top
 	_build_run_over_overlay()
 	_build_panel_borders()     # drawn last so borders appear on top of all panel content
+	_build_pause_banner()      # drawn after borders so it slides over the top edge
 
 
 # ---------------------------------------------------------------------------
@@ -729,6 +736,67 @@ func _build_panel_borders() -> void:
 	_add_border_line(1.0, 0.0, 1.0, 1.0, -RIGHT_PANEL_W - SILVER_BORDER_W,  0.0, -RIGHT_PANEL_W,  0.0)
 
 
+## Full-width bar that slides down from the top edge when the game is paused.
+## Starts entirely above the viewport (offset_top = -PAUSE_BANNER_H) and tweens
+## down to offset_top = 0 on pause, back up on unpause.
+func _build_pause_banner() -> void:
+	_pause_banner = Control.new()
+	_pause_banner.anchor_left   = 0.0
+	_pause_banner.anchor_right  = 1.0
+	_pause_banner.anchor_top    = 0.0
+	_pause_banner.anchor_bottom = 0.0
+	# Hidden above the screen until the first pause.
+	_pause_banner.offset_top    = -PAUSE_BANNER_H
+	_pause_banner.offset_bottom = 0.0
+	_pause_banner.process_mode  = Node.PROCESS_MODE_ALWAYS
+	_pause_banner.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	add_child(_pause_banner)
+
+	# Silver outer rectangle — forms the border by being slightly larger than the inner fill.
+	var silver_bg := ColorRect.new()
+	silver_bg.color              = COLOR_SILVER_BORDER
+	silver_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_pause_banner.add_child(silver_bg)
+
+	# Dark gray fill inset by the border width on all sides.
+	var dark_bg := ColorRect.new()
+	dark_bg.color         = COLOR_PAUSE_BANNER_BG
+	dark_bg.anchor_left   = 0.0
+	dark_bg.anchor_right  = 1.0
+	dark_bg.anchor_top    = 0.0
+	dark_bg.anchor_bottom = 1.0
+	dark_bg.offset_left   = PAUSE_BANNER_BORDER_W
+	dark_bg.offset_right  = -PAUSE_BANNER_BORDER_W
+	dark_bg.offset_top    = PAUSE_BANNER_BORDER_W
+	dark_bg.offset_bottom = -PAUSE_BANNER_BORDER_W
+	_pause_banner.add_child(dark_bg)
+
+	var label := Label.new()
+	label.text                 = "Paused"
+	label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_override("font", UIFonts.header())
+	label.add_theme_font_size_override("font_size", 28)
+	label.add_theme_color_override("font_color", COLOR_TEXT)
+	label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	_pause_banner.add_child(label)
+
+
+## Animates the pause banner into or out of view.
+## Pass true to slide it down (paused), false to slide it back up (unpaused).
+func _show_pause_banner(visible_state: bool) -> void:
+	if _pause_banner_tween:
+		_pause_banner_tween.kill()
+	_pause_banner_tween = create_tween()
+	_pause_banner_tween.set_ease(Tween.EASE_OUT)
+	_pause_banner_tween.set_trans(Tween.TRANS_CUBIC)
+	var target_top:    float = 0.0              if visible_state else -PAUSE_BANNER_H
+	var target_bottom: float = PAUSE_BANNER_H   if visible_state else 0.0
+	_pause_banner_tween.tween_property(_pause_banner, "offset_top",    target_top,    0.22)
+	_pause_banner_tween.parallel().tween_property(_pause_banner, "offset_bottom", target_bottom, 0.22)
+
+
 func _add_border_line(al: float, at: float, ar: float, ab: float,
 		ol: float, ot: float, or_: float, ob: float) -> void:
 	var line          := ColorRect.new()
@@ -1108,9 +1176,11 @@ func _on_pause_btn_pressed() -> void:
 	if _is_paused:
 		_pause_btn.text = "▶"
 		_pause_bar_icon.hide()
+		_show_pause_banner(true)
 	else:
 		_pause_btn.text = ""
 		_pause_bar_icon.show()
+		_show_pause_banner(false)
 
 
 func _on_multiplier_btn_pressed() -> void:
@@ -1180,6 +1250,8 @@ func _on_run_ended() -> void:
 	_is_paused        = false
 	_pause_btn.text   = ""
 	_pause_bar_icon.show()
+	# Hide the pause banner — the run-over overlay provides context instead.
+	_show_pause_banner(false)
 	_run_over_overlay.visible = true
 	get_tree().paused = true
 
