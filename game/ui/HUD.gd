@@ -78,11 +78,15 @@ var _incoming_font:            Font   # bold Bebas Neue — stored so layout can
 
 var _send_wave_btn:           Button
 var _wave_timer_icon:         Control          # _WaveTimerIcon — animated countdown ring
+var _multiplier_btn:          Button           # cycles x1 → x10 → x100 → x1
+var _multiplier_label:        Label
 var _send_wave_reward_row:    HBoxContainer
 var _send_wave_reward_label:  Label
 var _early_bonus_particles:   CPUParticles2D
 var _run_over_overlay:        Control
-var _displayed_segment_count: int = 0          # last integer segment count shown; reward text only refreshes when this changes
+var _displayed_segment_count: int = 0   # last integer segment; reward text only refreshes when this changes
+var _wave_max_reward:         int = 0   # full reward at wave launch; reward display scales proportionally to this
+var _wave_multiplier:         int = 1   # current send-wave multiplier; cycles 1 → 10 → 100 → 1
 
 var _speed_btn:      Button
 var _speed_icon_lbl: Label   # ">>" icon; black at 1×, bright gold at 2×
@@ -416,25 +420,53 @@ void fragment() {
 	_infestation_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	inf_overlay.add_child(_infestation_label)
 
-	# --- Send Wave button — square timer icon, vertically centred between the
-	# infestation bar and the bottom controls via equal expand-fill spacers.
+	# --- Send Wave row — timer icon (left) + multiplier toggle (right),
+	# vertically centred via equal expand-fill spacers above and below.
 	var send_spacer_top := Control.new()
 	send_spacer_top.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(send_spacer_top)
 
+	var send_row := HBoxContainer.new()
+	send_row.add_theme_constant_override("separation", 6)
+	send_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	send_row.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	vbox.add_child(send_row)
+
 	_send_wave_btn = Button.new()
 	_send_wave_btn.text                  = ""
-	_send_wave_btn.custom_minimum_size   = Vector2(140, 140)
-	_send_wave_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_send_wave_btn.custom_minimum_size   = Vector2(100, 100)
+	_send_wave_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
 	_send_wave_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_apply_timer_btn_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
-	vbox.add_child(_send_wave_btn)
+	send_row.add_child(_send_wave_btn)
 
 	_wave_timer_icon = _WaveTimerIcon.new()
 	_wave_timer_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_wave_timer_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_send_wave_btn.add_child(_wave_timer_icon)
+
+	# Multiplier toggle — right of the timer icon, cycles x1 → x10 → x100 → x1.
+	# Pressing the next-wave button triggers that many wave-sends simultaneously.
+	_multiplier_btn = Button.new()
+	_multiplier_btn.text                  = ""
+	_multiplier_btn.custom_minimum_size   = Vector2(0, 100)
+	_multiplier_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_multiplier_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_apply_gold_button_style(_multiplier_btn)
+	_multiplier_btn.pressed.connect(_on_multiplier_btn_pressed)
+	send_row.add_child(_multiplier_btn)
+
+	_multiplier_label = Label.new()
+	_multiplier_label.text                 = "×1"
+	_multiplier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_multiplier_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_multiplier_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_multiplier_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	_multiplier_label.add_theme_font_override("font", UIFonts.primary_bold())
+	_multiplier_label.add_theme_font_size_override("font_size", 22)
+	_multiplier_label.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
+	_multiplier_btn.add_child(_multiplier_label)
 
 	# Reward row — coin icon + bug bucks earned for sending the wave early.
 	# Appears just below the timer icon; hidden when no bonus is on offer.
@@ -851,6 +883,7 @@ func _on_wave_changed(wave: int) -> void:
 	# first spawn_progress update always refreshes the reward text.
 	_wave_timer_icon.set("spawn_progress", 0.0)
 	_displayed_segment_count = 0
+	_wave_max_reward          = 0
 
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
@@ -871,10 +904,17 @@ func _on_wave_spawn_progress_changed(spawned: int, total: int) -> void:
 	var progress    := float(spawned) / float(total)
 	var new_segment := int(floor(8.0 * progress))
 	_wave_timer_icon.set("spawn_progress", progress)
+	# Capture the maximum reward at wave launch so the displayed amount stays
+	# proportional to the green segments even as the total enemy count grows
+	# mid-wave from additive (multi-skip) launches.
+	if spawned == 0:
+		_wave_max_reward = total * GameState.EARLY_SEND_PER_ENEMY
 	# Update the reward text only when a segment flips — same cadence as the visual.
+	# Amount scales with the fraction of green segments remaining (8 green = full, 0 green = 0).
 	if spawned == 0 or new_segment != _displayed_segment_count:
-		_displayed_segment_count       = new_segment
-		_send_wave_reward_label.text   = "%d" % ((total - spawned) * GameState.EARLY_SEND_PER_ENEMY)
+		_displayed_segment_count     = new_segment
+		var segments_remaining       := 8 - _displayed_segment_count
+		_send_wave_reward_label.text  = "%d" % (_wave_max_reward * segments_remaining / 8)
 
 
 func _process(delta: float) -> void:
@@ -1037,9 +1077,21 @@ func _on_pause_btn_pressed() -> void:
 		_pause_bar_icon.show()
 
 
+func _on_multiplier_btn_pressed() -> void:
+	AudioManager.play_ui("button")
+	match _wave_multiplier:
+		1:   _wave_multiplier = 10
+		10:  _wave_multiplier = 100
+		100: _wave_multiplier = 1
+	_multiplier_label.text = "×%d" % _wave_multiplier
+
+
 func _on_send_wave_pressed() -> void:
 	AudioManager.play_ui("button")
-	GameState.wave_skip_requested.emit()
+	if _wave_multiplier > 1:
+		GameState.wave_skip_multi_requested.emit(_wave_multiplier)
+	else:
+		GameState.wave_skip_requested.emit()
 
 
 func _build_early_bonus_particles() -> void:
@@ -1054,14 +1106,14 @@ func _build_early_bonus_particles() -> void:
 	_early_bonus_particles.initial_velocity_min  = 250.0
 	_early_bonus_particles.initial_velocity_max  = 450.0
 	_early_bonus_particles.gravity               = Vector2(0.0, 350.0)
-	_early_bonus_particles.scale_amount_min      = 0.125
-	_early_bonus_particles.scale_amount_max      = 0.225
+	_early_bonus_particles.scale_amount_min      = 0.1875   # 1.5× the base 0.125
+	_early_bonus_particles.scale_amount_max      = 0.3375   # 1.5× the base 0.225
 	_early_bonus_particles.texture               = load("res://assets/bug_buck_coin.png") as Texture2D
 	add_child(_early_bonus_particles)
 
 
 func _on_early_bonus_awarded(coins: int) -> void:
-	_early_bonus_particles.amount   = max(1, coins / 4)
+	_early_bonus_particles.amount   = max(3, coins * 3 / 4)   # 3× the previous coin/4 formula
 	_early_bonus_particles.position = _send_wave_btn.get_global_rect().get_center()
 	_early_bonus_particles.restart()
 

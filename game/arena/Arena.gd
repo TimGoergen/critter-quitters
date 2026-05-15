@@ -263,6 +263,7 @@ func _ready() -> void:
 	_enemy_stats_panel = EnemyStatsPanel.new()
 	add_child(_enemy_stats_panel)
 	GameState.wave_skip_requested.connect(_on_wave_skip_requested)
+	GameState.wave_skip_multi_requested.connect(_on_wave_skip_multi_requested)
 	GameState.run_ended.connect(_close_upgrade_panel)
 	GameState.run_ended.connect(_on_run_ended_camera)
 	GameState.trap_type_selected.connect(_on_trap_type_changed)
@@ -671,23 +672,42 @@ func _try_remove_trap(cell: Vector2i) -> void:
 	if not _trap_anchors.has(cell):
 		return
 	_close_upgrade_panel()
-
 	var anchor: Vector2i = _trap_anchors[cell]
-
 	if _trap_nodes.has(anchor):
-		GameState.add_bug_bucks(int(_trap_nodes[anchor].get_cost() * 0.7))
-		_trap_nodes[anchor].queue_free()
-		_trap_nodes.erase(anchor)
+		_spawn_sell_coin_burst(_trap_nodes[anchor])
+	_try_remove_trap_by_anchor(anchor)
 
-	if _trap_outlines.has(anchor):
-		_trap_outlines[anchor].queue_free()
-		_trap_outlines.erase(anchor)
-	if _hovered_trap_anchor == anchor:
-		_hovered_trap_anchor = Vector2i(-1, -1)
 
-	for c in _get_trap_cells(anchor):
-		_grid.remove_trap(c)
-		_trap_anchors.erase(c)
+## Spawns gold coin particles at the trap's screen position, identical to the
+## burst shown when selling via the upgrade panel.
+func _spawn_sell_coin_burst(trap_node: Node3D) -> void:
+	var burst_pos := _camera.unproject_position(trap_node.global_position)
+
+	var host := CanvasLayer.new()
+	host.layer        = 10
+	host.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(host)
+
+	var particles := CPUParticles2D.new()
+	particles.process_mode         = Node.PROCESS_MODE_ALWAYS
+	particles.position             = burst_pos
+	particles.amount               = 28
+	particles.lifetime             = 0.9
+	particles.one_shot             = true
+	particles.explosiveness        = 1.0
+	particles.emitting             = true
+	particles.direction            = Vector2(0.0, -1.0)
+	particles.spread               = 180.0
+	particles.initial_velocity_min = 100.0
+	particles.initial_velocity_max = 260.0
+	particles.gravity              = Vector2(0.0, 380.0)
+	particles.scale_amount_min     = 5.0
+	particles.scale_amount_max     = 10.0
+	particles.color                = Color(1.00, 0.82, 0.10, 1.0)
+	host.add_child(particles)
+
+	var timer := get_tree().create_timer(particles.lifetime + 0.2)
+	timer.timeout.connect(host.queue_free)
 
 
 ## Opens the upgrade panel for the trap at anchor, closing any existing panel first.
@@ -1056,12 +1076,29 @@ func _on_wave_skip_requested() -> void:
 		_launch_wave()
 
 
+## Handles the multiplied "Send Wave Early" button (×10, ×100).
+## Triggers the normal single-skip logic for the first wave, then stacks count-1
+## additional waves on top.  Each extra wave increments the wave counter and adds
+## enemies to the running queue without restarting the spawn timer.
+func _on_wave_skip_multi_requested(count: int) -> void:
+	_on_wave_skip_requested()
+	for _i in range(count - 1):
+		GameState.current_wave += 1
+		_launch_wave(true)
+
+
 ## Begins spawning enemies for the wave.
+## additive=true layers enemies onto an already-running wave without restarting the
+## spawn timer — the existing timer drains the combined queue.
 ## In static mode, builds a fixed queue of 3 × each enemy type in ascending tier order
 ## so every type is visible for review regardless of the current wave number.
 ## In normal mode, spawns _wave_size enemies using the usual random composition.
-func _launch_wave() -> void:
-	if _static_enemies_mode:
+func _launch_wave(additive: bool = false) -> void:
+	var new_enemies: int
+	# Static mode rebuilds the full typed queue only for fresh (non-additive) waves.
+	# Additive calls in static mode still add wave_size enemies but skip the queue rebuild
+	# so the existing typed order is preserved.
+	if _static_enemies_mode and not additive:
 		_static_spawn_queue.clear()
 		var types: Array[Enemy.EnemyType] = [
 			Enemy.EnemyType.GNAT,
@@ -1074,15 +1111,31 @@ func _launch_wave() -> void:
 		for t: Enemy.EnemyType in types:
 			for _i in STATIC_GROUP_SIZE:
 				_static_spawn_queue.append(t)
-		_enemies_left_to_spawn = _static_spawn_queue.size()
+		new_enemies = _static_spawn_queue.size()
 	else:
-		_enemies_left_to_spawn = _wave_size
-	_wave_total_enemies = _enemies_left_to_spawn
+		new_enemies = _wave_size
+
+	if additive:
+		# Layer on top of the running wave — the existing spawn timer drains both.
+		_enemies_left_to_spawn += new_enemies
+		_wave_total_enemies    += new_enemies
+	else:
+		_enemies_left_to_spawn  = new_enemies
+		_wave_total_enemies     = new_enemies
+
 	# Publish the full reward so the HUD can display it before the first spawn.
 	GameState.early_send_reward_changed.emit(_enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY)
-	# Notify the HUD that a new wave is starting with 0 enemies spawned so far.
-	GameState.wave_spawn_progress_changed.emit(0, _wave_total_enemies)
-	get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
+	# For additive launches the spawn progress position doesn't reset — progress stays
+	# where it was relative to the expanded total.  For a fresh wave it resets to 0.
+	if additive:
+		var already_spawned := _wave_total_enemies - _enemies_left_to_spawn
+		GameState.wave_spawn_progress_changed.emit(already_spawned, _wave_total_enemies)
+	else:
+		GameState.wave_spawn_progress_changed.emit(0, _wave_total_enemies)
+
+	# Only start the spawn timer for fresh waves; additive waves share the running timer.
+	if not additive:
+		get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
 
 
 ## Spawns one enemy then schedules the next, until the wave is exhausted.

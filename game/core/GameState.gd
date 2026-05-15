@@ -57,6 +57,10 @@ signal wave_countdown_changed(seconds_remaining: int)
 ## Emitted when the player requests to skip the countdown and launch the next wave immediately.
 signal wave_skip_requested
 
+## Emitted when the player uses the multiplier toggle and wants to launch several waves at once.
+## count is the number of waves to launch simultaneously (matches the ×1/×10/×100 setting).
+signal wave_skip_multi_requested(count: int)
+
 ## Emitted when the player skips the countdown and receives a coin bonus for the remaining time.
 signal early_wave_bonus_awarded(coins: int)
 
