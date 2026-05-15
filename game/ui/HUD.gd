@@ -1601,14 +1601,14 @@ class _WaveTimerIcon extends Control:
 		var p1 := Vector2(tcx - tr * 0.52, tcy - tr * 0.82)
 		var p2 := Vector2(tcx + tr * 0.76, tcy)
 		var p3 := Vector2(tcx - tr * 0.52, tcy + tr * 0.82)
-		draw_colored_polygon(PackedVector2Array([p1, p2, p3]), PackedColorArray([COLOR_PLAY]))
+		draw_colored_polygon(PackedVector2Array([p1, p2, p3]), COLOR_PLAY)
 
 		# Inner (yellow) triangle at 60% scale around the centroid — creates the hollow outline.
 		var g  := (p1 + p2 + p3) / 3.0
 		var q1 := g + (p1 - g) * 0.60
 		var q2 := g + (p2 - g) * 0.60
 		var q3 := g + (p3 - g) * 0.60
-		draw_colored_polygon(PackedVector2Array([q1, q2, q3]), PackedColorArray([COLOR_CENTER]))
+		draw_colored_polygon(PackedVector2Array([q1, q2, q3]), COLOR_CENTER)
 
 
 	## Draws a filled annular sector (pie-slice of a ring) using a closed polygon.
@@ -1616,14 +1616,11 @@ class _WaveTimerIcon extends Control:
 	func _draw_annular_sector(center: Vector2, outer_r: float, inner_r: float,
 							   start_a: float, end_a: float, color: Color,
 							   steps: int = 16) -> void:
-		var pts    := PackedVector2Array()
-		var colors := PackedColorArray()
+		var pts := PackedVector2Array()
 		for i in range(steps + 1):
 			var a := lerp(start_a, end_a, float(i) / float(steps))
 			pts.append(center + Vector2(cos(a), sin(a)) * outer_r)
-			colors.append(color)
 		for i in range(steps + 1):
 			var a := lerp(end_a, start_a, float(i) / float(steps))
 			pts.append(center + Vector2(cos(a), sin(a)) * inner_r)
-			colors.append(color)
-		draw_colored_polygon(pts, colors)
+		draw_colored_polygon(pts, color)
