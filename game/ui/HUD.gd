@@ -1628,48 +1628,38 @@ class _ZoomIcon extends Control:
 			draw_line(Vector2(cx, cy - arm), Vector2(cx, cy + arm), icon_color, line)
 
 
-## Draws gray arcs over the SendNextWave sprite's green ring segments as enemies spawn.
-## Sits on top of a TextureRect showing the sprite — this class only draws the gray fills,
-## leaving unspawned segments transparent so the sprite's green shows through.
-##
-## Segment geometry matches the sprite's proportions: 8 segments, outer_r = 84% of half-width,
-## inner_r = 65%, 5° gaps on each side of every 45° slot.  A gray arc sweeps across each
-## segment from its leading edge as that segment's 1/8 spawn bucket fills.
+## Draws the outer progress ring on the Send Next Wave button.
+## A solid green ring represents the full reward available; a gray arc sweeps clockwise
+## from the top as enemies spawn, consuming the green to show how much reward is left.
+## Sits on top of the TextureRect sprite, which provides the center play button graphic.
 class _WaveSegmentOverlay extends Control:
 	var spawn_progress: float = 0.0:
 		set(v):
 			spawn_progress = clampf(v, 0.0, 1.0)
 			queue_redraw()
 
-	const SEGMENT_COUNT  := 8
-	const COLOR_SEG_GRAY := Color(0.65, 0.65, 0.65, 1.0)
+	const COLOR_SEG_GREEN := Color(0.00, 1.00, 0.27, 1.0)   # bright green
+	const COLOR_SEG_GRAY  := Color(0.65, 0.65, 0.65, 1.0)
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_RESIZED:
 			queue_redraw()
 
 	func _draw() -> void:
-		if spawn_progress <= 0.0:
-			return
-		var cx       := size.x * 0.5
-		var cy       := size.y * 0.5
-		var base     := minf(cx, cy)
-		var outer_r  := base * 0.84
-		var inner_r  := base * 0.65
-		var mid_r    := (outer_r + inner_r) * 0.5
-		var arc_w    := outer_r - inner_r
-		var gap_half := deg_to_rad(5.0)
+		var cx      := size.x * 0.5
+		var cy      := size.y * 0.5
+		var base    := minf(cx, cy)
+		var outer_r := base * 0.84
+		var inner_r := base * 0.65
+		var mid_r   := (outer_r + inner_r) * 0.5
+		var arc_w   := outer_r - inner_r
 
-		for i in range(SEGMENT_COUNT):
-			var slot_start := deg_to_rad(-90.0 + float(i) * 45.0)
-			var seg_start  := slot_start + gap_half
-			var seg_end    := slot_start + deg_to_rad(45.0) - gap_half
-			var bucket_lo  := float(i)     / float(SEGMENT_COUNT)
-			var bucket_hi  := float(i + 1) / float(SEGMENT_COUNT)
-			var fill: float = clampf((spawn_progress - bucket_lo) / (bucket_hi - bucket_lo), 0.0, 1.0)
-			if fill <= 0.0:
-				continue
-			# Sweep the gray arc from the segment's leading edge, covering fill% of the arc.
-			# Full-opacity gray completely covers the sprite's green for each consumed portion.
-			var sweep_end: float = lerp(seg_start, seg_end, fill)
-			draw_arc(Vector2(cx, cy), mid_r, seg_start, sweep_end, 32, COLOR_SEG_GRAY, arc_w, true)
+		# Full green ring — always drawn as the reward-available baseline.
+		draw_arc(Vector2(cx, cy), mid_r, 0.0, TAU, 64, COLOR_SEG_GREEN, arc_w, true)
+
+		# Gray arc sweeps clockwise from the top as enemies spawn,
+		# covering the green proportional to spawn_progress.
+		if spawn_progress > 0.0:
+			var start_angle := deg_to_rad(-90.0)
+			var end_angle   : float = start_angle + TAU * spawn_progress
+			draw_arc(Vector2(cx, cy), mid_r, start_angle, end_angle, 64, COLOR_SEG_GRAY, arc_w, true)
