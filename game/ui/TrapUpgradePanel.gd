@@ -266,7 +266,11 @@ func _build_header_trap_icon() -> Control:
 
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.size       = 3.1   # same framing as the HUD selector panel icons
+	# Background plate is 1.85 world units wide; cam.size = 1.9 makes it fill ~97%
+	# of the viewport so the coloured icon looks as tall as the adjacent buttons.
+	# (The HUD selector icons use 3.1 but those hide decorators and show only the
+	# small trap model, so the looser framing is appropriate there.)
+	cam.size       = 1.9
 	cam.position   = Vector3(0.0, 5.0, 0.0)
 	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
 	svp.add_child(cam)
