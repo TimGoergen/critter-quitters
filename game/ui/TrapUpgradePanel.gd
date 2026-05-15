@@ -29,7 +29,7 @@ const BORDER_W:   float = 2.0
 const STAT_ROW_H: float = 100.0
 
 # Green palette — matches the DebugStartDialog aesthetic.
-const COLOR_BG          := Color(0.04, 0.22, 0.00, 0.95)
+const COLOR_BG          := Color(0.04, 0.22, 0.00, 1.00)
 const COLOR_OUTLINE     := Color(0.22, 0.60, 0.04, 1.0)
 const COLOR_DIVIDER     := Color(0.06, 0.22, 0.01, 1.0)
 const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
@@ -134,10 +134,14 @@ func _build_ui() -> void:
 	_border.size     = Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
 	add_child(_border)
 
-	_bg          = ColorRect.new()
-	_bg.color    = COLOR_BG
-	_bg.position = Vector2(px, py)
-	_bg.size     = Vector2(panel_w, panel_h)
+	_bg            = ColorRect.new()
+	_bg.color      = COLOR_BG
+	_bg.position   = Vector2(px, py)
+	_bg.size       = Vector2(panel_w, panel_h)
+	# Moderate transparency so some arena context is visible beneath the panel.
+	# modulate propagates to all children, so stat rows and buttons are also
+	# semi-transparent without individually adjusting every color constant.
+	_bg.modulate.a = 0.82
 	add_child(_bg)
 
 	var inner_w := panel_w - PADDING * 2.0

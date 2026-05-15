@@ -1143,11 +1143,12 @@ func _on_wave_skip_multi_requested(count: int) -> void:
 ## In normal mode, spawns _wave_size enemies using the usual random composition.
 func _launch_wave(additive: bool = false) -> void:
 	var new_enemies: int
-	# Static mode rebuilds the full typed queue only for fresh (non-additive) waves.
-	# Additive calls in static mode still add wave_size enemies but skip the queue rebuild
-	# so the existing typed order is preserved.
-	if _static_enemies_mode and not additive:
-		_static_spawn_queue.clear()
+	if _static_enemies_mode:
+		# Both fresh and additive waves use the same typed queue.
+		# Fresh: clear and rebuild. Additive: append another pass so the queue
+		# always has enough entries to satisfy _enemies_left_to_spawn.
+		if not additive:
+			_static_spawn_queue.clear()
 		var types: Array[Enemy.EnemyType] = [
 			Enemy.EnemyType.GNAT,
 			Enemy.EnemyType.ANT,
@@ -1159,7 +1160,7 @@ func _launch_wave(additive: bool = false) -> void:
 		for t: Enemy.EnemyType in types:
 			for _i in STATIC_GROUP_SIZE:
 				_static_spawn_queue.append(t)
-		new_enemies = _static_spawn_queue.size()
+		new_enemies = types.size() * STATIC_GROUP_SIZE
 	else:
 		new_enemies = _wave_size
 
