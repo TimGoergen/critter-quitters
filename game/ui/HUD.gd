@@ -763,14 +763,21 @@ func _build_settings_dialog() -> void:
 	# Scrollable content — vertical scroll only; items expand to fill the panel width.
 	# Adding new settings to content_vbox automatically becomes scrollable.
 	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical        = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode     = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.size_flags_vertical    = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	dialog_vbox.add_child(scroll)
+
+	# Extra right padding so CheckButton toggle rings (which draw slightly outside
+	# their rect) are not clipped by the ScrollContainer's content boundary.
+	var content_margin := MarginContainer.new()
+	content_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_margin.add_theme_constant_override("margin_right", 6)
+	scroll.add_child(content_margin)
 
 	var content_vbox := VBoxContainer.new()
 	content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	content_vbox.add_theme_constant_override("separation", 10)
-	scroll.add_child(content_vbox)
+	content_margin.add_child(content_vbox)
 
 	# --- AUDIO section ---
 	_build_section_header(content_vbox, "AUDIO")
