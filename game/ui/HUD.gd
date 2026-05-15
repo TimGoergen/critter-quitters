@@ -22,7 +22,7 @@ const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM    := Color(0.60, 0.60, 0.65, 1.0)
 const COLOR_COUNTDOWN        := Color(1.00, 1.00, 1.00, 1.00)
 const COLOR_COUNTDOWN_SHADOW := Color(0.00, 0.00, 0.00, 0.70)
-const COLOR_INCOMING         := Color(0.90, 0.15, 0.15, 1.00)
+const COLOR_INCOMING         := Color(1.00, 1.00, 1.00, 1.00)
 const COLOR_INFESTED    := Color(0.85, 0.10, 0.10, 1.0)
 const COLOR_OVERLAY_BG  := Color(0.04, 0.02, 0.02, 0.82)
 
@@ -584,7 +584,7 @@ func _build_incoming_overlay() -> void:
 	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_wave_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_countdown_wave_label.add_theme_font_override("font", _incoming_font)
-	_countdown_wave_label.add_theme_color_override("font_color", Color(0.90, 0.15, 0.15, 0.48))
+	_countdown_wave_label.add_theme_color_override("font_color", Color(1.00, 1.00, 1.00, 0.48))
 	_countdown_wave_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_countdown_container.add_child(_countdown_wave_label)
 
@@ -594,7 +594,7 @@ func _build_incoming_overlay() -> void:
 	_countdown_seconds_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_seconds_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_countdown_seconds_label.add_theme_font_override("font", _incoming_font)
-	_countdown_seconds_label.add_theme_color_override("font_color", Color(0.90, 0.15, 0.15, 0.48))
+	_countdown_seconds_label.add_theme_color_override("font_color", Color(1.00, 1.00, 1.00, 0.48))
 	_countdown_seconds_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_countdown_container.add_child(_countdown_seconds_label)
 
