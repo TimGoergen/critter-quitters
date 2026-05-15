@@ -2236,7 +2236,7 @@ func _spawn_earn_label(screen_pos: Vector2, amount: int) -> void:
 	get_tree().root.add_child(host)
 
 	var node := _EarnTextNode.new()
-	node.setup("+%d🪙" % amount, UIFonts.primary_bold(), 38)
+	node.setup("+%d" % amount, UIFonts.primary_bold(), 23)
 	# Offset slightly right and above the event so the text doesn't overlap the sprite.
 	node.position = screen_pos + Vector2(14.0, -10.0)
 	host.add_child(node)
@@ -2252,24 +2252,31 @@ func _spawn_earn_label(screen_pos: Vector2, amount: int) -> void:
 	get_tree().create_timer(1.6).timeout.connect(host.queue_free)
 
 
-## Draws a single line of gold text with a black outline.
+## Draws a coin icon followed by a gold number, both without any outline.
 ## Extends Node2D rather than Control so it renders correctly as a direct child of
 ## a CanvasLayer — Control nodes need a parent Control for layout; Node2D nodes do not.
 class _EarnTextNode extends Node2D:
-	var _text:      String = ""
-	var _font:      Font   = null
-	var _font_size: int    = 38
+	var _text:      String    = ""
+	var _font:      Font      = null
+	var _font_size: int       = 38
+	var _coin_tex:  Texture2D = null
 
 	func setup(text: String, font: Font, font_size: int) -> void:
 		_text      = text
 		_font      = font
 		_font_size = font_size
+		_coin_tex  = load("res://assets/bug_buck_coin_small.png") as Texture2D
 
 	func _draw() -> void:
 		if _font == null:
 			return
-		# Outline drawn first so the gold fill sits on top.
-		draw_string_outline(_font, Vector2.ZERO, _text, HORIZONTAL_ALIGNMENT_LEFT, -1,
-			_font_size, 6, Color(0.0, 0.0, 0.0, 1.0))
-		draw_string(_font, Vector2.ZERO, _text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+		# Icon is sized to roughly match the cap-height of the text; positioned so
+		# its vertical center aligns with the midpoint of the font's ascent.
+		var icon_size := int(_font_size * 0.75)
+		var top_y     := -int(_font_size * 0.78)
+		if _coin_tex:
+			draw_texture_rect(_coin_tex, Rect2(Vector2(0.0, top_y), Vector2(icon_size, icon_size)), false)
+		# Text starts immediately to the right of the icon with a small gap.
+		var text_x := float(icon_size + 4)
+		draw_string(_font, Vector2(text_x, 0.0), _text, HORIZONTAL_ALIGNMENT_LEFT, -1,
 			_font_size, Color(1.00, 0.82, 0.10, 1.0))

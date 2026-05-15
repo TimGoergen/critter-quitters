@@ -348,7 +348,7 @@ func _build_right_panel() -> void:
 	vbox.add_child(bucks_row)
 
 	var coin_icon := TextureRect.new()
-	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
+	coin_icon.texture             = load("res://assets/bug_buck_coin_medium.png")
 	coin_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	coin_icon.custom_minimum_size = Vector2(44, 44)
@@ -506,7 +506,7 @@ void fragment() {
 	vbox.add_child(_send_wave_reward_row)
 
 	var btn_coin_icon := TextureRect.new()
-	btn_coin_icon.texture             = load("res://assets/bug_buck_coin.png") as Texture2D
+	btn_coin_icon.texture             = load("res://assets/bug_buck_coin_small.png") as Texture2D
 	btn_coin_icon.custom_minimum_size = Vector2(22, 22)
 	btn_coin_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	btn_coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -1225,7 +1225,7 @@ func _build_early_bonus_particles() -> void:
 	_early_bonus_particles.gravity               = Vector2(0.0, 350.0)
 	_early_bonus_particles.scale_amount_min      = 0.1875   # 1.5× the base 0.125
 	_early_bonus_particles.scale_amount_max      = 0.3375   # 1.5× the base 0.225
-	_early_bonus_particles.texture               = load("res://assets/bug_buck_coin.png") as Texture2D
+	_early_bonus_particles.texture               = load("res://assets/bug_buck_coin_small.png") as Texture2D
 	add_child(_early_bonus_particles)
 
 
@@ -1349,7 +1349,7 @@ func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 	cvbox.add_child(cost_row)
 
 	var coin_icon := TextureRect.new()
-	coin_icon.texture             = load("res://assets/bug_buck_coin.png")
+	coin_icon.texture             = load("res://assets/bug_buck_coin_small.png")
 	coin_icon.custom_minimum_size = Vector2(20, 20)
 	coin_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
