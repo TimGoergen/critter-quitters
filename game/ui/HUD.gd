@@ -84,10 +84,9 @@ var _send_wave_reward_row:    HBoxContainer
 var _send_wave_reward_label:  Label
 var _early_bonus_particles:   CPUParticles2D
 var _run_over_overlay:        Control
-var _displayed_segment_count: int = 0   # last integer segment; reward text only refreshes when this changes
-var _wave_max_reward:         int = 0   # full reward at wave launch; reward display scales proportionally to this
-var _wave_multiplier:         int = 1   # current send-wave multiplier; cycles 1 → 10 → 100 → 1
-var _last_countdown_seconds:  int = 0   # last received countdown value; used to refresh reward text when multiplier changes
+var _wave_multiplier:        int = 1   # current send-wave multiplier; cycles 1 → 10 → 100 → 1
+var _last_countdown_seconds: int = 0   # last received countdown value; used to refresh reward text when multiplier changes
+var _current_wave_reward:    int = 0   # last value from early_send_reward_changed; drives the reward label
 
 var _speed_btn:      Button
 var _speed_icon_lbl: Label   # ">>" icon; black at 1×, bright gold at 2×
@@ -889,10 +888,7 @@ func _on_infestation_changed(level: float) -> void:
 
 func _on_wave_changed(wave: int) -> void:
 	_wave_label.text = "%d" % wave  # "WAVE" is a static sibling label; only the number changes
-	# Reset overlay to all-green for the incoming wave.
 	_wave_segment_overlay.set("spawn_progress", 0.0)
-	_displayed_segment_count = 0
-	_wave_max_reward          = 0
 
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
@@ -912,20 +908,7 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 func _on_wave_spawn_progress_changed(spawned: int, total: int) -> void:
 	if total <= 0:
 		return
-	var progress    := float(spawned) / float(total)
-	var new_segment := int(floor(8.0 * progress))
-	_wave_segment_overlay.set("spawn_progress", progress)
-	# Capture the maximum reward at wave launch so the displayed amount stays
-	# proportional to the green segments even as the total enemy count grows
-	# mid-wave from additive (multi-skip) launches.
-	if spawned == 0:
-		_wave_max_reward = total * GameState.EARLY_SEND_PER_ENEMY
-	# Update the reward text only when a segment flips — same cadence as the visual.
-	# Amount scales with the fraction of green segments remaining (8 green = full, 0 green = 0).
-	if spawned == 0 or new_segment != _displayed_segment_count:
-		_displayed_segment_count     = new_segment
-		var segments_remaining       := 8 - _displayed_segment_count
-		_send_wave_reward_label.text  = "%d" % (_wave_max_reward * segments_remaining / 8 * _wave_multiplier)
+	_wave_segment_overlay.set("spawn_progress", float(spawned) / float(total))
 
 
 func _process(delta: float) -> void:
@@ -1104,9 +1087,8 @@ func _on_multiplier_btn_pressed() -> void:
 func _refresh_reward_label() -> void:
 	if _countdown_active and _last_countdown_seconds > 0:
 		_send_wave_reward_label.text = "%d" % (_last_countdown_seconds * GameState.early_wave_bonus_rate * _wave_multiplier)
-	elif _wave_max_reward > 0:
-		var segments_remaining := 8 - _displayed_segment_count
-		_send_wave_reward_label.text = "%d" % (_wave_max_reward * segments_remaining / 8 * _wave_multiplier)
+	elif _current_wave_reward > 0:
+		_send_wave_reward_label.text = "%d" % (_current_wave_reward * _wave_multiplier)
 
 
 func _on_send_wave_pressed() -> void:
@@ -1143,9 +1125,9 @@ func _on_early_bonus_awarded(coins: int) -> void:
 
 
 func _on_early_send_reward_changed(amount: int) -> void:
-	# Only controls row visibility — text is updated by _on_wave_spawn_progress_changed
-	# so it changes at the same cadence as the segment color changes, not every spawn.
+	_current_wave_reward             = amount
 	_send_wave_reward_row.modulate.a = 1.0 if amount > 0 else 0.0
+	_send_wave_reward_label.text     = "%d" % (amount * _wave_multiplier)
 
 
 func _on_run_ended() -> void:
