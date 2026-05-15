@@ -188,6 +188,7 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_on_viewport_resized)
 
 
+
 func _build_ui() -> void:
 	_build_left_panel()
 	_build_right_panel()
@@ -214,11 +215,14 @@ func _build_left_panel() -> void:
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# The left silver border (4px wide) eats into the left visual gap but not the right.
-	# Shifting both margins by half that width (2px) keeps the panel the same total width
-	# while centering it symmetrically between the two silver lines.
-	margin.add_theme_constant_override("margin_left",   int(SCREEN_EDGE_MARGIN + SILVER_BORDER_W * 0.5))
-	margin.add_theme_constant_override("margin_right",  int(SCREEN_EDGE_MARGIN - SILVER_BORDER_W * 0.5))
+	# The trap panels' natural width is ~192 px; LEFT_PANEL_W is 220 px, leaving 28 px to split.
+	# The left silver border (SILVER_BORDER_W = 4 px) sits inside the left gap and reduces the
+	# visible empty space on that side.  To get equal visible gaps on both sides:
+	#   left_empty  = margin_left  - SILVER_BORDER_W
+	#   right_empty = LEFT_PANEL_W - margin_left - 192  (right silver is flush with bg edge)
+	#   equal when  margin_left = (28 + SILVER_BORDER_W) / 2 = 16,  margin_right = 12
+	margin.add_theme_constant_override("margin_left",  16)
+	margin.add_theme_constant_override("margin_right", 12)
 	margin.add_theme_constant_override("margin_top",    MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	margin.add_theme_constant_override("margin_bottom", MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	bg.add_child(margin)
