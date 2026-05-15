@@ -82,14 +82,14 @@ const COLOR_PAUSE_BANNER_BG := Color(0.12, 0.12, 0.14, 0.80)  # dark gray, alpha
 
 # Incoming wave banner — slides up from the bottom during the between-wave countdown.
 # Reverse trapezoid: wide bottom edge flush with the screen, narrow top edge visible.
-const INCOMING_BANNER_W:     float = (1280.0 - LEFT_PANEL_W - RIGHT_PANEL_W) * 0.40
-const INCOMING_BANNER_TAPER: float = 20.0
+# Same width as the pause banner; TAPER matches so the slope is visually identical.
+const INCOMING_BANNER_W:     float = PAUSE_BANNER_W
+const INCOMING_BANNER_TAPER: float = PAUSE_BANNER_TAPER
 
 # Incoming wave banner — slides up from the bottom of the screen during the countdown.
-var _incoming_banner:          Control = null
-var _incoming_banner_tween:    Tween   = null
-var _countdown_wave_label:     Label
-var _countdown_seconds_label:  Label
+var _incoming_banner:         Control = null
+var _incoming_banner_tween:   Tween   = null
+var _countdown_seconds_label: Label
 
 var _send_wave_btn:           Button
 var _wave_segment_overlay:    Control          # _WaveSegmentOverlay — gray arcs drawn over sprite segments
@@ -214,11 +214,11 @@ func _build_left_panel() -> void:
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	margin.add_theme_constant_override("margin_left",   SCREEN_EDGE_MARGIN)
-	# Perceived left gap  = SCREEN_EDGE_MARGIN - SILVER_BORDER_W = 24 - 4 = 20 px
-	# Perceived right gap = SCREEN_EDGE_MARGIN - INNER_BORDER_W - shadow_size = 24 - 2 - 2 = 20 px
-	# shadow_offset.x = 0, so only shadow_size (2 px) extends rightward, not the old offset.
-	margin.add_theme_constant_override("margin_right",  SCREEN_EDGE_MARGIN)
+	# The left silver border (4px wide) eats into the left visual gap but not the right.
+	# Shifting both margins by half that width (2px) keeps the panel the same total width
+	# while centering it symmetrically between the two silver lines.
+	margin.add_theme_constant_override("margin_left",   int(SCREEN_EDGE_MARGIN + SILVER_BORDER_W * 0.5))
+	margin.add_theme_constant_override("margin_right",  int(SCREEN_EDGE_MARGIN - SILVER_BORDER_W * 0.5))
 	margin.add_theme_constant_override("margin_top",    MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	margin.add_theme_constant_override("margin_bottom", MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	bg.add_child(margin)
@@ -623,29 +623,16 @@ func _build_incoming_overlay() -> void:
 	shape.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_incoming_banner.add_child(shape)
 
-	# "INCOMING" on the left, countdown number on the right — both vertically centred.
-	_countdown_wave_label = Label.new()
-	_countdown_wave_label.text                 = "INCOMING"
-	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_countdown_wave_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
-	_countdown_wave_label.add_theme_font_size_override("font_size", 22)
-	_countdown_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
-	_countdown_wave_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_countdown_wave_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_countdown_wave_label.offset_left          = INCOMING_BANNER_TAPER + 8.0
-	_incoming_banner.add_child(_countdown_wave_label)
-
+	# Single centred label — "INCOMING  5..." — so both words are centred as a unit.
 	_countdown_seconds_label = Label.new()
 	_countdown_seconds_label.text                 = ""
-	_countdown_seconds_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_countdown_seconds_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_seconds_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_countdown_seconds_label.add_theme_font_override("font", UIFonts.header())
 	_countdown_seconds_label.add_theme_font_size_override("font_size", 22)
 	_countdown_seconds_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_countdown_seconds_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_countdown_seconds_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_countdown_seconds_label.offset_right         = -(INCOMING_BANNER_TAPER + 8.0)
 	_incoming_banner.add_child(_countdown_seconds_label)
 
 
@@ -1010,7 +997,7 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 		var was_active            := _countdown_active
 		_countdown_active          = true
 		_last_countdown_seconds    = seconds_remaining
-		_countdown_seconds_label.text = "%d" % seconds_remaining
+		_countdown_seconds_label.text = "INCOMING  %d..." % seconds_remaining
 		_send_wave_reward_label.text  = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate * _wave_multiplier)
 		_send_wave_reward_row.modulate.a = 1.0
 		if not was_active:
@@ -1727,23 +1714,28 @@ class _PauseBannerShape extends Control:
 		var w  := size.x
 		var h  := size.y
 		var bw := border_w
+		# Slant length — needed for perpendicular inset on the angled edges.
+		var L  := sqrt(taper * taper + h * h)
 
 		# Outer (silver) trapezoid — top edge = full width, sides angle inward.
 		draw_colored_polygon(PackedVector2Array([
-			Vector2(0.0,         0.0),
-			Vector2(w,           0.0),
-			Vector2(w - taper,   h),
-			Vector2(taper,       h),
+			Vector2(0.0,       0.0),
+			Vector2(w,         0.0),
+			Vector2(w - taper, h),
+			Vector2(taper,     h),
 		]), color_border)
 
-		# Inner (dark fill) trapezoid — inset by bw on all four sides.
-		# The horizontal inset on the slanted sides matches bw closely enough
-		# at this slope; no trigonometric correction needed at 4 px border width.
+		# Inner (dark fill) — each edge is offset inward perpendicular to itself by bw,
+		# then adjacent offset edges are intersected to find the inner corners.
+		# This gives a uniform visible border width along the angled sides;
+		# a simple horizontal inset would make the border narrow at the top and wide at the bottom.
+		var x_top := bw * (L + taper) / h          # inner x at the top corners
+		var x_bot := taper + bw * (L - taper) / h  # inner x at the bottom corners
 		draw_colored_polygon(PackedVector2Array([
-			Vector2(bw,              bw),
-			Vector2(w - bw,          bw),
-			Vector2(w - taper - bw,  h - bw),
-			Vector2(taper + bw,      h - bw),
+			Vector2(x_top,     bw),
+			Vector2(w - x_top, bw),
+			Vector2(w - x_bot, h - bw),
+			Vector2(x_bot,     h - bw),
 		]), color_fill)
 
 
@@ -1765,22 +1757,27 @@ class _IncomingBannerShape extends Control:
 		var w  := size.x
 		var h  := size.y
 		var bw := border_w
+		# Slant length — needed for perpendicular inset on the angled edges.
+		var L  := sqrt(taper * taper + h * h)
 
 		# Outer (silver) trapezoid — bottom edge = full width, sides angle inward toward top.
 		draw_colored_polygon(PackedVector2Array([
-			Vector2(taper,       0.0),
-			Vector2(w - taper,   0.0),
-			Vector2(w,           h),
-			Vector2(0.0,         h),
+			Vector2(taper,     0.0),
+			Vector2(w - taper, 0.0),
+			Vector2(w,         h),
+			Vector2(0.0,       h),
 		]), color_border)
 
-		# Inner (dark fill) — inset by bw on the top and sides; bottom is flush so the
-		# screen edge acts as a clean clip and no bottom border line is needed.
+		# Inner (dark fill) — perpendicular inset on top and sides; no bottom border since
+		# that edge is hidden beneath the screen boundary.  x_top and x_bot are derived by
+		# intersecting the inward-offset left/right edges with the offset top/bottom edges.
+		var x_top := taper + bw * (L - taper) / h  # inner x at the top corners
+		var x_bot := bw * L / h                     # inner x at the bottom corners (y = h)
 		draw_colored_polygon(PackedVector2Array([
-			Vector2(taper + bw,      bw),
-			Vector2(w - taper - bw,  bw),
-			Vector2(w - bw,          h),
-			Vector2(bw,              h),
+			Vector2(x_top,     bw),
+			Vector2(w - x_top, bw),
+			Vector2(w - x_bot, h),
+			Vector2(x_bot,     h),
 		]), color_fill)
 
 
