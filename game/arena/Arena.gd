@@ -1567,6 +1567,56 @@ void fragment() {
 }
 """
 
+# Shader for the large background plane that sits beneath and around the arena floor.
+# It samples the same texture as the floor, but uses world position to derive UV so
+# the edge pixels of the crop window are stretched outward beyond the arena bounds
+# rather than repeating or cutting to a solid colour.
+const _BACKGROUND_SHADER_CODE: String = """
+shader_type spatial;
+render_mode unshaded, cull_disabled, blend_mix;
+
+// filter_linear_mipmap is required for textureLod blurring below.
+uniform sampler2D floor_texture : source_color, filter_linear_mipmap, repeat_disable;
+uniform vec2  crop_offset = vec2(0.2, 0.2);
+uniform float crop_size   = 0.400;
+// Half the arena world-unit dimensions; converts world XZ to arena UV [0,1].
+uniform vec2  arena_half  = vec2(15.5, 14.5);
+
+// Darker than the arena floor (floor BRIGHTNESS = 0.7).
+const float BRIGHTNESS = 0.22;
+
+varying vec3 world_pos;
+
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
+void fragment() {
+	vec2 arena_uv = (world_pos.xz + arena_half) / (arena_half * 2.0);
+	// Slight inset (0.03–0.97) so we never clamp to the absolute edge pixels,
+	// which may be disproportionately dark due to content near the crop boundary.
+	vec2 clamped_uv = clamp(arena_uv, 0.03, 0.97);
+	vec2 crop_uv    = crop_offset + clamped_uv * crop_size;
+
+	// Mip 9 collapses the entire crop to ~1 texel — effectively the mean colour.
+	// This gives a neutral tone that no single dark edge pixel can drag down.
+	vec2 center_uv = crop_offset + vec2(0.5) * crop_size;
+	vec3 avg_color  = textureLod(floor_texture, center_uv, 8.0).rgb;
+	vec3 edge_color = textureLod(floor_texture, crop_uv,    5.0).rgb;
+
+	// Measure how far the edge sample sits from the crop average in RGB space.
+	// Common colours (small deviation) are allowed to show through at full weight;
+	// high-contrast outliers (e.g. a black shadow pixel at the crop boundary) are
+	// smoothly suppressed back toward the average so they can't form visible stripes.
+	float deviation = length(edge_color - avg_color);
+	float weight    = 0.50 * (1.0 - smoothstep(0.10, 0.25, deviation));
+	vec3  color     = mix(avg_color, edge_color, weight);
+
+	ALBEDO = color * BRIGHTNESS;
+	ALPHA  = 0.6;
+}
+"""
+
 func _spawn_floor() -> void:
 	var texture := load("res://assets/arena/backyard_floor.png") as Texture2D
 	if texture == null:
@@ -1604,6 +1654,28 @@ func _spawn_floor() -> void:
 	_floor_mi.position      = Vector3(0.0, 0.010, 0.0)
 	_floor_mi.material_override = _floor_mat_overview
 	add_child(_floor_mi)
+
+	# Background plane — larger than the arena so it fills whatever the camera can see
+	# beyond the walls.  It sits just below the floor (Y=0.0 vs floor Y=0.010) so the
+	# floor renders on top within the arena bounds with no Z-fighting.
+	var bg_shader := Shader.new()
+	bg_shader.code = _BACKGROUND_SHADER_CODE
+
+	var bg_mat := ShaderMaterial.new()
+	bg_mat.shader = bg_shader
+	bg_mat.set_shader_parameter("floor_texture", texture)
+	bg_mat.set_shader_parameter("crop_offset",   crop_offset)
+	bg_mat.set_shader_parameter("crop_size",     CROP_SIZE)
+	bg_mat.set_shader_parameter("arena_half",    Vector2(grid_w * 0.5, grid_h * 0.5))
+
+	var bg_plane := PlaneMesh.new()
+	bg_plane.size = Vector2(grid_w * 4.0, grid_h * 4.0)
+
+	var bg_mi := MeshInstance3D.new()
+	bg_mi.mesh              = bg_plane
+	bg_mi.position          = Vector3(0.0, 0.0, 0.0)
+	bg_mi.material_override = bg_mat
+	add_child(bg_mi)
 
 
 ## Renders the inner arena border — the outermost row/column ring of the 31×31 grid.
