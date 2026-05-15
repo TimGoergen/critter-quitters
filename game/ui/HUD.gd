@@ -82,6 +82,7 @@ var _send_wave_reward_row:    HBoxContainer
 var _send_wave_reward_label:  Label
 var _early_bonus_particles:   CPUParticles2D
 var _run_over_overlay:        Control
+var _displayed_segment_count: int = 0          # last integer segment count shown; reward text only refreshes when this changes
 
 var _speed_btn:      Button
 var _speed_icon_lbl: Label   # ">>" icon; black at 1×, bright gold at 2×
@@ -846,9 +847,10 @@ func _on_infestation_changed(level: float) -> void:
 
 func _on_wave_changed(wave: int) -> void:
 	_wave_label.text = "%d" % wave  # "WAVE" is a static sibling label; only the number changes
-	# New wave incoming — no enemies have spawned yet, so show all segments green.
-	# This covers both the countdown period and the moment an early send fires.
-	_wave_timer_icon.set("gray_count", 0)
+	# New wave incoming — reset to all-green and clear the segment counter so the
+	# first spawn_progress update always refreshes the reward text.
+	_wave_timer_icon.set("spawn_progress", 0.0)
+	_displayed_segment_count = 0
 
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
@@ -866,9 +868,13 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 func _on_wave_spawn_progress_changed(spawned: int, total: int) -> void:
 	if total <= 0:
 		return
-	# Each of the 8 segments represents one eighth of the wave's enemies.
-	# Segments gray out left-to-right as enemies spawn; all gray when fully spawned.
-	_wave_timer_icon.set("gray_count", int(floor(8.0 * float(spawned) / float(total))))
+	var progress    := float(spawned) / float(total)
+	var new_segment := int(floor(8.0 * progress))
+	_wave_timer_icon.set("spawn_progress", progress)
+	# Update the reward text only when a segment flips — same cadence as the visual.
+	if spawned == 0 or new_segment != _displayed_segment_count:
+		_displayed_segment_count       = new_segment
+		_send_wave_reward_label.text   = "%d" % ((total - spawned) * GameState.EARLY_SEND_PER_ENEMY)
 
 
 func _process(delta: float) -> void:
@@ -1061,8 +1067,9 @@ func _on_early_bonus_awarded(coins: int) -> void:
 
 
 func _on_early_send_reward_changed(amount: int) -> void:
+	# Only controls row visibility — text is updated by _on_wave_spawn_progress_changed
+	# so it changes at the same cadence as the segment color changes, not every spawn.
 	_send_wave_reward_row.modulate.a = 1.0 if amount > 0 else 0.0
-	_send_wave_reward_label.text     = "%d" % amount
 
 
 func _on_run_ended() -> void:
@@ -1547,12 +1554,13 @@ class _ZoomIcon extends Control:
 
 ## Animated wave countdown timer drawn procedurally.
 ## Matches the SendNextWave art style: 8 ring segments around a yellow play-button circle.
-## Set gray_count (0–8) to control how many segments have elapsed; segments gray out
-## starting from the top (12 o'clock) and proceed clockwise.
+## Set spawn_progress (0.0–1.0) to the fraction of this wave's enemies that have spawned.
+## Each segment smoothly blends green→gray as spawn_progress moves through its 1/8 bucket,
+## so the graying rate mirrors the actual enemy spawn rate exactly.
 class _WaveTimerIcon extends Control:
-	var gray_count: int = 0 :
+	var spawn_progress: float = 0.0 :
 		set(v):
-			gray_count = v
+			spawn_progress = clampf(v, 0.0, 1.0)
 			queue_redraw()
 
 	const SEGMENT_COUNT   := 8
@@ -1576,19 +1584,21 @@ class _WaveTimerIcon extends Control:
 		draw_circle(Vector2(cx, cy), base * 0.96, COLOR_RING)
 
 		# Step 2 — 8 ring segments drawn as thick antialiased arcs (top-first, clockwise).
-		# draw_arc with antialiased=true gives smooth edges without polygon tessellation.
-		# Each slot spans 45° (360/8); each arc is 35° wide with a 5° gap on each side.
-		# Arc center radius = midpoint of ring; arc width = full ring thickness.
+		# Each segment smoothly lerps green→gray as spawn_progress passes through its
+		# 1/8 bucket, so the colour change rate mirrors the actual enemy spawn rate.
 		var outer_r  := base * 0.84
 		var inner_r  := base * 0.65
 		var mid_r    := (outer_r + inner_r) * 0.5
 		var arc_w    := outer_r - inner_r
 		var gap_half := deg_to_rad(5.0)
 		for i in range(SEGMENT_COUNT):
-			var slot_start := deg_to_rad(-90.0 + float(i) * 45.0)
-			var seg_start  := slot_start + gap_half
-			var seg_end    := slot_start + deg_to_rad(45.0) - gap_half
-			var color      := COLOR_SEG_GRAY if i < gray_count else COLOR_SEG_GREEN
+			var slot_start    := deg_to_rad(-90.0 + float(i) * 45.0)
+			var seg_start     := slot_start + gap_half
+			var seg_end       := slot_start + deg_to_rad(45.0) - gap_half
+			var bucket_lo     := float(i)       / float(SEGMENT_COUNT)
+			var bucket_hi     := float(i + 1)   / float(SEGMENT_COUNT)
+			var fill: float    = clampf((spawn_progress - bucket_lo) / (bucket_hi - bucket_lo), 0.0, 1.0)
+			var color: Color   = COLOR_SEG_GREEN.lerp(COLOR_SEG_GRAY, fill)
 			draw_arc(Vector2(cx, cy), mid_r, seg_start, seg_end, 32, color, arc_w, true)
 
 		# Step 3 — yellow center circle.
