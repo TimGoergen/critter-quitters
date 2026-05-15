@@ -74,6 +74,8 @@ const SILVER_BORDER_W: float = 4.0    # thickness of the silver panel border lin
 
 const PAUSE_BANNER_H:          float = 56.0
 const PAUSE_BANNER_BORDER_W:   float = 6.0
+# 25% of the arena width (1280 virtual px minus the two 220px side panels).
+const PAUSE_BANNER_W:          float = (1280.0 - LEFT_PANEL_W - RIGHT_PANEL_W) * 0.25
 const COLOR_PAUSE_BANNER_BG := Color(0.12, 0.12, 0.14, 0.80)  # dark gray, alpha matches upgrade panel
 
 # INCOMING arena overlay — container parents both labels so one modulate write hides both.
@@ -741,10 +743,14 @@ func _build_panel_borders() -> void:
 ## down to offset_top = 0 on pause, back up on unpause.
 func _build_pause_banner() -> void:
 	_pause_banner = Control.new()
-	_pause_banner.anchor_left   = 0.0
-	_pause_banner.anchor_right  = 1.0
+	# Centered horizontally in the viewport — which is also the arena center
+	# because both side panels are equal width.
+	_pause_banner.anchor_left   = 0.5
+	_pause_banner.anchor_right  = 0.5
 	_pause_banner.anchor_top    = 0.0
 	_pause_banner.anchor_bottom = 0.0
+	_pause_banner.offset_left   = -PAUSE_BANNER_W / 2.0
+	_pause_banner.offset_right  = PAUSE_BANNER_W / 2.0
 	# Hidden above the screen until the first pause.
 	_pause_banner.offset_top    = -PAUSE_BANNER_H
 	_pause_banner.offset_bottom = 0.0
