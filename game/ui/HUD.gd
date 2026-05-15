@@ -80,11 +80,16 @@ const PAUSE_BANNER_TAPER:  float = 20.0
 const PAUSE_BANNER_W:      float = (1280.0 - LEFT_PANEL_W - RIGHT_PANEL_W) * 0.25
 const COLOR_PAUSE_BANNER_BG := Color(0.12, 0.12, 0.14, 0.80)  # dark gray, alpha matches upgrade panel
 
-# INCOMING arena overlay — container parents both labels so one modulate write hides both.
-var _countdown_container:      Control
+# Incoming wave banner — slides up from the bottom during the between-wave countdown.
+# Reverse trapezoid: wide bottom edge flush with the screen, narrow top edge visible.
+const INCOMING_BANNER_W:     float = (1280.0 - LEFT_PANEL_W - RIGHT_PANEL_W) * 0.40
+const INCOMING_BANNER_TAPER: float = 20.0
+
+# Incoming wave banner — slides up from the bottom of the screen during the countdown.
+var _incoming_banner:          Control = null
+var _incoming_banner_tween:    Tween   = null
 var _countdown_wave_label:     Label
 var _countdown_seconds_label:  Label
-var _incoming_font:            Font   # bold Bebas Neue — stored so layout can measure it
 
 var _send_wave_btn:           Button
 var _wave_segment_overlay:    Control          # _WaveSegmentOverlay — gray arcs drawn over sprite segments
@@ -130,9 +135,13 @@ var _grid_lines_zoomed_toggle:   CheckButton = null
 # unconditionally unpausing — the user may have already paused manually.
 var _was_paused_before_settings: bool = false
 
-# One Control per trap type — the right-aligned draggable icon panels.
+# One Control per trap type — the full-width row panel.
 # Used by _refresh_trap_selector() to update affordability dimming.
 var _icon_controls: Array[Control] = []
+
+# Inner icon-area Control per trap type — the 3D preview widget inside each panel.
+# Used by _start_drag() to find the icon's screen position for the floating icon tween.
+var _icon_area_controls: Array[Control] = []
 
 # Cached reference to Arena (our parent node) for calling the drag placement API.
 var _arena: Node = null
@@ -206,6 +215,9 @@ func _build_left_panel() -> void:
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
 	margin.add_theme_constant_override("margin_left",   SCREEN_EDGE_MARGIN)
+	# Perceived left gap  = SCREEN_EDGE_MARGIN - SILVER_BORDER_W = 24 - 4 = 20 px
+	# Perceived right gap = SCREEN_EDGE_MARGIN - INNER_BORDER_W - shadow_size = 24 - 2 - 2 = 20 px
+	# shadow_offset.x = 0, so only shadow_size (2 px) extends rightward, not the old offset.
 	margin.add_theme_constant_override("margin_right",  SCREEN_EDGE_MARGIN)
 	margin.add_theme_constant_override("margin_top",    MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	margin.add_theme_constant_override("margin_bottom", MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
@@ -228,15 +240,8 @@ func _build_left_panel() -> void:
 	margin.add_child(vbox)
 
 	for i in range(4):
-		var row := HBoxContainer.new()
-		row.add_theme_constant_override("separation", 6)
-		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		row.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-		vbox.add_child(row)
-
-		_build_info_panel(row, i)
-		var icon_ctrl := _build_icon_panel(row, i)
-		_icon_controls.append(icon_ctrl)
+		var row_panel := _build_trap_row(vbox, i)
+		_icon_controls.append(row_panel)
 
 
 # ---------------------------------------------------------------------------
@@ -588,70 +593,76 @@ void fragment() {
 
 
 # ---------------------------------------------------------------------------
-# INCOMING arena overlay
+# INCOMING wave banner
 # ---------------------------------------------------------------------------
 
 func _build_incoming_overlay() -> void:
-	# Synthesise bold Bebas Neue — no bold file exists, so use FontVariation embolden.
-	var fv := FontVariation.new()
-	fv.base_font          = UIFonts.header()
-	fv.variation_embolden = 1.2
-	_incoming_font = fv
+	# Reverse-trapezoid banner anchored to the bottom of the viewport.
+	# Wide bottom edge overlaps the screen edge; narrow top edge is the visible face.
+	# Starts below the screen and tweens upward when the countdown begins.
+	_incoming_banner = Control.new()
+	_incoming_banner.anchor_left   = 0.5
+	_incoming_banner.anchor_right  = 0.5
+	_incoming_banner.anchor_top    = 1.0
+	_incoming_banner.anchor_bottom = 1.0
+	_incoming_banner.offset_left   = -INCOMING_BANNER_W / 2.0
+	_incoming_banner.offset_right  = INCOMING_BANNER_W / 2.0
+	# Hidden below the screen edge until a countdown starts.
+	_incoming_banner.offset_top    = 0.0
+	_incoming_banner.offset_bottom = PAUSE_BANNER_H
+	_incoming_banner.process_mode  = Node.PROCESS_MODE_ALWAYS
+	_incoming_banner.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	add_child(_incoming_banner)
 
-	# Container parents both labels so a single modulate write shows or hides them.
-	# Purely visual — MOUSE_FILTER_IGNORE means it never blocks input.
-	_countdown_container = Control.new()
-	_countdown_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_countdown_container.modulate.a  = 0.0   # hidden until countdown starts
-	add_child(_countdown_container)
+	var shape := _IncomingBannerShape.new()
+	shape.taper        = INCOMING_BANNER_TAPER
+	shape.border_w     = SILVER_BORDER_W
+	shape.color_border = COLOR_SILVER_BORDER
+	shape.color_fill   = COLOR_PAUSE_BANNER_BG
+	shape.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shape.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_incoming_banner.add_child(shape)
 
+	# "INCOMING" on the left, countdown number on the right — both vertically centred.
 	_countdown_wave_label = Label.new()
 	_countdown_wave_label.text                 = "INCOMING"
-	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_countdown_wave_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_countdown_wave_label.add_theme_font_override("font", _incoming_font)
-	_countdown_wave_label.add_theme_color_override("font_color", Color(1.00, 1.00, 1.00, 0.48))
+	_countdown_wave_label.add_theme_font_override("font", UIFonts.header())
+	_countdown_wave_label.add_theme_font_size_override("font_size", 22)
+	_countdown_wave_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_countdown_wave_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_countdown_container.add_child(_countdown_wave_label)
+	_countdown_wave_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_countdown_wave_label.offset_left          = INCOMING_BANNER_TAPER + 8.0
+	_incoming_banner.add_child(_countdown_wave_label)
 
-	# Timer label uses the same font and colour as INCOMING so they read as one unit.
 	_countdown_seconds_label = Label.new()
 	_countdown_seconds_label.text                 = ""
-	_countdown_seconds_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown_seconds_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_countdown_seconds_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_countdown_seconds_label.add_theme_font_override("font", _incoming_font)
-	_countdown_seconds_label.add_theme_color_override("font_color", Color(1.00, 1.00, 1.00, 0.48))
+	_countdown_seconds_label.add_theme_font_override("font", UIFonts.header())
+	_countdown_seconds_label.add_theme_font_size_override("font_size", 22)
+	_countdown_seconds_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_countdown_seconds_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_countdown_container.add_child(_countdown_seconds_label)
+	_countdown_seconds_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_countdown_seconds_label.offset_right         = -(INCOMING_BANNER_TAPER + 8.0)
+	_incoming_banner.add_child(_countdown_seconds_label)
 
-	_update_incoming_overlay_layout()
 
-
-func _update_incoming_overlay_layout() -> void:
-	if _countdown_wave_label == null or _incoming_font == null:
-		return
-	var vp_size := get_viewport().get_visible_rect().size
-	var arena_w := vp_size.x - LEFT_PANEL_W - RIGHT_PANEL_W
-	var arena_h := vp_size.y
-
-	# 30% smaller than the original 90%-of-arena-width sizing → 63%.
-	var ref_size: int = 200
-	var measured := _incoming_font.get_string_size(
-			"INCOMING", HORIZONTAL_ALIGNMENT_LEFT, -1, ref_size).x
-	var font_size := int(ref_size * (arena_w * 0.63) / measured * 0.85)
-	_countdown_wave_label.add_theme_font_size_override("font_size", font_size)
-	_countdown_seconds_label.add_theme_font_size_override("font_size", font_size)
-
-	# Stack INCOMING above the timer, both centred over the arena.
-	# top_y places the pair in the upper third of the arena.
-	var line_h := float(font_size) * 1.2
-	var top_y  := arena_h * 0.25
-
-	_countdown_wave_label.position = Vector2(LEFT_PANEL_W, top_y)
-	_countdown_wave_label.size     = Vector2(arena_w, line_h)
-
-	_countdown_seconds_label.position = Vector2(LEFT_PANEL_W, top_y + line_h)
-	_countdown_seconds_label.size     = Vector2(arena_w, line_h)
+## Animates the incoming wave banner into or out of view from the bottom edge.
+## Pass true to slide it up (countdown active), false to slide it back down.
+func _show_incoming_banner(visible_state: bool) -> void:
+	if _incoming_banner_tween:
+		_incoming_banner_tween.kill()
+	_incoming_banner_tween = create_tween()
+	_incoming_banner_tween.set_ease(Tween.EASE_OUT)
+	_incoming_banner_tween.set_trans(Tween.TRANS_CUBIC)
+	# Visible: top = -H, bottom = 0 (banner sits above screen edge).
+	# Hidden: top = 0, bottom = H (banner is pushed below the screen edge).
+	var target_top:    float = -PAUSE_BANNER_H if visible_state else 0.0
+	var target_bottom: float = 0.0             if visible_state else PAUSE_BANNER_H
+	_incoming_banner_tween.tween_property(_incoming_banner, "offset_top",    target_top,    0.22)
+	_incoming_banner_tween.parallel().tween_property(_incoming_banner, "offset_bottom", target_bottom, 0.22)
 
 
 # ---------------------------------------------------------------------------
@@ -996,16 +1007,19 @@ func _on_wave_changed(wave: int) -> void:
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 	if seconds_remaining > 0:
-		_countdown_active               = true
-		_last_countdown_seconds         = seconds_remaining
-		_countdown_container.modulate.a = 0.6
-		_countdown_seconds_label.text   = "%d" % seconds_remaining
-		_send_wave_reward_label.text    = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate * _wave_multiplier)
+		var was_active            := _countdown_active
+		_countdown_active          = true
+		_last_countdown_seconds    = seconds_remaining
+		_countdown_seconds_label.text = "%d" % seconds_remaining
+		_send_wave_reward_label.text  = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate * _wave_multiplier)
+		_send_wave_reward_row.modulate.a = 1.0
+		if not was_active:
+			_show_incoming_banner(true)
 	else:
-		_countdown_active               = false
-		_last_countdown_seconds         = 0
-		_countdown_container.modulate.a = 0.0
-		_countdown_seconds_label.text   = ""
+		_countdown_active             = false
+		_last_countdown_seconds       = 0
+		_countdown_seconds_label.text = ""
+		_show_incoming_banner(false)
 
 
 func _on_wave_spawn_progress_changed(spawned: int, total: int) -> void:
@@ -1087,8 +1101,8 @@ func _start_drag(trap_type: int) -> void:
 
 	GameState.select_trap_type(trap_type)   # so Arena knows which ghost to draw
 
-	# Capture the icon's current screen position before building the overlay.
-	var icon_rect  := _icon_controls[trap_type].get_global_rect()
+	# Capture the icon area's screen position for the floating icon tween origin.
+	var icon_rect  := _icon_area_controls[trap_type].get_global_rect()
 	var icon_center := icon_rect.get_center()
 
 	# Full-viewport pass-through container — MOUSE_FILTER_IGNORE so it never
@@ -1153,11 +1167,10 @@ func _on_zoom_state_changed(is_zoomed: bool) -> void:
 	# When in overview, the action is to zoom in — show the plus sign.
 	(_zoom_icon as _ZoomIcon).show_plus = not is_zoomed
 	_zoom_icon.queue_redraw()
-	_update_incoming_overlay_layout()
 
 
 func _on_viewport_resized() -> void:
-	_update_incoming_overlay_layout()
+	pass
 
 
 func _on_speed_btn_pressed() -> void:
@@ -1287,14 +1300,12 @@ func _trap_image_path(type: int) -> String:
 	return ""
 
 
-## Builds the left portion of a trap row: brand-colored info panel containing
-## the trap name, cost, and brand badge.  MOUSE_FILTER_STOP prevents taps from
-## reaching the arena behind the panel.
-## Builds the left portion of a trap row: brand-colored info panel containing
-## the trap name, cost, and brand badge.
-## Uses PanelContainer (not Panel) so it auto-sizes to its content, giving the
-## row a correct minimum height when the row is SIZE_SHRINK_BEGIN.
-func _build_info_panel(row: HBoxContainer, type: int) -> void:
+## Builds a full-width trap row: brand-colored panel spanning the entire left-panel
+## width, containing text content on the left and the 3D trap preview on the right.
+## Drag-to-place input fires from anywhere on the panel, not just the icon area.
+## Appends the icon area Control to _icon_area_controls for _start_drag positioning.
+## Returns the outer PanelContainer so _icon_controls can store it for affordability dimming.
+func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 	var style := StyleBoxFlat.new()
 	style.bg_color      = TRAP_BRAND[type]["normal"]
 	style.set_corner_radius_all(6)
@@ -1302,17 +1313,16 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 	style.border_color  = Color(0.72, 0.72, 0.72, 1.0)
 	style.shadow_color  = COLOR_BTN_SHADOW
 	style.shadow_size   = 2
-	style.shadow_offset = Vector2(2, 3)
+	style.shadow_offset = Vector2(0, 2)   # no horizontal bias; shadow falls only downward
 
-	# PanelContainer draws the background AND contributes its content height as
-	# the minimum size, so the row knows how tall to be.
+	# PanelContainer fills the full row width and intercepts all pointer events so
+	# the user can drag from anywhere — not just the icon area.
 	var panel := PanelContainer.new()
-	panel.size_flags_horizontal    = Control.SIZE_EXPAND_FILL
-	panel.size_flags_vertical      = Control.SIZE_EXPAND_FILL
-	# No stretch_ratio needed — info panel fills whatever width the icon doesn't take.
-	panel.mouse_filter             = Control.MOUSE_FILTER_STOP
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	panel.mouse_filter          = Control.MOUSE_FILTER_STOP
 	panel.add_theme_stylebox_override("panel", style)
-	row.add_child(panel)
+	parent.add_child(panel)
 
 	var margin := MarginContainer.new()
 	margin.add_theme_constant_override("margin_left",   8)
@@ -1322,12 +1332,19 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(margin)
 
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 6)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_child(hbox)
+
+	# --- Left: text content, fills remaining width ---
 	var cvbox := VBoxContainer.new()
 	cvbox.add_theme_constant_override("separation", 3)
-	cvbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	margin.add_child(cvbox)
+	cvbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cvbox.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	cvbox.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(cvbox)
 
-	# Line 1: trap name — left-aligned.
 	var name_lbl := Label.new()
 	name_lbl.text                  = TRAP_LABELS[type][0]
 	name_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
@@ -1338,7 +1355,6 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 	name_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	cvbox.add_child(name_lbl)
 
-	# Line 2: cost — coin icon + numeric amount, left-aligned.
 	var cost_row := HBoxContainer.new()
 	cost_row.add_theme_constant_override("separation", 4)
 	cost_row.alignment    = BoxContainer.ALIGNMENT_BEGIN
@@ -1363,10 +1379,9 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
 
-	# Line 3: brand tagline — right-aligned.
 	var badge_lbl := Label.new()
 	badge_lbl.text                  = TRAP_BRAND[type]["badge"]
-	badge_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
+	badge_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
 	badge_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	badge_lbl.add_theme_font_size_override("font_size", 12)
 	badge_lbl.add_theme_font_override("font", UIFonts.primary_bold())
@@ -1374,24 +1389,30 @@ func _build_info_panel(row: HBoxContainer, type: int) -> void:
 	badge_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	cvbox.add_child(badge_lbl)
 
-
-## Builds the right portion of a trap row: the draggable trap icon.
-## The user presses and holds here to initiate drag-and-drop placement.
-## Returns the Control so _icon_controls can store it for affordability updates.
-func _build_icon_panel(row: HBoxContainer, type: int) -> Control:
+	# --- Right: 3D trap preview with framed background ---
+	# Plain Control acts as the anchor parent for both the background panel and the viewport.
 	var icon_ctrl := Control.new()
-	# Fixed width so all 4 icons are the same size and pin to the right edge.
-	# SIZE_SHRINK_END places it at the trailing (right) side; info panel gets the rest.
-	icon_ctrl.custom_minimum_size   = Vector2(72.0, 0.0)
-	# SIZE_SHRINK_CENTER: don't expand; info panel (SIZE_EXPAND_FILL) pushes this naturally to the right.
+	# Square: height matches width so the 3D viewport renders without distortion.
+	icon_ctrl.custom_minimum_size   = Vector2(72.0, 72.0)
 	icon_ctrl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	icon_ctrl.size_flags_vertical   = Control.SIZE_EXPAND_FILL
-	# STOP so this Control receives gui_input events for hold detection.
-	icon_ctrl.mouse_filter = Control.MOUSE_FILTER_STOP
-	row.add_child(icon_ctrl)
+	icon_ctrl.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	# IGNORE so the outer panel's MOUSE_FILTER_STOP handles all pointer events.
+	icon_ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(icon_ctrl)
 
-	# No background — the trap image renders over the panel background behind it.
-	# SubViewport — own_world_3d isolates it; transparent_bg shows the row bg.
+	# Dark framed background behind the 3D preview — the "outline" the user expects.
+	var icon_bg_style := StyleBoxFlat.new()
+	icon_bg_style.bg_color = Color(0.0, 0.0, 0.0, 0.35)
+	icon_bg_style.set_corner_radius_all(4)
+	icon_bg_style.set_border_width_all(2)
+	icon_bg_style.border_color = Color(0.72, 0.72, 0.80, 1.0)
+
+	var icon_bg := PanelContainer.new()
+	icon_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_bg.add_theme_stylebox_override("panel", icon_bg_style)
+	icon_ctrl.add_child(icon_bg)
+
 	var svp := SubViewport.new()
 	svp.size                      = Vector2i(int(DRAG_ICON_SIZE), int(DRAG_ICON_SIZE))
 	svp.own_world_3d              = true
@@ -1416,15 +1437,20 @@ func _build_icon_panel(row: HBoxContainer, type: int) -> Control:
 	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
 	svc.stretch      = true
 	svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# SubViewportContainer draws a "panel" stylebox before compositing the texture.
-	# Override it with StyleBoxEmpty so no background or border appears behind the trap.
+	# Suppress the default SubViewportContainer panel stylebox — the icon_bg above
+	# draws the background; the viewport only needs to composite the 3D content.
 	svc.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	svc.add_child(svp)
 	icon_ctrl.add_child(svc)
 
-	icon_ctrl.gui_input.connect(_on_icon_gui_input.bind(type))
+	# Drag input connects to the full panel so the entire row is a drag target.
+	panel.gui_input.connect(_on_icon_gui_input.bind(type))
 
-	return icon_ctrl
+	# Store icon_ctrl separately so _start_drag can tween the floating icon
+	# from the trap image's actual screen position rather than the panel center.
+	_icon_area_controls.append(icon_ctrl)
+
+	return panel
 
 
 ## Builds a floating drag icon identical to the in-panel icon, sized DRAG_ICON_SIZE.
@@ -1718,6 +1744,43 @@ class _PauseBannerShape extends Control:
 			Vector2(w - bw,          bw),
 			Vector2(w - taper - bw,  h - bw),
 			Vector2(taper + bw,      h - bw),
+		]), color_fill)
+
+
+## Reverse trapezoid for the incoming-wave banner.
+## Bottom edge spans the full Control width (flush with the screen edge);
+## sides angle inward going upward, so the top edge is narrower by 2×taper.
+## No bottom border is drawn — that edge is hidden beneath the screen boundary.
+class _IncomingBannerShape extends Control:
+	var taper:        float = 0.0
+	var border_w:     float = 0.0
+	var color_border: Color = Color.WHITE
+	var color_fill:   Color = Color.TRANSPARENT
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	func _draw() -> void:
+		var w  := size.x
+		var h  := size.y
+		var bw := border_w
+
+		# Outer (silver) trapezoid — bottom edge = full width, sides angle inward toward top.
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(taper,       0.0),
+			Vector2(w - taper,   0.0),
+			Vector2(w,           h),
+			Vector2(0.0,         h),
+		]), color_border)
+
+		# Inner (dark fill) — inset by bw on the top and sides; bottom is flush so the
+		# screen edge acts as a clean clip and no bottom border line is needed.
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(taper + bw,      bw),
+			Vector2(w - taper - bw,  bw),
+			Vector2(w - bw,          h),
+			Vector2(bw,              h),
 		]), color_fill)
 
 
