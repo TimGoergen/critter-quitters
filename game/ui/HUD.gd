@@ -5,7 +5,7 @@
 ##
 ## Left panel (LEFT_PANEL_W wide):  vertical stack of 4 trap rows.
 ##   Each row: static info panel (left, brand-colored) + draggable trap icon (right).
-##   Press-and-hold the icon to begin drag-and-drop placement.
+##   Press the icon and move to begin drag-and-drop placement.
 ## Right panel (RIGHT_PANEL_W wide): wave, bug bucks, infestation bar,
 ##   INCOMING label, send-wave button, and a bottom row of three control buttons
 ##   (zoom, pause, speed).  Exit and Restart live inside the Settings dialog.
@@ -70,9 +70,11 @@ const SCREEN_EDGE_MARGIN: float = 24.0 # extra inset on the screen-edge side and
 const RIGHT_BTN_H: float = 52.0        # fixed height for all right-panel buttons
 const INNER_BORDER_W: float = 2.0      # black separator line at the arena-facing edge of each panel
 
-# "INCOMING" label — large semi-transparent overlay centred over the arena.
-var _countdown_wave_label:   Label
-var _incoming_font:          Font   # bold Bebas Neue — stored so layout can measure it
+# INCOMING arena overlay — container parents both labels so one modulate write hides both.
+var _countdown_container:      Control
+var _countdown_wave_label:     Label
+var _countdown_seconds_label:  Label
+var _incoming_font:            Font   # bold Bebas Neue — stored so layout can measure it
 
 var _send_wave_btn:          Button
 var _send_wave_text_label:   Label   # "Send Early" / "Send Next Wave"
@@ -105,6 +107,12 @@ var _sfx_slider:   HSlider
 var _settings_btn:    Button  = null
 var _settings_dialog: Control = null
 
+var _grid_lines_overview_toggle: CheckButton = null
+var _grid_lines_zoomed_toggle:   CheckButton = null
+# Saved when Settings opens so we can restore it on close rather than
+# unconditionally unpausing — the user may have already paused manually.
+var _was_paused_before_settings: bool = false
+
 # One Control per trap type — the right-aligned draggable icon panels.
 # Used by _refresh_trap_selector() to update affordability dimming.
 var _icon_controls: Array[Control] = []
@@ -112,10 +120,8 @@ var _icon_controls: Array[Control] = []
 # Cached reference to Arena (our parent node) for calling the drag placement API.
 var _arena: Node = null
 
-# Press-and-hold detection for drag initiation.
-var _hold_trap:      int     = -1           # trap index being held; -1 = none
-var _hold_time:      float   = 0.0          # seconds held so far
-var _hold_start_pos: Vector2 = Vector2.ZERO # screen position of initial press
+# Press-and-move detection for drag initiation.
+var _hold_trap: int = -1   # trap index currently pressed; -1 = none
 
 # Drag state — active while the user is dragging a trap icon toward the arena.
 var _drag_active:    bool    = false
@@ -126,18 +132,14 @@ var _drag_overlay:   Control = null  # full-viewport pass-through container for 
 var _drag_icon_ctrl: Control = null  # the floating trap image widget
 var _drag_tween:     Tween   = null
 
-# Hold must be sustained for this long (without moving ICON_CANCEL_PX) to begin a drag.
-const ICON_HOLD_SEC:  float = 0.25
-const ICON_CANCEL_PX: float = 10.0
 # SubViewport render resolution for trap preview icons (panel and floating).
 const DRAG_ICON_SIZE: float = 90.0
 # Screen-space size of the floating drag icon.  Matches the panel icon width.
 const DRAG_ICON_DISPLAY: float = 72.0
 # Offset from the cursor/finger to the floating icon center.
 # Above-and-left so the placement zone cell is visible at the icon's lower-right corner.
-const DRAG_OFFSET: Vector2 = Vector2(-30.0, -95.0)
+const DRAG_OFFSET: Vector2 = Vector2(-15.0, -47.5)
 
-var _blink_time: float = 0.0
 
 
 func _ready() -> void:
@@ -570,28 +572,32 @@ func _build_incoming_overlay() -> void:
 	fv.variation_embolden = 1.2
 	_incoming_font = fv
 
-	# Large semi-transparent "INCOMING" text centred over the arena.
+	# Container parents both labels so a single modulate write shows or hides them.
 	# Purely visual — MOUSE_FILTER_IGNORE means it never blocks input.
-	# Anchors mirror the panel pattern so the engine keeps the rect correct on
-	# any viewport change (including zoom) without manual position/size writes.
+	_countdown_container = Control.new()
+	_countdown_container.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_countdown_container.modulate.a  = 0.0   # hidden until countdown starts
+	add_child(_countdown_container)
+
 	_countdown_wave_label = Label.new()
 	_countdown_wave_label.text                 = "INCOMING"
-	_countdown_wave_label.anchor_left          = 0.0
-	_countdown_wave_label.anchor_right         = 1.0
-	_countdown_wave_label.anchor_top           = 0.0
-	_countdown_wave_label.anchor_bottom        = 1.0
-	_countdown_wave_label.offset_left          = LEFT_PANEL_W
-	_countdown_wave_label.offset_right         = -RIGHT_PANEL_W
 	_countdown_wave_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_wave_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_countdown_wave_label.add_theme_font_override("font", _incoming_font)
-	# Baked-in alpha keeps the text translucent at the "on" phase of the blink.
 	_countdown_wave_label.add_theme_color_override("font_color", Color(0.90, 0.15, 0.15, 0.48))
-	# Counter-clockwise tilt: text rises from right to left.
-	_countdown_wave_label.rotation_degrees = -10.0
-	_countdown_wave_label.mouse_filter     = Control.MOUSE_FILTER_IGNORE
-	_countdown_wave_label.modulate.a       = 0.0   # hidden until countdown starts
-	add_child(_countdown_wave_label)
+	_countdown_wave_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	_countdown_container.add_child(_countdown_wave_label)
+
+	# Timer label uses the same font and colour as INCOMING so they read as one unit.
+	_countdown_seconds_label = Label.new()
+	_countdown_seconds_label.text                 = ""
+	_countdown_seconds_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_countdown_seconds_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_countdown_seconds_label.add_theme_font_override("font", _incoming_font)
+	_countdown_seconds_label.add_theme_color_override("font_color", Color(0.90, 0.15, 0.15, 0.48))
+	_countdown_seconds_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	_countdown_container.add_child(_countdown_seconds_label)
+
 	_update_incoming_overlay_layout()
 
 
@@ -602,15 +608,24 @@ func _update_incoming_overlay_layout() -> void:
 	var arena_w := vp_size.x - LEFT_PANEL_W - RIGHT_PANEL_W
 	var arena_h := vp_size.y
 
-	# Measure "INCOMING" at a reference size, then scale so it spans 90% of arena width.
-	var ref_size : int = 200
+	# 30% smaller than the original 90%-of-arena-width sizing → 63%.
+	var ref_size: int = 200
 	var measured := _incoming_font.get_string_size(
 			"INCOMING", HORIZONTAL_ALIGNMENT_LEFT, -1, ref_size).x
-	var font_size := int(ref_size * (arena_w * 0.9) / measured)
+	var font_size := int(ref_size * (arena_w * 0.63) / measured)
 	_countdown_wave_label.add_theme_font_size_override("font_size", font_size)
+	_countdown_seconds_label.add_theme_font_size_override("font_size", font_size)
 
-	# Pivot at the label's centre so the tilt rotates in place over the arena.
-	_countdown_wave_label.pivot_offset = Vector2(arena_w * 0.5, arena_h * 0.5)
+	# Stack INCOMING above the timer, both centred over the arena.
+	# top_y places the pair in the upper third of the arena.
+	var line_h := float(font_size) * 1.2
+	var top_y  := arena_h * 0.25
+
+	_countdown_wave_label.position = Vector2(LEFT_PANEL_W, top_y)
+	_countdown_wave_label.size     = Vector2(arena_w, line_h)
+
+	_countdown_seconds_label.position = Vector2(LEFT_PANEL_W, top_y + line_h)
+	_countdown_seconds_label.size     = Vector2(arena_w, line_h)
 
 
 # ---------------------------------------------------------------------------
@@ -683,8 +698,9 @@ func _build_run_over_overlay() -> void:
 # ---------------------------------------------------------------------------
 
 ## Builds the modal settings panel.  Hidden by default; shown when the user
-## taps the van-gear button in the top-right corner of the right panel.
+## taps the gear button in the top-right corner of the right panel.
 ## The dialog lives at the CanvasLayer root so it floats above the side panels.
+## A ScrollContainer in the middle lets the settings list grow without resizing the panel.
 ## Exit and Restart buttons are located here rather than on the right panel.
 func _build_settings_dialog() -> void:
 	_settings_dialog = Control.new()
@@ -695,27 +711,27 @@ func _build_settings_dialog() -> void:
 	add_child(_settings_dialog)
 
 	# Full-screen dimmer behind the panel.
-	var dim        := ColorRect.new()
-	dim.color       = Color(0.0, 0.0, 0.0, 0.60)
+	var dim := ColorRect.new()
+	dim.color        = Color(0.0, 0.0, 0.0, 0.60)
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_STOP
 	_settings_dialog.add_child(dim)
 
-	# Centered dialog panel — anchored to the viewport centre with fixed offsets.
-	# Taller than before to accommodate the Exit/Restart row below the close button.
+	# Centered dialog panel — wider and taller than the original to make room
+	# for a full settings list; the ScrollContainer handles overflow.
 	var panel := Panel.new()
 	panel.anchor_left   = 0.5
 	panel.anchor_right  = 0.5
 	panel.anchor_top    = 0.5
 	panel.anchor_bottom = 0.5
-	panel.offset_left   = -190.0
-	panel.offset_right  =  190.0
-	panel.offset_top    = -155.0
-	panel.offset_bottom =  155.0
+	panel.offset_left   = -240.0
+	panel.offset_right  =  240.0
+	panel.offset_top    = -220.0
+	panel.offset_bottom =  220.0
 	panel.mouse_filter  = Control.MOUSE_FILTER_STOP
 
 	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color = Color(0.12, 0.12, 0.22, 0.97)
+	panel_style.bg_color     = Color(0.12, 0.12, 0.22, 0.97)
 	panel_style.border_color = Color(0.50, 0.50, 0.68, 1.0)
 	panel_style.set_border_width_all(2)
 	panel_style.set_corner_radius_all(8)
@@ -731,7 +747,7 @@ func _build_settings_dialog() -> void:
 	panel.add_child(inner)
 
 	var dialog_vbox := VBoxContainer.new()
-	dialog_vbox.add_theme_constant_override("separation", 14)
+	dialog_vbox.add_theme_constant_override("separation", 12)
 	inner.add_child(dialog_vbox)
 
 	var title := Label.new()
@@ -742,35 +758,58 @@ func _build_settings_dialog() -> void:
 	title.add_theme_color_override("font_color", COLOR_TEXT)
 	dialog_vbox.add_child(title)
 
-	var sep := HSeparator.new()
-	dialog_vbox.add_child(sep)
+	dialog_vbox.add_child(HSeparator.new())
 
-	# Volume sliders — class members so the existing save/load handlers still work.
-	_music_slider = _build_volume_row(dialog_vbox, "MUSIC")
-	_sfx_slider   = _build_volume_row(dialog_vbox, "SFX")
-	_load_volume_settings()
+	# Scrollable content — vertical scroll only; items expand to fill the panel width.
+	# Adding new settings to content_vbox automatically becomes scrollable.
+	var scroll := ScrollContainer.new()
+	scroll.size_flags_vertical        = Control.SIZE_EXPAND_FILL
+	scroll.horizontal_scroll_mode     = ScrollContainer.SCROLL_MODE_DISABLED
+	dialog_vbox.add_child(scroll)
+
+	var content_vbox := VBoxContainer.new()
+	content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	content_vbox.add_theme_constant_override("separation", 10)
+	scroll.add_child(content_vbox)
+
+	# --- AUDIO section ---
+	_build_section_header(content_vbox, "AUDIO")
+	_music_slider = _build_volume_row(content_vbox, "MUSIC")
+	_sfx_slider   = _build_volume_row(content_vbox, "SFX")
+
+	content_vbox.add_child(HSeparator.new())
+
+	# --- DISPLAY section ---
+	_build_section_header(content_vbox, "DISPLAY")
+	_grid_lines_overview_toggle = _build_toggle_row(content_vbox, "Grid lines when zoomed out")
+	_grid_lines_zoomed_toggle   = _build_toggle_row(content_vbox, "Grid lines when zoomed in")
+
+	# Load saved values first so the initial signal emission from _load_all_settings
+	# carries the correct booleans before we wire up the change callbacks.
+	_load_all_settings()
 	_music_slider.value_changed.connect(_on_music_volume_changed)
 	_sfx_slider.value_changed.connect(_on_sfx_volume_changed)
+	_grid_lines_overview_toggle.toggled.connect(_on_grid_lines_overview_toggled)
+	_grid_lines_zoomed_toggle.toggled.connect(_on_grid_lines_zoomed_toggled)
 
 	# X button — square, top-right corner of the panel, outside the vbox flow.
 	var close_btn := Button.new()
-	close_btn.text                = "X"
-	close_btn.anchor_left         = 1.0
-	close_btn.anchor_right        = 1.0
-	close_btn.anchor_top          = 0.0
-	close_btn.anchor_bottom       = 0.0
-	close_btn.offset_left         = -48.0
-	close_btn.offset_right        = -8.0
-	close_btn.offset_top          =  8.0
-	close_btn.offset_bottom       =  48.0
+	close_btn.text          = "X"
+	close_btn.anchor_left   = 1.0
+	close_btn.anchor_right  = 1.0
+	close_btn.anchor_top    = 0.0
+	close_btn.anchor_bottom = 0.0
+	close_btn.offset_left   = -48.0
+	close_btn.offset_right  = -8.0
+	close_btn.offset_top    =  8.0
+	close_btn.offset_bottom =  48.0
 	close_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	close_btn.add_theme_font_size_override("font_size", 20)
 	_apply_button_style(close_btn)
 	close_btn.pressed.connect(_on_settings_close_pressed)
 	panel.add_child(close_btn)
 
-	var exit_sep := HSeparator.new()
-	dialog_vbox.add_child(exit_sep)
+	dialog_vbox.add_child(HSeparator.new())
 
 	# Exit and Restart live in the settings dialog so the right panel stays clean.
 	var exit_restart_row := HBoxContainer.new()
@@ -800,12 +839,17 @@ func _build_settings_dialog() -> void:
 
 func _on_settings_btn_pressed() -> void:
 	AudioManager.play_ui("button")
-	_settings_dialog.visible = true
+	# Save current pause state so we can restore it when the dialog closes —
+	# the user might have already paused manually before opening Settings.
+	_was_paused_before_settings = get_tree().paused
+	get_tree().paused           = true
+	_settings_dialog.visible   = true
 
 
 func _on_settings_close_pressed() -> void:
 	AudioManager.play_ui("button")
 	_settings_dialog.visible = false
+	get_tree().paused        = _was_paused_before_settings
 
 
 # ---------------------------------------------------------------------------
@@ -831,34 +875,21 @@ func _on_wave_changed(wave: int) -> void:
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 	if seconds_remaining > 0:
-		# Between-wave countdown — reveal the INCOMING label and switch button text.
-		# The label is shown by restoring full alpha; _process will blink it.
-		_countdown_active                = true
-		_countdown_wave_label.modulate.a = 1.0
-		_send_wave_text_label.text       = "Send Early"
-		_send_wave_reward_label.text     = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
-		_blink_time = 0.0
+		# Between-wave countdown — reveal the overlay and switch button text.
+		_countdown_active                  = true
+		_countdown_container.modulate.a    = 0.6
+		_countdown_seconds_label.text      = "%d" % seconds_remaining
+		_send_wave_text_label.text         = "Send Early"
+		_send_wave_reward_label.text       = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
 	else:
-		# Wave launched — hide the INCOMING label and restore the button text.
-		_countdown_active                = false
-		_countdown_wave_label.modulate.a = 0.0
-		_send_wave_text_label.text       = "Send Next Wave"
-		_blink_time = 0.0
+		# Wave launched — hide the overlay and restore the button text.
+		_countdown_active                  = false
+		_countdown_container.modulate.a    = 0.0
+		_countdown_seconds_label.text      = ""
+		_send_wave_text_label.text         = "Send Next Wave"
 
 
 func _process(delta: float) -> void:
-	if _countdown_active:
-		_blink_time += delta
-		var on: bool = fmod(_blink_time, 1.0 / 2.0) < (1.0 / 4.0)
-		# Blink the INCOMING label via alpha; the button content stays solid.
-		_countdown_wave_label.modulate.a = 1.0 if on else 0.0
-
-	# Press-and-hold timer: promote to drag once the hold threshold is met.
-	if _hold_trap >= 0:
-		_hold_time += delta
-		if _hold_time >= ICON_HOLD_SEC:
-			_start_drag(_hold_trap)
-
 	# Keep the floating drag icon centred above the cursor each frame.
 	# We do this in _process (rather than only in _input) so the icon stays
 	# locked to position even when the cursor is stationary.
@@ -895,33 +926,22 @@ func _input(event: InputEvent) -> void:
 
 
 ## Receives gui_input events from a trap icon Control.
-## Starts the hold timer on press; cancels it if the finger moves too far.
+## Drag begins the moment the user presses and then moves — no hold delay.
 func _on_icon_gui_input(event: InputEvent, trap_type: int) -> void:
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
-			_hold_trap      = trap_type
-			_hold_time      = 0.0
-			_hold_start_pos = event.position
+			_hold_trap = trap_type
 		elif _hold_trap == trap_type:
 			_cancel_hold()
 	elif event is InputEventScreenTouch and event.index == 0:
 		if event.pressed:
-			_hold_trap      = trap_type
-			_hold_time      = 0.0
-			_hold_start_pos = event.position
+			_hold_trap = trap_type
 		elif _hold_trap == trap_type:
 			_cancel_hold()
 	elif _hold_trap == trap_type:
-		# Cancel if the press moves more than ICON_CANCEL_PX before the hold threshold.
-		var pos: Vector2
-		if event is InputEventMouseMotion:
-			pos = event.position
-		elif event is InputEventScreenDrag:
-			pos = event.position
-		else:
-			return
-		if pos.distance_to(_hold_start_pos) > ICON_CANCEL_PX:
-			_cancel_hold()
+		# Any motion while the icon is pressed immediately begins drag.
+		if event is InputEventMouseMotion or event is InputEventScreenDrag:
+			_start_drag(trap_type)
 
 
 ## Initiates a drag for the given trap type.
@@ -973,10 +993,9 @@ func _update_drag_cursor(cursor_pos: Vector2) -> void:
 	_arena.update_hud_drag(cursor_pos + DRAG_OFFSET)
 
 
-## Clears hold timer state without starting a drag.
+## Clears press state without starting a drag.
 func _cancel_hold() -> void:
 	_hold_trap = -1
-	_hold_time = 0.0
 
 
 ## Tears down the floating overlay and resets drag state.
@@ -1359,8 +1378,18 @@ func _apply_send_wave_btn_style(btn: Button) -> void:
 
 
 # ---------------------------------------------------------------------------
-# Volume controls
+# Volume controls and settings helpers
 # ---------------------------------------------------------------------------
+
+## Builds a small dimmed category label used as a section divider in the settings scroll area.
+func _build_section_header(parent: VBoxContainer, header_text: String) -> void:
+	var lbl := Label.new()
+	lbl.text = header_text
+	lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl.add_theme_font_size_override("font_size", 12)
+	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	parent.add_child(lbl)
+
 
 ## Builds a compact label + slider row for one audio bus.
 ## Returns the HSlider so the caller can read/write its value.
@@ -1392,33 +1421,78 @@ func _build_volume_row(parent: VBoxContainer, label_text: String) -> HSlider:
 	return slider
 
 
+## Builds a full-width label + CheckButton row for a boolean setting.
+## Returns the CheckButton so the caller can connect its toggled signal and read its state.
+func _build_toggle_row(parent: VBoxContainer, label_text: String) -> CheckButton:
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 8)
+	parent.add_child(row)
+
+	var lbl := Label.new()
+	lbl.text                  = label_text
+	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_color_override("font_color", COLOR_TEXT)
+	row.add_child(lbl)
+
+	var toggle := CheckButton.new()
+	toggle.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(toggle)
+
+	return toggle
+
+
 func _on_music_volume_changed(value: float) -> void:
 	AudioManager.set_music_volume(value)
-	_save_volume_settings()
+	_save_all_settings()
 
 
 func _on_sfx_volume_changed(value: float) -> void:
 	AudioManager.set_sfx_volume(value)
-	_save_volume_settings()
+	_save_all_settings()
 
 
-func _save_volume_settings() -> void:
+func _on_grid_lines_overview_toggled(pressed: bool) -> void:
+	_save_all_settings()
+	GameState.grid_lines_changed.emit(pressed, _grid_lines_zoomed_toggle.button_pressed)
+
+
+func _on_grid_lines_zoomed_toggled(pressed: bool) -> void:
+	_save_all_settings()
+	GameState.grid_lines_changed.emit(_grid_lines_overview_toggle.button_pressed, pressed)
+
+
+func _save_all_settings() -> void:
 	var cfg := ConfigFile.new()
-	cfg.set_value("audio", "music", _music_slider.value)
-	cfg.set_value("audio", "sfx",   _sfx_slider.value)
+	cfg.set_value("audio",   "music",               _music_slider.value)
+	cfg.set_value("audio",   "sfx",                 _sfx_slider.value)
+	cfg.set_value("display", "grid_lines_overview",  _grid_lines_overview_toggle.button_pressed)
+	cfg.set_value("display", "grid_lines_zoomed",    _grid_lines_zoomed_toggle.button_pressed)
 	cfg.save("user://settings.cfg")
 
 
-func _load_volume_settings() -> void:
+## Loads all settings from disk.  Applies defaults when the file is absent (first run).
+## Emits grid_lines_changed so Arena can apply the loaded values at startup.
+func _load_all_settings() -> void:
 	var cfg := ConfigFile.new()
-	if cfg.load("user://settings.cfg") != OK:
-		return
-	var music_vol: float = cfg.get_value("audio", "music", 1.0)
-	var sfx_vol:   float = cfg.get_value("audio", "sfx",   1.0)
+	var music_vol:     float = 1.0
+	var sfx_vol:       float = 1.0
+	var grid_overview: bool  = false  # default: no grid lines in the zoomed-out view
+	var grid_zoomed:   bool  = true   # default: grid lines visible when zoomed in
+	if cfg.load("user://settings.cfg") == OK:
+		music_vol     = cfg.get_value("audio",   "music",               1.0)
+		sfx_vol       = cfg.get_value("audio",   "sfx",                 1.0)
+		grid_overview = cfg.get_value("display", "grid_lines_overview",  false)
+		grid_zoomed   = cfg.get_value("display", "grid_lines_zoomed",    true)
 	_music_slider.value = music_vol
 	_sfx_slider.value   = sfx_vol
 	AudioManager.set_music_volume(music_vol)
 	AudioManager.set_sfx_volume(sfx_vol)
+	_grid_lines_overview_toggle.button_pressed = grid_overview
+	_grid_lines_zoomed_toggle.button_pressed   = grid_zoomed
+	GameState.grid_lines_changed.emit(grid_overview, grid_zoomed)
 
 
 # ---------------------------------------------------------------------------

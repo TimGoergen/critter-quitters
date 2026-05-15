@@ -76,6 +76,11 @@ signal zoom_toggle_requested
 ## Emitted by Arena after a zoom state change so HUD can update the button label.
 signal zoom_state_changed(is_zoomed: bool)
 
+## Emitted when the player changes grid line display preferences in Settings.
+## show_when_overview: true draws lines in the zoomed-out (full-arena) view.
+## show_when_zoomed:   true draws lines in the zoomed-in (2×) view.
+signal grid_lines_changed(show_when_overview: bool, show_when_zoomed: bool)
+
 
 # ---------------------------------------------------------------------------
 # Constants

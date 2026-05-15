@@ -246,12 +246,14 @@ func _ready() -> void:
 	_setup_selected_trap_outline()
 	_init_path_marker_pool()
 	_spawn_floor()
+	_apply_floor_grid_lines_from_cfg()  # apply saved preference before first frame
 	_spawn_arena_border()
 	_spawn_outer_border_ring()
 
 	get_viewport().physics_object_picking = true
 
 	_pathfinder.recalculate()
+	GameState.grid_lines_changed.connect(_on_grid_lines_changed)
 	add_child(HUD.new())
 	_enemy_stats_panel = EnemyStatsPanel.new()
 	add_child(_enemy_stats_panel)
@@ -2026,3 +2028,39 @@ func _make_box_mesh_instance(size: Vector3, color: Color) -> MeshInstance3D:
 	mesh_instance.material_override = material
 
 	return mesh_instance
+
+
+# ---------------------------------------------------------------------------
+# Grid line display settings
+# ---------------------------------------------------------------------------
+
+## Reads grid line preferences from settings.cfg and applies them to the floor
+## materials.  Called once at startup so the floor is correct before the first
+## frame renders, independently of when HUD initialises and emits its signal.
+func _apply_floor_grid_lines_from_cfg() -> void:
+	var cfg := ConfigFile.new()
+	var show_overview: bool = false
+	var show_zoomed:   bool = true
+	if cfg.load("user://settings.cfg") == OK:
+		show_overview = cfg.get_value("display", "grid_lines_overview", false)
+		show_zoomed   = cfg.get_value("display", "grid_lines_zoomed",   true)
+	_set_floor_grid_lines(show_overview, show_zoomed)
+
+
+## Receives the signal emitted by HUD when the player changes a grid line toggle.
+func _on_grid_lines_changed(show_overview: bool, show_zoomed: bool) -> void:
+	_set_floor_grid_lines(show_overview, show_zoomed)
+
+
+## Updates line_alpha on both floor shader materials and re-applies the active
+## one so the change is visible immediately without waiting for a zoom toggle.
+func _set_floor_grid_lines(show_overview: bool, show_zoomed: bool) -> void:
+	if _floor_mat_overview == null or _floor_mat_zoomed == null:
+		return
+	_floor_mat_overview.set_shader_parameter("line_alpha", 0.15 if show_overview else 0.0)
+	_floor_mat_zoomed.set_shader_parameter("line_alpha",   0.15 if show_zoomed  else 0.0)
+	# Re-apply whichever material is currently in use so the updated alpha takes
+	# effect right away instead of waiting for the next zoom toggle.
+	if _floor_mi != null:
+		var currently_zoomed := _zoom_state == ZoomState.ZOOMED_IN
+		_floor_mi.material_override = _floor_mat_zoomed if currently_zoomed else _floor_mat_overview
