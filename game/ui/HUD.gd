@@ -1658,7 +1658,7 @@ class _WaveSegmentOverlay extends Control:
 			spawn_progress = clampf(v, 0.0, 1.0)
 			queue_redraw()
 
-	const COLOR_SEG_GREEN := Color(0.00, 1.00, 0.27, 1.0)   # bright green
+	const COLOR_SEG_GREEN := Color(0.22, 0.60, 0.04, 1.0)   # matches DebugStartDialog green palette
 	const COLOR_SEG_GRAY  := Color(0.65, 0.65, 0.65, 1.0)
 
 	func _notification(what: int) -> void:
