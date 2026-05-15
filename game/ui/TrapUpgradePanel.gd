@@ -230,7 +230,7 @@ func _build_ui() -> void:
 ## are chosen so the panel reads as clearly tinted while text stays legible.
 ## Must be called after _trap is set and before _build_ui() runs.
 func _apply_trap_theme() -> void:
-	var base := _trap.get_base_color()
+	var base: Color = _trap.get_base_color()
 	var h    := base.h
 	var s    := base.s
 	var v    := base.v
