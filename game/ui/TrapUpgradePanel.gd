@@ -235,7 +235,7 @@ func _apply_trap_theme() -> void:
 	var s    := base.s
 	var v    := base.v
 
-	COLOR_BG                  = Color.from_hsv(h, s * 0.75, v * 0.15, 0.65)
+	COLOR_BG                  = Color.from_hsv(h, s * 0.75, v * 0.15, 0.80)
 	COLOR_OUTLINE             = Color.from_hsv(h, s * 0.85, v * 0.62, 1.0)
 	COLOR_DIVIDER             = Color.from_hsv(h, s * 0.75, v * 0.22, 1.0)
 	COLOR_TEXT_DIM            = Color.from_hsv(h, s * 0.35, v * 0.78, 1.0)

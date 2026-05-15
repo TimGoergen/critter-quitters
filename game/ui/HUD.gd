@@ -627,7 +627,7 @@ func _update_incoming_overlay_layout() -> void:
 	var ref_size: int = 200
 	var measured := _incoming_font.get_string_size(
 			"INCOMING", HORIZONTAL_ALIGNMENT_LEFT, -1, ref_size).x
-	var font_size := int(ref_size * (arena_w * 0.63) / measured)
+	var font_size := int(ref_size * (arena_w * 0.63) / measured * 0.85)
 	_countdown_wave_label.add_theme_font_size_override("font_size", font_size)
 	_countdown_seconds_label.add_theme_font_size_override("font_size", font_size)
 
