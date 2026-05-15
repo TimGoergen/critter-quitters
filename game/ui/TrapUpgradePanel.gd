@@ -260,8 +260,16 @@ func _refresh() -> void:
 		_trap.is_range_maxed(), _trap.get_range_upgrade_cost()
 	)
 
-	# Fire Rate row — hidden for passive traps (Glue Board).
-	if _trap.is_passive():
+	# Third stat row: Duration for Glue Board, Fire Rate for active traps.
+	if trap_type == Trap.TrapType.GLUE_BOARD:
+		_rate_row["row"].visible = true
+		_refresh_stat_row(
+			_rate_row, "Duration", _trap.get_duration_level(),
+			"%.1fs" % _trap.get_duration(),
+			"+%.1fs" % (_trap.get_duration_after_upgrade() - _trap.get_duration()),
+			_trap.is_duration_maxed(), _trap.get_duration_upgrade_cost()
+		)
+	elif _trap.is_passive():
 		_rate_row["row"].visible = false
 	else:
 		_rate_row["row"].visible = true
@@ -346,12 +354,20 @@ func _on_btn_b() -> void:
 
 
 func _on_btn_c() -> void:
-	if _trap.is_rate_maxed() or _trap.is_passive():
-		return
-	if not GameState.spend_bug_bucks(_trap.get_rate_upgrade_cost()):
-		return
-	_trap.apply_fire_rate_upgrade()
-	AudioManager.play_ui("upgrade")
+	if _trap.get_type() == Trap.TrapType.GLUE_BOARD:
+		if _trap.is_duration_maxed():
+			return
+		if not GameState.spend_bug_bucks(_trap.get_duration_upgrade_cost()):
+			return
+		_trap.apply_duration_upgrade()
+		AudioManager.play_ui("upgrade")
+	else:
+		if _trap.is_rate_maxed() or _trap.is_passive():
+			return
+		if not GameState.spend_bug_bucks(_trap.get_rate_upgrade_cost()):
+			return
+		_trap.apply_fire_rate_upgrade()
+		AudioManager.play_ui("upgrade")
 
 
 func _on_btn_sell() -> void:

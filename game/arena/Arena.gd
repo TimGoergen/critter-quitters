@@ -153,6 +153,10 @@ const PINCH_THRESHOLD_PX: float = 40.0
 var _drag_place_preview: Node3D  = null
 var _drag_place_anchor:  Vector2i = Vector2i(-1, -1)
 
+# The placed trap whose range indicator is shown while the preview hovers over it.
+# Cleared when the preview moves away or is released.
+var _placement_hover_trap: Node = null
+
 # True while the HUD is driving a drag-and-drop placement gesture.
 # When set, Arena's own pointer state machine stays idle and placement
 # is controlled entirely by HUD calling begin/update/commit_hud_drag().
@@ -412,11 +416,22 @@ func _update_drag_preview(screen_pos: Vector2) -> void:
 
 	var cells := _get_trap_cells(anchor)
 	var valid  := not cells.is_empty() \
+		and _all_cells_buildable(cells) \
 		and not _footprint_overlaps_enemy(cells) \
 		and _can_place_at(cells)
 	_drag_place_preview = _make_trap_preview(GameState.selected_trap_type, 0.5, valid)
 	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 	_drag_place_preview.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
+
+	# When placement is invalid, suppress the preview's range circle.
+	# If the footprint covers an existing trap, surface that trap's range indicator
+	# so the player can see the conflict clearly.
+	if not valid:
+		_drag_place_preview.hide_range_indicator()
+		var blocked_trap := _find_trap_at_cells(cells)
+		if blocked_trap != null:
+			blocked_trap.show_range_indicator()
+			_placement_hover_trap = blocked_trap
 
 
 ## Places a trap at the last previewed anchor and frees the preview.
@@ -436,6 +451,7 @@ func _clear_drag_preview() -> void:
 		_drag_place_preview.queue_free()
 	_drag_place_preview   = null
 	_drag_place_anchor    = Vector2i(-1, -1)
+	_release_placement_hover_trap()
 
 
 # ---------------------------------------------------------------------------
@@ -598,6 +614,37 @@ func _footprint_overlaps_enemy(cells: Array[Vector2i]) -> bool:
 		if enemy.get_target_cell() in cells:
 			return true
 	return false
+
+
+## Returns true only if every cell in the footprint is available for building.
+## Catches TRAP, WALL, and OBSTACLE states that _can_place_at() does not reject.
+func _all_cells_buildable(cells: Array[Vector2i]) -> bool:
+	for cell in cells:
+		if not _grid.is_buildable(cell):
+			return false
+	return true
+
+
+## Returns the placed Trap node whose footprint contains any of the given cells,
+## or null if no placed trap occupies those cells.
+func _find_trap_at_cells(cells: Array[Vector2i]) -> Node:
+	for cell in cells:
+		if _trap_anchors.has(cell):
+			var anchor: Vector2i = _trap_anchors[cell]
+			if _trap_nodes.has(anchor):
+				return _trap_nodes[anchor]
+	return null
+
+
+## Hides the range indicator on any trap that was shown during an invalid placement
+## hover, then clears the reference.  Does not hide if the upgrade panel has the
+## indicator pinned on the same trap.
+func _release_placement_hover_trap() -> void:
+	if _placement_hover_trap != null and is_instance_valid(_placement_hover_trap):
+		# Skip hide when the upgrade panel is open on this trap — it owns the pin.
+		if _placement_hover_trap != _selected_trap:
+			_placement_hover_trap.hide_range_indicator()
+	_placement_hover_trap = null
 
 
 func _try_place_trap(anchor: Vector2i) -> bool:

@@ -18,9 +18,11 @@
 ##   fire time and does nothing on arrival.
 ##
 ## Upgrade model:
-##   Each trap instance tracks three independent upgrade levels — one per
-##   stat (Damage, Range, Fire Rate). Each stat can be upgraded up to
-##   MAX_UPGRADE_LEVEL (3) times. Costs per level are defined in UPGRADE_COSTS.
+##   Each trap instance tracks three independent upgrade levels — one per stat.
+##   Active traps (Snap, Zapper, Fogger): Damage, Range, Fire Rate.
+##   Glue Board: Adhesion, Range, Duration (seconds the slow persists after leaving range).
+##   Each stat can be upgraded up to MAX_UPGRADE_LEVEL (3) times.
+##   Costs per level are defined in UPGRADE_COSTS.
 ##
 ## Usage: instantiate via Arena, call initialize(), set position, then
 ## add to the scene tree.
@@ -66,6 +68,10 @@ const UPGRADE_FIRE_RATE_FACTOR: float = 0.08  # −8% of base cooldown per level
 ## Defined as an explicit table because the intended values don't fit the shared
 ## UPGRADE_DAMAGE_FACTOR formula.
 const GLUE_ADHESION_LEVELS: Array[float] = [0.20, 0.30, 0.40, 0.50]
+
+## Glue Board slow duration (seconds) at each duration upgrade level (index = _duration_level).
+## How long the slow persists on an enemy after it leaves the board's radius.
+const GLUE_DURATION_LEVELS: Array[float] = [3.0, 4.5, 6.0, 8.0]
 
 ## Bug Bucks cost for each upgrade level per trap type.
 ## Index 0 = first upgrade, 1 = second, 2 = third.
@@ -125,9 +131,15 @@ var _base_cooldown: float = 0.0
 # types, so this always reflects the live list without any extra bookkeeping.
 var _active_enemies: Array = []
 
-# All enemies currently under this board's slow effect, stored as a set.
-# Dictionary is used instead of Array for O(1) membership checks and removal.
+# All enemies currently under this board's slow effect.
+#   key   = enemy node
+#   value = -1.0 while the enemy is inside the range radius;
+#           remaining countdown seconds after the enemy has left the radius.
 var _glue_slowed_enemies: Dictionary = {}
+
+# How long the slow lingers on an enemy after it exits the board's radius.
+var _slow_duration:  float = 0.0
+var _duration_level: int   = 0
 
 # When true, this node is a visual-only placement preview: no combat, no hover area,
 # no range indicator. Set by initialize_preview() before the node enters the tree.
@@ -207,6 +219,7 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	stats_changed.connect(_rebuild_range_indicator)
 	stats_changed.connect(_update_star_display)
 	if _trap_type == TrapType.GLUE_BOARD:
+		_slow_duration = GLUE_DURATION_LEVELS[0]
 		stats_changed.connect(_refresh_glue_slow)
 
 
@@ -250,6 +263,11 @@ func get_rate_upgrade_cost() -> int:
 		return 0
 	return UPGRADE_COSTS[_trap_type][_rate_level]
 
+func get_duration_upgrade_cost() -> int:
+	if _duration_level >= MAX_UPGRADE_LEVEL:
+		return 0
+	return UPGRADE_COSTS[_trap_type][_duration_level]
+
 
 # ---------------------------------------------------------------------------
 # Upgrade — stat previews
@@ -274,6 +292,10 @@ func get_shots_per_sec() -> float:
 func get_shots_per_sec_after_upgrade() -> float:
 	var new_cooldown := maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
 	return 1.0 / new_cooldown
+
+## Glue Board only — slow duration (seconds) after the next duration upgrade.
+func get_duration_after_upgrade() -> float:
+	return GLUE_DURATION_LEVELS[mini(_duration_level + 1, MAX_UPGRADE_LEVEL)]
 
 
 # ---------------------------------------------------------------------------
@@ -307,6 +329,13 @@ func apply_fire_rate_upgrade() -> void:
 	_check_full_upgrade_bonus()
 	stats_changed.emit()
 
+## Advances the Glue Board to the next duration tier. Only call when not maxed.
+func apply_duration_upgrade() -> void:
+	_duration_level += 1
+	_slow_duration = GLUE_DURATION_LEVELS[_duration_level]
+	_check_full_upgrade_bonus()
+	stats_changed.emit()
+
 
 # ---------------------------------------------------------------------------
 # Upgrade — accessors
@@ -330,12 +359,20 @@ func is_range_maxed() -> bool:
 func is_rate_maxed() -> bool:
 	return _rate_level >= MAX_UPGRADE_LEVEL
 
+func get_duration_level() -> int:
+	return _duration_level
+
+func is_duration_maxed() -> bool:
+	return _duration_level >= MAX_UPGRADE_LEVEL
+
+## Glue Board only — current slow duration in seconds after leaving the board's radius.
+func get_duration() -> float:
+	return _slow_duration
+
 ## True when every upgradeable stat is at MAX_UPGRADE_LEVEL.
-## Passive traps (no fire rate) are fully upgraded after 6 total upgrades;
-## active traps require all 9.
 func is_fully_upgraded() -> bool:
-	if _base_cooldown == 0.0:
-		return is_damage_maxed() and is_range_maxed()
+	if _trap_type == TrapType.GLUE_BOARD:
+		return is_damage_maxed() and is_range_maxed() and is_duration_maxed()
 	return is_damage_maxed() and is_range_maxed() and is_rate_maxed()
 
 func get_damage() -> float:
@@ -378,15 +415,18 @@ func get_adhesion_after_upgrade_pct() -> float:
 ## Returns how many stats are currently at MAX_UPGRADE_LEVEL.
 func get_maxed_stat_count() -> int:
 	var count := 0
-	if is_damage_maxed():  count += 1
-	if is_range_maxed():   count += 1
-	if not is_passive() and is_rate_maxed():  count += 1
+	if is_damage_maxed(): count += 1
+	if is_range_maxed():  count += 1
+	if _trap_type == TrapType.GLUE_BOARD:
+		if is_duration_maxed(): count += 1
+	elif not is_passive():
+		if is_rate_maxed():     count += 1
 	return count
 
 ## Returns the total number of independently upgradeable stats for this trap.
-## Passive traps (Glue Board) have 2; active traps have 3.
+## All trap types have 3: active traps upgrade Fire Rate; Glue Board upgrades Duration.
 func get_total_upgradeable_stats() -> int:
-	return 2 if is_passive() else 3
+	return 3
 
 ## Fraction of total spending returned when the trap is sold.
 const SELL_REFUND_FRACTION: float = 0.49
@@ -402,6 +442,8 @@ func get_sell_value() -> int:
 		total_spent += UPGRADE_COSTS[_trap_type][lvl]
 	for lvl in range(_rate_level):
 		total_spent += UPGRADE_COSTS[_trap_type][lvl]
+	for lvl in range(_duration_level):
+		total_spent += UPGRADE_COSTS[_trap_type][lvl]
 	return int(total_spent * SELL_REFUND_FRACTION)
 
 
@@ -411,7 +453,7 @@ func get_sell_value() -> int:
 
 func _process(delta: float) -> void:
 	if _trap_type == TrapType.GLUE_BOARD:
-		_update_glue_aoe()
+		_update_glue_aoe(delta)
 		return
 
 	# Fogger idle animation: gentle sine-wave float between shots.
@@ -483,28 +525,42 @@ func _fire_fogger() -> bool:
 	return false
 
 
-## Slows every enemy within range simultaneously.  Runs every frame.
-## Enemies are caught the first frame they cross the radius boundary and released
-## the first frame they leave it (or die).
-func _update_glue_aoe() -> void:
-	# Collect enemies to release — cannot erase from a Dictionary while iterating it.
+## Slows every enemy that enters range. The slow persists for _slow_duration seconds
+## after the enemy leaves the radius before being removed. Runs every frame.
+func _update_glue_aoe(delta: float) -> void:
+	# First pass: tick duration countdowns and collect enemies whose slow has expired.
+	# Cannot erase from a Dictionary while iterating — collect targets first.
 	var to_release: Array = []
 	for enemy in _glue_slowed_enemies:
-		if not is_instance_valid(enemy) or _xz_distance(enemy.global_position) > _range:
+		if not is_instance_valid(enemy):
 			to_release.append(enemy)
+			continue
+		if _xz_distance(enemy.global_position) <= _range:
+			_glue_slowed_enemies[enemy] = -1.0   # still in range — reset to "no countdown"
+		else:
+			var remaining: float = _glue_slowed_enemies[enemy]
+			if remaining < 0.0:
+				_glue_slowed_enemies[enemy] = _slow_duration  # just left range — start countdown
+			else:
+				remaining -= delta
+				if remaining <= 0.0:
+					to_release.append(enemy)
+				else:
+					_glue_slowed_enemies[enemy] = remaining
+
 	for enemy in to_release:
 		if is_instance_valid(enemy):
 			enemy.remove_slow_source(self)
 		_glue_slowed_enemies.erase(enemy)
 
-	# Apply slow to newly-in-range enemies and fire a cosmetic projectile for each.
+	# Second pass: apply slow to newly-in-range enemies and fire a cosmetic projectile.
 	var newly_caught := false
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
 			continue
 		if _xz_distance(enemy.global_position) <= _range and not _glue_slowed_enemies.has(enemy):
 			enemy.add_slow_source(self, _damage)
-			_glue_slowed_enemies[enemy] = true
+			_glue_slowed_enemies[enemy] = -1.0
 			fired.emit(global_position, enemy.global_position, enemy, 0.0, _trap_type)
 			newly_caught = true
 	if newly_caught:
@@ -713,7 +769,7 @@ func _spawn_range_indicator() -> void:
 	fill_mesh.height          = 0.001
 	fill_mesh.radial_segments = 64
 	var fill_mat             := StandardMaterial3D.new()
-	fill_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.0175)
+	fill_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.025)
 	fill_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fill_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	fill_mi.mesh              = fill_mesh
@@ -724,7 +780,7 @@ func _spawn_range_indicator() -> void:
 	var ring_mi              := MeshInstance3D.new()
 	ring_mi.mesh              = _make_ring_mesh(_range, 0.10)
 	var ring_mat             := StandardMaterial3D.new()
-	ring_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.035)
+	ring_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.55)
 	ring_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	ring_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	ring_mi.material_override = ring_mat
