@@ -159,10 +159,17 @@ func _make_icon_button(label_text: String, icon_path: String, is_green: bool) ->
 
 
 func _on_start_pressed() -> void:
-	# Disable both buttons immediately so a double-tap cannot fire the transition twice.
 	_start_btn.disabled = true
-	_quit_btn.disabled  = true
+	_quit_btn.visible   = false
+	_strip_btn_border(_start_btn, true)
 	_play_van_exit()
+
+
+func _on_quit_pressed() -> void:
+	_quit_btn.disabled  = true
+	_start_btn.visible  = false
+	_strip_btn_border(_quit_btn, false)
+	get_tree().quit()
 
 
 func _play_van_exit() -> void:
@@ -223,10 +230,6 @@ func _on_van_exited() -> void:
 	tween.tween_callback(func(): get_tree().change_scene_to_file("res://Main.tscn"))
 
 
-func _on_quit_pressed() -> void:
-	get_tree().quit()
-
-
 func _apply_green_btn_style(btn: Button) -> void:
 	for state: Array in [
 		["normal",  COLOR_GREEN_NORMAL],
@@ -263,6 +266,22 @@ func _apply_red_btn_style(btn: Button) -> void:
 		box.content_margin_bottom = 8.0
 		btn.add_theme_stylebox_override(state[0], box)
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
+
+
+## Replaces all state styleboxes on btn with a border-free version of its base color.
+## Applied to the clicked button so it retains its background while the outline disappears.
+func _strip_btn_border(btn: Button, is_green: bool) -> void:
+	var bg := COLOR_GREEN_NORMAL if is_green else COLOR_RED_NORMAL
+	var box := StyleBoxFlat.new()
+	box.bg_color              = bg
+	box.set_border_width_all(0)
+	box.set_corner_radius_all(6)
+	box.content_margin_left   = 16.0
+	box.content_margin_right  = 16.0
+	box.content_margin_top    = 8.0
+	box.content_margin_bottom = 8.0
+	for state in ["normal", "hover", "pressed", "disabled"]:
+		btn.add_theme_stylebox_override(state, box)
 
 
 # One transient exhaust cloud puff.

@@ -748,12 +748,17 @@ func _rebuild_range_indicator() -> void:
 
 ## Creates a flat filled disc and outline ring at ground level to show trap range.
 ## Hidden by default; shown on mouse hover via _hover_area.
+## Preview instances (trap being dragged for placement) use higher opacity so the
+## circle reads clearly against the arena while the player is choosing a cell.
 func _spawn_range_indicator() -> void:
 	_range_indicator            = Node3D.new()
 	_range_indicator.position.y = 0.02
 	_range_indicator.visible    = false
 
-	# Filled disc — white, 80% transparent (alpha 0.20)
+	var fill_alpha := 0.12 if _is_preview else 0.025
+	var ring_alpha := 0.90 if _is_preview else 0.55
+
+	# Filled disc
 	var fill_mi              := MeshInstance3D.new()
 	var fill_mesh            := CylinderMesh.new()
 	fill_mesh.top_radius      = _range
@@ -761,18 +766,18 @@ func _spawn_range_indicator() -> void:
 	fill_mesh.height          = 0.001
 	fill_mesh.radial_segments = 64
 	var fill_mat             := StandardMaterial3D.new()
-	fill_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.025)
+	fill_mat.albedo_color     = Color(1.0, 1.0, 1.0, fill_alpha)
 	fill_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fill_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	fill_mi.mesh              = fill_mesh
 	fill_mi.material_override = fill_mat
 	_range_indicator.add_child(fill_mi)
 
-	# Outline ring — white, 60% transparent (alpha 0.40)
+	# Outline ring
 	var ring_mi              := MeshInstance3D.new()
 	ring_mi.mesh              = _make_ring_mesh(_range, 0.10)
 	var ring_mat             := StandardMaterial3D.new()
-	ring_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.55)
+	ring_mat.albedo_color     = Color(1.0, 1.0, 1.0, ring_alpha)
 	ring_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	ring_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	ring_mi.material_override = ring_mat
