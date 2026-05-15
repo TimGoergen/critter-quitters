@@ -601,7 +601,7 @@ void vertex() {
 void fragment() {
     float d = clamp(frag_dist, 0.0, 1.0);
     ALBEDO = vec3(1.0, 0.82, 0.0);
-    ALPHA  = 0.62 * (1.0 - d * d);
+    ALPHA  = 0.155 * (1.0 - d * d);
 }
 """
 	var mat := ShaderMaterial.new()
