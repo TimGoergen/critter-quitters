@@ -735,8 +735,9 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 	_selected_trap_anchor = anchor
 	if _trap_outlines.has(anchor):
 		_draw_trap_outline(anchor)
-	get_tree().paused = true
-	_panel_paused = true
+	if not get_tree().paused:
+		get_tree().paused = true
+		_panel_paused = true
 
 
 ## Sells the trap at anchor (70% refund) and closes the upgrade panel.

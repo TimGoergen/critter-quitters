@@ -69,6 +69,8 @@ const MARGIN: float = 10.0             # inner padding for both panels
 const SCREEN_EDGE_MARGIN: float = 24.0 # extra inset on the screen-edge side and top/bottom to clear rounded corners
 const RIGHT_BTN_H: float = 52.0        # fixed height for all right-panel buttons
 const INNER_BORDER_W: float = 2.0      # black separator line at the arena-facing edge of each panel
+const COLOR_SILVER_BORDER := Color(0.72, 0.72, 0.80, 1.0)
+const SILVER_BORDER_W: float = 4.0    # thickness of the silver panel border lines
 
 # INCOMING arena overlay — container parents both labels so one modulate write hides both.
 var _countdown_container:      Control
@@ -84,7 +86,7 @@ var _send_wave_reward_row:    HBoxContainer
 var _send_wave_reward_label:  Label
 var _early_bonus_particles:   CPUParticles2D
 var _run_over_overlay:        Control
-var _wave_multiplier:        int = 1   # current send-wave multiplier; cycles 1 → 10 → 100 → 1
+var _wave_multiplier:        int = 1   # current send-wave multiplier; cycles 1 → 5 → 10 → 1
 var _last_countdown_seconds: int = 0   # last received countdown value; used to refresh reward text when multiplier changes
 var _current_wave_reward:    int = 0   # last value from early_send_reward_changed; drives the reward label
 
@@ -173,6 +175,7 @@ func _build_ui() -> void:
 	_build_incoming_overlay()  # arena overlay; drawn above panels, below dialogs
 	_build_settings_dialog()   # must be after right panel so it draws on top
 	_build_run_over_overlay()
+	_build_panel_borders()     # drawn last so borders appear on top of all panel content
 
 
 # ---------------------------------------------------------------------------
@@ -459,7 +462,7 @@ void fragment() {
 	# Pressing the next-wave button triggers that many wave-sends simultaneously.
 	_multiplier_btn = Button.new()
 	_multiplier_btn.text                  = ""
-	_multiplier_btn.custom_minimum_size   = Vector2(0, 100)
+	_multiplier_btn.custom_minimum_size   = Vector2(0, 50)
 	_multiplier_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_multiplier_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_apply_gold_button_style(_multiplier_btn)
@@ -473,7 +476,7 @@ void fragment() {
 	_multiplier_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_multiplier_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_multiplier_label.add_theme_font_override("font", UIFonts.primary_bold())
-	_multiplier_label.add_theme_font_size_override("font_size", 22)
+	_multiplier_label.add_theme_font_size_override("font_size", 28)
 	_multiplier_label.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
 	_multiplier_btn.add_child(_multiplier_label)
 
@@ -703,6 +706,38 @@ func _build_run_over_overlay() -> void:
 	restart_label.add_theme_font_size_override("font_size", 24)
 	restart_label.add_theme_color_override("font_color", COLOR_TEXT)
 	btn_hbox.add_child(restart_label)
+
+
+# ---------------------------------------------------------------------------
+# Panel borders
+# ---------------------------------------------------------------------------
+
+## Draws thick silver lines around the left panel, arena, and right panel.
+## Called last in _build_ui() so borders render on top of all panel content.
+func _build_panel_borders() -> void:
+	# Top edge — full width
+	_add_border_line(0.0, 0.0, 1.0, 0.0,  0.0,  0.0,  0.0,  SILVER_BORDER_W)
+	# Bottom edge — full width
+	_add_border_line(0.0, 1.0, 1.0, 1.0,  0.0, -SILVER_BORDER_W,  0.0,  0.0)
+	# Left screen edge
+	_add_border_line(0.0, 0.0, 0.0, 1.0,  0.0,  0.0,  SILVER_BORDER_W,  0.0)
+	# Right screen edge
+	_add_border_line(1.0, 0.0, 1.0, 1.0, -SILVER_BORDER_W,  0.0,  0.0,  0.0)
+	# Left panel / arena divider
+	_add_border_line(0.0, 0.0, 0.0, 1.0,  LEFT_PANEL_W,  0.0,  LEFT_PANEL_W + SILVER_BORDER_W,  0.0)
+	# Arena / right panel divider
+	_add_border_line(1.0, 0.0, 1.0, 1.0, -RIGHT_PANEL_W - SILVER_BORDER_W,  0.0, -RIGHT_PANEL_W,  0.0)
+
+
+func _add_border_line(al: float, at: float, ar: float, ab: float,
+		ol: float, ot: float, or_: float, ob: float) -> void:
+	var line          := ColorRect.new()
+	line.color         = COLOR_SILVER_BORDER
+	line.anchor_left   = al;  line.anchor_top    = at
+	line.anchor_right  = ar;  line.anchor_bottom = ab
+	line.offset_left   = ol;  line.offset_top    = ot
+	line.offset_right  = or_; line.offset_bottom = ob
+	add_child(line)
 
 
 # ---------------------------------------------------------------------------
@@ -1074,9 +1109,9 @@ func _on_pause_btn_pressed() -> void:
 func _on_multiplier_btn_pressed() -> void:
 	AudioManager.play_ui("button")
 	match _wave_multiplier:
-		1:   _wave_multiplier = 10
-		10:  _wave_multiplier = 100
-		100: _wave_multiplier = 1
+		1:   _wave_multiplier = 5
+		5:   _wave_multiplier = 10
+		10:  _wave_multiplier = 1
 	_multiplier_label.text = "×%d" % _wave_multiplier
 	_refresh_reward_label()
 
@@ -1120,11 +1155,9 @@ func _build_early_bonus_particles() -> void:
 func _on_early_bonus_awarded(coins: int) -> void:
 	if coins <= 0:
 		return
-	var particle_scale := 1 if _wave_multiplier == 1 else (2 if _wave_multiplier == 10 else 3)
-	# Divide by the multiplier first — coins is the total payout which is already scaled
-	# by wave count, so we derive a single-wave equivalent before applying the visual scale.
-	var base_coins     := coins / _wave_multiplier
-	_early_bonus_particles.amount   = max(3, base_coins * 3 / 4) * particle_scale
+	const BASE_PARTICLES := 12
+	var scale := 1 if _wave_multiplier == 1 else (2 if _wave_multiplier == 5 else 3)
+	_early_bonus_particles.amount   = BASE_PARTICLES * scale
 	_early_bonus_particles.position = _send_wave_btn.get_global_rect().get_center()
 	_early_bonus_particles.restart()
 
