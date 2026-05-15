@@ -637,13 +637,10 @@ func _find_trap_at_cells(cells: Array[Vector2i]) -> Node:
 
 
 ## Hides the range indicator on any trap that was shown during an invalid placement
-## hover, then clears the reference.  Does not hide if the upgrade panel has the
-## indicator pinned on the same trap.
+## hover, then clears the reference.
 func _release_placement_hover_trap() -> void:
 	if _placement_hover_trap != null and is_instance_valid(_placement_hover_trap):
-		# Skip hide when the upgrade panel is open on this trap — it owns the pin.
-		if _placement_hover_trap != _selected_trap:
-			_placement_hover_trap.hide_range_indicator()
+		_placement_hover_trap.hide_range_indicator()
 	_placement_hover_trap = null
 
 
@@ -711,7 +708,6 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 	panel.initialize(_trap_nodes[anchor])
 	_upgrade_panel  = panel
 	_selected_trap  = _trap_nodes[anchor]
-	_selected_trap.show_range_indicator()
 	_show_selected_trap_outline(anchor)
 	_selected_trap_anchor = anchor
 	if _trap_outlines.has(anchor):
@@ -747,8 +743,6 @@ func _close_upgrade_panel() -> void:
 	if _upgrade_panel != null and is_instance_valid(_upgrade_panel):
 		_upgrade_panel.queue_free()
 	_upgrade_panel = null
-	if _selected_trap != null and is_instance_valid(_selected_trap):
-		_selected_trap.hide_range_indicator()
 	_selected_trap = null
 	_hide_selected_trap_outline()
 	var prev_selected := _selected_trap_anchor
@@ -762,8 +756,6 @@ func _close_upgrade_panel() -> void:
 
 func _on_upgrade_panel_closed() -> void:
 	_upgrade_panel = null
-	if _selected_trap != null and is_instance_valid(_selected_trap):
-		_selected_trap.hide_range_indicator()
 	_selected_trap = null
 	_hide_selected_trap_outline()
 	var prev_selected := _selected_trap_anchor

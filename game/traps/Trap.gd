@@ -707,20 +707,18 @@ func _update_star_display() -> void:
 		_shadow_mat.set_shader_parameter("opacity", shadow_opacity)
 
 
-## Forces the range indicator visible and pins it so hover-exit cannot hide it.
-## Called by Arena when the upgrade panel opens for this trap.
+## Shows the range indicator. Called by Arena when a placement preview overlaps this trap.
 func show_range_indicator() -> void:
 	_indicator_pinned = true
 	if _range_indicator != null:
 		_range_indicator.visible = true
 
 
-## Unpins the indicator and hides it unless the mouse is still over the trap.
-## Called by Arena when the upgrade panel closes.
+## Hides the range indicator. Called by Arena when the placement preview moves away.
 func hide_range_indicator() -> void:
 	_indicator_pinned = false
 	if _range_indicator != null:
-		_range_indicator.visible = _is_hovered
+		_range_indicator.visible = false
 
 
 ## Hides the colored background plate, shadow halo, and footprint outline bars.
@@ -732,16 +730,10 @@ func hide_decorators() -> void:
 
 func _on_hover_enter() -> void:
 	_is_hovered = true
-	if _range_indicator != null:
-		_range_indicator.visible = true
 
 
 func _on_hover_exit() -> void:
 	_is_hovered = false
-	if _indicator_pinned:
-		return
-	if _range_indicator != null:
-		_range_indicator.visible = false
 
 
 ## Rebuilds the range indicator after an upgrade changes _range.
