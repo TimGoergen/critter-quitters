@@ -64,6 +64,10 @@ signal early_wave_bonus_awarded(coins: int)
 ## the full amount, after each enemy spawns as it decreases, and at 0 once exhausted.
 signal early_send_reward_changed(amount: int)
 
+## Emitted at wave launch (spawned=0) and after each enemy spawns.
+## HUD uses this to drive the timer-ring segment display.
+signal wave_spawn_progress_changed(spawned: int, total: int)
+
 ## Emitted when the player picks a different trap type to place.
 ## type is an int matching the Trap.TrapType enum — stored as int here to
 ## avoid importing Trap.gd into GameState and creating a circular dependency.

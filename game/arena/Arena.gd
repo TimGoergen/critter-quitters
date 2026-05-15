@@ -94,6 +94,7 @@ const SPAWN_GAP_CELLS: float = 0.4
 const WAVE_COUNTDOWN: int  = 5         # seconds of countdown before each wave
 
 var _enemies_left_to_spawn: int  = 0
+var _wave_total_enemies:    int  = 0      # total enemies queued at _launch_wave; used for spawn-progress signal
 var _countdown_active: bool      = false  # true while between-wave countdown is ticking
 var _seconds_remaining: int      = 0     # last value broadcast during the active countdown
 
@@ -1076,8 +1077,11 @@ func _launch_wave() -> void:
 		_enemies_left_to_spawn = _static_spawn_queue.size()
 	else:
 		_enemies_left_to_spawn = _wave_size
+	_wave_total_enemies = _enemies_left_to_spawn
 	# Publish the full reward so the HUD can display it before the first spawn.
 	GameState.early_send_reward_changed.emit(_enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY)
+	# Notify the HUD that a new wave is starting with 0 enemies spawned so far.
+	GameState.wave_spawn_progress_changed.emit(0, _wave_total_enemies)
 	get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
 
 
@@ -1088,6 +1092,7 @@ func _spawn_next_in_wave() -> void:
 		return
 	_enemies_left_to_spawn -= 1
 	GameState.early_send_reward_changed.emit(_enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY)
+	GameState.wave_spawn_progress_changed.emit(_wave_total_enemies - _enemies_left_to_spawn, _wave_total_enemies)
 
 	var open_rows: Array[int] = []
 	for row in _entrance_rows:

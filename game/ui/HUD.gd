@@ -82,7 +82,6 @@ var _send_wave_reward_row:    HBoxContainer
 var _send_wave_reward_label:  Label
 var _early_bonus_particles:   CPUParticles2D
 var _run_over_overlay:        Control
-var _countdown_total_seconds: int = 0          # max seconds of the current between-wave countdown
 
 var _speed_btn:      Button
 var _speed_icon_lbl: Label   # ">>" icon; black at 1×, bright gold at 2×
@@ -154,6 +153,7 @@ func _ready() -> void:
 	GameState.wave_countdown_changed.connect(_on_wave_countdown_changed)
 	GameState.early_wave_bonus_awarded.connect(_on_early_bonus_awarded)
 	GameState.early_send_reward_changed.connect(_on_early_send_reward_changed)
+	GameState.wave_spawn_progress_changed.connect(_on_wave_spawn_progress_changed)
 	GameState.run_ended.connect(_on_run_ended)
 	GameState.zoom_state_changed.connect(_on_zoom_state_changed)
 	_on_bucks_changed(GameState.bug_bucks)
@@ -846,30 +846,29 @@ func _on_infestation_changed(level: float) -> void:
 
 func _on_wave_changed(wave: int) -> void:
 	_wave_label.text = "%d" % wave  # "WAVE" is a static sibling label; only the number changes
-	# Reset so the next countdown always captures its fresh starting value.
-	# Without this, early-send leaves the old total in place and the calculation breaks.
-	_countdown_total_seconds = 0
+	# New wave incoming — no enemies have spawned yet, so show all segments green.
+	# This covers both the countdown period and the moment an early send fires.
+	_wave_timer_icon.set("gray_count", 0)
 
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 	if seconds_remaining > 0:
-		# Capture the starting total on the first tick so progress can be computed.
-		if _countdown_total_seconds == 0:
-			_countdown_total_seconds = seconds_remaining
 		_countdown_active               = true
 		_countdown_container.modulate.a = 0.6
 		_countdown_seconds_label.text   = "%d" % seconds_remaining
-		# Gray segments fill in from top-clockwise as time elapses.
-		var elapsed := 1.0 - float(seconds_remaining) / float(_countdown_total_seconds)
-		_wave_timer_icon.set("gray_count", int(floor(8.0 * elapsed)))
 		_send_wave_reward_label.text    = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
 	else:
-		# Wave launched — reset the timer icon and hide the overlay.
 		_countdown_active               = false
-		_countdown_total_seconds        = 0
 		_countdown_container.modulate.a = 0.0
 		_countdown_seconds_label.text   = ""
-		_wave_timer_icon.set("gray_count", 0)
+
+
+func _on_wave_spawn_progress_changed(spawned: int, total: int) -> void:
+	if total <= 0:
+		return
+	# Each of the 8 segments represents one eighth of the wave's enemies.
+	# Segments gray out left-to-right as enemies spawn; all gray when fully spawned.
+	_wave_timer_icon.set("gray_count", int(floor(8.0 * float(spawned) / float(total))))
 
 
 func _process(delta: float) -> void:
@@ -1615,5 +1614,3 @@ class _WaveTimerIcon extends Control:
 		var q2 := g + (p2 - g) * 0.60
 		var q3 := g + (p3 - g) * 0.60
 		draw_colored_polygon(PackedVector2Array([q1, q2, q3]), COLOR_CENTER)
-
-
