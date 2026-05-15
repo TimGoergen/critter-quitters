@@ -72,10 +72,12 @@ const INNER_BORDER_W: float = 2.0      # black separator line at the arena-facin
 const COLOR_SILVER_BORDER := Color(0.72, 0.72, 0.80, 1.0)
 const SILVER_BORDER_W: float = 4.0    # thickness of the silver panel border lines
 
-const PAUSE_BANNER_H:          float = 56.0
-const PAUSE_BANNER_BORDER_W:   float = 6.0
+const PAUSE_BANNER_H:      float = 40.0
+# How many px each side angles inward from the top edge to the bottom edge.
+const PAUSE_BANNER_TAPER:  float = 20.0
 # 25% of the arena width (1280 virtual px minus the two 220px side panels).
-const PAUSE_BANNER_W:          float = (1280.0 - LEFT_PANEL_W - RIGHT_PANEL_W) * 0.25
+# This is the width of the wide top edge; the bottom edge is 2×TAPER narrower.
+const PAUSE_BANNER_W:      float = (1280.0 - LEFT_PANEL_W - RIGHT_PANEL_W) * 0.25
 const COLOR_PAUSE_BANNER_BG := Color(0.12, 0.12, 0.14, 0.80)  # dark gray, alpha matches upgrade panel
 
 # INCOMING arena overlay — container parents both labels so one modulate write hides both.
@@ -738,13 +740,14 @@ func _build_panel_borders() -> void:
 	_add_border_line(1.0, 0.0, 1.0, 1.0, -RIGHT_PANEL_W - SILVER_BORDER_W,  0.0, -RIGHT_PANEL_W,  0.0)
 
 
-## Full-width bar that slides down from the top edge when the game is paused.
-## Starts entirely above the viewport (offset_top = -PAUSE_BANNER_H) and tweens
-## down to offset_top = 0 on pause, back up on unpause.
+## Trapezoidal tab that slides down from the top border when the game is paused.
+## The top edge is PAUSE_BANNER_W wide and sits flush with the existing top
+## silver border; the sides angle inward by PAUSE_BANNER_TAPER px on each side
+## so the bottom edge is narrower.  Starts above the viewport and tweens down.
 func _build_pause_banner() -> void:
 	_pause_banner = Control.new()
-	# Centered horizontally in the viewport — which is also the arena center
-	# because both side panels are equal width.
+	# Centered horizontally — arena center equals viewport center because
+	# both side panels are the same width.
 	_pause_banner.anchor_left   = 0.5
 	_pause_banner.anchor_right  = 0.5
 	_pause_banner.anchor_top    = 0.0
@@ -758,24 +761,15 @@ func _build_pause_banner() -> void:
 	_pause_banner.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	add_child(_pause_banner)
 
-	# Silver outer rectangle — forms the border by being slightly larger than the inner fill.
-	var silver_bg := ColorRect.new()
-	silver_bg.color              = COLOR_SILVER_BORDER
-	silver_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_pause_banner.add_child(silver_bg)
-
-	# Dark gray fill inset by the border width on all sides.
-	var dark_bg := ColorRect.new()
-	dark_bg.color         = COLOR_PAUSE_BANNER_BG
-	dark_bg.anchor_left   = 0.0
-	dark_bg.anchor_right  = 1.0
-	dark_bg.anchor_top    = 0.0
-	dark_bg.anchor_bottom = 1.0
-	dark_bg.offset_left   = PAUSE_BANNER_BORDER_W
-	dark_bg.offset_right  = -PAUSE_BANNER_BORDER_W
-	dark_bg.offset_top    = PAUSE_BANNER_BORDER_W
-	dark_bg.offset_bottom = -PAUSE_BANNER_BORDER_W
-	_pause_banner.add_child(dark_bg)
+	# Trapezoidal shape — silver outline + dark fill drawn in _draw().
+	var shape := _PauseBannerShape.new()
+	shape.taper        = PAUSE_BANNER_TAPER
+	shape.border_w     = SILVER_BORDER_W   # match the panel outline thickness exactly
+	shape.color_border = COLOR_SILVER_BORDER
+	shape.color_fill   = COLOR_PAUSE_BANNER_BG
+	shape.set_anchors_preset(Control.PRESET_FULL_RECT)
+	shape.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_pause_banner.add_child(shape)
 
 	var label := Label.new()
 	label.text                 = "Paused"
@@ -783,7 +777,7 @@ func _build_pause_banner() -> void:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_override("font", UIFonts.header())
-	label.add_theme_font_size_override("font_size", 28)
+	label.add_theme_font_size_override("font_size", 22)
 	label.add_theme_color_override("font_color", COLOR_TEXT)
 	label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_pause_banner.add_child(label)
@@ -1688,6 +1682,44 @@ func _load_all_settings() -> void:
 # ---------------------------------------------------------------------------
 # Procedural icons
 # ---------------------------------------------------------------------------
+
+## Trapezoid with a silver outline and dark fill.  The top edge spans the full
+## Control width; each side angles inward by 'taper' px over the Control height
+## so the bottom edge is (width - 2×taper) wide.  Border width matches the
+## panel outlines so the top edge is visually continuous with the arena border.
+class _PauseBannerShape extends Control:
+	var taper:        float = 0.0
+	var border_w:     float = 0.0
+	var color_border: Color = Color.WHITE
+	var color_fill:   Color = Color.TRANSPARENT
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	func _draw() -> void:
+		var w  := size.x
+		var h  := size.y
+		var bw := border_w
+
+		# Outer (silver) trapezoid — top edge = full width, sides angle inward.
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(0.0,         0.0),
+			Vector2(w,           0.0),
+			Vector2(w - taper,   h),
+			Vector2(taper,       h),
+		]), color_border)
+
+		# Inner (dark fill) trapezoid — inset by bw on all four sides.
+		# The horizontal inset on the slanted sides matches bw closely enough
+		# at this slope; no trigonometric correction needed at 4 px border width.
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(bw,              bw),
+			Vector2(w - bw,          bw),
+			Vector2(w - taper - bw,  h - bw),
+			Vector2(taper + bw,      h - bw),
+		]), color_fill)
+
 
 ## Two vertical bars drawn at the correct cap height for the pause button.
 class _PauseBarIcon extends Control:
