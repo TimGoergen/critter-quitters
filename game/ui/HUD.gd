@@ -76,12 +76,13 @@ var _countdown_wave_label:     Label
 var _countdown_seconds_label:  Label
 var _incoming_font:            Font   # bold Bebas Neue — stored so layout can measure it
 
-var _send_wave_btn:          Button
-var _send_wave_text_label:   Label   # "Send Early" / "Send Next Wave"
-var _send_wave_reward_row:   HBoxContainer
-var _send_wave_reward_label: Label
-var _early_bonus_particles:  CPUParticles2D
-var _run_over_overlay:       Control
+var _send_wave_btn:           Button
+var _wave_timer_icon:         Control          # _WaveTimerIcon — animated countdown ring
+var _send_wave_reward_row:    HBoxContainer
+var _send_wave_reward_label:  Label
+var _early_bonus_particles:   CPUParticles2D
+var _run_over_overlay:        Control
+var _countdown_total_seconds: int = 0          # max seconds of the current between-wave countdown
 
 var _speed_btn:      Button
 var _speed_icon_lbl: Label   # ">>" icon; black at 1×, bright gold at 2×
@@ -414,69 +415,34 @@ void fragment() {
 	_infestation_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	inf_overlay.add_child(_infestation_label)
 
-	# --- Send Wave button — fixed height, centered in remaining vertical space.
-	# Equal expand-fill spacers above and below float it between the infestation
-	# bar and the bottom button row without stretching to fill all available space.
+	# --- Send Wave button — square timer icon, vertically centred between the
+	# infestation bar and the bottom controls via equal expand-fill spacers.
 	var send_spacer_top := Control.new()
 	send_spacer_top.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(send_spacer_top)
 
 	_send_wave_btn = Button.new()
-	_send_wave_btn.text = ""
-	_send_wave_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_send_wave_btn.text                  = ""
+	_send_wave_btn.custom_minimum_size   = Vector2(140, 140)
+	_send_wave_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_send_wave_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_send_wave_btn.custom_minimum_size   = Vector2(0, 104)
-	_apply_send_wave_btn_style(_send_wave_btn)
+	_apply_timer_btn_style(_send_wave_btn)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	vbox.add_child(_send_wave_btn)
 
-	var send_spacer_bottom := Control.new()
-	send_spacer_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(send_spacer_bottom)
+	_wave_timer_icon = _WaveTimerIcon.new()
+	_wave_timer_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_wave_timer_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_send_wave_btn.add_child(_wave_timer_icon)
 
-	var btn_vbox := VBoxContainer.new()
-	btn_vbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	btn_vbox.offset_left   = 8.0
-	btn_vbox.offset_right  = -8.0
-	btn_vbox.offset_top    = 4.0
-	btn_vbox.offset_bottom = -4.0
-	btn_vbox.alignment     = BoxContainer.ALIGNMENT_CENTER
-	btn_vbox.add_theme_constant_override("separation", 6)
-	btn_vbox.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	_send_wave_btn.add_child(btn_vbox)
-
-	# Action row — house icon + text label.
-	var top_row := HBoxContainer.new()
-	top_row.alignment    = BoxContainer.ALIGNMENT_CENTER
-	top_row.add_theme_constant_override("separation", 5)
-	top_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn_vbox.add_child(top_row)
-
-	var game_icon := TextureRect.new()
-	game_icon.texture             = load("res://assets/uninfested.png") as Texture2D
-	game_icon.custom_minimum_size = Vector2(36, 36)
-	game_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	game_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	game_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	game_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	top_row.add_child(game_icon)
-
-	_send_wave_text_label              = Label.new()
-	_send_wave_text_label.text         = "Send Next Wave"
-	_send_wave_text_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_send_wave_text_label.add_theme_font_override("font", UIFonts.primary_bold())
-	_send_wave_text_label.add_theme_font_size_override("font_size", 18)
-	_send_wave_text_label.add_theme_color_override("font_color", COLOR_TEXT)
-	top_row.add_child(_send_wave_text_label)
-
-	# Reward row — coin icon + bug bucks earned for sending early.
-	# Hidden when the reward is zero (no early bonus available).
+	# Reward row — coin icon + bug bucks earned for sending the wave early.
+	# Appears just below the timer icon; hidden when no bonus is on offer.
 	_send_wave_reward_row              = HBoxContainer.new()
 	_send_wave_reward_row.alignment    = BoxContainer.ALIGNMENT_CENTER
 	_send_wave_reward_row.add_theme_constant_override("separation", 4)
 	_send_wave_reward_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_send_wave_reward_row.modulate.a   = 0.0
-	btn_vbox.add_child(_send_wave_reward_row)
+	vbox.add_child(_send_wave_reward_row)
 
 	var btn_coin_icon := TextureRect.new()
 	btn_coin_icon.texture             = load("res://assets/bug_buck_coin.png") as Texture2D
@@ -497,6 +463,10 @@ void fragment() {
 	_send_wave_reward_row.add_child(_send_wave_reward_label)
 
 	_build_early_bonus_particles()
+
+	var send_spacer_bottom := Control.new()
+	send_spacer_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(send_spacer_bottom)
 
 	# --- Bottom 3-button row: Zoom | Pause | Speed ---
 	# Three equal-width gold buttons at a fixed height.
@@ -876,24 +846,27 @@ func _on_infestation_changed(level: float) -> void:
 
 func _on_wave_changed(wave: int) -> void:
 	_wave_label.text = "%d" % wave  # "WAVE" is a static sibling label; only the number changes
-	if not _countdown_active:
-		_send_wave_text_label.text = "Send Next Wave"
 
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 	if seconds_remaining > 0:
-		# Between-wave countdown — reveal the overlay and switch button text.
-		_countdown_active                  = true
-		_countdown_container.modulate.a    = 0.6
-		_countdown_seconds_label.text      = "%d" % seconds_remaining
-		_send_wave_text_label.text         = "Send Early"
-		_send_wave_reward_label.text       = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
+		# Capture the starting total on the first tick so progress can be computed.
+		if _countdown_total_seconds == 0:
+			_countdown_total_seconds = seconds_remaining
+		_countdown_active               = true
+		_countdown_container.modulate.a = 0.6
+		_countdown_seconds_label.text   = "%d" % seconds_remaining
+		# Gray segments fill in from top-clockwise as time elapses.
+		var elapsed := 1.0 - float(seconds_remaining) / float(_countdown_total_seconds)
+		_wave_timer_icon.set("gray_count", int(floor(8.0 * elapsed)))
+		_send_wave_reward_label.text    = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate)
 	else:
-		# Wave launched — hide the overlay and restore the button text.
-		_countdown_active                  = false
-		_countdown_container.modulate.a    = 0.0
-		_countdown_seconds_label.text      = ""
-		_send_wave_text_label.text         = "Send Next Wave"
+		# Wave launched — reset the timer icon and hide the overlay.
+		_countdown_active               = false
+		_countdown_total_seconds        = 0
+		_countdown_container.modulate.a = 0.0
+		_countdown_seconds_label.text   = ""
+		_wave_timer_icon.set("gray_count", 0)
 
 
 func _process(delta: float) -> void:
@@ -1384,6 +1357,18 @@ func _apply_send_wave_btn_style(btn: Button) -> void:
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
 
 
+func _apply_timer_btn_style(btn: Button) -> void:
+	# The _WaveTimerIcon draws all visuals; the button itself is fully transparent.
+	# Only the pressed state adds a dark overlay so the tap registers visually.
+	btn.add_theme_stylebox_override("normal",  StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("hover",   StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("focus",   StyleBoxEmpty.new())
+	var pressed_box := StyleBoxFlat.new()
+	pressed_box.bg_color = Color(0.0, 0.0, 0.0, 0.28)
+	pressed_box.set_corner_radius_all(100)
+	btn.add_theme_stylebox_override("pressed", pressed_box)
+
+
 # ---------------------------------------------------------------------------
 # Volume controls and settings helpers
 # ---------------------------------------------------------------------------
@@ -1556,3 +1541,89 @@ class _ZoomIcon extends Control:
 		draw_line(Vector2(cx - arm, cy), Vector2(cx + arm, cy), icon_color, line)
 		if show_plus:
 			draw_line(Vector2(cx, cy - arm), Vector2(cx, cy + arm), icon_color, line)
+
+
+## Animated wave countdown timer drawn procedurally.
+## Matches the SendNextWave art style: 8 ring segments around a yellow play-button circle.
+## Set gray_count (0–8) to control how many segments have elapsed; segments gray out
+## starting from the top (12 o'clock) and proceed clockwise.
+class _WaveTimerIcon extends Control:
+	var gray_count: int = 0 :
+		set(v):
+			gray_count = v
+			queue_redraw()
+
+	const SEGMENT_COUNT   := 8
+	const COLOR_SEG_GREEN := Color(0.00, 1.00, 0.27, 1.0)   # bright green (#00FF45)
+	const COLOR_SEG_GRAY  := Color(0.65, 0.65, 0.65, 1.0)   # medium gray
+	const COLOR_RING      := Color.BLACK
+	const COLOR_CENTER    := Color(0.78, 0.67, 0.04, 1.0)   # golden yellow
+	const COLOR_PLAY      := Color.BLACK
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	func _draw() -> void:
+		var cx   := size.x * 0.5
+		var cy   := size.y * 0.5
+		var base := minf(cx, cy)   # reference half-dimension; button should be square
+
+		# Step 1 — outer black disc.
+		# Provides the thick outer ring border and fills the gaps between segments.
+		draw_circle(Vector2(cx, cy), base * 0.96, COLOR_RING)
+
+		# Step 2 — 8 ring segments (top-first, clockwise).
+		# Each of the 8 slots spans exactly 45° (360 / 8).
+		# Each segment arc is 35° wide; 5° gap on each side of the slot.
+		var outer_r  := base * 0.84
+		var inner_r  := base * 0.65
+		var gap_half := deg_to_rad(5.0)
+		for i in range(SEGMENT_COUNT):
+			var slot_start := deg_to_rad(-90.0 + float(i) * 45.0)
+			var seg_start  := slot_start + gap_half
+			var seg_end    := slot_start + deg_to_rad(45.0) - gap_half
+			var color      := COLOR_SEG_GRAY if i < gray_count else COLOR_SEG_GREEN
+			_draw_annular_sector(Vector2(cx, cy), outer_r, inner_r, seg_start, seg_end, color)
+
+		# Step 3 — yellow center circle.
+		# The black inner ring (inner_r down to this circle's edge) shows naturally
+		# through the outer black disc — no separate draw call needed.
+		draw_circle(Vector2(cx, cy), base * 0.57, COLOR_CENTER)
+
+		# Step 4 — play triangle: hollow (thick black outline, yellow interior).
+		# A small right offset compensates for the triangle's asymmetric pointing shape.
+		var tr  := base * 0.26
+		var tcx := cx + tr * 0.10
+		var tcy := cy
+
+		# Outer (black) triangle
+		var p1 := Vector2(tcx - tr * 0.52, tcy - tr * 0.82)
+		var p2 := Vector2(tcx + tr * 0.76, tcy)
+		var p3 := Vector2(tcx - tr * 0.52, tcy + tr * 0.82)
+		draw_colored_polygon(PackedVector2Array([p1, p2, p3]), PackedColorArray([COLOR_PLAY]))
+
+		# Inner (yellow) triangle at 60% scale around the centroid — creates the hollow outline.
+		var g  := (p1 + p2 + p3) / 3.0
+		var q1 := g + (p1 - g) * 0.60
+		var q2 := g + (p2 - g) * 0.60
+		var q3 := g + (p3 - g) * 0.60
+		draw_colored_polygon(PackedVector2Array([q1, q2, q3]), PackedColorArray([COLOR_CENTER]))
+
+
+	## Draws a filled annular sector (pie-slice of a ring) using a closed polygon.
+	## Outer arc traced start→end; inner arc traced end→start to close the shape.
+	func _draw_annular_sector(center: Vector2, outer_r: float, inner_r: float,
+							   start_a: float, end_a: float, color: Color,
+							   steps: int = 16) -> void:
+		var pts    := PackedVector2Array()
+		var colors := PackedColorArray()
+		for i in range(steps + 1):
+			var a := lerp(start_a, end_a, float(i) / float(steps))
+			pts.append(center + Vector2(cos(a), sin(a)) * outer_r)
+			colors.append(color)
+		for i in range(steps + 1):
+			var a := lerp(end_a, start_a, float(i) / float(steps))
+			pts.append(center + Vector2(cos(a), sin(a)) * inner_r)
+			colors.append(color)
+		draw_colored_polygon(pts, colors)
