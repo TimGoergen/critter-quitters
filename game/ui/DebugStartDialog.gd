@@ -268,6 +268,7 @@ func _style_start_button(btn: Button) -> void:
 		box.content_margin_top    = 4.0
 		box.content_margin_bottom = 4.0
 		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
 
 
@@ -283,6 +284,7 @@ func _style_button(btn: Button) -> void:
 		box.content_margin_top    = 4.0
 		box.content_margin_bottom = 4.0
 		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
 
 

@@ -962,6 +962,13 @@ func _process(delta: float) -> void:
 ## Intercepts mouse/touch events when a drag is in progress, preventing them
 ## from reaching the arena's own input handlers.
 func _input(event: InputEvent) -> void:
+	# Spacebar toggles pause regardless of drag state.
+	if event is InputEventKey and event.pressed and not event.echo:
+		if event.keycode == KEY_SPACE:
+			_on_pause_btn_pressed()
+			get_viewport().set_input_as_handled()
+			return
+
 	if not _drag_active:
 		return
 
@@ -1415,6 +1422,7 @@ func _apply_gear_button_style(btn: Button) -> void:
 		box.set_corner_radius_all(6)
 		btn.add_theme_stylebox_override(state[0], box)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.focus_mode = Control.FOCUS_NONE
 
 
 func _apply_gold_button_style(btn: Button) -> void:
@@ -1429,7 +1437,9 @@ func _apply_gold_button_style(btn: Button) -> void:
 		box.content_margin_top    = 6.0
 		box.content_margin_bottom = 6.0
 		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
+	btn.focus_mode = Control.FOCUS_NONE
 
 
 func _apply_button_style(btn: Button) -> void:
@@ -1444,7 +1454,9 @@ func _apply_button_style(btn: Button) -> void:
 		box.content_margin_top    = 6.0
 		box.content_margin_bottom = 6.0
 		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
+	btn.focus_mode = Control.FOCUS_NONE
 
 
 func _apply_send_wave_btn_style(btn: Button) -> void:
@@ -1459,7 +1471,9 @@ func _apply_send_wave_btn_style(btn: Button) -> void:
 		box.content_margin_top    = 6.0
 		box.content_margin_bottom = 6.0
 		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
+	btn.focus_mode = Control.FOCUS_NONE
 
 
 func _apply_timer_btn_style(btn: Button) -> void:
@@ -1472,6 +1486,7 @@ func _apply_timer_btn_style(btn: Button) -> void:
 	pressed_box.bg_color = Color(0.0, 0.0, 0.0, 0.28)
 	pressed_box.set_corner_radius_all(100)
 	btn.add_theme_stylebox_override("pressed", pressed_box)
+	btn.focus_mode = Control.FOCUS_NONE
 
 
 # ---------------------------------------------------------------------------

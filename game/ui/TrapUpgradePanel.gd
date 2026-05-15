@@ -668,6 +668,9 @@ func _add_divider(y: float, inner_w: float) -> void:
 ## The disabled state is also overridden so it stays green-dimmed rather than
 ## falling back to Godot's default gray.
 func _apply_button_style(btn: Button, maxed: bool) -> void:
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+
 	if maxed:
 		for state: String in ["normal", "hover", "pressed", "disabled"]:
 			var box := StyleBoxFlat.new()
@@ -719,7 +722,9 @@ func _apply_neutral_button_style(btn: Button) -> void:
 		box.set_corner_radius_all(4)
 		box.set_content_margin_all(8.0)
 		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
+	btn.focus_mode = Control.FOCUS_NONE
 
 
 ## Sell button style — red-toned to signal a destructive action.
@@ -739,7 +744,9 @@ func _apply_sell_button_style(btn: Button) -> void:
 		box.content_margin_top    = 4.0
 		box.content_margin_bottom = 4.0
 		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
+	btn.focus_mode = Control.FOCUS_NONE
 
 
 # ---------------------------------------------------------------------------
