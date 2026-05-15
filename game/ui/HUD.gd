@@ -846,6 +846,9 @@ func _on_infestation_changed(level: float) -> void:
 
 func _on_wave_changed(wave: int) -> void:
 	_wave_label.text = "%d" % wave  # "WAVE" is a static sibling label; only the number changes
+	# Reset so the next countdown always captures its fresh starting value.
+	# Without this, early-send leaves the old total in place and the calculation breaks.
+	_countdown_total_seconds = 0
 
 
 func _on_wave_countdown_changed(seconds_remaining: int) -> void:
@@ -1573,18 +1576,21 @@ class _WaveTimerIcon extends Control:
 		# Provides the thick outer ring border and fills the gaps between segments.
 		draw_circle(Vector2(cx, cy), base * 0.96, COLOR_RING)
 
-		# Step 2 — 8 ring segments (top-first, clockwise).
-		# Each of the 8 slots spans exactly 45° (360 / 8).
-		# Each segment arc is 35° wide; 5° gap on each side of the slot.
+		# Step 2 — 8 ring segments drawn as thick antialiased arcs (top-first, clockwise).
+		# draw_arc with antialiased=true gives smooth edges without polygon tessellation.
+		# Each slot spans 45° (360/8); each arc is 35° wide with a 5° gap on each side.
+		# Arc center radius = midpoint of ring; arc width = full ring thickness.
 		var outer_r  := base * 0.84
 		var inner_r  := base * 0.65
+		var mid_r    := (outer_r + inner_r) * 0.5
+		var arc_w    := outer_r - inner_r
 		var gap_half := deg_to_rad(5.0)
 		for i in range(SEGMENT_COUNT):
 			var slot_start := deg_to_rad(-90.0 + float(i) * 45.0)
 			var seg_start  := slot_start + gap_half
 			var seg_end    := slot_start + deg_to_rad(45.0) - gap_half
 			var color      := COLOR_SEG_GRAY if i < gray_count else COLOR_SEG_GREEN
-			_draw_annular_sector(Vector2(cx, cy), outer_r, inner_r, seg_start, seg_end, color)
+			draw_arc(Vector2(cx, cy), mid_r, seg_start, seg_end, 32, color, arc_w, true)
 
 		# Step 3 — yellow center circle.
 		# The black inner ring (inner_r down to this circle's edge) shows naturally
@@ -1611,16 +1617,3 @@ class _WaveTimerIcon extends Control:
 		draw_colored_polygon(PackedVector2Array([q1, q2, q3]), COLOR_CENTER)
 
 
-	## Draws a filled annular sector (pie-slice of a ring) using a closed polygon.
-	## Outer arc traced start→end; inner arc traced end→start to close the shape.
-	func _draw_annular_sector(center: Vector2, outer_r: float, inner_r: float,
-							   start_a: float, end_a: float, color: Color,
-							   steps: int = 16) -> void:
-		var pts := PackedVector2Array()
-		for i in range(steps + 1):
-			var a: float = lerp(start_a, end_a, float(i) / float(steps))
-			pts.append(center + Vector2(cos(a), sin(a)) * outer_r)
-		for i in range(steps + 1):
-			var a: float = lerp(end_a, start_a, float(i) / float(steps))
-			pts.append(center + Vector2(cos(a), sin(a)) * inner_r)
-		draw_colored_polygon(pts, color)
