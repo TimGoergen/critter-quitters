@@ -28,11 +28,9 @@ const BORDER_W:   float = 2.0
 # so they work well as touch targets in their own right.
 const STAT_ROW_H: float = 100.0
 
-# Size of the trap thumbnail and the sell/close buttons in the header.
-# All three share the same width so they are visually equal.
+# Size of the trap thumbnail in the header.
 const HEADER_ICON_RENDER:  float = 90.0   # SubViewport pixel resolution
-const HEADER_BTN_W:        float = 80.0   # shared width for icon, sell, and close
-const HEADER_BTN_H:        float = 64.0   # shared height for all three
+const HEADER_ICON_DISPLAY: float = 64.0   # icon displayed as a 64×64 square (matches button height)
 
 # Theme colours — derived from the placed trap's identity colour at runtime.
 # Declared as vars so _apply_trap_theme() can assign them before _build_ui() runs
@@ -171,11 +169,11 @@ func _build_ui() -> void:
 	# they are upgrading without reading the label.
 	header.add_child(_build_header_trap_icon())
 
-	# Sell button — red, same width as the icon and close button.
-	# Left: trashcan icon (scaled to fit). Right: coin icon + refund amount.
+	# Sell button — red, in the header row next to the close button.
+	# Left side: trashcan icon. Right side: coin icon + refund amount.
 	_btn_sell = Button.new()
 	_btn_sell.text                = ""
-	_btn_sell.custom_minimum_size = Vector2(HEADER_BTN_W, HEADER_BTN_H)
+	_btn_sell.custom_minimum_size = Vector2(160.0, 64.0)
 	_apply_sell_button_style(_btn_sell)
 	_btn_sell.pressed.connect(_on_btn_sell)
 	header.add_child(_btn_sell)
@@ -185,30 +183,30 @@ func _build_ui() -> void:
 	sell_hbox.offset_left  =  6.0
 	sell_hbox.offset_right = -6.0
 	sell_hbox.alignment    = BoxContainer.ALIGNMENT_CENTER
-	sell_hbox.add_theme_constant_override("separation", 4)
+	sell_hbox.add_theme_constant_override("separation", 6)
 	_btn_sell.add_child(sell_hbox)
 
 	var icon := TrashcanIcon.new()
-	# Trashcan scaled down to match the narrower button width — the icon
-	# _draw() is proportional so it reads clearly at this smaller size.
-	icon.custom_minimum_size = Vector2(22.0, 0.0)
+	icon.custom_minimum_size = Vector2(54.0, 0.0)
 	icon.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sell_hbox.add_child(icon)
 
 	_lbl_sell_value = Label.new()
 	_lbl_sell_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_lbl_sell_value.add_theme_font_size_override("font_size", 20)
+	_lbl_sell_value.add_theme_font_size_override("font_size", 24)
 	_lbl_sell_value.add_theme_color_override("font_color", COLOR_GOLD)
 	_lbl_sell_value.add_theme_font_override("font", UIFonts.primary_bold())
 	sell_hbox.add_child(_lbl_sell_value)
 
 	_set_mouse_passthrough(sell_hbox)
 
-	# Close button — same width and height as the icon and sell button.
+	# Square close button — custom_minimum_size forces equal width and height;
+	# _apply_neutral_button_style uses equal margins on all four sides so the X
+	# sits at the visual centre of the square, not off-centre.
 	var btn_close := Button.new()
 	btn_close.text                = "X"
-	btn_close.custom_minimum_size = Vector2(HEADER_BTN_W, HEADER_BTN_H)
+	btn_close.custom_minimum_size = Vector2(64.0, 64.0)
 	btn_close.add_theme_font_size_override("font_size", 26)
 	btn_close.add_theme_font_override("font", UIFonts.primary_bold())
 	btn_close.pressed.connect(_on_close)
@@ -255,8 +253,9 @@ func _apply_trap_theme() -> void:
 ## colour is immediately visible; hides only the range indicator circle.
 func _build_header_trap_icon() -> Control:
 	var icon_ctrl := Control.new()
-	icon_ctrl.custom_minimum_size = Vector2(HEADER_BTN_W, HEADER_BTN_H)
-	icon_ctrl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon_ctrl.custom_minimum_size = Vector2(HEADER_ICON_DISPLAY, HEADER_ICON_DISPLAY)
+	# SIZE_FILL (default) lets the HBox stretch the icon to the full row height (64 px),
+	# matching the sell and close buttons.  SIZE_SHRINK_CENTER would cap it at min-height.
 	icon_ctrl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 
 	var svp := SubViewport.new()
