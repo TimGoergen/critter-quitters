@@ -1618,9 +1618,9 @@ class _WaveTimerIcon extends Control:
 							   steps: int = 16) -> void:
 		var pts := PackedVector2Array()
 		for i in range(steps + 1):
-			var a := lerp(start_a, end_a, float(i) / float(steps))
+			var a: float = lerp(start_a, end_a, float(i) / float(steps))
 			pts.append(center + Vector2(cos(a), sin(a)) * outer_r)
 		for i in range(steps + 1):
-			var a := lerp(end_a, start_a, float(i) / float(steps))
+			var a: float = lerp(end_a, start_a, float(i) / float(steps))
 			pts.append(center + Vector2(cos(a), sin(a)) * inner_r)
 		draw_colored_polygon(pts, color)
