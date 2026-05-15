@@ -1671,5 +1671,5 @@ class _WaveSegmentOverlay extends Control:
 				continue
 			# Sweep the gray arc from the segment's leading edge, covering fill% of the arc.
 			# Full-opacity gray completely covers the sprite's green for each consumed portion.
-			var sweep_end := lerp(seg_start, seg_end, fill)
+			var sweep_end: float = lerp(seg_start, seg_end, fill)
 			draw_arc(Vector2(cx, cy), mid_r, seg_start, sweep_end, 32, COLOR_SEG_GRAY, arc_w, true)
