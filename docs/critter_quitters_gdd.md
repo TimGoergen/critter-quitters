@@ -1,6 +1,6 @@
 ﻿# **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.27 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
+**Version:** Draft v0.28 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
 
 ---
 
@@ -35,6 +35,7 @@
 | v0.25 | Phase 5 (Mobile UI Rework) complete. Viewport scaling: `stretch/mode=viewport` + `stretch/aspect=expand` at 1280×600 base resolution — all UI coordinates are virtual pixels, consistent across physical screen sizes. Safe area margins (24px) added to side panels to keep controls away from screen edges and camera cutouts. Orientation: `SCREEN_SENSOR_LANDSCAPE` (allows normal and upside-down landscape; blocks portrait). Firebase App Distribution integrated into CI: signed APK deployed automatically to testers group on every push to main or feature/** branches. Build version format changed from `0.0.<sha>` to `0.0.0.<NNNN>` (zero-padded GitHub run number, always incrementing); Firebase release notes show branch name + short SHA + commit message. Section 10 updated to reflect implemented mobile UX model. Art style tag in header corrected. Phase 5 marked complete. |
 | v0.26 | Sound added as Phase 6. Previous phases 6, 7, 7b, 8, 9 renumbered to 7, 8, 8b, 9, 10. Audio removed from Phase 9 (Depth & Polish) as it is now covered by Phase 6. |
 | v0.27 | GDD audited against implemented code. Section 2 step 5 corrected (no between-wave store). Section 10 upgrade panel description updated to match implementation (3-level per-stat, not star 0–5/tier-up). Section 11 upgrade system entry clarified. Phase 6 status updated to reflect partial completion (AudioManager infrastructure and trap fire sounds done; enemy/UI/music audio pending). README updated to reflect Phase 5 complete. |
+| v0.28 | Phase 6 (Sound) marked complete. Remaining audio assets (music, enemy sounds, UI sounds) deferred to post-roadmap cleanup checklist. New Phase 7 (Define New Traps, Enemies, and Boosts) inserted as a design phase before implementation begins. Previous phases 7–10 renumbered to 8–11. |
 
 ---
 
@@ -609,9 +610,9 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 - ✓ Enemy hit reaction — brief white flash on hit; white flash then queue_free on death
 - ✓ Snap Trap procedural placeholder visual — portrait mousetrap shape with animated kill bar and cheese wedge; to be replaced by illustrated Sprite3D
 - ✓ Snap Trap projectile — tumbling cheese wedge with cheese-splat impact particles
-- ~~✗ Sprite3D art for all enemies (Ant SVG placeholder only; Cricket, Beetle, Cockroach, Rat still use colored cylinders)~~ — cancelled; covered by Phase 7
-- ~~✗ Sprite3D art for all traps (Snap Trap uses procedural mesh; Zapper, Fogger, Glue Board use colored boxes)~~ — cancelled; covered by Phase 7
-- ~~✗ Procedural animated background system~~ — cancelled; covered by Phase 7
+- ~~✗ Sprite3D art for all enemies (Ant SVG placeholder only; Cricket, Beetle, Cockroach, Rat still use colored cylinders)~~ — cancelled; covered by Phase 8
+- ~~✗ Sprite3D art for all traps (Snap Trap uses procedural mesh; Zapper, Fogger, Glue Board use colored boxes)~~ — cancelled; covered by Phase 8
+- ~~✗ Procedural animated background system~~ — cancelled; covered by Phase 8
 - ~~✗ Basic per-element color palette~~ — cancelled; deferred to Phase 7
 
 *Goal: looks and feels like the game*
@@ -648,20 +649,29 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: the full game is comfortably playable one-handed on a phone in landscape mode*
 
-### **Phase 6 — Sound** *(In Progress)*
+### **Phase 6 — Sound** ✓ Complete
 - ✓ Audio bus setup — Music, SFX, UI buses; Music and SFX volume sliders in the settings dialog; settings persisted to `user://settings.cfg`
 - ✓ AudioManager autoload — full infrastructure with null-guarded stream slots; pool-based playback (8 SFX, 4 footstep, 3 UI players); footstep rate limiting; Bug Bucks chime throttle
 - ✓ Call hooks wired in Enemy.gd, Trap.gd, Arena.gd, HUD.gd, TrapUpgradePanel.gd
 - ✓ Per-trap fire sounds — all 4 trap types have audio files assigned (snap, zap, fogger hiss, glue apply)
-- ✗ Background music — stream slot exists; no audio file yet
-- ✗ Enemy hit sounds — one per trap type; stream slots exist; no audio files yet
-- ✗ Enemy death sounds — keyed by tier (small/medium/large/rat); stream slots exist; no audio files yet
-- ✗ Enemy footstep sounds — one per enemy type; stream slots exist; no audio files yet
-- ✗ UI sounds — button, wave start, wave clear, run end, Bug Bucks chime, upgrade; stream slots exist; no audio files yet
+- ~~✗ Background music~~ — stream slot exists; audio file deferred to post-roadmap cleanup
+- ~~✗ Enemy hit sounds~~ — stream slots exist; audio files deferred to post-roadmap cleanup
+- ~~✗ Enemy death sounds~~ — stream slots exist; audio files deferred to post-roadmap cleanup
+- ~~✗ Enemy footstep sounds~~ — stream slots exist; audio files deferred to post-roadmap cleanup
+- ~~✗ UI sounds~~ — stream slots exist; audio files deferred to post-roadmap cleanup
 
 *Goal: the game is playable with the screen off and every meaningful event has an audio identity*
 
-### **Phase 7 — Sprite Art Migration**
+### **Phase 7 — Define New Traps, Enemies, and Boosts**
+- Full design spec for each trap beyond the current 4: name, theme, targeting behavior, projectile/effect, upgrade path
+- Full design spec for each enemy beyond the current 5: name, pest type, stats, special behavior, audio/visual identity
+- Boost/perk roster — full list of round-end perks with descriptions and mechanical effect
+- Stat baselines and scaling formulas defined for all new units and traps (to be tuned via playtesting)
+- All designs written into GDD before implementation begins
+
+*Goal: no implementation work begins on new content until the full roster is specified — prevents scope creep and mid-build redesigns*
+
+### **Phase 8 — Sprite Art Migration**
 - Illustrated Sprite3D art for all 5 enemies: Ant (replace SVG placeholder), Cricket, Beetle, Cockroach, Rat
 - Illustrated Sprite3D art for all 4 traps: Snap Trap (replace procedural mesh), Zapper, Fogger, Glue Board
 - Per-element color palette finalized across all sprites
@@ -669,7 +679,7 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: all gameplay-visible assets are illustrated sprites; no colored cylinders, boxes, or placeholder meshes remain*
 
-### **Phase 8 — Full Game Loop**
+### **Phase 9 — Full Game Loop**
 - Wave composition system — complexity curve, group-based spawning, boss waves
 - All 4 trap types
 - All 5 enemy types
@@ -680,11 +690,11 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: complete playable game from start to run-end*
 
-### **Prototype note (Phase 8)**
+### **Prototype note (Phase 9)**
 
 The current prototype uses an endless-wave structure for testing and balancing purposes. The target shipped design groups waves into Rounds (3–5 waves) and Rounds into Levels (Contracts, 5–10 rounds). At the end of each Round, the player picks 1 of 3 randomly offered temporary perks that last for the remainder of the run. Completing a Level (Contract) awards Service Fees for meta progression. The prototype will remain endless until the core loop is balanced and the grouping structure is fully designed.
 
-### **Phase 8b — Meta Progression**
+### **Phase 9b — Meta Progression**
 - Service Fees earned at run end based on performance
 - The Truck hub screen — Start New Job, Upgrades, Stats
 - Equipment upgrade tree
@@ -693,7 +703,7 @@ The current prototype uses an endless-wave structure for testing and balancing p
 
 *Goal: long-term progression loop across runs*
 
-### **Phase 9 — Depth & Polish**
+### **Phase 10 — Depth & Polish**
 - Full upgrade trees and DoT system (fire, ice)
 - Trap unlock progression
 - Store tiers, reroll mechanic
@@ -702,9 +712,22 @@ The current prototype uses an endless-wave structure for testing and balancing p
 
 *Goal: full-featured game*
 
-### **Phase 10 — Platform**
+### **Phase 11 — Platform**
 - Mobile export and touch controls
 - Web export
 - Performance optimisation
 
 *Goal: shippable on target platforms*
+
+---
+
+## **Post-Roadmap Cleanup Checklist**
+
+Items deferred from completed phases that are not blocking any downstream work.
+
+### Sound (deferred from Phase 6)
+- Background music — stream slot wired; needs audio file
+- Enemy hit sounds — one per trap type; stream slots wired; need audio files
+- Enemy death sounds — keyed by tier (small/medium/large/rat); stream slots wired; need audio files
+- Enemy footstep sounds — one per enemy type; stream slots wired; need audio files
+- UI sounds — button, wave start, wave clear, run end, Bug Bucks chime, upgrade; stream slots wired; need audio files
