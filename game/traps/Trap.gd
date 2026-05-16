@@ -7,7 +7,7 @@
 ##     SNAP_TRAP  — nearest enemy in range
 ##     ZAPPER     — farthest-along-path enemy in range (Phase 4)
 ##     FOGGER     — all enemies in range simultaneously (Phase 4)
-##     GLUE_BOARD — passive slow; no projectile (Phase 4)
+##     GLUE_BOARD — passive AoE slow; cosmetic projectile fires when an enemy first enters range
 ##
 ##   "Farthest along path" is determined by the enemy's path index —
 ##   higher index means closer to the exit, so it is the greater threat.
@@ -18,9 +18,11 @@
 ##   fire time and does nothing on arrival.
 ##
 ## Upgrade model:
-##   Each trap instance tracks three independent upgrade levels — one per
-##   stat (Damage, Range, Fire Rate). Each stat can be upgraded up to
-##   MAX_UPGRADE_LEVEL (3) times. Costs per level are defined in UPGRADE_COSTS.
+##   Each trap instance tracks three independent upgrade levels — one per stat.
+##   Active traps (Snap, Zapper, Fogger): Damage, Range, Fire Rate.
+##   Glue Board: Adhesion, Range, Duration (seconds the slow persists after leaving range).
+##   Each stat can be upgraded up to MAX_UPGRADE_LEVEL (3) times.
+##   Costs per level are defined in UPGRADE_COSTS.
 ##
 ## Usage: instantiate via Arena, call initialize(), set position, then
 ## add to the scene tree.
@@ -50,7 +52,7 @@ const STATS := {
 	TrapType.SNAP_TRAP:  { "damage": 5.0,  "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.52, 0.27, 0.08) },
 	TrapType.ZAPPER:     { "damage": 30.0, "range": 9.6, "cooldown": 2.5, "cost": 75, "color": Color(0.10, 0.50, 1.00) },
 	TrapType.FOGGER:     { "damage": 3.0,  "range": 4.0, "cooldown": 2.2, "cost": 60, "color": Color(0.35, 0.88, 0.18) },
-	TrapType.GLUE_BOARD: { "damage": 0.50, "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(0.92, 0.89, 0.78) },
+	TrapType.GLUE_BOARD: { "damage": 0.20, "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(0.92, 0.89, 0.78) },
 }
 
 ## Each stat can be upgraded this many times independently.
@@ -60,6 +62,16 @@ const MAX_UPGRADE_LEVEL: int = 3
 const UPGRADE_DAMAGE_FACTOR:    float = 0.20  # +20% of base damage per level
 const UPGRADE_RANGE_FACTOR:     float = 0.10  # +10% of base range per level
 const UPGRADE_FIRE_RATE_FACTOR: float = 0.08  # −8% of base cooldown per level (faster shots)
+
+## Glue Board adhesion strength at each damage upgrade level (index = _damage_level).
+## Values are slow factors: 0.0 = no slow, 1.0 = fully stopped.
+## Defined as an explicit table because the intended values don't fit the shared
+## UPGRADE_DAMAGE_FACTOR formula.
+const GLUE_ADHESION_LEVELS: Array[float] = [0.20, 0.30, 0.40, 0.50]
+
+## Glue Board slow duration (seconds) at each duration upgrade level (index = _duration_level).
+## How long the slow persists on an enemy after it leaves the board's radius.
+const GLUE_DURATION_LEVELS: Array[float] = [3.0, 4.5, 6.0, 8.0]
 
 ## Bug Bucks cost for each upgrade level per trap type.
 ## Index 0 = first upgrade, 1 = second, 2 = third.
@@ -119,16 +131,15 @@ var _base_cooldown: float = 0.0
 # types, so this always reflects the live list without any extra bookkeeping.
 var _active_enemies: Array = []
 
-# The single enemy currently slowed by this Glue Board (null if none).
-# The board targets one enemy at a time — always the closest in range.
-var _slowed_enemy: Node3D = null
+# All enemies currently under this board's slow effect.
+#   key   = enemy node
+#   value = -1.0 while the enemy is inside the range radius;
+#           remaining countdown seconds after the enemy has left the radius.
+var _glue_slowed_enemies: Dictionary = {}
 
-# Seconds remaining before the board can switch to a new slow target.
-# Prevents the board from re-targeting every frame when enemies swap distance ranks.
-var _glue_apply_cooldown: float = 0.0
-
-## How often (in seconds) the Glue Board may pick a new slow target.
-const GLUE_APPLY_INTERVAL: float = 1.0
+# How long the slow lingers on an enemy after it exits the board's radius.
+var _slow_duration:  float = 0.0
+var _duration_level: int   = 0
 
 # When true, this node is a visual-only placement preview: no combat, no hover area,
 # no range indicator. Set by initialize_preview() before the node enters the tree.
@@ -148,7 +159,12 @@ var _star_labels: Array[Label3D] = []
 # Upgrade tint — materials updated in _update_star_display() to lerp toward gold.
 var _base_color:   Color                       = Color.WHITE
 var _outline_mats: Array[StandardMaterial3D]   = []
-var _bg_mat:       StandardMaterial3D          = null
+var _shadow_mat:   ShaderMaterial              = null
+
+# Arena-decorator nodes: the colored background plate, shadow halo, and footprint
+# outline bars.  Populated by _spawn_background / _spawn_shadow / _spawn_footprint_outline
+# so hide_decorators() can remove them for icon-only previews (e.g. HUD panel icons).
+var _decorator_nodes: Array[Node3D] = []
 
 # Snap Trap animation nodes — null for all other trap types.
 var _snap_bar_pivot: Node3D         = null
@@ -202,6 +218,9 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	_spawn_star_display()
 	stats_changed.connect(_rebuild_range_indicator)
 	stats_changed.connect(_update_star_display)
+	if _trap_type == TrapType.GLUE_BOARD:
+		_slow_duration = GLUE_DURATION_LEVELS[0]
+		stats_changed.connect(_refresh_glue_slow)
 
 
 ## Lightweight setup for placement preview ghosts.
@@ -244,13 +263,21 @@ func get_rate_upgrade_cost() -> int:
 		return 0
 	return UPGRADE_COSTS[_trap_type][_rate_level]
 
+func get_duration_upgrade_cost() -> int:
+	if _duration_level >= MAX_UPGRADE_LEVEL:
+		return 0
+	return UPGRADE_COSTS[_trap_type][_duration_level]
+
 
 # ---------------------------------------------------------------------------
 # Upgrade — stat previews
 # ---------------------------------------------------------------------------
 
 ## Damage this trap would have after one damage upgrade.
+## For Glue Board, returns the next adhesion tier value from GLUE_ADHESION_LEVELS.
 func get_damage_after_upgrade() -> float:
+	if _trap_type == TrapType.GLUE_BOARD:
+		return GLUE_ADHESION_LEVELS[mini(_damage_level + 1, MAX_UPGRADE_LEVEL)]
 	return _damage + _base_damage * UPGRADE_DAMAGE_FACTOR
 
 ## Range this trap would have after one range upgrade.
@@ -266,15 +293,24 @@ func get_shots_per_sec_after_upgrade() -> float:
 	var new_cooldown := maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
 	return 1.0 / new_cooldown
 
+## Glue Board only — slow duration (seconds) after the next duration upgrade.
+func get_duration_after_upgrade() -> float:
+	return GLUE_DURATION_LEVELS[mini(_duration_level + 1, MAX_UPGRADE_LEVEL)]
+
 
 # ---------------------------------------------------------------------------
 # Upgrade — apply
 # ---------------------------------------------------------------------------
 
-## Increases damage by 20% of base. Only call when not maxed.
+## Increases damage by 20% of base (or advances to the next adhesion tier for Glue Board).
+## Only call when not maxed.
 func apply_damage_upgrade() -> void:
-	_damage += _base_damage * UPGRADE_DAMAGE_FACTOR
-	_damage_level += 1
+	if _trap_type == TrapType.GLUE_BOARD:
+		_damage_level += 1
+		_damage = GLUE_ADHESION_LEVELS[_damage_level]
+	else:
+		_damage += _base_damage * UPGRADE_DAMAGE_FACTOR
+		_damage_level += 1
 	_check_full_upgrade_bonus()
 	stats_changed.emit()
 
@@ -290,6 +326,13 @@ func apply_range_upgrade() -> void:
 func apply_fire_rate_upgrade() -> void:
 	_cooldown = maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
 	_rate_level += 1
+	_check_full_upgrade_bonus()
+	stats_changed.emit()
+
+## Advances the Glue Board to the next duration tier. Only call when not maxed.
+func apply_duration_upgrade() -> void:
+	_duration_level += 1
+	_slow_duration = GLUE_DURATION_LEVELS[_duration_level]
 	_check_full_upgrade_bonus()
 	stats_changed.emit()
 
@@ -316,12 +359,20 @@ func is_range_maxed() -> bool:
 func is_rate_maxed() -> bool:
 	return _rate_level >= MAX_UPGRADE_LEVEL
 
+func get_duration_level() -> int:
+	return _duration_level
+
+func is_duration_maxed() -> bool:
+	return _duration_level >= MAX_UPGRADE_LEVEL
+
+## Glue Board only — current slow duration in seconds after leaving the board's radius.
+func get_duration() -> float:
+	return _slow_duration
+
 ## True when every upgradeable stat is at MAX_UPGRADE_LEVEL.
-## Passive traps (no fire rate) are fully upgraded after 6 total upgrades;
-## active traps require all 9.
 func is_fully_upgraded() -> bool:
-	if _base_cooldown == 0.0:
-		return is_damage_maxed() and is_range_maxed()
+	if _trap_type == TrapType.GLUE_BOARD:
+		return is_damage_maxed() and is_range_maxed() and is_duration_maxed()
 	return is_damage_maxed() and is_range_maxed() and is_rate_maxed()
 
 func get_damage() -> float:
@@ -353,26 +404,52 @@ func get_type_name() -> String:
 func get_cost() -> int:
 	return _cost
 
+## Returns the identity colour used for this trap's background plate, shadow, and footprint outline.
+## The upgrade panel reads this to derive its per-trap colour theme.
+func get_base_color() -> Color:
+	return _base_color
+
 ## Glue Board only — adhesion strength as a percentage (e.g. 50.0 for 50% slow).
 func get_adhesion_pct() -> float:
 	return _damage * 100.0
 
 ## Glue Board only — adhesion after the next damage upgrade, as a percentage.
 func get_adhesion_after_upgrade_pct() -> float:
-	return (_damage + _base_damage * UPGRADE_DAMAGE_FACTOR) * 100.0
+	return get_damage_after_upgrade() * 100.0
 
 ## Returns how many stats are currently at MAX_UPGRADE_LEVEL.
 func get_maxed_stat_count() -> int:
 	var count := 0
-	if is_damage_maxed():  count += 1
-	if is_range_maxed():   count += 1
-	if not is_passive() and is_rate_maxed():  count += 1
+	if is_damage_maxed(): count += 1
+	if is_range_maxed():  count += 1
+	if _trap_type == TrapType.GLUE_BOARD:
+		if is_duration_maxed(): count += 1
+	elif not is_passive():
+		if is_rate_maxed():     count += 1
 	return count
 
 ## Returns the total number of independently upgradeable stats for this trap.
-## Passive traps (Glue Board) have 2; active traps have 3.
+## All trap types have 3: active traps upgrade Fire Rate; Glue Board upgrades Duration.
 func get_total_upgradeable_stats() -> int:
-	return 2 if is_passive() else 3
+	return 3
+
+## Fraction of total spending returned when the trap is sold.
+const SELL_REFUND_FRACTION: float = 0.49
+
+## Returns the Bug Bucks refunded when this trap is sold.
+## Covers the placement cost plus every upgrade level purchased across all stats.
+## Passive traps have no fire-rate level, so _rate_level stays 0 and its loop is a no-op.
+func get_sell_value() -> int:
+	var total_spent := _cost
+	for lvl in range(_damage_level):
+		total_spent += UPGRADE_COSTS[_trap_type][lvl]
+	for lvl in range(_range_level):
+		total_spent += UPGRADE_COSTS[_trap_type][lvl]
+	for lvl in range(_rate_level):
+		total_spent += UPGRADE_COSTS[_trap_type][lvl]
+	for lvl in range(_duration_level):
+		total_spent += UPGRADE_COSTS[_trap_type][lvl]
+	return int(total_spent * SELL_REFUND_FRACTION)
 
 
 # ---------------------------------------------------------------------------
@@ -381,7 +458,7 @@ func get_total_upgradeable_stats() -> int:
 
 func _process(delta: float) -> void:
 	if _trap_type == TrapType.GLUE_BOARD:
-		_update_glue_slow()
+		_update_glue_aoe(delta)
 		return
 
 	# Fogger idle animation: gentle sine-wave float between shots.
@@ -419,11 +496,12 @@ func _process(delta: float) -> void:
 
 
 func _exit_tree() -> void:
-	# Release the slow source so the enemy returns to normal speed immediately
-	# when the trap is sold or overwritten.
-	if is_instance_valid(_slowed_enemy):
-		_slowed_enemy.remove_slow_source(self)
-	_slowed_enemy = null
+	# Release all slow sources so every affected enemy returns to normal speed
+	# immediately when the trap is sold or overwritten.
+	for enemy in _glue_slowed_enemies:
+		if is_instance_valid(enemy):
+			enemy.remove_slow_source(self)
+	_glue_slowed_enemies.clear()
 
 
 # ---------------------------------------------------------------------------
@@ -452,48 +530,55 @@ func _fire_fogger() -> bool:
 	return false
 
 
-## Targets the closest enemy in range and slows it. Switches to a new target at
-## most once per GLUE_APPLY_INTERVAL so enemies cannot be swapped every frame.
-func _update_glue_slow() -> void:
-	_glue_apply_cooldown -= get_process_delta_time()
+## Slows every enemy that enters range. The slow persists for _slow_duration seconds
+## after the enemy leaves the radius before being removed. Runs every frame.
+func _update_glue_aoe(delta: float) -> void:
+	# First pass: tick duration countdowns and collect enemies whose slow has expired.
+	# Cannot erase from a Dictionary while iterating — collect targets first.
+	var to_release: Array = []
+	for enemy in _glue_slowed_enemies:
+		if not is_instance_valid(enemy):
+			to_release.append(enemy)
+			continue
+		if _xz_distance(enemy.global_position) <= _range:
+			_glue_slowed_enemies[enemy] = -1.0   # still in range — reset to "no countdown"
+		else:
+			var remaining: float = _glue_slowed_enemies[enemy]
+			if remaining < 0.0:
+				_glue_slowed_enemies[enemy] = _slow_duration  # just left range — start countdown
+			else:
+				remaining -= delta
+				if remaining <= 0.0:
+					to_release.append(enemy)
+				else:
+					_glue_slowed_enemies[enemy] = remaining
 
-	# If the current target has died or walked out of range, release it immediately
-	# so the slot is free — we don't wait for the interval to expire.
-	if is_instance_valid(_slowed_enemy):
-		if _xz_distance(_slowed_enemy.global_position) > _range:
-			_slowed_enemy.remove_slow_source(self)
-			_slowed_enemy = null
-	elif _slowed_enemy != null:
-		# Instance is no longer valid (enemy died).
-		_slowed_enemy = null
+	for enemy in to_release:
+		if is_instance_valid(enemy):
+			enemy.remove_slow_source(self)
+		_glue_slowed_enemies.erase(enemy)
 
-	# Only re-target when the interval has elapsed.
-	if _glue_apply_cooldown > 0.0:
-		return
-
-	# Find the closest enemy in range.
-	var closest: Node3D = null
-	var closest_dist    := INF
+	# Second pass: apply slow to newly-in-range enemies and fire a cosmetic projectile.
+	var newly_caught := false
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
 			continue
-		var dist := _xz_distance(enemy.global_position)
-		if dist <= _range and dist < closest_dist:
-			closest_dist = dist
-			closest      = enemy
+		if _xz_distance(enemy.global_position) <= _range and not _glue_slowed_enemies.has(enemy):
+			enemy.add_slow_source(self, _damage)
+			_glue_slowed_enemies[enemy] = -1.0
+			fired.emit(global_position, enemy.global_position, enemy, 0.0, _trap_type)
+			newly_caught = true
+	if newly_caught:
+		AudioManager.play_trap_fire(TrapType.GLUE_BOARD)
 
-	# Switch to the new target if it differs from the current one.
-	if closest != _slowed_enemy:
-		if is_instance_valid(_slowed_enemy):
-			_slowed_enemy.remove_slow_source(self)
-		_slowed_enemy = closest
-		if _slowed_enemy != null:
-			_slowed_enemy.add_slow_source(self, _damage)
-			# Cosmetic glue projectile — damage is 0, slow is the only effect.
-			fired.emit(global_position, _slowed_enemy.global_position, _slowed_enemy, 0.0, _trap_type)
-			AudioManager.play_trap_fire(TrapType.GLUE_BOARD)
 
-	_glue_apply_cooldown = GLUE_APPLY_INTERVAL
+## Re-applies the current adhesion factor to all already-slowed enemies.
+## Connected to stats_changed so an adhesion upgrade takes effect immediately
+## on enemies that are already inside the board's radius.
+func _refresh_glue_slow() -> void:
+	for enemy in _glue_slowed_enemies:
+		if is_instance_valid(enemy):
+			enemy.add_slow_source(self, _damage)
 
 
 ## Returns the enemy in range closest to this trap (used by Snap Trap).
@@ -577,9 +662,9 @@ func _spawn_star_display() -> void:
 		_star_labels.append(lbl)
 
 
-## Refreshes star labels and tints the outline + background toward gold as stats are maxed.
-## frac = maxed_stats / total_upgradeable_stats, so each maxed stat moves the tint forward.
-## At frac=1.0 the outline is fully gold and the background is a rich darkened gold.
+## Refreshes star labels, tints the footprint outline toward gold, and brightens the
+## drop shadow as stats are maxed.  The background plate keeps its base color throughout —
+## only the border and shadow shift, so the trap's identity color is always visible.
 func _update_star_display() -> void:
 	if _star_labels.is_empty():
 		return
@@ -605,47 +690,55 @@ func _update_star_display() -> void:
 		_star_labels[i].visible  = i < maxed
 		_star_labels[i].position = positions[i]
 
-	# --- Outline + background tint ---
 	const GOLD: Color = Color(1.0, 0.82, 0.18)
 	var frac := float(maxed) / float(get_total_upgradeable_stats())
-	var tint := _base_color.lerp(GOLD, frac)
 
+	# --- Outline tint ---
+	# Lerp from base color toward gold so the border signals upgrade progress
+	# without washing out the trap's base color on the background plate.
+	var tint := _base_color.lerp(GOLD, frac)
 	for mat: StandardMaterial3D in _outline_mats:
 		mat.albedo_color = tint
 
-	if _bg_mat != null:
-		var bg_brightness := lerpf(0.65, 0.80, frac)
-		_bg_mat.albedo_color = Color(tint.r * bg_brightness, tint.g * bg_brightness, tint.b * bg_brightness, 0.92)
+	# --- Shadow brightness + tint ---
+	# At zero stars the shadow is dim (18% brightness, opacity 0.60).
+	# As stars are earned it brightens (up to 50%) and shifts toward gold, echoing the outline.
+	if _shadow_mat != null:
+		var shadow_tint    := _base_color.lerp(GOLD, frac)
+		var brightness     := lerpf(0.18, 0.50, frac)
+		var shadow_opacity := lerpf(0.60, 0.90, frac)
+		_shadow_mat.set_shader_parameter("shadow_color",
+			Vector3(shadow_tint.r * brightness, shadow_tint.g * brightness, shadow_tint.b * brightness))
+		_shadow_mat.set_shader_parameter("opacity", shadow_opacity)
 
 
-## Forces the range indicator visible and pins it so hover-exit cannot hide it.
-## Called by Arena when the upgrade panel opens for this trap.
+## Shows the range indicator. Called by Arena when a placement preview overlaps this trap.
 func show_range_indicator() -> void:
 	_indicator_pinned = true
 	if _range_indicator != null:
 		_range_indicator.visible = true
 
 
-## Unpins the indicator and hides it unless the mouse is still over the trap.
-## Called by Arena when the upgrade panel closes.
+## Hides the range indicator. Called by Arena when the placement preview moves away.
 func hide_range_indicator() -> void:
 	_indicator_pinned = false
 	if _range_indicator != null:
-		_range_indicator.visible = _is_hovered
+		_range_indicator.visible = false
+
+
+## Hides the colored background plate, shadow halo, and footprint outline bars.
+## Called on icon-only previews (HUD panel, drag overlay) so only the trap model shows.
+func hide_decorators() -> void:
+	for node: Node3D in _decorator_nodes:
+		node.hide()
 
 
 func _on_hover_enter() -> void:
 	_is_hovered = true
-	if _range_indicator != null:
-		_range_indicator.visible = true
 
 
 func _on_hover_exit() -> void:
 	_is_hovered = false
-	if _indicator_pinned:
-		return
-	if _range_indicator != null:
-		_range_indicator.visible = false
 
 
 ## Rebuilds the range indicator after an upgrade changes _range.
@@ -660,12 +753,17 @@ func _rebuild_range_indicator() -> void:
 
 ## Creates a flat filled disc and outline ring at ground level to show trap range.
 ## Hidden by default; shown on mouse hover via _hover_area.
+## Preview instances (trap being dragged for placement) use higher opacity so the
+## circle reads clearly against the arena while the player is choosing a cell.
 func _spawn_range_indicator() -> void:
 	_range_indicator            = Node3D.new()
 	_range_indicator.position.y = 0.02
 	_range_indicator.visible    = false
 
-	# Filled disc — white, 80% transparent (alpha 0.20)
+	var fill_alpha := 0.12 if _is_preview else 0.025
+	var ring_alpha := 0.90 if _is_preview else 0.55
+
+	# Filled disc
 	var fill_mi              := MeshInstance3D.new()
 	var fill_mesh            := CylinderMesh.new()
 	fill_mesh.top_radius      = _range
@@ -673,18 +771,18 @@ func _spawn_range_indicator() -> void:
 	fill_mesh.height          = 0.001
 	fill_mesh.radial_segments = 64
 	var fill_mat             := StandardMaterial3D.new()
-	fill_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.0175)
+	fill_mat.albedo_color     = Color(1.0, 1.0, 1.0, fill_alpha)
 	fill_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	fill_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	fill_mi.mesh              = fill_mesh
 	fill_mi.material_override = fill_mat
 	_range_indicator.add_child(fill_mi)
 
-	# Outline ring — white, 60% transparent (alpha 0.40)
+	# Outline ring
 	var ring_mi              := MeshInstance3D.new()
 	ring_mi.mesh              = _make_ring_mesh(_range, 0.10)
 	var ring_mat             := StandardMaterial3D.new()
-	ring_mat.albedo_color     = Color(1.0, 1.0, 1.0, 0.035)
+	ring_mat.albedo_color     = Color(1.0, 1.0, 1.0, ring_alpha)
 	ring_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	ring_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	ring_mi.material_override = ring_mat
@@ -771,6 +869,7 @@ func _spawn_footprint_outline(color: Color) -> void:
 		mi.position          = Vector3(0.0, y, sz)
 		mi.material_override = mat
 		add_child(mi)
+		_decorator_nodes.append(mi)
 
 	for sx: float in [-(fp * 0.5 - thickness * 0.5), fp * 0.5 - thickness * 0.5]:
 		var mat := StandardMaterial3D.new()
@@ -784,6 +883,7 @@ func _spawn_footprint_outline(color: Color) -> void:
 		mi.position          = Vector3(sx, y, 0.0)
 		mi.material_override = mat
 		add_child(mi)
+		_decorator_nodes.append(mi)
 
 
 ## Adds a rectangular outline shadow matching the footprint boundary.
@@ -815,9 +915,12 @@ func _spawn_shadow(color: Color) -> void:
 	# Darken to ~18% brightness so the tinted halo reads as a shadow.
 	mat.set_shader_parameter("shadow_color", Vector3(color.r * 0.18, color.g * 0.18, color.b * 0.18))
 	shadow_mi.material_override = mat
+	# Store so _update_star_display() can brighten and tint the shadow as stars are earned.
+	_shadow_mat = mat
 
 	shadow_mi.position.y = 0.05 - 0.25
 	add_child(shadow_mi)
+	_decorator_nodes.append(shadow_mi)
 
 
 ## Adds a dark, slightly transparent background plate that fills most of the cell.
@@ -834,11 +937,11 @@ func _spawn_background(color: Color) -> void:
 	mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
 	bg_mi.material_override = mat
-	_bg_mat = mat
 
 	# Just above the shadow (world y = 0.07) so the shadow peeks out at the edges.
 	bg_mi.position.y = 0.07 - 0.25
 	add_child(bg_mi)
+	_decorator_nodes.append(bg_mi)
 
 
 ## Creates the trap's placeholder visual. All four trap types get multi-part

@@ -34,7 +34,7 @@ const HUD     = preload("res://ui/HUD.gd")
 
 var _field_bucks:  LineEdit  = null
 var _field_waves:  LineEdit  = null
-var _check_static: CheckBox  = null
+var _check_static: Button    = null  # toggle_mode button; checked = "✓" centered, matching ± size
 var _panel_rect:   Rect2     = Rect2()
 
 
@@ -120,12 +120,20 @@ func _build_ui() -> void:
 	static_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 	static_row.add_child(static_lbl)
 
-	_check_static = CheckBox.new()
-	_check_static.button_pressed        = false
-	_check_static.custom_minimum_size   = Vector2(44, 44)
-	_check_static.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	# Toggle button instead of CheckBox so it is the same 56×56 size as the ± buttons
+	# and the checkmark is naturally centered in the box.
+	_check_static = Button.new()
+	_check_static.toggle_mode          = true
+	_check_static.button_pressed       = false
+	_check_static.focus_mode           = Control.FOCUS_NONE
+	_check_static.custom_minimum_size  = Vector2(56.0, 56.0)
+	_check_static.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
+	_check_static.add_theme_font_size_override("font_size", 30)
 	_check_static.add_theme_font_override("font", UIFonts.primary())
-	_style_checkbox(_check_static)
+	_style_button(_check_static)
+	_check_static.toggled.connect(func(pressed: bool) -> void:
+		_check_static.text = "✓" if pressed else ""
+	)
 	static_row.add_child(_check_static)
 	y += 72.0
 
@@ -140,6 +148,7 @@ func _build_ui() -> void:
 	# Start button
 	var btn               := Button.new()
 	btn.text               = "Start"
+	btn.focus_mode         = Control.FOCUS_NONE
 	btn.position           = Vector2(PADDING, y)
 	btn.custom_minimum_size = Vector2(inner_w, 64.0)
 	btn.add_theme_font_size_override("font_size", 30)
@@ -170,6 +179,7 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 
 	var minus_btn := Button.new()
 	minus_btn.text              = "−"
+	minus_btn.focus_mode        = Control.FOCUS_NONE
 	minus_btn.custom_minimum_size = Vector2(56.0, 56.0)
 	minus_btn.add_theme_font_size_override("font_size", 30)
 	minus_btn.add_theme_font_override("font", UIFonts.primary())
@@ -187,6 +197,7 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 
 	var plus_btn := Button.new()
 	plus_btn.text               = "+"
+	plus_btn.focus_mode         = Control.FOCUS_NONE
 	plus_btn.custom_minimum_size = Vector2(56.0, 56.0)
 	plus_btn.add_theme_font_size_override("font_size", 30)
 	plus_btn.add_theme_font_override("font", UIFonts.primary())
@@ -257,6 +268,7 @@ func _style_start_button(btn: Button) -> void:
 		box.content_margin_top    = 4.0
 		box.content_margin_bottom = 4.0
 		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
 
 
@@ -272,25 +284,8 @@ func _style_button(btn: Button) -> void:
 		box.content_margin_top    = 4.0
 		box.content_margin_bottom = 4.0
 		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
-
-
-func _style_checkbox(cb: CheckBox) -> void:
-	# Normal/pressed: dim green border always visible so the control has a clear boundary.
-	for state: String in ["normal", "pressed"]:
-		var box := StyleBoxFlat.new()
-		box.bg_color     = Color(0.0, 0.0, 0.0, 0.0)
-		box.border_color = Color(0.10, 0.35, 0.02, 1.0)
-		box.set_border_width_all(2)
-		box.set_corner_radius_all(0)
-		cb.add_theme_stylebox_override(state, box)
-	# Hover: full-brightness outline signals interactivity.
-	var hover_box := StyleBoxFlat.new()
-	hover_box.bg_color     = Color(0.0, 0.0, 0.0, 0.0)
-	hover_box.border_color = COLOR_OUTLINE
-	hover_box.set_border_width_all(2)
-	hover_box.set_corner_radius_all(0)
-	cb.add_theme_stylebox_override("hover", hover_box)
 
 
 func _style_field(field: LineEdit) -> void:

@@ -29,6 +29,7 @@ const Enemy             = preload("res://enemies/Enemy.gd")
 const Trap              = preload("res://traps/Trap.gd")
 const Projectile        = preload("res://traps/Projectile.gd")
 const FogCloud          = preload("res://traps/FogCloud.gd")
+const UIFonts           = preload("res://ui/UIFonts.gd")
 const HUD               = preload("res://ui/HUD.gd")
 const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
 const EnemyStatsPanel   = preload("res://ui/EnemyStatsPanel.gd")
@@ -94,6 +95,7 @@ const SPAWN_GAP_CELLS: float = 0.4
 const WAVE_COUNTDOWN: int  = 5         # seconds of countdown before each wave
 
 var _enemies_left_to_spawn: int  = 0
+var _wave_total_enemies:    int  = 0      # total enemies queued at _launch_wave; used for spawn-progress signal
 var _countdown_active: bool      = false  # true while between-wave countdown is ticking
 var _seconds_remaining: int      = 0     # last value broadcast during the active countdown
 
@@ -130,17 +132,15 @@ var _panel_paused: bool = false
 # Touch/mouse input state machine.
 #
 # IDLE             → no pointer down
-# PENDING_CLASSIFY → pointer down; waiting to see if this is a tap, a pan, or a hold
+# PENDING_CLASSIFY → pointer down; waiting to see if this is a tap, a pan, or a drag
 # DRAGGING         → movement exceeded DRAG_THRESHOLD_PX first; panning the camera
-# DRAG_PLACING     → pointer held past HOLD_THRESHOLD_SEC without moving; dragging
-#                    a ghost preview around the arena to choose a placement cell
+# DRAG_PLACING     → active while an HUD-initiated drag-and-drop is in progress
 enum TouchState { IDLE, PENDING_CLASSIFY, DRAGGING, DRAG_PLACING }
 var _touch_state:    TouchState = TouchState.IDLE
 var _touch_down_pos: Vector2    = Vector2.ZERO   # screen position where the pointer landed
 var _touch_last_pos: Vector2    = Vector2.ZERO   # most recent drag/move position
-var _touch_hold_time: float     = 0.0            # seconds held without exceeding drag threshold
+var _touch_hold_time: float     = 0.0            # kept for compatibility; no longer drives hold logic
 const DRAG_THRESHOLD_PX: float  = 15.0           # movement before classifying as drag/pan
-const HOLD_THRESHOLD_SEC: float = 0.25           # hold duration before entering DRAG_PLACING
 
 # Pinch-to-zoom — two-finger gesture that toggles between the two zoom levels.
 # While _pinch_active is true all single-finger routing is suspended.
@@ -154,6 +154,15 @@ const PINCH_THRESHOLD_PX: float = 40.0
 # Ghost preview node shown while in DRAG_PLACING mode.
 var _drag_place_preview: Node3D  = null
 var _drag_place_anchor:  Vector2i = Vector2i(-1, -1)
+
+# The placed trap whose range indicator is shown while the preview hovers over it.
+# Cleared when the preview moves away or is released.
+var _placement_hover_trap: Node = null
+
+# True while the HUD is driving a drag-and-drop placement gesture.
+# When set, Arena's own pointer state machine stays idle and placement
+# is controlled entirely by HUD calling begin/update/commit_hud_drag().
+var _hud_drag_active: bool = false
 
 # Camera zoom — two discrete levels: overview (full-arena fit) and zoomed-in (2×).
 enum ZoomState { OVERVIEW, ZOOMED_IN }
@@ -243,16 +252,19 @@ func _ready() -> void:
 	_setup_selected_trap_outline()
 	_init_path_marker_pool()
 	_spawn_floor()
+	_apply_floor_grid_lines_from_cfg()  # apply saved preference before first frame
 	_spawn_arena_border()
 	_spawn_outer_border_ring()
 
 	get_viewport().physics_object_picking = true
 
 	_pathfinder.recalculate()
+	GameState.grid_lines_changed.connect(_on_grid_lines_changed)
 	add_child(HUD.new())
 	_enemy_stats_panel = EnemyStatsPanel.new()
 	add_child(_enemy_stats_panel)
 	GameState.wave_skip_requested.connect(_on_wave_skip_requested)
+	GameState.wave_skip_multi_requested.connect(_on_wave_skip_multi_requested)
 	GameState.run_ended.connect(_close_upgrade_panel)
 	GameState.run_ended.connect(_on_run_ended_camera)
 	GameState.trap_type_selected.connect(_on_trap_type_changed)
@@ -385,20 +397,8 @@ func _on_pointer_dragged(screen_pos: Vector2, relative: Vector2) -> void:
 
 
 # ---------------------------------------------------------------------------
-# Drag-to-place
+# Drag-to-place (driven by HUD drag-and-drop; see begin_hud_drag / update_hud_drag)
 # ---------------------------------------------------------------------------
-
-## Transitions PENDING_CLASSIFY → DRAG_PLACING after the hold threshold.
-## Called from _process when the hold timer fires.
-## Does nothing if the player cannot afford a trap.
-func _enter_drag_placing(screen_pos: Vector2) -> void:
-	if not _can_afford_trap():
-		# Nothing to drag-place; treat the rest of the gesture as inert.
-		_touch_state = TouchState.IDLE
-		return
-	_touch_state = TouchState.DRAG_PLACING
-	_update_drag_preview(screen_pos)
-
 
 ## Positions or repositions the ghost preview at the cell under screen_pos.
 ## Rebuilds the preview node only when the anchor cell changes.
@@ -419,11 +419,22 @@ func _update_drag_preview(screen_pos: Vector2) -> void:
 
 	var cells := _get_trap_cells(anchor)
 	var valid  := not cells.is_empty() \
+		and _all_cells_buildable(cells) \
 		and not _footprint_overlaps_enemy(cells) \
 		and _can_place_at(cells)
 	_drag_place_preview = _make_trap_preview(GameState.selected_trap_type, 0.5, valid)
 	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 	_drag_place_preview.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
+
+	# When placement is invalid, suppress the preview's range circle.
+	# If the footprint covers an existing trap, surface that trap's range indicator
+	# so the player can see the conflict clearly.
+	if not valid:
+		_drag_place_preview.hide_range_indicator()
+		var blocked_trap := _find_trap_at_cells(cells)
+		if blocked_trap != null:
+			blocked_trap.show_range_indicator()
+			_placement_hover_trap = blocked_trap
 
 
 ## Places a trap at the last previewed anchor and frees the preview.
@@ -443,6 +454,41 @@ func _clear_drag_preview() -> void:
 		_drag_place_preview.queue_free()
 	_drag_place_preview   = null
 	_drag_place_anchor    = Vector2i(-1, -1)
+	_release_placement_hover_trap()
+
+
+# ---------------------------------------------------------------------------
+# HUD drag-and-drop placement API
+# Called by HUD.gd when the user drags a trap icon from the left panel.
+# ---------------------------------------------------------------------------
+
+## Called by HUD when the user begins dragging a trap icon.
+## placement_screen_pos is the centre of the floating icon (cursor + offset),
+## which is the cell the trap will be placed in — not the raw cursor position.
+func begin_hud_drag(_trap_type: int, placement_screen_pos: Vector2) -> void:
+	_hud_drag_active = true
+	_touch_state     = TouchState.IDLE   # keep Arena's own state machine inert
+	# GameState.selected_trap_type is already set by HUD before this call.
+	_update_drag_preview(placement_screen_pos)
+
+
+## Called by HUD each frame as the floating icon moves.
+func update_hud_drag(placement_screen_pos: Vector2) -> void:
+	if _hud_drag_active:
+		_update_drag_preview(placement_screen_pos)
+
+
+## Called by HUD when the user releases the drag.  Attempts placement.
+func commit_hud_drag() -> void:
+	if _hud_drag_active:
+		_commit_drag_place()
+		_hud_drag_active = false
+
+
+## Called by HUD if the drag is cancelled without releasing (e.g. second finger).
+func cancel_hud_drag() -> void:
+	_clear_drag_preview()
+	_hud_drag_active = false
 
 
 # ---------------------------------------------------------------------------
@@ -453,6 +499,7 @@ func _clear_drag_preview() -> void:
 ## Cancels any in-progress single-finger operation and begins tracking span.
 func _begin_pinch() -> void:
 	_clear_drag_preview()
+	_hud_drag_active  = false   # cancel any active HUD drag when a pinch starts
 	_touch_state      = TouchState.IDLE
 	_pinch_active     = true
 	_pinch_start_span = _pinch_finger0_pos.distance_to(_pinch_finger1_pos)
@@ -498,14 +545,10 @@ func _handle_tap(screen_pos: Vector2) -> void:
 		_open_upgrade_panel(_trap_anchors[cell])
 		return
 
-	# Tap on an empty arena cell → place trap if affordable and not obstructed.
+	# Tapping an empty arena cell no longer places a trap.
+	# Traps are placed only via drag-and-drop from the HUD panel icons.
 	if _is_in_arena(cell):
 		_close_upgrade_panel()
-		if _can_afford_trap():
-			var anchor := _clamp_to_anchor(cell)
-			var cells  := _get_trap_cells(anchor)
-			if not cells.is_empty() and not _footprint_overlaps_enemy(cells):
-				_try_place_trap(anchor)
 
 
 ## Returns the nearest active enemy whose projected screen position is within
@@ -576,6 +619,34 @@ func _footprint_overlaps_enemy(cells: Array[Vector2i]) -> bool:
 	return false
 
 
+## Returns true only if every cell in the footprint is available for building.
+## Catches TRAP, WALL, and OBSTACLE states that _can_place_at() does not reject.
+func _all_cells_buildable(cells: Array[Vector2i]) -> bool:
+	for cell in cells:
+		if not _grid.is_buildable(cell):
+			return false
+	return true
+
+
+## Returns the placed Trap node whose footprint contains any of the given cells,
+## or null if no placed trap occupies those cells.
+func _find_trap_at_cells(cells: Array[Vector2i]) -> Node:
+	for cell in cells:
+		if _trap_anchors.has(cell):
+			var anchor: Vector2i = _trap_anchors[cell]
+			if _trap_nodes.has(anchor):
+				return _trap_nodes[anchor]
+	return null
+
+
+## Hides the range indicator on any trap that was shown during an invalid placement
+## hover, then clears the reference.
+func _release_placement_hover_trap() -> void:
+	if _placement_hover_trap != null and is_instance_valid(_placement_hover_trap):
+		_placement_hover_trap.hide_range_indicator()
+	_placement_hover_trap = null
+
+
 func _try_place_trap(anchor: Vector2i) -> bool:
 	anchor = _clamp_to_anchor(anchor)
 	var cells := _get_trap_cells(anchor)
@@ -602,23 +673,42 @@ func _try_remove_trap(cell: Vector2i) -> void:
 	if not _trap_anchors.has(cell):
 		return
 	_close_upgrade_panel()
-
 	var anchor: Vector2i = _trap_anchors[cell]
-
 	if _trap_nodes.has(anchor):
-		GameState.add_bug_bucks(int(_trap_nodes[anchor].get_cost() * 0.7))
-		_trap_nodes[anchor].queue_free()
-		_trap_nodes.erase(anchor)
+		_spawn_sell_coin_burst(_trap_nodes[anchor])
+	_try_remove_trap_by_anchor(anchor)
 
-	if _trap_outlines.has(anchor):
-		_trap_outlines[anchor].queue_free()
-		_trap_outlines.erase(anchor)
-	if _hovered_trap_anchor == anchor:
-		_hovered_trap_anchor = Vector2i(-1, -1)
 
-	for c in _get_trap_cells(anchor):
-		_grid.remove_trap(c)
-		_trap_anchors.erase(c)
+## Spawns gold coin particles at the trap's screen position, identical to the
+## burst shown when selling via the upgrade panel.
+func _spawn_sell_coin_burst(trap_node: Node3D) -> void:
+	var burst_pos := _camera.unproject_position(trap_node.global_position)
+
+	var host := CanvasLayer.new()
+	host.layer        = 10
+	host.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(host)
+
+	var particles := CPUParticles2D.new()
+	particles.process_mode         = Node.PROCESS_MODE_ALWAYS
+	particles.position             = burst_pos
+	particles.amount               = 28
+	particles.lifetime             = 0.9
+	particles.one_shot             = true
+	particles.explosiveness        = 1.0
+	particles.emitting             = true
+	particles.direction            = Vector2(0.0, -1.0)
+	particles.spread               = 180.0
+	particles.initial_velocity_min = 100.0
+	particles.initial_velocity_max = 260.0
+	particles.gravity              = Vector2(0.0, 380.0)
+	particles.scale_amount_min     = 5.0
+	particles.scale_amount_max     = 10.0
+	particles.color                = Color(1.00, 0.82, 0.10, 1.0)
+	host.add_child(particles)
+
+	var timer := get_tree().create_timer(particles.lifetime + 0.2)
+	timer.timeout.connect(host.queue_free)
 
 
 ## Opens the upgrade panel for the trap at anchor, closing any existing panel first.
@@ -645,8 +735,9 @@ func _open_upgrade_panel(anchor: Vector2i) -> void:
 	_selected_trap_anchor = anchor
 	if _trap_outlines.has(anchor):
 		_draw_trap_outline(anchor)
-	get_tree().paused = true
-	_panel_paused = true
+	if not get_tree().paused:
+		get_tree().paused = true
+		_panel_paused = true
 
 
 ## Sells the trap at anchor (70% refund) and closes the upgrade panel.
@@ -655,11 +746,14 @@ func _on_sell_trap_requested(anchor: Vector2i) -> void:
 	_try_remove_trap_by_anchor(anchor)
 
 
-## Removes the trap at anchor and refunds 70% of its cost.
+## Removes the trap at anchor and refunds placement cost plus all upgrade costs at 70%.
 func _try_remove_trap_by_anchor(anchor: Vector2i) -> void:
 	if _trap_nodes.has(anchor):
-		GameState.add_bug_bucks(int(_trap_nodes[anchor].get_cost() * 0.7))
-		_trap_nodes[anchor].queue_free()
+		var trap: Node3D = _trap_nodes[anchor]
+		var sell_value: int = trap.get_sell_value()
+		GameState.add_bug_bucks(sell_value)
+		_spawn_earn_label(_camera.unproject_position(trap.global_position), sell_value)
+		trap.queue_free()
 		_trap_nodes.erase(anchor)
 	if _trap_outlines.has(anchor):
 		_trap_outlines[anchor].queue_free()
@@ -675,9 +769,9 @@ func _try_remove_trap_by_anchor(anchor: Vector2i) -> void:
 func _close_upgrade_panel() -> void:
 	if _upgrade_panel != null and is_instance_valid(_upgrade_panel):
 		_upgrade_panel.queue_free()
-	_upgrade_panel = null
 	if _selected_trap != null and is_instance_valid(_selected_trap):
 		_selected_trap.hide_range_indicator()
+	_upgrade_panel = null
 	_selected_trap = null
 	_hide_selected_trap_outline()
 	var prev_selected := _selected_trap_anchor
@@ -690,9 +784,9 @@ func _close_upgrade_panel() -> void:
 
 
 func _on_upgrade_panel_closed() -> void:
-	_upgrade_panel = null
 	if _selected_trap != null and is_instance_valid(_selected_trap):
 		_selected_trap.hide_range_indicator()
+	_upgrade_panel = null
 	_selected_trap = null
 	_hide_selected_trap_outline()
 	var prev_selected := _selected_trap_anchor
@@ -918,7 +1012,9 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 
 
 func _on_enemy_died(enemy: Node3D) -> void:
-	GameState.add_bug_bucks(enemy.get_bounty())
+	var bounty: int = enemy.get_bounty()
+	GameState.add_bug_bucks(bounty)
+	_spawn_earn_label(_camera.unproject_position(enemy.global_position), bounty)
 	_active_enemies.erase(enemy)
 	if enemy == _followed_enemy:
 		_set_followed_enemy(null)
@@ -977,6 +1073,7 @@ func _on_wave_skip_requested() -> void:
 		if _seconds_remaining > 0:
 			var bonus := _seconds_remaining * GameState.early_wave_bonus_rate
 			GameState.add_bug_bucks(bonus)
+			_spawn_earn_label(get_viewport().get_visible_rect().get_center(), int(bonus))
 			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.set_countdown(0)
 		_launch_wave()
@@ -986,19 +1083,78 @@ func _on_wave_skip_requested() -> void:
 		# enemies are out the reward is 0.
 		var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY
 		GameState.add_bug_bucks(bonus)
+		_spawn_earn_label(get_viewport().get_visible_rect().get_center(), int(bonus))
 		GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.early_send_reward_changed.emit(0)
 		GameState.current_wave += 1
 		_launch_wave()
 
 
+## Handles the multiplied "Send Wave Early" button (×10, ×100).
+##
+## All count waves begin simultaneously — each gets its own independent spawn timer so
+## enemies arrive count-per-tick rather than in a single elongated stream.
+##
+## Countdown path: cancel the countdown, award the time-remaining bonus, build the
+## combined enemy pool (count × _wave_size), then fire count timers at once.
+## The first timer is started by _launch_wave(); the remaining count-1 are started here.
+##
+## Active-wave path: award the early-send bonus for the current wave's unsent enemies,
+## discard them (paid for via the bonus), build count new waves, then start count timers.
+## If the previous spawn chain was still running its timer counts as one, so only
+## count-1 additional timers are needed.
+func _on_wave_skip_multi_requested(count: int) -> void:
+	if _countdown_active:
+		_countdown_active = false
+		if _seconds_remaining > 0:
+			var bonus := _seconds_remaining * GameState.early_wave_bonus_rate * count
+			GameState.add_bug_bucks(bonus)
+			GameState.early_wave_bonus_awarded.emit(bonus)
+		GameState.set_countdown(0)
+		# Non-additive first call resets the counter and starts spawn stream 1.
+		# current_wave was already incremented by _start_wave() when the countdown began.
+		_launch_wave()
+		for _i in range(count - 1):
+			GameState.current_wave += 1
+			_launch_wave(true)
+		# Start streams 2 through count — same delay as stream 1 so all fire together.
+		for _i in range(count - 1):
+			get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
+	elif not (_active_enemies.is_empty() and _enemies_left_to_spawn == 0):
+		# Award the early-send bonus for the current wave's unsent enemies, then discard
+		# them so count fresh waves start from a clean slate.
+		var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY * count
+		GameState.add_bug_bucks(bonus)
+		GameState.early_wave_bonus_awarded.emit(bonus)
+		GameState.early_send_reward_changed.emit(0)
+		# A running spawn chain means one stream is already active; remember this before
+		# zeroing the counter so we don't start a redundant timer for it.
+		var chain_running := _enemies_left_to_spawn > 0
+		_enemies_left_to_spawn = 0
+		_wave_total_enemies    = 0
+		for _i in range(count):
+			GameState.current_wave += 1
+			_launch_wave(true)
+		# Start count streams total; the existing chain (if any) already counts as one.
+		var new_timers := count - (1 if chain_running else 0)
+		for _i in range(new_timers):
+			get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
+
+
 ## Begins spawning enemies for the wave.
+## additive=true layers enemies onto an already-running wave without restarting the
+## spawn timer — the existing timer drains the combined queue.
 ## In static mode, builds a fixed queue of 3 × each enemy type in ascending tier order
 ## so every type is visible for review regardless of the current wave number.
 ## In normal mode, spawns _wave_size enemies using the usual random composition.
-func _launch_wave() -> void:
+func _launch_wave(additive: bool = false) -> void:
+	var new_enemies: int
 	if _static_enemies_mode:
-		_static_spawn_queue.clear()
+		# Both fresh and additive waves use the same typed queue.
+		# Fresh: clear and rebuild. Additive: append another pass so the queue
+		# always has enough entries to satisfy _enemies_left_to_spawn.
+		if not additive:
+			_static_spawn_queue.clear()
 		var types: Array[Enemy.EnemyType] = [
 			Enemy.EnemyType.GNAT,
 			Enemy.EnemyType.ANT,
@@ -1010,12 +1166,31 @@ func _launch_wave() -> void:
 		for t: Enemy.EnemyType in types:
 			for _i in STATIC_GROUP_SIZE:
 				_static_spawn_queue.append(t)
-		_enemies_left_to_spawn = _static_spawn_queue.size()
+		new_enemies = types.size() * STATIC_GROUP_SIZE
 	else:
-		_enemies_left_to_spawn = _wave_size
+		new_enemies = _wave_size
+
+	if additive:
+		# Layer on top of the running wave — the existing spawn timer drains both.
+		_enemies_left_to_spawn += new_enemies
+		_wave_total_enemies    += new_enemies
+	else:
+		_enemies_left_to_spawn  = new_enemies
+		_wave_total_enemies     = new_enemies
+
 	# Publish the full reward so the HUD can display it before the first spawn.
 	GameState.early_send_reward_changed.emit(_enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY)
-	get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
+	# For additive launches the spawn progress position doesn't reset — progress stays
+	# where it was relative to the expanded total.  For a fresh wave it resets to 0.
+	if additive:
+		var already_spawned := _wave_total_enemies - _enemies_left_to_spawn
+		GameState.wave_spawn_progress_changed.emit(already_spawned, _wave_total_enemies)
+	else:
+		GameState.wave_spawn_progress_changed.emit(0, _wave_total_enemies)
+
+	# Only start the spawn timer for fresh waves; additive waves share the running timer.
+	if not additive:
+		get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
 
 
 ## Spawns one enemy then schedules the next, until the wave is exhausted.
@@ -1025,6 +1200,7 @@ func _spawn_next_in_wave() -> void:
 		return
 	_enemies_left_to_spawn -= 1
 	GameState.early_send_reward_changed.emit(_enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY)
+	GameState.wave_spawn_progress_changed.emit(_wave_total_enemies - _enemies_left_to_spawn, _wave_total_enemies)
 
 	var open_rows: Array[int] = []
 	for row in _entrance_rows:
@@ -1391,6 +1567,56 @@ void fragment() {
 }
 """
 
+# Shader for the large background plane that sits beneath and around the arena floor.
+# It samples the same texture as the floor, but uses world position to derive UV so
+# the edge pixels of the crop window are stretched outward beyond the arena bounds
+# rather than repeating or cutting to a solid colour.
+const _BACKGROUND_SHADER_CODE: String = """
+shader_type spatial;
+render_mode unshaded, cull_disabled, blend_mix;
+
+// filter_linear_mipmap is required for textureLod blurring below.
+uniform sampler2D floor_texture : source_color, filter_linear_mipmap, repeat_disable;
+uniform vec2  crop_offset = vec2(0.2, 0.2);
+uniform float crop_size   = 0.400;
+// Half the arena world-unit dimensions; converts world XZ to arena UV [0,1].
+uniform vec2  arena_half  = vec2(15.5, 14.5);
+
+// Darker than the arena floor (floor BRIGHTNESS = 0.7).
+const float BRIGHTNESS = 0.22;
+
+varying vec3 world_pos;
+
+void vertex() {
+	world_pos = (MODEL_MATRIX * vec4(VERTEX, 1.0)).xyz;
+}
+
+void fragment() {
+	vec2 arena_uv = (world_pos.xz + arena_half) / (arena_half * 2.0);
+	// Slight inset (0.03–0.97) so we never clamp to the absolute edge pixels,
+	// which may be disproportionately dark due to content near the crop boundary.
+	vec2 clamped_uv = clamp(arena_uv, 0.03, 0.97);
+	vec2 crop_uv    = crop_offset + clamped_uv * crop_size;
+
+	// Mip 9 collapses the entire crop to ~1 texel — effectively the mean colour.
+	// This gives a neutral tone that no single dark edge pixel can drag down.
+	vec2 center_uv = crop_offset + vec2(0.5) * crop_size;
+	vec3 avg_color  = textureLod(floor_texture, center_uv, 8.0).rgb;
+	vec3 edge_color = textureLod(floor_texture, crop_uv,    5.0).rgb;
+
+	// Measure how far the edge sample sits from the crop average in RGB space.
+	// Common colours (small deviation) are allowed to show through at full weight;
+	// high-contrast outliers (e.g. a black shadow pixel at the crop boundary) are
+	// smoothly suppressed back toward the average so they can't form visible stripes.
+	float deviation = length(edge_color - avg_color);
+	float weight    = 0.50 * (1.0 - smoothstep(0.10, 0.25, deviation));
+	vec3  color     = mix(avg_color, edge_color, weight);
+
+	ALBEDO = color * BRIGHTNESS;
+	ALPHA  = 0.6;
+}
+"""
+
 func _spawn_floor() -> void:
 	var texture := load("res://assets/arena/backyard_floor.png") as Texture2D
 	if texture == null:
@@ -1428,6 +1654,28 @@ func _spawn_floor() -> void:
 	_floor_mi.position      = Vector3(0.0, 0.010, 0.0)
 	_floor_mi.material_override = _floor_mat_overview
 	add_child(_floor_mi)
+
+	# Background plane — larger than the arena so it fills whatever the camera can see
+	# beyond the walls.  It sits just below the floor (Y=0.0 vs floor Y=0.010) so the
+	# floor renders on top within the arena bounds with no Z-fighting.
+	var bg_shader := Shader.new()
+	bg_shader.code = _BACKGROUND_SHADER_CODE
+
+	var bg_mat := ShaderMaterial.new()
+	bg_mat.shader = bg_shader
+	bg_mat.set_shader_parameter("floor_texture", texture)
+	bg_mat.set_shader_parameter("crop_offset",   crop_offset)
+	bg_mat.set_shader_parameter("crop_size",     CROP_SIZE)
+	bg_mat.set_shader_parameter("arena_half",    Vector2(grid_w * 0.5, grid_h * 0.5))
+
+	var bg_plane := PlaneMesh.new()
+	bg_plane.size = Vector2(grid_w * 4.0, grid_h * 4.0)
+
+	var bg_mi := MeshInstance3D.new()
+	bg_mi.mesh              = bg_plane
+	bg_mi.position          = Vector3(0.0, 0.0, 0.0)
+	bg_mi.material_override = bg_mat
+	add_child(bg_mi)
 
 
 ## Renders the inner arena border — the outermost row/column ring of the 31×31 grid.
@@ -1898,10 +2146,8 @@ func _process(delta: float) -> void:
 		var p := _followed_enemy.global_position
 		_apply_pan(Vector2(p.x, p.z))
 
-	if _touch_state == TouchState.PENDING_CLASSIFY:
-		_touch_hold_time += delta
-		if _touch_hold_time >= HOLD_THRESHOLD_SEC:
-			_enter_drag_placing(_touch_down_pos)
+	# Hold-to-place from the arena is removed: placement now only initiates
+	# via drag from the HUD trap icon panel (see begin_hud_drag / update_hud_drag).
 
 
 ## Toggles between OVERVIEW and ZOOMED_IN camera levels.
@@ -2006,3 +2252,103 @@ func _make_box_mesh_instance(size: Vector3, color: Color) -> MeshInstance3D:
 	mesh_instance.material_override = material
 
 	return mesh_instance
+
+
+# ---------------------------------------------------------------------------
+# Grid line display settings
+# ---------------------------------------------------------------------------
+
+## Reads grid line preferences from settings.cfg and applies them to the floor
+## materials.  Called once at startup so the floor is correct before the first
+## frame renders, independently of when HUD initialises and emits its signal.
+func _apply_floor_grid_lines_from_cfg() -> void:
+	var cfg := ConfigFile.new()
+	var show_overview: bool = false
+	var show_zoomed:   bool = true
+	if cfg.load("user://settings.cfg") == OK:
+		show_overview = cfg.get_value("display", "grid_lines_overview", false)
+		show_zoomed   = cfg.get_value("display", "grid_lines_zoomed",   true)
+	_set_floor_grid_lines(show_overview, show_zoomed)
+
+
+## Receives the signal emitted by HUD when the player changes a grid line toggle.
+func _on_grid_lines_changed(show_overview: bool, show_zoomed: bool) -> void:
+	_set_floor_grid_lines(show_overview, show_zoomed)
+
+
+## Updates line_alpha on both floor shader materials and re-applies the active
+## one so the change is visible immediately without waiting for a zoom toggle.
+func _set_floor_grid_lines(show_overview: bool, show_zoomed: bool) -> void:
+	if _floor_mat_overview == null or _floor_mat_zoomed == null:
+		return
+	_floor_mat_overview.set_shader_parameter("line_alpha", 0.15 if show_overview else 0.0)
+	_floor_mat_zoomed.set_shader_parameter("line_alpha",   0.15 if show_zoomed  else 0.0)
+	# Re-apply whichever material is currently in use so the updated alpha takes
+	# effect right away instead of waiting for the next zoom toggle.
+	if _floor_mi != null:
+		var currently_zoomed := _zoom_state == ZoomState.ZOOMED_IN
+		_floor_mi.material_override = _floor_mat_zoomed if currently_zoomed else _floor_mat_overview
+
+
+# ---------------------------------------------------------------------------
+# Earn label
+# ---------------------------------------------------------------------------
+
+## Spawns a gold "+N🪙" label at screen_pos that drifts upward and fades out over 1.4 s.
+## Called from every site that awards bug bucks so the player always sees what they earned.
+## Uses a Node2D subclass (_EarnTextNode) to draw the text — a Control (Label) would collapse
+## to zero size in a CanvasLayer because CanvasLayer bypasses the Control layout system.
+func _spawn_earn_label(screen_pos: Vector2, amount: int) -> void:
+	if amount <= 0:
+		return
+
+	var host := CanvasLayer.new()
+	host.layer        = 10
+	host.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(host)
+
+	var node := _EarnTextNode.new()
+	node.setup("+%d" % amount, UIFonts.primary_bold(), 23)
+	# Offset slightly right and above the event so the text doesn't overlap the sprite.
+	node.position = screen_pos + Vector2(14.0, -10.0)
+	host.add_child(node)
+
+	# Drift upward while fading: EASE_OUT on position (starts fast, slows)
+	# and EASE_IN on alpha (holds briefly, then fades quickly) — natural "announcement" feel.
+	var tween := host.create_tween().set_parallel(true)
+	tween.tween_property(node, "position:y", node.position.y - 60.0, 1.4) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_QUAD)
+	tween.tween_property(node, "modulate:a", 0.0, 1.4) \
+		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+	get_tree().create_timer(1.6).timeout.connect(host.queue_free)
+
+
+## Draws a coin icon followed by a gold number, both without any outline.
+## Extends Node2D rather than Control so it renders correctly as a direct child of
+## a CanvasLayer — Control nodes need a parent Control for layout; Node2D nodes do not.
+class _EarnTextNode extends Node2D:
+	var _text:      String    = ""
+	var _font:      Font      = null
+	var _font_size: int       = 38
+	var _coin_tex:  Texture2D = null
+
+	func setup(text: String, font: Font, font_size: int) -> void:
+		_text      = text
+		_font      = font
+		_font_size = font_size
+		_coin_tex  = load("res://assets/bug_buck_coin_small.png") as Texture2D
+
+	func _draw() -> void:
+		if _font == null:
+			return
+		# Icon is sized to roughly match the cap-height of the text; positioned so
+		# its vertical center aligns with the midpoint of the font's ascent.
+		var icon_size := int(_font_size * 0.75)
+		var top_y     := -int(_font_size * 0.78)
+		if _coin_tex:
+			draw_texture_rect(_coin_tex, Rect2(Vector2(0.0, top_y), Vector2(icon_size, icon_size)), false)
+		# Text starts immediately to the right of the icon with a small gap.
+		var text_x := float(icon_size + 4)
+		draw_string(_font, Vector2(text_x, 0.0), _text, HORIZONTAL_ALIGNMENT_LEFT, -1,
+			_font_size, Color(1.00, 0.82, 0.10, 1.0))

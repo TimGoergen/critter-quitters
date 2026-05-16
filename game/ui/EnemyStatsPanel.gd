@@ -23,11 +23,14 @@ const COLOR_BAR_BG   := Color(0.28, 0.28, 0.28, 1.0)
 const COLOR_BAR_FILL := Color(0.85, 0.22, 0.22, 1.0)
 const COLOR_TEXT     := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM := Color(0.60, 0.60, 0.65, 1.0)
+# Amber matches the Glue Board splatter color used on the enemy sprite.
+const COLOR_SLOW     := Color(0.88, 0.70, 0.18, 1.0)
 
-const PANEL_W:  float = 260.0
-const PANEL_H:  float = 110.0
-const PAD:      float = 10.0
-const BORDER_W: float = 1.5
+const PANEL_W:      float = 260.0
+const PANEL_H_BASE: float = 110.0   # height when no status effects are active
+const STATUS_H:     float = 26.0    # extra height added when at least one effect is active
+const PAD:          float = 10.0
+const BORDER_W:     float = 1.5
 
 
 # ---------------------------------------------------------------------------
@@ -36,14 +39,16 @@ const BORDER_W: float = 1.5
 
 var _tracked_enemy: Node3D = null
 
-var _bg:         ColorRect = null
-var _name_label: Label     = null
-var _hp_label:   Label     = null
-var _hp_track:   ColorRect = null
-var _hp_fill:    ColorRect = null
-var _spd_val:    Label     = null
-var _inf_val:    Label     = null
-var _bounty_val: Label     = null
+var _border:       ColorRect = null
+var _bg:           ColorRect = null
+var _name_label:   Label     = null
+var _hp_label:     Label     = null
+var _hp_track:     ColorRect = null
+var _hp_fill:      ColorRect = null
+var _spd_val:      Label     = null
+var _inf_val:      Label     = null
+var _bounty_val:   Label     = null
+var _status_label: Label     = null
 
 
 # ---------------------------------------------------------------------------
@@ -68,18 +73,20 @@ func _build_ui() -> void:
 	var py       := HUD.SCREEN_EDGE_MARGIN
 	var inner_w  := PANEL_W - PAD * 2.0
 
-	# Thin border rect behind the background
-	var border        := ColorRect.new()
-	border.color       = COLOR_BORDER
-	border.position    = Vector2(px - BORDER_W, py - BORDER_W)
-	border.size        = Vector2(PANEL_W + BORDER_W * 2.0, PANEL_H + BORDER_W * 2.0)
-	add_child(border)
+	# Thin border rect behind the background.
+	# Size is updated dynamically in _update_status() when effects are active.
+	_border          = ColorRect.new()
+	_border.color    = COLOR_BORDER
+	_border.position = Vector2(px - BORDER_W, py - BORDER_W)
+	_border.size     = Vector2(PANEL_W + BORDER_W * 2.0, PANEL_H_BASE + BORDER_W * 2.0)
+	add_child(_border)
 
-	# Background — MOUSE_FILTER_STOP (default) absorbs taps within the panel
+	# Background — MOUSE_FILTER_STOP (default) absorbs taps within the panel.
+	# Size is updated dynamically alongside _border.
 	_bg          = ColorRect.new()
 	_bg.color    = COLOR_PANEL_BG
 	_bg.position = Vector2(px, py)
-	_bg.size     = Vector2(PANEL_W, PANEL_H)
+	_bg.size     = Vector2(PANEL_W, PANEL_H_BASE)
 	add_child(_bg)
 
 	var y := PAD
@@ -149,6 +156,20 @@ func _build_ui() -> void:
 			1: _inf_val    = val
 			2: _bounty_val = val
 
+	# --- Row 4: Status effects ---
+	# Sits below row 3; panel height expands to accommodate it when visible.
+	# y + 15 (header) + 22 (value) = bottom of row 3 content = y + 37.
+	var status_y := y + 37.0 + 4.0   # 4px gap below the stat values
+	_status_label          = Label.new()
+	_status_label.position = Vector2(PAD, status_y)
+	_status_label.size     = Vector2(inner_w, STATUS_H - 4.0)
+	_status_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_status_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_status_label.add_theme_font_override("font", UIFonts.primary_bold())
+	_status_label.add_theme_font_size_override("font_size", 13)
+	_status_label.visible = false
+	_bg.add_child(_status_label)
+
 
 # ---------------------------------------------------------------------------
 # Public interface
@@ -178,6 +199,7 @@ func _process(_delta: float) -> void:
 		visible = false
 		return
 	_update_hp()
+	_update_status()
 
 
 func _update_hp() -> void:
@@ -186,6 +208,31 @@ func _update_hp() -> void:
 	_hp_label.text  = "%d / %d" % [ceili(cur), ceili(max_)]
 	var frac        := cur / max_ if max_ > 0.0 else 0.0
 	_hp_fill.size.x = _hp_track.size.x * frac
+
+
+## Builds the status-effects line from the enemy's current active effects.
+## If any effects are active, the panel expands downward to fit the row.
+## Currently handles: slow (Glue Board). Add further conditions as new effects land.
+func _update_status() -> void:
+	var effects: PackedStringArray = []
+
+	if _tracked_enemy.is_slowed():
+		var pct := int(round(_tracked_enemy.get_slow_factor() * 100.0))
+		effects.append("SLOWED  %d%%" % pct)
+
+	var has_effects := effects.size() > 0
+	_status_label.visible = has_effects
+
+	# Expand or contract the panel to match.
+	var panel_h := PANEL_H_BASE + (STATUS_H if has_effects else 0.0)
+	_bg.size.y     = panel_h
+	_border.size.y = panel_h + BORDER_W * 2.0
+
+	if has_effects:
+		# Single concatenated string; amber for slow. A future multi-effect pass
+		# would use separate labels with per-effect colors.
+		_status_label.text = "  ".join(effects)
+		_status_label.add_theme_color_override("font_color", COLOR_SLOW)
 
 
 # ---------------------------------------------------------------------------

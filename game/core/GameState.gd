@@ -57,12 +57,20 @@ signal wave_countdown_changed(seconds_remaining: int)
 ## Emitted when the player requests to skip the countdown and launch the next wave immediately.
 signal wave_skip_requested
 
+## Emitted when the player uses the multiplier toggle and wants to launch several waves at once.
+## count is the number of waves to launch simultaneously (matches the ×1/×10/×100 setting).
+signal wave_skip_multi_requested(count: int)
+
 ## Emitted when the player skips the countdown and receives a coin bonus for the remaining time.
 signal early_wave_bonus_awarded(coins: int)
 
 ## Emitted whenever the "send next wave early" reward changes — at wave launch with
 ## the full amount, after each enemy spawns as it decreases, and at 0 once exhausted.
 signal early_send_reward_changed(amount: int)
+
+## Emitted at wave launch (spawned=0) and after each enemy spawns.
+## HUD uses this to drive the timer-ring segment display.
+signal wave_spawn_progress_changed(spawned: int, total: int)
 
 ## Emitted when the player picks a different trap type to place.
 ## type is an int matching the Trap.TrapType enum — stored as int here to
@@ -75,6 +83,11 @@ signal zoom_toggle_requested
 
 ## Emitted by Arena after a zoom state change so HUD can update the button label.
 signal zoom_state_changed(is_zoomed: bool)
+
+## Emitted when the player changes grid line display preferences in Settings.
+## show_when_overview: true draws lines in the zoomed-out (full-arena) view.
+## show_when_zoomed:   true draws lines in the zoomed-in (2×) view.
+signal grid_lines_changed(show_when_overview: bool, show_when_zoomed: bool)
 
 
 # ---------------------------------------------------------------------------
