@@ -1,6 +1,6 @@
 ﻿# **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.28 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
+**Version:** Draft v0.29 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
 
 ---
 
@@ -36,6 +36,7 @@
 | v0.26 | Sound added as Phase 6. Previous phases 6, 7, 7b, 8, 9 renumbered to 7, 8, 8b, 9, 10. Audio removed from Phase 9 (Depth & Polish) as it is now covered by Phase 6. |
 | v0.27 | GDD audited against implemented code. Section 2 step 5 corrected (no between-wave store). Section 10 upgrade panel description updated to match implementation (3-level per-stat, not star 0–5/tier-up). Section 11 upgrade system entry clarified. Phase 6 status updated to reflect partial completion (AudioManager infrastructure and trap fire sounds done; enemy/UI/music audio pending). README updated to reflect Phase 5 complete. |
 | v0.28 | Phase 6 (Sound) marked complete. Remaining audio assets (music, enemy sounds, UI sounds) deferred to post-roadmap cleanup checklist. New Phase 7 (Define New Traps, Enemies, and Boosts) inserted as a design phase before implementation begins. Previous phases 7–10 renumbered to 8–11. |
+| v0.29 | Phase 7 design complete. New traps: Fly Strip Launcher (anti-air, AoE cloud, flying enemies only) and Bait Station (floor trap, passable cells, poison DoT). New enemies: Mosquito (flying, straight-line path), Cockroach Nymph (splits on death), Mouse (steals Bug Bucks on exit, releases Gnats on death). New unit category: Boosts (5 types — Pheromone Dispenser, Compressor, Cash Register, Air Freshener, Quarantine Marker). Boost rules: block pathfinding, 2×2 footprint, store-only availability, cost comparable to traps, custom upgrade stats per Boost. New systems identified: is_flying flag, straight-line path, FLOOR_TRAP cell state, Poisoned status effect, BoostUnit class, aura system, split-on-death spawn, Bug Bucks theft on exit. Section 4b (Boost Roster) added. Future Pass updated. |
 
 ---
 
@@ -45,6 +46,7 @@
 2. Core Loop
 3. Arena & Layout
 4. Tower Roster
+4b. Boost Roster
 5. Enemy Roster
 6. Mechanics
 6a. Blocking Terrain & Arena Evolution
@@ -158,7 +160,7 @@ The arena evolves over the course of the run. See Section 6a.
 
 ---
 
-## **4. Tower Roster (Initial)**
+## **4. Tower Roster**
 
 Each trap is a tool in an exterminator's kit.
 
@@ -196,8 +198,11 @@ The upgrade panel shows current stat values with per-stat star indicators (e.g. 
 | :---- | :---- |
 | Fire | Deals repeated damage ticks for a duration after the hit |
 | Ice | Reduces pest movement speed for a duration after the hit |
+| Poison | Deals repeated damage ticks for a duration after the hit; applied by the Bait Station |
 
-DoT rules: effects do not stack (a subsequent hit refreshes duration); effects do not spread; Fire and Ice can coexist on the same pest simultaneously.
+DoT rules: effects do not stack (a subsequent hit refreshes duration); effects do not spread; multiple DoT types can coexist on the same pest simultaneously.
+
+**Flying enemy targeting** — Some traps can target flying pests; most cannot. Each trap entry below specifies whether it can reach flying enemies. As a rule: traps that fire mechanically upward or project into the air can reach flying pests; ground-contact traps cannot. The Fly Strip Launcher is the dedicated anti-air trap and the primary counter to flying enemies.
 
 **Footprint:** Traps occupy a 2×2 cell footprint. Placement is anchored to the top-left cell of the footprint. Footprints are fixed and do not rotate — all traps operate in a full 360-degree arc.
 
@@ -209,6 +214,8 @@ Cheap, reliable. Small range circle, fast trigger rate, low damage. Fires at the
 
 **Targeting:** Nearest enemy in range.
 
+**Flying enemy targeting:** Yes — the snap mechanism launches with enough vertical force to catch low-flying pests. The Snap Trap is the only ground trap that can target flying enemies; this is intentional. It gives budget builds a fallback anti-air option without requiring the Fly Strip Launcher.
+
 **Projectile:** A tumbling cheese wedge (the trap's bait, flung at the target). Impact produces a cheese-splat particle burst; kills add an enemy-color burst on top.
 
 **Placeholder visual (current):** A portrait-oriented procedural mesh — narrow wooden base, coil spring at the hinge end, U-shaped wire kill bar (two thin arms and a front crossbar) that slams down on fire and resets after half the cooldown, and a small yellow triangular cheese wedge on the trigger platform that disappears during the snap. To be replaced by an illustrated Sprite3D.
@@ -219,11 +226,15 @@ Cheap, reliable. Small range circle, fast trigger rate, low damage. Fires at the
 
 Large range circle, very slow trigger rate, high damage. Fires an electrical bolt at the exposed pest farthest along the path. Its wide range circle allows it to reach pests deep in corridors without being placed near them. Eliminates standard pests outright late in upgrade path.
 
+**Flying enemy targeting:** No — the electrical arc targets ground-level pests only.
+
 ### **The Fogger**
 
 **Archetype:** Area of effect / high damage
 
 Medium range circle, slow trigger rate, high damage per burst. When it fires, a fog cloud expands outward from the trap and damages exposed pests as the expanding wave reaches each one — pests closer to the trap are hit first. The range circle defines both triggering and AoE coverage. Ideal for chokepoints and tightly packed groups.
+
+**Flying enemy targeting:** No — the chemical cloud disperses at ground level and does not reach airborne pests.
 
 ### **The Glue Board**
 
@@ -231,9 +242,121 @@ Medium range circle, slow trigger rate, high damage per burst. When it fires, a 
 
 Medium range circle, passive and continuous. Any pest inside the circle has the ice slow applied for as long as it remains in range. Low cost, low footprint.
 
+**Flying enemy targeting:** No — flying pests stay airborne and never contact the adhesive surface.
+
 ---
 
-## **5. Enemy Roster (Initial)**
+### **The Fly Strip Launcher**
+
+**Archetype:** Anti-air / AoE cloud
+
+The dedicated counter to flying enemies. Useless against ground pests entirely.
+
+**Targeting:** Flying enemies only — ground enemies are completely unaffected.
+
+**Mechanic:** On firing, launches a persistent cloud of adhesive fly strips that fills the trap's range area. The cloud lingers for a duration. Any flying enemy that passes through the cloud is immediately slowed and takes damage-over-time while it remains inside. Multiple flying enemies can be caught in the same cloud simultaneously. A new cloud is launched on the next firing cycle after the previous one expires.
+
+**Upgrade stats:** Damage (scales both initial slow-entry damage and per-tick DoT), Range, Adhesion Strength (controls slow intensity and duration while inside the cloud).
+
+**Cost:** TBD (playtesting)
+
+---
+
+### **The Bait Station**
+
+**Archetype:** Floor trap / poison
+
+A flat, toxic bait hidden at floor level. Enemies walk straight over it — it does not block movement or alter pathfinding. Its presence is invisible to pests until it fires.
+
+**Targeting:** All ground enemies within a small fixed radius beyond the trap's 2×2 footprint. Flying enemies are completely unaffected.
+
+**Mechanic:** Passable — the Bait Station occupies grid cells using a special floor-trap cell state that the pathfinder treats as walkable. Enemies do not route around it. On a timed interval the Bait Station fires a pulse: all ground enemies in range take an immediate burst of damage and have the **Poisoned** status applied. Poisoned enemies take additional damage at a fixed tick rate for the duration of the poison. A subsequent pulse on an already-poisoned enemy refreshes the duration rather than stacking a second instance.
+
+**Upgrade stats:** Damage (scales both the initial burst and the poison tick), Poison Duration, Range.
+
+**Cost:** TBD (playtesting)
+
+**New system — FLOOR_TRAP cell state:** The Bait Station introduces a new value in the `Grid.CellState` enum. FLOOR_TRAP cells are passable by the A* pathfinder (enemies walk through them) but are occupied for placement purposes (another unit cannot be placed on the same cells).
+
+**New system — Poisoned status effect:** A status that applies a damage-per-tick effect for a fixed duration. Tracked on the enemy alongside the existing slow status. Refresh-on-reapply; no stacking.
+
+---
+
+## **4b. Boost Roster**
+
+Boosts are a distinct category of placeable unit — they are not traps and do not deal damage directly. Their role is to amplify traps, generate resources, or mitigate the Infestation Level. Placing a Boost is a meaningful trade-off against buying or upgrading a damage dealer.
+
+**Boost rules:**
+- Block pathfinding — enemies route around them exactly as they do for traps
+- 2×2 footprint, anchored at the top-left cell; same placement model as traps
+- Store-only availability — Boosts never appear in the run-start trap selection; they can only be unlocked mid-run through the store
+- Cost comparable to traps — placement is a genuine investment decision, not a free bonus
+- Non-damaging — Boosts apply passive auras, generate currency, or interact with the Infestation Level; they do not fire projectiles or apply status effects to enemies directly
+- Upgrade system: each Boost type has its own set of upgradeable stats; not all Boosts have three upgrade stats
+
+---
+
+### **Pheromone Dispenser** *(Trap Aura)*
+
+Emits a synthetic attractant that primes pests for damage. All traps within the aura range deal increased damage while the Dispenser is placed.
+
+**Aura:** Circular radius centered on the Dispenser. Effect applies continuously to all placed traps within range.
+
+**Upgrade stats:** Aura Range, Damage Bonus %
+
+---
+
+### **Compressor** *(Trap Aura — fire rate)*
+
+A compressed-air tank rigged up on-site. Pressurises nearby trap mechanisms so they cycle and reset faster.
+
+**Aura:** Circular radius centered on the Compressor. Reduces the fire cooldown of all traps within range.
+
+**Pairs well with** the Pheromone Dispenser — one buffs damage, the other buffs fire rate. Stacking both Boosts on the same corridor is a high-investment play that rewards dense trap placement.
+
+**Upgrade stats:** Aura Range, Fire Rate Bonus %
+
+---
+
+### **Cash Register** *(Passive Income)*
+
+A mounted trophy display — job receipts, pest samples, awards. Generates Bug Bucks at a steady base rate and pays a bonus per kill that occurs within its aura range.
+
+**Aura:** Circular radius for tracking kills. Base income is continuous regardless of nearby activity.
+
+**Design note:** Income rate is intentionally modest — the Cash Register rewards careful placement inside an active kill zone, not passive economy replacement.
+
+**Upgrade stats:** Base Income Rate, Bonus per Kill, Range
+
+---
+
+### **Air Freshener** *(Infestation Control — perishable)*
+
+A chemical deodorizer placed near the exit. Absorbs infestation damage from pests that escape through its aura, reducing how much each escapee contributes to the Infestation Level.
+
+**Perishable:** The Air Freshener has a finite absorption capacity. Once that capacity is exhausted, the unit is destroyed and must be repurchased. It is the only placeable unit with a lifespan — placing and managing Air Fresheners is a consumable resource decision.
+
+**Aura:** Circular radius centered on the unit. Effect applies to every pest that exits while inside the aura.
+
+**Upgrade stats:** Absorption Capacity (total infestation it can absorb before destruction), Reduction per Pest (how much of each pest's exit damage is absorbed), Range
+
+---
+
+### **Quarantine Marker** *(Infestation Control — kill-based, perishable)*
+
+A biohazard zone marker. Kills made inside its aura restore a small amount of the Infestation Level — a lifesteal-style mechanic that rewards high kill density inside the marked zone.
+
+**Perishable:** Like the Air Freshener, the Quarantine Marker has a finite total restoration capacity. Once it has restored that much infestation across all kills, it is destroyed and must be repurchased. Both infestation control Boosts are perishable — the category identity is managed lifespan.
+
+**Aura:** Circular radius. Applies restoration per kill to any enemy killed within range.
+
+**Synergises with** high-DPS traps and the Pheromone Dispenser / Compressor placed inside the zone.
+
+**Upgrade stats:** Restoration per Kill, Total Capacity, Range
+
+---
+
+## **5. Enemy Roster**
 
 | Name | Archetype | Behavior | Tier |
 | :---- | :---- | :---- | :---- |
@@ -242,8 +365,51 @@ Medium range circle, passive and continuous. Any pest inside the circle has the 
 | The Beetle | Mid-tier tank | High HP, slow movement, moderate infestation damage on exit. Uncommon within waves. | 3 |
 | The Cockroach | High-tier resilient | Very high HP, very slow movement, high infestation damage on exit. Rare. | 4 |
 | The Rat | Boss | Massive HP, slowest movement, highest infestation damage on exit. Leads boss waves. One per wave maximum. | Boss |
+| The Mosquito | Flying / fast | Low HP, fast, flies in a straight line ignoring all obstacles. Immune to most ground traps. | 2–3 |
+| The Cockroach Nymph | Splitting / resilient | High HP, slow. Splits into 2 smaller Nymphs on death. Nymphs do not split again. | 3–4 |
+| The Mouse | Carrier / economic threat | Mid HP and speed. Steals Bug Bucks on exit. Releases Gnats on death. | Mid |
 
 **Exit damage** increases each wave. Wave 1 is balanced so that if all pests reached the exit uncontested, they would fill the Infestation Level to twice its threshold — the player must stop at least half to survive.
+
+---
+
+### **The Mosquito**
+
+**Archetype:** Flying / fast
+
+**Movement:** The Mosquito does not follow the A* path. It flies in a straight line from the entrance midpoint to the exit midpoint, ignoring all grid obstacles, traps, and the Bait Station entirely. Because the straight-line route is shorter than any ground path, the Mosquito arrives at the exit faster than a ground enemy of equivalent speed.
+
+**Ground trap interaction:** The Mosquito is immune to all ground traps except the Snap Trap. The Snap Trap's snap mechanism launches with enough vertical force to catch low-flying pests — it is the only ground trap with this reach. The Fly Strip Launcher is the dedicated counter.
+
+**Tier:** 2–3 — fast, low HP, moderate infestation damage on exit. Appears in standard waves once unlocked; can appear in mixed groups with ground enemies.
+
+---
+
+### **The Cockroach Nymph**
+
+**Archetype:** Splitting / resilient
+
+A cockroach that refuses to stay dead. Killing it is only the first problem.
+
+**On death:** Spawns 2 smaller Cockroach Nymphs at the parent's current grid position. The Nymphs inherit the remaining path from the point of death and continue toward the exit. Nymphs have reduced HP, speed, and infestation damage compared to the parent. Nymphs do not split again on death.
+
+**Economy:** The full kill bounty is paid when the parent is killed. Each Nymph pays a reduced bounty on death.
+
+**Tier:** 3–4 — high HP, slow movement, high infestation damage on exit. The split mechanic means apparent kills can still result in infestation damage if the Nymphs are not also stopped.
+
+---
+
+### **The Mouse**
+
+**Archetype:** Carrier / economic threat
+
+The Mouse punishes the player in both directions — letting it escape is expensive; killing it is not free either.
+
+**On exit:** When the Mouse reaches the exit, it deals its infestation damage as normal and additionally steals a flat amount of Bug Bucks directly from the player's current total. Letting a Mouse escape has two simultaneous consequences: the Infestation Level rises and the player's economy is set back. Bug Bucks stolen per escape: TBD (playtesting).
+
+**On death:** When the Mouse is killed, it releases a small group of Gnats at its current position. The Gnats inherit the path from the Mouse's grid position and continue toward the exit. The correct counter is high-DPS trap coverage that extends beyond the Mouse's kill point — stopping the Mouse mid-corridor still requires covering the Gnats that follow. Gnats spawned per death: TBD (playtesting; 2–4 recommended starting range).
+
+**Tier:** Mid — HP and speed between Cricket and Beetle. Not exceptionally fast or tanky, but strategically high-priority due to its dual threat.
 
 ---
 
@@ -256,6 +422,10 @@ Medium range circle, passive and continuous. Any pest inside the circle has the 
 **Blocking terrain** — Environmental obstacles that act as physical barriers. Cannot be placed on by traps; cannot be crossed by pests. Purely physical — no damage effects. See Section 6a.
 
 **Pathfinding validity** — At least one valid path from entrance to exit must always exist, and at least one row in each gap must remain unblocked. If placing a trap or barrier would violate either constraint, the placement is rejected. This applies to both player-placed traps and arena evolution obstacles.
+
+**Flying enemies** — Flying pests (the Mosquito) do not use the A* pathfinder. They travel in a straight line from the entrance midpoint to the exit midpoint, ignoring all placed traps, obstacles, and the Bait Station. Flying enemies are immune to most ground traps; see Section 4 for per-trap targeting rules. Flying enemies still deal infestation damage on exit and can be tracked and followed by the camera the same as ground enemies.
+
+**Floor traps** — The Bait Station occupies grid cells using a FLOOR_TRAP cell state that the A* pathfinder treats as walkable. Enemies do not route around floor traps. The placement validity check still applies — a floor trap cannot be placed on a cell that is already occupied by another unit. Floor traps do not contribute to blocking terrain and cannot seal a path. Flying enemies ignore floor traps entirely.
 
 ---
 
@@ -554,13 +724,7 @@ The panel is dismissed by tapping the close button or tapping outside the panel.
 
 The following mechanics were identified during design but deferred to a later pass. They should not block v1 development.
 
-**Flying units** — Pests that travel through the air and ignore ground traps entirely. Requires a dedicated anti-air trap type (e.g. a bug zapper variant with aerial targeting). Candidate pest: Mosquito.
-
-**Pest split / survival mechanic** — A pest that survives certain traps or splits into multiple smaller units on death. Candidate pest: Cockroach.
-
-**Barrier-breaking** — A pest capable of destroying or damaging blocking terrain. Candidate pest: Mouse / Rat variant.
-
-**Placeable ally unit** — A neutral or friendly creature the player can deploy that acts as a trap or deterrent. Candidate unit: Spider.
+**Placeable ally unit** — A neutral or friendly creature the player can deploy as a deterrent. Candidate unit: Spider. The Boost unit category introduced in v0.29 partially addresses this space; a creature-style ally remains a future option.
 
 **Additional pests** — Slug (extremely slow, possibly damages traps), Cricket (erratic movement, hard to predict) considered for later roster expansion.
 
@@ -662,12 +826,13 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: the game is playable with the screen off and every meaningful event has an audio identity*
 
-### **Phase 7 — Define New Traps, Enemies, and Boosts**
-- Full design spec for each trap beyond the current 4: name, theme, targeting behavior, projectile/effect, upgrade path
-- Full design spec for each enemy beyond the current 5: name, pest type, stats, special behavior, audio/visual identity
-- Boost/perk roster — full list of round-end perks with descriptions and mechanical effect
-- Stat baselines and scaling formulas defined for all new units and traps (to be tuned via playtesting)
-- All designs written into GDD before implementation begins
+### **Phase 7 — Define New Traps, Enemies, and Boosts** ✓ Complete
+- ✓ Full design spec for new traps: Fly Strip Launcher (anti-air, AoE cloud) and Bait Station (floor trap, poison DoT) — see Section 4
+- ✓ Full design spec for new enemies: Mosquito (flying), Cockroach Nymph (splitting), Mouse (carrier / economic threat) — see Section 5
+- ✓ Boost unit category defined: 5 types (Pheromone Dispenser, Compressor, Cash Register, Air Freshener, Quarantine Marker) — see Section 4b
+- ✓ New systems identified for implementation: is_flying flag, straight-line path, FLOOR_TRAP cell state, Poisoned status effect, BoostUnit class, aura system, split-on-death spawn, Bug Bucks theft on exit
+- ✓ All designs written into GDD before implementation begins
+- Stat baselines and scaling formulas: deferred to playtesting (values are TBD throughout)
 
 *Goal: no implementation work begins on new content until the full roster is specified — prevents scope creep and mid-build redesigns*
 
