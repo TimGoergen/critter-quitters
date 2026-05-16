@@ -29,6 +29,8 @@ const Enemy             = preload("res://enemies/Enemy.gd")
 const Trap              = preload("res://traps/Trap.gd")
 const Projectile        = preload("res://traps/Projectile.gd")
 const FogCloud          = preload("res://traps/FogCloud.gd")
+const FlyStripCloud     = preload("res://traps/FlyStripCloud.gd")
+const BoostUnit         = preload("res://boosts/BoostUnit.gd")
 const UIFonts           = preload("res://ui/UIFonts.gd")
 const HUD               = preload("res://ui/HUD.gd")
 const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
@@ -74,6 +76,10 @@ var _trap_nodes: Dictionary = {}          # anchor Vector2i -> MeshInstance3D
 # Maps every cell in a trap's 2x2 footprint back to that trap's anchor cell.
 # Used to find and remove the whole trap when the player clicks any of its cells.
 var _trap_anchors: Dictionary = {}        # Vector2i -> anchor Vector2i
+
+# Boost units — parallel structure to traps; Boosts block pathfinding like traps.
+var _boost_nodes:   Dictionary = {}       # anchor Vector2i -> BoostUnit node
+var _boost_anchors: Dictionary = {}       # Vector2i -> anchor Vector2i
 
 # Pre-created path marker nodes. Repositioned and shown/hidden on each
 # path update rather than freed and re-created.
@@ -660,8 +666,13 @@ func _try_place_trap(anchor: Vector2i) -> bool:
 	if not _can_place_at(cells):
 		return false
 
+	var is_bait_station := (GameState.selected_trap_type == Trap.TrapType.BAIT_STATION)
 	for cell in cells:
-		_grid.place_trap(cell)
+		# Bait Station uses FLOOR_TRAP so enemies walk over it; all other traps use TRAP.
+		if is_bait_station:
+			_grid.place_floor_trap(cell)
+		else:
+			_grid.place_trap(cell)
 		_trap_anchors[cell] = anchor
 
 	_spawn_trap(anchor)
@@ -761,7 +772,11 @@ func _try_remove_trap_by_anchor(anchor: Vector2i) -> void:
 	if _hovered_trap_anchor == anchor:
 		_hovered_trap_anchor = Vector2i(-1, -1)
 	for c in _get_trap_cells(anchor):
-		_grid.remove_trap(c)
+		# Bait Station occupies FLOOR_TRAP cells; all others use TRAP.
+		if _grid.get_cell(c) == Grid.CellState.FLOOR_TRAP:
+			_grid.remove_floor_trap(c)
+		else:
+			_grid.remove_trap(c)
 		_trap_anchors.erase(c)
 
 
@@ -1000,8 +1015,27 @@ func _spawn_enemy(path: Array[Vector2i], enemy_type: Enemy.EnemyType) -> void:
 	enemy.initialize(path, enemy_type, GameState.current_wave)
 
 
+## Spawns a new enemy mid-arena starting from grid_pos.
+## Used for on-death effects (Cockroach Nymph splits, Mouse gnat swarm).
+## Finds a fresh path from the given cell; does nothing if no path exists.
+func spawn_enemy_at_grid_position(grid_pos: Vector2i, enemy_type: Enemy.EnemyType) -> void:
+	var path := _find_shortest_exit_path(grid_pos)
+	if path.is_empty():
+		return
+	_spawn_enemy(path, enemy_type)
+
+
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
-	GameState.add_infestation(enemy.get_infestation_damage())
+	# Air Freshener Boosts may absorb a fraction of the infestation — pass the full
+	# amount through each Boost in sequence, with each returning its unabsorbed remainder.
+	var infestation := enemy.get_infestation_damage()
+	for boost in _boost_nodes.values():
+		if is_instance_valid(boost):
+			infestation = boost.absorb_infestation(infestation, enemy.global_position)
+	GameState.add_infestation(infestation)
+	# Mouse steals Bug Bucks from the player in addition to adding infestation.
+	if enemy.get_enemy_type() == Enemy.EnemyType.MOUSE:
+		GameState.add_bug_bucks(-enemy.get_bug_bucks_steal())
 	_active_enemies.erase(enemy)
 	if enemy == _followed_enemy:
 		_set_followed_enemy(null)
@@ -1020,6 +1054,24 @@ func _on_enemy_died(enemy: Node3D) -> void:
 		_set_followed_enemy(null)
 	# enemy.queue_free() is called inside Enemy._die() after the flash tween.
 
+	# Notify all Boost units of the kill (Quarantine Marker + Cash Register use this).
+	for boost in _boost_nodes.values():
+		if is_instance_valid(boost):
+			boost.on_enemy_died_near(enemy.global_position)
+
+	# On-death spawn effects — trigger after erasing from _active_enemies so
+	# the spawned children don't cause an immediate false wave-end check.
+	var death_cell := enemy.get_current_cell()
+	match enemy.get_enemy_type():
+		Enemy.EnemyType.COCKROACH_NYMPH:
+			# Splits into two smaller cockroaches that continue toward the exit.
+			for _i in 2:
+				spawn_enemy_at_grid_position(death_cell, Enemy.EnemyType.COCKROACH_MINI)
+		Enemy.EnemyType.MOUSE:
+			# Releases a swarm of gnats from its position.
+			for _i in 3:
+				spawn_enemy_at_grid_position(death_cell, Enemy.EnemyType.GNAT)
+
 	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
 		_start_wave()
 
@@ -1027,6 +1079,10 @@ func _on_enemy_died(enemy: Node3D) -> void:
 ## Increments the wave counter and begins the between-wave countdown.
 func _start_wave() -> void:
 	GameState.current_wave += 1
+	# Notify Boost units of the new wave (Cash Register awards passive income here).
+	for boost in _boost_nodes.values():
+		if is_instance_valid(boost):
+			boost.on_wave_started()
 	_countdown_active    = true
 	_seconds_remaining   = WAVE_COUNTDOWN
 	GameState.set_countdown(WAVE_COUNTDOWN)
@@ -2058,6 +2114,7 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 	trap.fired.connect(_on_trap_fired)
 	trap.aoe_fired.connect(_on_fogger_aoe_fired)
+	trap.fly_strip_fired.connect(_on_fly_strip_fired)
 	trap.initialize(GameState.selected_trap_type as Trap.TrapType, _active_enemies)
 	# Arena is PROCESS_MODE_ALWAYS; override so traps pause with the game.
 	trap.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -2080,6 +2137,60 @@ func _on_fogger_aoe_fired(from_pos: Vector3, aoe_range: float, damage: float, ac
 	# Arena is PROCESS_MODE_ALWAYS; override so fog clouds pause with the game.
 	cloud.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(cloud)
+
+
+func _on_fly_strip_fired(from_pos: Vector3, aoe_range: float, damage: float,
+		adhesion: float, cloud_duration: float, active_enemies: Array) -> void:
+	var cloud := FlyStripCloud.new()
+	cloud.initialize(from_pos, aoe_range, damage, adhesion, cloud_duration, active_enemies)
+	cloud.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(cloud)
+
+
+## Places a Boost unit at anchor. Boosts block pathfinding like traps.
+## Returns true if placement succeeded.
+func _try_place_boost(anchor: Vector2i, boost_type: BoostUnit.BoostType) -> bool:
+	anchor = _clamp_to_anchor(anchor)
+	var cells := _get_trap_cells(anchor)
+	if cells.is_empty():
+		return false
+
+	for cell in cells:
+		if not _grid.is_buildable(cell):
+			return false
+
+	if not _can_place_at(cells):
+		return false
+
+	for cell in cells:
+		_grid.place_trap(cell)
+		_boost_anchors[cell] = anchor
+
+	var boost := BoostUnit.new()
+	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
+	boost.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
+	boost.process_mode = Node.PROCESS_MODE_PAUSABLE
+	boost.initialize(boost_type, _active_enemies, _trap_nodes)
+	boost.boost_depleted.connect(_try_remove_boost_by_anchor.bind(anchor))
+	add_child(boost)
+	_boost_nodes[anchor] = boost
+	GameState.spend_bug_bucks(boost.get_cost())
+	# cell_changed from place_trap() above triggers Pathfinder recalculation automatically.
+	return true
+
+
+## Removes a Boost unit and refunds 70% of its cost.
+func _try_remove_boost_by_anchor(anchor: Vector2i) -> void:
+	if _boost_nodes.has(anchor):
+		var boost: Node3D = _boost_nodes[anchor]
+		var refund: int = int(boost.get_cost() * 0.70)
+		GameState.add_bug_bucks(refund)
+		boost.queue_free()
+		_boost_nodes.erase(anchor)
+	for c in _get_trap_cells(anchor):
+		_grid.remove_trap(c)
+		_boost_anchors.erase(c)
+	# cell_changed from remove_trap() triggers Pathfinder recalculation automatically.
 
 
 ## Returns the four cells of a 2x2 trap footprint given its top-left anchor.

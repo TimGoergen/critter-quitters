@@ -39,12 +39,13 @@ const CELL_SIZE: float = 1.0
 # ---------------------------------------------------------------------------
 
 enum CellState {
-	EMPTY,     # Nothing here — passable by pests, available for trap placement
-	TRAP,      # Player-placed trap — impassable, can be sold or upgraded
-	OBSTACLE,  # Arena Evolution obstacle — impassable, cannot be removed by player
-	WALL,      # Permanent arena border wall — impassable, never buildable or removable
-	ENTRANCE,  # Pest entry point (gap in left wall) — passable, buildable with path check
-	EXIT,      # Pest destination (gap in right wall) — passable, buildable with path check
+	EMPTY,      # Nothing here — passable by pests, available for trap placement
+	TRAP,       # Player-placed trap — impassable, can be sold or upgraded
+	FLOOR_TRAP, # Player-placed floor trap (e.g. Bait Station) — passable by pests, occupied for placement
+	OBSTACLE,   # Arena Evolution obstacle — impassable, cannot be removed by player
+	WALL,       # Permanent arena border wall — impassable, never buildable or removable
+	ENTRANCE,   # Pest entry point (gap in left wall) — passable, buildable with path check
+	EXIT,       # Pest destination (gap in right wall) — passable, buildable with path check
 }
 
 
@@ -103,12 +104,13 @@ func is_in_bounds(cell: Vector2i) -> bool:
 
 
 ## Returns true if pests can move through this cell.
-## EMPTY, ENTRANCE, and EXIT are passable. TRAP and OBSTACLE are not.
+## EMPTY, ENTRANCE, EXIT, and FLOOR_TRAP are passable. TRAP and OBSTACLE are not.
 func is_passable(cell: Vector2i) -> bool:
 	var state: CellState = get_cell(cell)
 	return state == CellState.EMPTY \
 		or state == CellState.ENTRANCE \
-		or state == CellState.EXIT
+		or state == CellState.EXIT \
+		or state == CellState.FLOOR_TRAP
 
 
 ## Returns true if the player is allowed to place a trap on this cell.
@@ -154,6 +156,19 @@ func place_obstacle(cell: Vector2i) -> void:
 ## Removes an Arena Evolution obstacle — used by the rare removal roll.
 ## Assumes the cell currently holds an OBSTACLE.
 func remove_obstacle(cell: Vector2i) -> void:
+	set_cell(cell, CellState.EMPTY)
+
+
+## Places a floor trap (e.g. Bait Station) on the given cell.
+## Floor traps are passable by pests — the pathfinder does not reroute around them.
+## Assumes the cell is buildable — call is_buildable() before calling this.
+func place_floor_trap(cell: Vector2i) -> void:
+	set_cell(cell, CellState.FLOOR_TRAP)
+
+
+## Removes a floor trap and returns the cell to EMPTY.
+## Assumes the cell currently holds a FLOOR_TRAP.
+func remove_floor_trap(cell: Vector2i) -> void:
 	set_cell(cell, CellState.EMPTY)
 
 

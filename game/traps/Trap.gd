@@ -40,19 +40,32 @@ const SHADOW_OUTLINE_SHADER = preload("res://assets/shadow_outline.gdshader")
 # Trap type
 # ---------------------------------------------------------------------------
 
-enum TrapType { SNAP_TRAP, ZAPPER, FOGGER, GLUE_BOARD }
+enum TrapType { SNAP_TRAP, ZAPPER, FOGGER, GLUE_BOARD, FLY_STRIP_LAUNCHER, BAIT_STATION }
 
 ## Per-type stat table. All numeric values are placeholders — tuned via playtesting.
-##   damage   — HP removed from each target per shot
-##   range    — circular detection radius in world units (1 unit = 1 cell)
-##   cooldown — seconds between shots; 0.0 = passive (no shots fired)
-##   cost     — Bug Bucks to place one trap of this type
-##   color    — placeholder box colour (replaced by sprites in Phase 3)
+##   damage           — HP removed from each target per shot
+##   range            — circular detection radius in world units (1 unit = 1 cell)
+##   cooldown         — seconds between shots; 0.0 = passive (no shots fired)
+##   cost             — Bug Bucks to place one trap of this type
+##   color            — placeholder box colour (replaced by sprites in Phase 8)
+##   cloud_duration   — FLY_STRIP_LAUNCHER only: seconds the sticky cloud persists
+##   adhesion         — FLY_STRIP_LAUNCHER only: slow factor applied to flying enemies (0.0–1.0)
+##   pulse_interval   — BAIT_STATION only: seconds between damage pulses
+##   poison_*         — BAIT_STATION only: poison DoT applied after each pulse
 const STATS := {
 	TrapType.SNAP_TRAP:  { "damage": 5.0,  "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.52, 0.27, 0.08) },
 	TrapType.ZAPPER:     { "damage": 30.0, "range": 9.6, "cooldown": 2.5, "cost": 75, "color": Color(0.10, 0.50, 1.00) },
 	TrapType.FOGGER:     { "damage": 3.0,  "range": 4.0, "cooldown": 2.2, "cost": 60, "color": Color(0.35, 0.88, 0.18) },
 	TrapType.GLUE_BOARD: { "damage": 0.20, "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(0.92, 0.89, 0.78) },
+	TrapType.FLY_STRIP_LAUNCHER: {
+		"damage": 2.0, "range": 5.0, "cooldown": 5.0, "cost": 65, "color": Color(0.85, 0.20, 0.65),
+		"cloud_duration": 3.0, "adhesion": 0.30,
+	},
+	TrapType.BAIT_STATION: {
+		"damage": 3.0, "range": 3.5, "cooldown": 0.0, "cost": 40, "color": Color(0.45, 0.25, 0.55),
+		"pulse_interval": 4.0,
+		"poison_damage_per_tick": 1.5, "poison_duration": 3.0, "poison_tick_rate": 0.5,
+	},
 }
 
 ## Each stat can be upgraded this many times independently.
@@ -73,14 +86,24 @@ const GLUE_ADHESION_LEVELS: Array[float] = [0.20, 0.30, 0.40, 0.50]
 ## How long the slow persists on an enemy after it leaves the board's radius.
 const GLUE_DURATION_LEVELS: Array[float] = [3.0, 4.5, 6.0, 8.0]
 
+## Fly Strip Launcher adhesion strength at each third-stat upgrade level.
+## Applied to flying enemies caught in the sticky cloud.
+const FLY_STRIP_ADHESION_LEVELS: Array[float] = [0.30, 0.40, 0.55, 0.70]
+
+## Bait Station poison duration (seconds) at each duration upgrade level.
+## How long the DoT persists on an enemy after the pulse hits them.
+const BAIT_POISON_DURATION_LEVELS: Array[float] = [3.0, 4.5, 6.0, 8.0]
+
 ## Bug Bucks cost for each upgrade level per trap type.
 ## Index 0 = first upgrade, 1 = second, 2 = third.
 ## All values are tuning placeholders — finalize via playtesting.
 const UPGRADE_COSTS := {
-	TrapType.SNAP_TRAP:  [20, 30, 50],
-	TrapType.ZAPPER:     [50, 75, 120],
-	TrapType.FOGGER:     [40, 60, 100],
-	TrapType.GLUE_BOARD: [30, 45, 70],
+	TrapType.SNAP_TRAP:          [20, 30,  50],
+	TrapType.ZAPPER:             [50, 75, 120],
+	TrapType.FOGGER:             [40, 60, 100],
+	TrapType.GLUE_BOARD:         [30, 45,  70],
+	TrapType.FLY_STRIP_LAUNCHER: [40, 65, 100],
+	TrapType.BAIT_STATION:       [30, 45,  70],
 }
 
 
@@ -96,6 +119,10 @@ signal fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, 
 ## for its full visual lifetime and ticks damage to any enemy in range on a
 ## fixed interval — including enemies that enter the area after the cloud forms.
 signal aoe_fired(from_pos: Vector3, aoe_range: float, damage: float, active_enemies: Array)
+
+## Emitted once per Fly Strip Launcher firing cycle. Arena spawns a FlyStripCloud
+## that slows and damages flying enemies while they pass through it.
+signal fly_strip_fired(from_pos: Vector3, aoe_range: float, damage: float, adhesion: float, cloud_duration: float, active_enemies: Array)
 
 ## Emitted after any upgrade is applied. TrapUpgradePanel connects here to
 ## keep its display current without polling.
@@ -187,9 +214,31 @@ var _zapper_animating: bool  = false
 
 # Tracks how many particle batches from this trap are still visually alive.
 # Each fire increments the count; a timer decrements it after the particles expire.
-# Firing is blocked when the count reaches FOG_BATCH_CAP (~6 puffs on screen).
-const FOG_BATCH_CAP: int = 2   # 2 batches × 3–4 puffs each ≈ 6 puffs max
-var _active_fog_batches: int = 0
+# Firing is blocked when the count reaches the cap (~6 puffs on screen).
+const FOG_BATCH_CAP: int       = 2   # 2 batches × 3–4 puffs each ≈ 6 puffs max
+const FLY_STRIP_BATCH_CAP: int = 2   # same limit for fly strip clouds
+var _active_fog_batches:       int = 0
+var _active_fly_strip_batches: int = 0
+
+# Fly Strip Launcher — extra stats that go beyond the base damage/range/cooldown tuple.
+var _fly_strip_adhesion:       float = 0.0   # slow factor applied to flying enemies in the cloud
+var _fly_strip_cloud_duration: float = 0.0   # how many seconds the cloud lingers
+
+# Bait Station — pulse interval and poison parameters (stored separately because
+# cooldown = 0.0 in STATS so the base fire loop treats it as passive).
+var _bait_pulse_interval:          float = 0.0
+var _bait_pulse_timer:             float = 0.0
+var _bait_poison_damage_per_tick:  float = 0.0
+var _bait_base_poison_damage:      float = 0.0   # base value stored so upgrades scale correctly
+var _bait_poison_duration:         float = 0.0
+var _bait_poison_tick_rate:        float = 0.0
+
+# Damage and fire-rate multipliers applied by Boost auras.
+# Stored per-source so the boost is removed cleanly when the Boost is sold or destroyed.
+var _damage_boost_sources:    Dictionary = {}   # BoostUnit node → damage bonus factor
+var _fire_rate_boost_sources: Dictionary = {}   # BoostUnit node → fire-rate bonus factor
+var _damage_multiplier:    float = 1.0
+var _fire_rate_multiplier: float = 1.0
 
 
 # ---------------------------------------------------------------------------
@@ -214,6 +263,18 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	_base_range    = _range
 	_base_cooldown = _cooldown
 
+	if _trap_type == TrapType.FLY_STRIP_LAUNCHER:
+		_fly_strip_adhesion       = stats.get("adhesion", 0.30)
+		_fly_strip_cloud_duration = stats.get("cloud_duration", 3.0)
+
+	if _trap_type == TrapType.BAIT_STATION:
+		_bait_pulse_interval         = stats.get("pulse_interval", 4.0)
+		_bait_pulse_timer            = _bait_pulse_interval
+		_bait_poison_damage_per_tick = stats.get("poison_damage_per_tick", 1.5)
+		_bait_base_poison_damage     = _bait_poison_damage_per_tick
+		_bait_poison_duration        = stats.get("poison_duration", 3.0)
+		_bait_poison_tick_rate       = stats.get("poison_tick_rate", 0.5)
+
 	_spawn_visual(stats["color"])
 	_spawn_star_display()
 	stats_changed.connect(_rebuild_range_indicator)
@@ -221,6 +282,8 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	if _trap_type == TrapType.GLUE_BOARD:
 		_slow_duration = GLUE_DURATION_LEVELS[0]
 		stats_changed.connect(_refresh_glue_slow)
+	if _trap_type == TrapType.BAIT_STATION:
+		_bait_poison_duration = BAIT_POISON_DURATION_LEVELS[0]
 
 
 ## Lightweight setup for placement preview ghosts.
@@ -276,9 +339,11 @@ func get_duration_upgrade_cost() -> int:
 ## Damage this trap would have after one damage upgrade.
 ## For Glue Board, returns the next adhesion tier value from GLUE_ADHESION_LEVELS.
 func get_damage_after_upgrade() -> float:
-	if _trap_type == TrapType.GLUE_BOARD:
-		return GLUE_ADHESION_LEVELS[mini(_damage_level + 1, MAX_UPGRADE_LEVEL)]
-	return _damage + _base_damage * UPGRADE_DAMAGE_FACTOR
+	match _trap_type:
+		TrapType.GLUE_BOARD:
+			return GLUE_ADHESION_LEVELS[mini(_damage_level + 1, MAX_UPGRADE_LEVEL)]
+		_:
+			return _damage + _base_damage * UPGRADE_DAMAGE_FACTOR
 
 ## Range this trap would have after one range upgrade.
 func get_range_after_upgrade() -> float:
@@ -293,8 +358,10 @@ func get_shots_per_sec_after_upgrade() -> float:
 	var new_cooldown := maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
 	return 1.0 / new_cooldown
 
-## Glue Board only — slow duration (seconds) after the next duration upgrade.
+## Glue Board / Bait Station — duration value after the next duration upgrade.
 func get_duration_after_upgrade() -> float:
+	if _trap_type == TrapType.BAIT_STATION:
+		return BAIT_POISON_DURATION_LEVELS[mini(_duration_level + 1, MAX_UPGRADE_LEVEL)]
 	return GLUE_DURATION_LEVELS[mini(_duration_level + 1, MAX_UPGRADE_LEVEL)]
 
 
@@ -303,6 +370,7 @@ func get_duration_after_upgrade() -> float:
 # ---------------------------------------------------------------------------
 
 ## Increases damage by 20% of base (or advances to the next adhesion tier for Glue Board).
+## For Bait Station, poison tick damage scales with burst damage at the same rate.
 ## Only call when not maxed.
 func apply_damage_upgrade() -> void:
 	if _trap_type == TrapType.GLUE_BOARD:
@@ -310,6 +378,8 @@ func apply_damage_upgrade() -> void:
 		_damage = GLUE_ADHESION_LEVELS[_damage_level]
 	else:
 		_damage += _base_damage * UPGRADE_DAMAGE_FACTOR
+		if _trap_type == TrapType.BAIT_STATION:
+			_bait_poison_damage_per_tick += _bait_base_poison_damage * UPGRADE_DAMAGE_FACTOR
 		_damage_level += 1
 	_check_full_upgrade_bonus()
 	stats_changed.emit()
@@ -321,18 +391,27 @@ func apply_range_upgrade() -> void:
 	_check_full_upgrade_bonus()
 	stats_changed.emit()
 
-## Reduces cooldown by 8% of base (faster shots). Only call when not maxed.
+## Reduces cooldown by 8% of base (faster shots), or advances Fly Strip Launcher
+## adhesion to the next tier. Only call when not maxed.
 ## Cooldown is clamped to 0.1 s minimum to prevent instant-fire edge cases.
 func apply_fire_rate_upgrade() -> void:
-	_cooldown = maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
-	_rate_level += 1
+	if _trap_type == TrapType.FLY_STRIP_LAUNCHER:
+		_rate_level      += 1
+		_fly_strip_adhesion = FLY_STRIP_ADHESION_LEVELS[_rate_level]
+	else:
+		_cooldown    = maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
+		_rate_level += 1
 	_check_full_upgrade_bonus()
 	stats_changed.emit()
 
-## Advances the Glue Board to the next duration tier. Only call when not maxed.
+## Advances the Glue Board slow duration or Bait Station poison duration to the next tier.
+## Only call when not maxed.
 func apply_duration_upgrade() -> void:
 	_duration_level += 1
-	_slow_duration = GLUE_DURATION_LEVELS[_duration_level]
+	if _trap_type == TrapType.BAIT_STATION:
+		_bait_poison_duration = BAIT_POISON_DURATION_LEVELS[_duration_level]
+	else:
+		_slow_duration = GLUE_DURATION_LEVELS[_duration_level]
 	_check_full_upgrade_bonus()
 	stats_changed.emit()
 
@@ -365,15 +444,19 @@ func get_duration_level() -> int:
 func is_duration_maxed() -> bool:
 	return _duration_level >= MAX_UPGRADE_LEVEL
 
-## Glue Board only — current slow duration in seconds after leaving the board's radius.
+## Glue Board — slow duration in seconds. Bait Station — poison duration in seconds.
 func get_duration() -> float:
+	if _trap_type == TrapType.BAIT_STATION:
+		return _bait_poison_duration
 	return _slow_duration
 
 ## True when every upgradeable stat is at MAX_UPGRADE_LEVEL.
 func is_fully_upgraded() -> bool:
-	if _trap_type == TrapType.GLUE_BOARD:
-		return is_damage_maxed() and is_range_maxed() and is_duration_maxed()
-	return is_damage_maxed() and is_range_maxed() and is_rate_maxed()
+	match _trap_type:
+		TrapType.GLUE_BOARD, TrapType.BAIT_STATION:
+			return is_damage_maxed() and is_range_maxed() and is_duration_maxed()
+		_:
+			return is_damage_maxed() and is_range_maxed() and is_rate_maxed()
 
 func get_damage() -> float:
 	return _damage
@@ -394,10 +477,12 @@ func get_type() -> TrapType:
 
 func get_type_name() -> String:
 	match _trap_type:
-		TrapType.SNAP_TRAP:  return "Snap Trap"
-		TrapType.ZAPPER:     return "Zapper"
-		TrapType.FOGGER:     return "Fogger"
-		TrapType.GLUE_BOARD: return "Glue Board"
+		TrapType.SNAP_TRAP:          return "Snap Trap"
+		TrapType.ZAPPER:             return "Zapper"
+		TrapType.FOGGER:             return "Fogger"
+		TrapType.GLUE_BOARD:         return "Glue Board"
+		TrapType.FLY_STRIP_LAUNCHER: return "Fly Strip Launcher"
+		TrapType.BAIT_STATION:       return "Bait Station"
 	return "Unknown"
 
 ## Returns the Bug Bucks cost to place this trap.
@@ -422,10 +507,11 @@ func get_maxed_stat_count() -> int:
 	var count := 0
 	if is_damage_maxed(): count += 1
 	if is_range_maxed():  count += 1
-	if _trap_type == TrapType.GLUE_BOARD:
-		if is_duration_maxed(): count += 1
-	elif not is_passive():
-		if is_rate_maxed():     count += 1
+	match _trap_type:
+		TrapType.GLUE_BOARD, TrapType.BAIT_STATION:
+			if is_duration_maxed(): count += 1
+		_:
+			if not is_passive() and is_rate_maxed(): count += 1
 	return count
 
 ## Returns the total number of independently upgradeable stats for this trap.
@@ -460,6 +546,9 @@ func _process(delta: float) -> void:
 	if _trap_type == TrapType.GLUE_BOARD:
 		_update_glue_aoe(delta)
 		return
+	if _trap_type == TrapType.BAIT_STATION:
+		_update_bait_station(delta)
+		return
 
 	# Fogger idle animation: gentle sine-wave float between shots.
 	if _trap_type == TrapType.FOGGER and _fogger_root != null:
@@ -474,17 +563,28 @@ func _process(delta: float) -> void:
 	if _trap_type == TrapType.FOGGER:
 		did_fire = _fire_fogger()
 		if did_fire:
-			aoe_fired.emit(global_position, _range, _damage, _active_enemies)
+			aoe_fired.emit(global_position, _range, _damage * _damage_multiplier, _active_enemies)
 			_play_fogger_animation()
 			_active_fog_batches += 1
 			var expire := FogCloud.PARTICLE_LIFETIME * 2.0 + 0.20
 			get_tree().create_timer(expire).timeout.connect(
 				func(): _active_fog_batches = maxi(0, _active_fog_batches - 1)
 			)
+	elif _trap_type == TrapType.FLY_STRIP_LAUNCHER:
+		did_fire = _fire_fly_strip()
+		if did_fire:
+			fly_strip_fired.emit(global_position, _range, _damage * _damage_multiplier,
+				_fly_strip_adhesion, _fly_strip_cloud_duration, _active_enemies)
+			_active_fly_strip_batches += 1
+			# Timer matches the cloud lifetime so the batch counter clears when it fades.
+			get_tree().create_timer(_fly_strip_cloud_duration + 0.50).timeout.connect(
+				func(): _active_fly_strip_batches = maxi(0, _active_fly_strip_batches - 1)
+			)
 	else:
 		var target := _find_target()
 		if target != null:
-			fired.emit(global_position, target.global_position, target, _damage, _trap_type)
+			fired.emit(global_position, target.global_position, target,
+				_damage * _damage_multiplier, _trap_type)
 			did_fire = true
 			if _trap_type == TrapType.SNAP_TRAP:
 				_play_snap_animation()
@@ -492,7 +592,8 @@ func _process(delta: float) -> void:
 				_play_zapper_animation()
 
 	if did_fire:
-		_cooldown_remaining = _cooldown
+		# Divide by fire-rate multiplier so a Compressor Boost speeds up all traps.
+		_cooldown_remaining = _cooldown / _fire_rate_multiplier
 
 
 func _exit_tree() -> void:
@@ -579,6 +680,84 @@ func _refresh_glue_slow() -> void:
 	for enemy in _glue_slowed_enemies:
 		if is_instance_valid(enemy):
 			enemy.add_slow_source(self, _damage)
+
+
+## Returns true if at least one flying enemy is in range and the batch cap is not reached.
+## Damage is NOT applied here — FlyStripCloud ticks it while alive.
+func _fire_fly_strip() -> bool:
+	if _active_fly_strip_batches >= FLY_STRIP_BATCH_CAP:
+		return false
+	for enemy in _active_enemies:
+		if not is_instance_valid(enemy):
+			continue
+		if enemy.get_is_flying() and _xz_distance(enemy.global_position) <= _range:
+			return true
+	return false
+
+
+## Pulses damage + poison to all ground enemies in range on a fixed interval.
+## Runs every frame in place of the standard fire loop.
+func _update_bait_station(delta: float) -> void:
+	_bait_pulse_timer -= delta
+	if _bait_pulse_timer > 0.0:
+		return
+	_bait_pulse_timer = _bait_pulse_interval
+
+	var hit_any := false
+	for enemy in _active_enemies:
+		if not is_instance_valid(enemy):
+			continue
+		if enemy.get_is_flying():
+			continue   # Bait Station only affects ground pests
+		if _xz_distance(enemy.global_position) > _range:
+			continue
+		enemy.take_damage(_damage * _damage_multiplier, Color(0.72, 0.42, 0.08))
+		enemy.apply_poison(_bait_poison_damage_per_tick, _bait_poison_duration, _bait_poison_tick_rate)
+		hit_any = true
+	if hit_any:
+		AudioManager.play_trap_fire(TrapType.BAIT_STATION)
+
+
+# ---------------------------------------------------------------------------
+# Boost aura system
+# ---------------------------------------------------------------------------
+
+## Called by a Pheromone Dispenser Boost when it enters or refreshes range of this trap.
+## Stacks additively: two dispensers with factor 0.25 each give _damage_multiplier = 1.50.
+func apply_damage_boost(source: Node3D, factor: float) -> void:
+	_damage_boost_sources[source] = factor
+	_recalculate_multipliers()
+
+
+## Called by a Pheromone Dispenser Boost when it is sold, destroyed, or moves out of range.
+func remove_damage_boost(source: Node3D) -> void:
+	_damage_boost_sources.erase(source)
+	_recalculate_multipliers()
+
+
+## Called by a Compressor Boost when it enters or refreshes range of this trap.
+func apply_fire_rate_boost(source: Node3D, factor: float) -> void:
+	_fire_rate_boost_sources[source] = factor
+	_recalculate_multipliers()
+
+
+## Called by a Compressor Boost when it is sold, destroyed, or moves out of range.
+func remove_fire_rate_boost(source: Node3D) -> void:
+	_fire_rate_boost_sources.erase(source)
+	_recalculate_multipliers()
+
+
+## Recomputes multipliers from the current boost source dictionaries.
+func _recalculate_multipliers() -> void:
+	var damage_bonus: float = 0.0
+	for factor: float in _damage_boost_sources.values():
+		damage_bonus += factor
+	_damage_multiplier = 1.0 + damage_bonus
+
+	var fire_rate_bonus: float = 0.0
+	for factor: float in _fire_rate_boost_sources.values():
+		fire_rate_bonus += factor
+	_fire_rate_multiplier = 1.0 + fire_rate_bonus
 
 
 ## Returns the enemy in range closest to this trap (used by Snap Trap).
@@ -951,11 +1130,13 @@ func _spawn_visual(_color: Color) -> void:
 	# footprint outline all stay in sync.
 	var c: Color
 	match _trap_type:
-		TrapType.SNAP_TRAP:  c = Color(0.90, 0.70, 0.38)
-		TrapType.ZAPPER:     c = Color(0.28, 0.62, 0.96)
-		TrapType.FOGGER:     c = Color(0.46, 0.96, 0.38)
-		TrapType.GLUE_BOARD: c = Color(0.96, 0.82, 0.34)
-		_:                   c = Color(0.80, 0.80, 0.80)
+		TrapType.SNAP_TRAP:          c = Color(0.90, 0.70, 0.38)
+		TrapType.ZAPPER:             c = Color(0.28, 0.62, 0.96)
+		TrapType.FOGGER:             c = Color(0.46, 0.96, 0.38)
+		TrapType.GLUE_BOARD:         c = Color(0.96, 0.82, 0.34)
+		TrapType.FLY_STRIP_LAUNCHER: c = Color(0.92, 0.30, 0.78)
+		TrapType.BAIT_STATION:       c = Color(0.52, 0.30, 0.65)
+		_:                           c = Color(0.80, 0.80, 0.80)
 	_base_color = c
 	_spawn_shadow(c)
 	_spawn_background(c)
@@ -975,6 +1156,9 @@ func _spawn_visual(_color: Color) -> void:
 		_spawn_footprint_outline(c)
 		_spawn_glue_board_visual()
 		return
+	# FLY_STRIP_LAUNCHER and BAIT_STATION use a placeholder colored box until Phase 8.
+	_spawn_footprint_outline(c)
+	_spawn_placeholder_visual(c)
 
 
 ## Builds the Glue Board visual: a flat rectangular glue board as seen from above.
@@ -1481,3 +1665,19 @@ func _play_snap_animation() -> void:
 
 	_snap_cheese.visible = true
 	_snap_animating      = false
+
+
+## Simple flat box placeholder for trap types that don't have a dedicated visual yet.
+## Replaced in Phase 8 (Sprite Art Migration) with the proper illustrated model.
+func _spawn_placeholder_visual(color: Color) -> void:
+	var fp      := Grid.CELL_SIZE * 1.9
+	var box_mi  := MeshInstance3D.new()
+	var box     := BoxMesh.new()
+	box.size     = Vector3(fp * 0.60, fp * 0.20, fp * 0.60)
+	box_mi.mesh  = box
+	box_mi.position.y = fp * 0.10
+	var mat             := StandardMaterial3D.new()
+	mat.albedo_color     = color
+	mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	box_mi.material_override = mat
+	add_child(box_mi)

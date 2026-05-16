@@ -51,13 +51,17 @@ const TRAP_BRAND: Array = [
 	{"normal": Color(0.07, 0.25, 0.60), "hover": Color(0.10, 0.33, 0.76), "sel": Color(0.09, 0.30, 0.68), "badge": "+-1000V"},
 	{"normal": Color(0.09, 0.38, 0.18), "hover": Color(0.12, 0.48, 0.24), "sel": Color(0.11, 0.44, 0.20), "badge": "SAFE*"},
 	{"normal": Color(0.50, 0.34, 0.05), "hover": Color(0.62, 0.43, 0.07), "sel": Color(0.57, 0.38, 0.06), "badge": "STICKY"},
+	{"normal": Color(0.52, 0.10, 0.38), "hover": Color(0.66, 0.14, 0.48), "sel": Color(0.60, 0.12, 0.44), "badge": "FLYAWAY"},
+	{"normal": Color(0.25, 0.12, 0.32), "hover": Color(0.32, 0.16, 0.40), "sel": Color(0.29, 0.14, 0.37), "badge": "TOXIC"},
 ]
 
 const TRAP_LABELS: Array = [
-	["SNAP TRAP",  "$%d  *  SINCE 1952"],
-	["ZAPPER",     "$%d  *  GUARANTEED"],
-	["FOGGER",     "$%d  *  MOSTLY SAFE"],
-	["GLUE BOARD", "$%d  *  NO ESCAPE"],
+	["SNAP TRAP",          "$%d  *  SINCE 1952"],
+	["ZAPPER",             "$%d  *  GUARANTEED"],
+	["FOGGER",             "$%d  *  MOSTLY SAFE"],
+	["GLUE BOARD",         "$%d  *  NO ESCAPE"],
+	["FLY STRIP",          "$%d  *  AIRBORNE"],
+	["BAIT STATION",       "$%d  *  SNEAKY"],
 ]
 
 # Panel dimensions — read by Arena.gd to compute the usable arena area.
@@ -243,7 +247,7 @@ func _build_left_panel() -> void:
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
-	for i in range(4):
+	for i in range(TRAP_LABELS.size()):
 		var row_panel := _build_trap_row(vbox, i)
 		_icon_controls.append(row_panel)
 
