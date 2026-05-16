@@ -852,10 +852,18 @@ func _can_place_at(cells: Array[Vector2i]) -> bool:
 	var ent_x := GameState.entrance_cell.x
 	var ex_x  := GameState.exit_cell.x
 
+	# Bait Station uses FLOOR_TRAP — pests walk through it, so its cells are
+	# not blockers. Exclude them from neither the open-row lists nor the
+	# pathfinder's additional_blockers argument.
+	var is_floor_trap := (GameState.selected_trap_type == Trap.TrapType.BAIT_STATION)
+	var path_blockers: Array[Vector2i] = []
+	if not is_floor_trap:
+		path_blockers = cells
+
 	var open_ent: Array[Vector2i] = []
 	for row in _entrance_rows:
 		var c := Vector2i(ent_x, row)
-		if not (c in cells) and _grid.is_passable(c):
+		if (is_floor_trap or not (c in cells)) and _grid.is_passable(c):
 			open_ent.append(c)
 
 	if open_ent.is_empty():
@@ -865,7 +873,7 @@ func _can_place_at(cells: Array[Vector2i]) -> bool:
 	var open_ex: Array[Vector2i] = []
 	for row in ex_rows:
 		var c := Vector2i(ex_x, row)
-		if not (c in cells) and _grid.is_passable(c):
+		if (is_floor_trap or not (c in cells)) and _grid.is_passable(c):
 			open_ex.append(c)
 
 	if open_ex.is_empty():
@@ -873,7 +881,7 @@ func _can_place_at(cells: Array[Vector2i]) -> bool:
 
 	for ent in open_ent:
 		for ex in open_ex:
-			if _pathfinder.can_reach(ent, ex, cells):
+			if _pathfinder.can_reach(ent, ex, path_blockers):
 				return true
 	return false
 

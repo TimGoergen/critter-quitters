@@ -578,12 +578,15 @@ void fragment() {
 	# so the number sits just left of center on top of the icon.
 	_send_wave_mult_lbl = Label.new()
 	_send_wave_mult_lbl.text                 = "1"
-	_send_wave_mult_lbl.anchor_left          = 0.0
-	_send_wave_mult_lbl.anchor_right         = 0.5
+	# Pinning both anchors to the same horizontal point and expanding symmetrically
+	# ensures all values (1, 5, 10) share the same visual center regardless of width.
+	_send_wave_mult_lbl.anchor_left          = 0.46
+	_send_wave_mult_lbl.anchor_right         = 0.46
 	_send_wave_mult_lbl.anchor_top           = 0.0
 	_send_wave_mult_lbl.anchor_bottom        = 1.0
-	_send_wave_mult_lbl.offset_right         = -1.0
-	_send_wave_mult_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_send_wave_mult_lbl.offset_left          = -15.0
+	_send_wave_mult_lbl.offset_right         = 15.0
+	_send_wave_mult_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_send_wave_mult_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_send_wave_mult_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_send_wave_mult_lbl.add_theme_font_override("font", UIFonts.primary_bold())
