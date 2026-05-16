@@ -100,6 +100,12 @@ var _base_color: Color = Color.WHITE
 # Setup
 # ---------------------------------------------------------------------------
 
+## Lightweight preview-only initializer used by the HUD icon SubViewport.
+## Passes empty collections so no aura or callback logic runs.
+func initialize_preview(boost_type: BoostType) -> void:
+	initialize(boost_type, [], {})
+
+
 ## Configures the Boost for a given type and wires it to the live collections.
 ## Must be called by Arena before adding to the scene tree.
 func initialize(boost_type: BoostType, active_enemies: Array, trap_nodes: Dictionary) -> void:

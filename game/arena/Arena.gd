@@ -168,7 +168,9 @@ var _placement_hover_trap: Node = null
 # True while the HUD is driving a drag-and-drop placement gesture.
 # When set, Arena's own pointer state machine stays idle and placement
 # is controlled entirely by HUD calling begin/update/commit_hud_drag().
-var _hud_drag_active: bool = false
+var _hud_drag_active:     bool                 = false
+var _hud_drag_is_boost:   bool                 = false
+var _hud_drag_boost_type: BoostUnit.BoostType  = BoostUnit.BoostType.PHEROMONE_DISPENSER
 
 # Camera zoom — two discrete levels: overview (full-arena fit) and zoomed-in (2×).
 enum ZoomState { OVERVIEW, ZOOMED_IN }
@@ -487,14 +489,43 @@ func update_hud_drag(placement_screen_pos: Vector2) -> void:
 ## Called by HUD when the user releases the drag.  Attempts placement.
 func commit_hud_drag() -> void:
 	if _hud_drag_active:
-		_commit_drag_place()
-		_hud_drag_active = false
+		if _hud_drag_is_boost:
+			_commit_boost_drag_place()
+		else:
+			_commit_drag_place()
+		_hud_drag_active   = false
+		_hud_drag_is_boost = false
 
 
 ## Called by HUD if the drag is cancelled without releasing (e.g. second finger).
 func cancel_hud_drag() -> void:
 	_clear_drag_preview()
-	_hud_drag_active = false
+	_hud_drag_active   = false
+	_hud_drag_is_boost = false
+
+
+## Called by HUD when the user begins dragging a boost icon.
+## Uses a SNAP_TRAP ghost (same 2×2 footprint) so the placement preview renders correctly.
+func begin_hud_drag_boost(boost_type: BoostUnit.BoostType, placement_screen_pos: Vector2) -> void:
+	_hud_drag_active     = true
+	_hud_drag_is_boost   = true
+	_hud_drag_boost_type = boost_type
+	_touch_state         = TouchState.IDLE
+	GameState.select_trap_type(Trap.TrapType.SNAP_TRAP)
+	_update_drag_preview(placement_screen_pos)
+
+
+## Places a boost at the last previewed anchor.
+func _commit_boost_drag_place() -> void:
+	var anchor := _drag_place_anchor
+	_clear_drag_preview()
+	if anchor == Vector2i(-1, -1):
+		return
+	if GameState.bug_bucks < BoostUnit.STATS[_hud_drag_boost_type]["cost"]:
+		return
+	var cells := _get_trap_cells(anchor)
+	if not cells.is_empty() and not _footprint_overlaps_enemy(cells):
+		_try_place_boost(anchor, _hud_drag_boost_type)
 
 
 # ---------------------------------------------------------------------------
@@ -505,7 +536,8 @@ func cancel_hud_drag() -> void:
 ## Cancels any in-progress single-finger operation and begins tracking span.
 func _begin_pinch() -> void:
 	_clear_drag_preview()
-	_hud_drag_active  = false   # cancel any active HUD drag when a pinch starts
+	_hud_drag_active   = false   # cancel any active HUD drag when a pinch starts
+	_hud_drag_is_boost = false
 	_touch_state      = TouchState.IDLE
 	_pinch_active     = true
 	_pinch_start_span = _pinch_finger0_pos.distance_to(_pinch_finger1_pos)
@@ -1028,7 +1060,7 @@ func spawn_enemy_at_grid_position(grid_pos: Vector2i, enemy_type: Enemy.EnemyTyp
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
 	# Air Freshener Boosts may absorb a fraction of the infestation — pass the full
 	# amount through each Boost in sequence, with each returning its unabsorbed remainder.
-	var infestation := enemy.get_infestation_damage()
+	var infestation: float = enemy.get_infestation_damage()
 	for boost in _boost_nodes.values():
 		if is_instance_valid(boost):
 			infestation = boost.absorb_infestation(infestation, enemy.global_position)
@@ -1061,7 +1093,7 @@ func _on_enemy_died(enemy: Node3D) -> void:
 
 	# On-death spawn effects — trigger after erasing from _active_enemies so
 	# the spawned children don't cause an immediate false wave-end check.
-	var death_cell := enemy.get_current_cell()
+	var death_cell: Vector2i = enemy.get_current_cell()
 	match enemy.get_enemy_type():
 		Enemy.EnemyType.COCKROACH_NYMPH:
 			# Splits into two smaller cockroaches that continue toward the exit.

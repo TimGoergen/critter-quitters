@@ -12,8 +12,9 @@
 
 extends CanvasLayer
 
-const Trap     = preload("res://traps/Trap.gd")
-const UIFonts  = preload("res://ui/UIFonts.gd")
+const Trap      = preload("res://traps/Trap.gd")
+const BoostUnit = preload("res://boosts/BoostUnit.gd")
+const UIFonts   = preload("res://ui/UIFonts.gd")
 
 const COLOR_PANEL_BG    := Color(0.144, 0.144, 0.235, 0.88)
 const COLOR_BAR_BG      := Color(0.28, 0.28, 0.28, 1.0)
@@ -64,8 +65,25 @@ const TRAP_LABELS: Array = [
 	["BAIT STATION",       "$%d  *  SNEAKY"],
 ]
 
+# Colors match BoostUnit._spawn_visual() for visual consistency.
+const BOOST_BRAND: Array = [
+	{"normal": Color(0.48, 0.27, 0.05), "hover": Color(0.60, 0.34, 0.07), "sel": Color(0.55, 0.30, 0.06), "badge": "+25% DMG"},
+	{"normal": Color(0.05, 0.35, 0.45), "hover": Color(0.07, 0.44, 0.57), "sel": Color(0.06, 0.40, 0.51), "badge": "+20% RATE"},
+	{"normal": Color(0.10, 0.40, 0.15), "hover": Color(0.13, 0.50, 0.19), "sel": Color(0.12, 0.46, 0.17), "badge": "INCOME"},
+	{"normal": Color(0.22, 0.36, 0.46), "hover": Color(0.28, 0.45, 0.58), "sel": Color(0.25, 0.41, 0.52), "badge": "SHIELD"},
+	{"normal": Color(0.45, 0.45, 0.05), "hover": Color(0.57, 0.57, 0.07), "sel": Color(0.51, 0.51, 0.06), "badge": "RESTORE"},
+]
+
+const BOOST_LABELS: Array = [
+	["PHEROMONE",     "+25% DAMAGE"],
+	["COMPRESSOR",    "+20% RATE"],
+	["CASH REGISTER", "PASSIVE INCOME"],
+	["AIR FRESHENER", "EXIT SHIELD"],
+	["QUARANTINE",    "KILL RESTORE"],
+]
+
 # Panel dimensions — read by Arena.gd to compute the usable arena area.
-const LEFT_PANEL_W:   float = 220.0
+const LEFT_PANEL_W:   float = 176.0
 const RIGHT_PANEL_W:  float = 220.0
 const ARENA_MARGIN_PX: float = 4.0
 
@@ -73,6 +91,7 @@ const MARGIN: float = 10.0             # inner padding for both panels
 const SCREEN_EDGE_MARGIN: float = 24.0 # extra inset on the screen-edge side and top/bottom to clear rounded corners
 const RIGHT_BTN_H: float = 52.0        # fixed height for all right-panel buttons
 const INNER_BORDER_W: float = 2.0      # black separator line at the arena-facing edge of each panel
+const ROW_H:          float = 72.0     # fixed height for every trap and boost selector row
 const COLOR_SILVER_BORDER := Color(0.72, 0.72, 0.80, 1.0)
 const SILVER_BORDER_W: float = 4.0    # thickness of the silver panel border lines
 
@@ -97,6 +116,7 @@ var _countdown_seconds_label: Label
 
 var _send_wave_btn:           Button
 var _wave_segment_overlay:    Control          # _WaveSegmentOverlay — gray arcs drawn over sprite segments
+var _send_wave_mult_lbl:      Label            # small multiplier number drawn inside the send-wave button
 var _multiplier_btn:          Button           # cycles x1 → x10 → x100 → x1
 var _multiplier_label:        Label
 var _send_wave_reward_row:    HBoxContainer
@@ -106,6 +126,9 @@ var _run_over_overlay:        Control
 var _wave_multiplier:        int = 1   # current send-wave multiplier; cycles 1 → 5 → 10 → 1
 var _last_countdown_seconds: int = 0   # last received countdown value; used to refresh reward text when multiplier changes
 var _current_wave_reward:    int = 0   # last value from early_send_reward_changed; drives the reward label
+
+const SEND_WAVE_COOLDOWN_SEC: float = 1.0
+var _send_wave_cooldown: float = 0.0   # seconds remaining before the send-wave button is usable again
 
 var _speed_btn:      Button
 var _speed_icon_lbl: Label   # ">>" icon; black at 1×, bright gold at 2×
@@ -147,14 +170,26 @@ var _icon_controls: Array[Control] = []
 # Used by _start_drag() to find the icon's screen position for the floating icon tween.
 var _icon_area_controls: Array[Control] = []
 
+# Parallel arrays for the boost selector tab.
+var _boost_icon_controls:      Array[Control] = []
+var _boost_icon_area_controls: Array[Control] = []
+
+# Left-panel tab state.
+var _trap_scroll:  ScrollContainer = null
+var _boost_scroll: ScrollContainer = null
+var _active_tab:   int             = 0     # 0 = Traps, 1 = Boosts
+var _tab_btns:     Array[Button]   = []
+
 # Cached reference to Arena (our parent node) for calling the drag placement API.
 var _arena: Node = null
 
 # Press-and-move detection for drag initiation.
-var _hold_trap: int = -1   # trap index currently pressed; -1 = none
+var _hold_trap:  int = -1   # trap index currently pressed; -1 = none
+var _hold_boost: int = -1   # boost index currently pressed; -1 = none
 
-# Drag state — active while the user is dragging a trap icon toward the arena.
+# Drag state — active while the user is dragging a trap or boost icon toward the arena.
 var _drag_active:    bool    = false
+var _drag_is_boost:  bool    = false
 var _drag_type:      int     = -1
 var _drag_cursor_pos: Vector2 = Vector2.ZERO
 
@@ -219,13 +254,7 @@ func _build_left_panel() -> void:
 
 	var margin := MarginContainer.new()
 	margin.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# The trap panels' natural width is ~192 px; LEFT_PANEL_W is 220 px, leaving 28 px to split.
-	# The left silver border (SILVER_BORDER_W = 4 px) sits inside the left gap and reduces the
-	# visible empty space on that side.  To get equal visible gaps on both sides:
-	#   left_empty  = margin_left  - SILVER_BORDER_W
-	#   right_empty = LEFT_PANEL_W - margin_left - 192  (right silver is flush with bg edge)
-	#   equal when  margin_left = (28 + SILVER_BORDER_W) / 2 = 16,  margin_right = 12
-	margin.add_theme_constant_override("margin_left",  16)
+	margin.add_theme_constant_override("margin_left",  10)
 	margin.add_theme_constant_override("margin_right", 12)
 	margin.add_theme_constant_override("margin_top",    MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
 	margin.add_theme_constant_override("margin_bottom", MARGIN + SCREEN_EDGE_MARGIN)  # rounded corner
@@ -243,13 +272,76 @@ func _build_left_panel() -> void:
 	bg.add_child(border)
 
 	var vbox := VBoxContainer.new()
-	vbox.add_theme_constant_override("separation", 8)
+	vbox.add_theme_constant_override("separation", 0)
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
+	# --- Tab bar: TRAPS | BOOSTS ---
+	var tab_bar := HBoxContainer.new()
+	tab_bar.add_theme_constant_override("separation", 2)
+	tab_bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_child(tab_bar)
+
+	for tab_label in ["TRAPS", "BOOSTS"]:
+		var btn := Button.new()
+		btn.text                  = tab_label
+		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		btn.custom_minimum_size   = Vector2(0, 30)
+		btn.focus_mode            = Control.FOCUS_NONE
+		btn.add_theme_font_override("font", UIFonts.primary_bold())
+		btn.add_theme_font_size_override("font_size", 13)
+		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+		tab_bar.add_child(btn)
+		_tab_btns.append(btn)
+
+	_tab_btns[0].pressed.connect(_on_trap_tab_pressed)
+	_tab_btns[1].pressed.connect(_on_boost_tab_pressed)
+
+	# Thin separator between tab bar and scroll content.
+	var tab_sep := ColorRect.new()
+	tab_sep.color               = Color(0.30, 0.30, 0.55, 0.70)
+	tab_sep.custom_minimum_size = Vector2(0, 2)
+	vbox.add_child(tab_sep)
+
+	# Small gap between separator and first row.
+	var gap := Control.new()
+	gap.custom_minimum_size = Vector2(0, 6)
+	vbox.add_child(gap)
+
+	# --- Trap tab ---
+	_trap_scroll = ScrollContainer.new()
+	_trap_scroll.size_flags_vertical    = Control.SIZE_EXPAND_FILL
+	_trap_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_trap_scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_AUTO
+	vbox.add_child(_trap_scroll)
+
+	var trap_vbox := VBoxContainer.new()
+	trap_vbox.add_theme_constant_override("separation", 8)
+	trap_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_trap_scroll.add_child(trap_vbox)
+
 	for i in range(TRAP_LABELS.size()):
-		var row_panel := _build_trap_row(vbox, i)
+		var row_panel := _build_trap_row(trap_vbox, i)
 		_icon_controls.append(row_panel)
+
+	# --- Boost tab (hidden until Boosts tab is selected) ---
+	_boost_scroll = ScrollContainer.new()
+	_boost_scroll.size_flags_vertical    = Control.SIZE_EXPAND_FILL
+	_boost_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_boost_scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_AUTO
+	_boost_scroll.visible                = false
+	vbox.add_child(_boost_scroll)
+
+	var boost_vbox := VBoxContainer.new()
+	boost_vbox.add_theme_constant_override("separation", 8)
+	boost_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_boost_scroll.add_child(boost_vbox)
+
+	for i in range(BOOST_LABELS.size()):
+		var row_panel := _build_boost_row(boost_vbox, i)
+		_boost_icon_controls.append(row_panel)
+
+	_update_tab_styles()
 
 
 # ---------------------------------------------------------------------------
@@ -481,6 +573,23 @@ void fragment() {
 	_wave_segment_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_wave_segment_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_send_wave_btn.add_child(_wave_segment_overlay)
+
+	# Small multiplier readout — covers the left half of the button, right-aligned
+	# so the number sits just left of center on top of the icon.
+	_send_wave_mult_lbl = Label.new()
+	_send_wave_mult_lbl.text                 = "1"
+	_send_wave_mult_lbl.anchor_left          = 0.0
+	_send_wave_mult_lbl.anchor_right         = 0.5
+	_send_wave_mult_lbl.anchor_top           = 0.0
+	_send_wave_mult_lbl.anchor_bottom        = 1.0
+	_send_wave_mult_lbl.offset_right         = -1.0
+	_send_wave_mult_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_send_wave_mult_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_send_wave_mult_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	_send_wave_mult_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	_send_wave_mult_lbl.add_theme_font_size_override("font_size", 12)
+	_send_wave_mult_lbl.add_theme_color_override("font_color", COLOR_GOLD_BORDER)
+	_send_wave_btn.add_child(_send_wave_mult_lbl)
 
 	# Multiplier toggle — right of the timer icon, cycles x1 → x10 → x100 → x1.
 	# Pressing the next-wave button triggers that many wave-sends simultaneously.
@@ -1031,6 +1140,13 @@ func _process(delta: float) -> void:
 		var half := DRAG_ICON_DISPLAY * 0.5
 		_drag_icon_ctrl.global_position = _drag_cursor_pos + DRAG_OFFSET - Vector2(half, half)
 
+	if _send_wave_cooldown > 0.0:
+		_send_wave_cooldown -= delta
+		if _send_wave_cooldown <= 0.0:
+			_send_wave_cooldown = 0.0
+			_send_wave_btn.disabled = false
+			_send_wave_btn.modulate = Color.WHITE
+
 
 # ---------------------------------------------------------------------------
 # Drag-and-drop trap placement
@@ -1136,7 +1252,8 @@ func _update_drag_cursor(cursor_pos: Vector2) -> void:
 
 ## Clears press state without starting a drag.
 func _cancel_hold() -> void:
-	_hold_trap = -1
+	_hold_trap  = -1
+	_hold_boost = -1
 
 
 ## Tears down the floating overlay and resets drag state.
@@ -1146,10 +1263,11 @@ func _end_drag() -> void:
 		_drag_tween = null
 	if _drag_overlay != null and is_instance_valid(_drag_overlay):
 		_drag_overlay.queue_free()
-	_drag_overlay    = null
-	_drag_icon_ctrl  = null
-	_drag_active     = false
-	_drag_type       = -1
+	_drag_overlay   = null
+	_drag_icon_ctrl = null
+	_drag_active    = false
+	_drag_is_boost  = false
+	_drag_type      = -1
 
 
 func _on_zoom_btn_pressed() -> void:
@@ -1198,6 +1316,7 @@ func _on_multiplier_btn_pressed() -> void:
 		5:   _wave_multiplier = 10
 		10:  _wave_multiplier = 1
 	_multiplier_label.text = "×%d" % _wave_multiplier
+	_send_wave_mult_lbl.text = "%d" % _wave_multiplier
 	_refresh_reward_label()
 
 
@@ -1217,6 +1336,9 @@ func _on_send_wave_pressed() -> void:
 		GameState.wave_skip_multi_requested.emit(_wave_multiplier)
 	else:
 		GameState.wave_skip_requested.emit()
+	_send_wave_cooldown = SEND_WAVE_COOLDOWN_SEC
+	_send_wave_btn.disabled = true
+	_send_wave_btn.modulate = Color(0.5, 0.5, 0.5, 1.0)
 
 
 func _build_early_bonus_particles() -> void:
@@ -1282,6 +1404,8 @@ func _on_exit_pressed() -> void:
 func _refresh_trap_selector() -> void:
 	for i in range(_icon_controls.size()):
 		_icon_controls[i].modulate = Color(1, 1, 1, 1) if _can_afford(i) else COLOR_UNAFFORDABLE_MODULATE
+	for i in range(_boost_icon_controls.size()):
+		_boost_icon_controls[i].modulate = Color(1, 1, 1, 1) if _can_afford_boost(i) else COLOR_UNAFFORDABLE_MODULATE
 
 
 ## Returns the path where a trap's button image should live.
@@ -1314,27 +1438,28 @@ func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 	# the user can drag from anywhere — not just the icon area.
 	var panel := PanelContainer.new()
 	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	panel.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	panel.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+	panel.custom_minimum_size   = Vector2(0, ROW_H)
 	panel.mouse_filter          = Control.MOUSE_FILTER_STOP
 	panel.add_theme_stylebox_override("panel", style)
 	parent.add_child(panel)
 
 	var margin := MarginContainer.new()
-	margin.add_theme_constant_override("margin_left",   8)
-	margin.add_theme_constant_override("margin_right",  8)
-	margin.add_theme_constant_override("margin_top",    6)
-	margin.add_theme_constant_override("margin_bottom", 6)
+	margin.add_theme_constant_override("margin_left",   6)
+	margin.add_theme_constant_override("margin_right",  6)
+	margin.add_theme_constant_override("margin_top",    4)
+	margin.add_theme_constant_override("margin_bottom", 4)
 	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(margin)
 
 	var hbox := HBoxContainer.new()
-	hbox.add_theme_constant_override("separation", 6)
+	hbox.add_theme_constant_override("separation", 5)
 	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	margin.add_child(hbox)
 
 	# --- Left: text content, fills remaining width ---
 	var cvbox := VBoxContainer.new()
-	cvbox.add_theme_constant_override("separation", 3)
+	cvbox.add_theme_constant_override("separation", 2)
 	cvbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cvbox.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	cvbox.mouse_filter          = Control.MOUSE_FILTER_IGNORE
@@ -1344,21 +1469,22 @@ func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 	name_lbl.text                  = TRAP_LABELS[type][0]
 	name_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
 	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.clip_text             = true
 	name_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	name_lbl.add_theme_font_size_override("font_size", 18)
+	name_lbl.add_theme_font_size_override("font_size", 15)
 	name_lbl.add_theme_color_override("font_color", Color.WHITE)
 	name_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	cvbox.add_child(name_lbl)
 
 	var cost_row := HBoxContainer.new()
-	cost_row.add_theme_constant_override("separation", 4)
+	cost_row.add_theme_constant_override("separation", 3)
 	cost_row.alignment    = BoxContainer.ALIGNMENT_BEGIN
 	cost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cvbox.add_child(cost_row)
 
 	var coin_icon := TextureRect.new()
 	coin_icon.texture             = load("res://assets/bug_buck_coin_small.png")
-	coin_icon.custom_minimum_size = Vector2(20, 20)
+	coin_icon.custom_minimum_size = Vector2(16, 16)
 	coin_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -1369,7 +1495,7 @@ func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 	cost_lbl.text                = str(Trap.STATS[type]["cost"])
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	cost_lbl.add_theme_font_size_override("font_size", 18)
+	cost_lbl.add_theme_font_size_override("font_size", 15)
 	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.20))
 	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
@@ -1378,21 +1504,19 @@ func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 	badge_lbl.text                  = TRAP_BRAND[type]["badge"]
 	badge_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
 	badge_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	badge_lbl.add_theme_font_size_override("font_size", 12)
+	badge_lbl.clip_text             = true
+	badge_lbl.add_theme_font_size_override("font_size", 11)
 	badge_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	badge_lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
 	badge_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	cvbox.add_child(badge_lbl)
 
 	# --- Right: 3D trap preview with framed background ---
-	# Plain Control acts as the anchor parent for both the background panel and the viewport.
 	var icon_ctrl := Control.new()
-	# Square: height matches width so the 3D viewport renders without distortion.
-	icon_ctrl.custom_minimum_size   = Vector2(72.0, 72.0)
+	icon_ctrl.custom_minimum_size   = Vector2(60.0, 60.0)
 	icon_ctrl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon_ctrl.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	# IGNORE so the outer panel's MOUSE_FILTER_STOP handles all pointer events.
-	icon_ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_ctrl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(icon_ctrl)
 
 	# Dark framed background behind the 3D preview — the "outline" the user expects.
@@ -1493,6 +1617,283 @@ func _can_afford(type: int) -> bool:
 	return GameState.bug_bucks >= Trap.STATS[type]["cost"]
 
 
+func _can_afford_boost(type: int) -> bool:
+	return GameState.bug_bucks >= BoostUnit.STATS[type]["cost"]
+
+
+# ---------------------------------------------------------------------------
+# Tab switching
+# ---------------------------------------------------------------------------
+
+func _on_trap_tab_pressed() -> void:
+	AudioManager.play_ui("button")
+	_active_tab           = 0
+	_trap_scroll.visible  = true
+	_boost_scroll.visible = false
+	_update_tab_styles()
+
+
+func _on_boost_tab_pressed() -> void:
+	AudioManager.play_ui("button")
+	_active_tab           = 1
+	_trap_scroll.visible  = false
+	_boost_scroll.visible = true
+	_update_tab_styles()
+
+
+func _update_tab_styles() -> void:
+	for i in range(_tab_btns.size()):
+		var is_active := (i == _active_tab)
+		var bg_normal := Color(0.22, 0.22, 0.38, 1.0) if is_active else Color(0.09, 0.09, 0.17, 1.0)
+		var bg_hover  := bg_normal.lightened(0.08)
+		var border_c  := Color(0.60, 0.60, 0.82, 1.0) if is_active else Color(0.22, 0.22, 0.38, 1.0)
+		for state_name in ["normal", "hover", "pressed"]:
+			var box := StyleBoxFlat.new()
+			box.bg_color     = bg_hover if state_name == "hover" else bg_normal
+			if state_name == "pressed":
+				box.bg_color = bg_normal.darkened(0.08)
+			box.border_color = border_c
+			box.set_border_width_all(2)
+			box.set_corner_radius_all(4)
+			_tab_btns[i].add_theme_stylebox_override(state_name, box)
+		_tab_btns[i].add_theme_color_override("font_color",
+			Color(0.95, 0.95, 1.0) if is_active else Color(0.55, 0.55, 0.70))
+
+
+# ---------------------------------------------------------------------------
+# Boost selector row
+# ---------------------------------------------------------------------------
+
+## Builds a boost row identical in structure to a trap row but uses BoostUnit
+## for the icon preview and cost, and routes drag input to _start_boost_drag().
+## Returns the outer PanelContainer for affordability dimming.
+func _build_boost_row(parent: VBoxContainer, type: int) -> Control:
+	var style := StyleBoxFlat.new()
+	style.bg_color     = BOOST_BRAND[type]["normal"]
+	style.set_corner_radius_all(6)
+	style.set_border_width_all(2)
+	style.border_color = Color(0.72, 0.72, 0.72, 1.0)
+	style.shadow_color = COLOR_BTN_SHADOW
+	style.shadow_size  = 2
+	style.shadow_offset = Vector2(0, 2)
+
+	var panel := PanelContainer.new()
+	panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	panel.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+	panel.custom_minimum_size   = Vector2(0, ROW_H)
+	panel.mouse_filter          = Control.MOUSE_FILTER_STOP
+	panel.add_theme_stylebox_override("panel", style)
+	parent.add_child(panel)
+
+	var margin := MarginContainer.new()
+	margin.add_theme_constant_override("margin_left",   6)
+	margin.add_theme_constant_override("margin_right",  6)
+	margin.add_theme_constant_override("margin_top",    4)
+	margin.add_theme_constant_override("margin_bottom", 4)
+	margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(margin)
+
+	var hbox := HBoxContainer.new()
+	hbox.add_theme_constant_override("separation", 5)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	margin.add_child(hbox)
+
+	var cvbox := VBoxContainer.new()
+	cvbox.add_theme_constant_override("separation", 2)
+	cvbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	cvbox.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	cvbox.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(cvbox)
+
+	var name_lbl := Label.new()
+	name_lbl.text                  = BOOST_LABELS[type][0]
+	name_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
+	name_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	name_lbl.clip_text             = true
+	name_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	name_lbl.add_theme_font_size_override("font_size", 15)
+	name_lbl.add_theme_color_override("font_color", Color.WHITE)
+	name_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	cvbox.add_child(name_lbl)
+
+	var cost_row := HBoxContainer.new()
+	cost_row.add_theme_constant_override("separation", 3)
+	cost_row.alignment    = BoxContainer.ALIGNMENT_BEGIN
+	cost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	cvbox.add_child(cost_row)
+
+	var coin_icon := TextureRect.new()
+	coin_icon.texture             = load("res://assets/bug_buck_coin_small.png")
+	coin_icon.custom_minimum_size = Vector2(16, 16)
+	coin_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+	coin_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	coin_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	coin_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	cost_row.add_child(coin_icon)
+
+	var cost_lbl := Label.new()
+	cost_lbl.text                = str(BoostUnit.STATS[type]["cost"])
+	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	cost_lbl.add_theme_font_size_override("font_size", 15)
+	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.20))
+	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	cost_row.add_child(cost_lbl)
+
+	var badge_lbl := Label.new()
+	badge_lbl.text                  = BOOST_BRAND[type]["badge"]
+	badge_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
+	badge_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	badge_lbl.clip_text             = true
+	badge_lbl.add_theme_font_size_override("font_size", 11)
+	badge_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	badge_lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
+	badge_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	cvbox.add_child(badge_lbl)
+
+	# 3D boost preview icon using a SubViewport with a BoostUnit instance.
+	var icon_ctrl := Control.new()
+	icon_ctrl.custom_minimum_size   = Vector2(60.0, 60.0)
+	icon_ctrl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	icon_ctrl.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	icon_ctrl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(icon_ctrl)
+
+	var icon_bg_style := StyleBoxFlat.new()
+	icon_bg_style.bg_color = Color(0.0, 0.0, 0.0, 0.35)
+	icon_bg_style.set_corner_radius_all(4)
+	icon_bg_style.set_border_width_all(2)
+	icon_bg_style.border_color = Color(0.72, 0.72, 0.80, 1.0)
+
+	var icon_bg := PanelContainer.new()
+	icon_bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	icon_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	icon_bg.add_theme_stylebox_override("panel", icon_bg_style)
+	icon_ctrl.add_child(icon_bg)
+
+	var svp := SubViewport.new()
+	svp.size                      = Vector2i(int(DRAG_ICON_SIZE), int(DRAG_ICON_SIZE))
+	svp.own_world_3d              = true
+	svp.transparent_bg            = true
+	svp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size       = 3.1
+	cam.position   = Vector3(0.0, 5.0, 0.0)
+	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
+	svp.add_child(cam)
+
+	var boost_preview := Node3D.new()
+	boost_preview.set_script(BoostUnit)
+	boost_preview.initialize_preview(type as BoostUnit.BoostType)
+	svp.add_child(boost_preview)
+
+	var svc := SubViewportContainer.new()
+	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	svc.stretch      = true
+	svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	svc.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	svc.add_child(svp)
+	icon_ctrl.add_child(svc)
+
+	panel.gui_input.connect(_on_boost_icon_gui_input.bind(type))
+	_boost_icon_area_controls.append(icon_ctrl)
+
+	return panel
+
+
+## Builds a floating boost drag icon (colored cylinder via SubViewport).
+func _build_floating_boost_icon(parent: Control, type: int) -> Control:
+	var icon_ctrl := Control.new()
+	icon_ctrl.custom_minimum_size = Vector2(DRAG_ICON_DISPLAY, DRAG_ICON_DISPLAY)
+	icon_ctrl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	parent.add_child(icon_ctrl)
+
+	var svp := SubViewport.new()
+	svp.size                      = Vector2i(int(DRAG_ICON_SIZE), int(DRAG_ICON_SIZE))
+	svp.own_world_3d              = true
+	svp.transparent_bg            = true
+	svp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size       = 3.1
+	cam.position   = Vector3(0.0, 5.0, 0.0)
+	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
+	svp.add_child(cam)
+
+	var boost_preview := Node3D.new()
+	boost_preview.set_script(BoostUnit)
+	boost_preview.initialize_preview(type as BoostUnit.BoostType)
+	svp.add_child(boost_preview)
+
+	var svc := SubViewportContainer.new()
+	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	svc.stretch      = true
+	svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	svc.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	svc.add_child(svp)
+	icon_ctrl.add_child(svc)
+
+	return icon_ctrl
+
+
+# ---------------------------------------------------------------------------
+# Boost drag input
+# ---------------------------------------------------------------------------
+
+func _on_boost_icon_gui_input(event: InputEvent, boost_type: int) -> void:
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
+			_hold_boost = boost_type
+		elif _hold_boost == boost_type:
+			_cancel_hold()
+	elif event is InputEventScreenTouch and event.index == 0:
+		if event.pressed:
+			_hold_boost = boost_type
+		elif _hold_boost == boost_type:
+			_cancel_hold()
+	elif _hold_boost == boost_type:
+		if event is InputEventMouseMotion or event is InputEventScreenDrag:
+			_start_boost_drag(boost_type)
+
+
+func _start_boost_drag(boost_type: int) -> void:
+	_cancel_hold()
+
+	if not _can_afford_boost(boost_type):
+		return
+
+	# Use SNAP_TRAP selection so the ghost preview shows a valid 2×2 footprint.
+	GameState.select_trap_type(Trap.TrapType.SNAP_TRAP)
+
+	var icon_rect   := _boost_icon_area_controls[boost_type].get_global_rect()
+	var icon_center := icon_rect.get_center()
+
+	_drag_overlay = Control.new()
+	_drag_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_drag_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(_drag_overlay)
+
+	_drag_icon_ctrl = _build_floating_boost_icon(_drag_overlay, boost_type)
+	var half := DRAG_ICON_DISPLAY * 0.5
+	_drag_icon_ctrl.global_position = icon_center - Vector2(half, half)
+
+	_drag_active     = true
+	_drag_is_boost   = true
+	_drag_type       = boost_type
+	_drag_cursor_pos = icon_center
+
+	_arena.begin_hud_drag_boost(boost_type as BoostUnit.BoostType, icon_center + DRAG_OFFSET)
+
+	var target_pos := icon_center + DRAG_OFFSET - Vector2(half, half)
+	_drag_tween = create_tween()
+	_drag_tween.set_ease(Tween.EASE_OUT)
+	_drag_tween.set_trans(Tween.TRANS_CUBIC)
+	_drag_tween.tween_property(_drag_icon_ctrl, "global_position", target_pos, 0.15)
+
+
 # ---------------------------------------------------------------------------
 # Button styles
 # ---------------------------------------------------------------------------
@@ -1572,9 +1973,10 @@ func _apply_send_wave_btn_style(btn: Button) -> void:
 func _apply_timer_btn_style(btn: Button) -> void:
 	# The _WaveTimerIcon draws all visuals; the button itself is fully transparent.
 	# Only the pressed state adds a dark overlay so the tap registers visually.
-	btn.add_theme_stylebox_override("normal",  StyleBoxEmpty.new())
-	btn.add_theme_stylebox_override("hover",   StyleBoxEmpty.new())
-	btn.add_theme_stylebox_override("focus",   StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("normal",   StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("hover",    StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("focus",    StyleBoxEmpty.new())
+	btn.add_theme_stylebox_override("disabled", StyleBoxEmpty.new())
 	var pressed_box := StyleBoxFlat.new()
 	pressed_box.bg_color = Color(0.0, 0.0, 0.0, 0.28)
 	pressed_box.set_corner_radius_all(100)
