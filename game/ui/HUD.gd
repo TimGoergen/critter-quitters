@@ -287,10 +287,10 @@ func _build_left_panel() -> void:
 		var btn := Button.new()
 		btn.text                  = tab_label
 		btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		btn.custom_minimum_size   = Vector2(0, 30)
+		btn.custom_minimum_size   = Vector2(0, 48)
 		btn.focus_mode            = Control.FOCUS_NONE
 		btn.add_theme_font_override("font", UIFonts.primary_bold())
-		btn.add_theme_font_size_override("font_size", 13)
+		btn.add_theme_font_size_override("font_size", 18)
 		btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 		tab_bar.add_child(btn)
 		_tab_btns.append(btn)
@@ -300,7 +300,7 @@ func _build_left_panel() -> void:
 
 	# Thin separator between tab bar and scroll content.
 	var tab_sep := ColorRect.new()
-	tab_sep.color               = Color(0.30, 0.30, 0.55, 0.70)
+	tab_sep.color               = Color(0.50, 0.52, 0.56, 0.80)
 	tab_sep.custom_minimum_size = Vector2(0, 2)
 	vbox.add_child(tab_sep)
 
@@ -547,7 +547,7 @@ void fragment() {
 	vbox.add_child(send_spacer_top)
 
 	var send_panel := Panel.new()
-	send_panel.custom_minimum_size   = Vector2(0, 148)
+	send_panel.custom_minimum_size   = Vector2(0, 155)
 	send_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	send_panel.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	var panel_style := StyleBoxFlat.new()
@@ -563,13 +563,15 @@ void fragment() {
 	inner_vbox.add_theme_constant_override("separation", 0)
 	send_panel.add_child(inner_vbox)
 
-	# Top third — "SEND WAVE" header.
+	# Top — "SEND WAVE" header. SIZE_SHRINK_CENTER so it takes only the height
+	# the text needs; the button row below hugs up close rather than floating
+	# in the middle of a third of the panel.
 	var top_margin := MarginContainer.new()
-	top_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	top_margin.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	top_margin.add_theme_constant_override("margin_left",   8)
 	top_margin.add_theme_constant_override("margin_right",  8)
-	top_margin.add_theme_constant_override("margin_top",    5)
-	top_margin.add_theme_constant_override("margin_bottom", 3)
+	top_margin.add_theme_constant_override("margin_top",    8)
+	top_margin.add_theme_constant_override("margin_bottom", 2)
 	inner_vbox.add_child(top_margin)
 
 	var send_wave_lbl := Label.new()
@@ -578,79 +580,107 @@ void fragment() {
 	send_wave_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	send_wave_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	send_wave_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	send_wave_lbl.add_theme_font_size_override("font_size", 17)
+	send_wave_lbl.add_theme_font_size_override("font_size", 22)
 	send_wave_lbl.add_theme_color_override("font_color", COLOR_TEXT)
 	top_margin.add_child(send_wave_lbl)
 
-	# Middle section — ">>" fills the full panel width (PRESET_FULL_RECT on a free Control);
-	# multiplier toggle is a small overlay anchored to the top-right corner.
+	# Middle section — >> send button on the left, ×N multiplier toggle on the right.
+	# Both buttons share the same fixed height (50px) so their vertical centers are
+	# guaranteed identical regardless of the row's total allocated height.
+	# Both labels use the same Bebas Neue font + embolden so font-metric offsets
+	# from VERTICAL_ALIGNMENT_CENTER are identical, keeping text visually aligned.
 	var mid_margin := MarginContainer.new()
 	mid_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	mid_margin.add_theme_constant_override("margin_left",   6)
-	mid_margin.add_theme_constant_override("margin_right",  6)
-	mid_margin.add_theme_constant_override("margin_top",    4)
-	mid_margin.add_theme_constant_override("margin_bottom", 4)
+	mid_margin.add_theme_constant_override("margin_left",   8)
+	mid_margin.add_theme_constant_override("margin_right",  8)
+	mid_margin.add_theme_constant_override("margin_top",    6)
+	mid_margin.add_theme_constant_override("margin_bottom", 6)
 	inner_vbox.add_child(mid_margin)
 
-	var mid_ctrl := Control.new()
-	mid_ctrl.custom_minimum_size   = Vector2(0, 74)   # must exceed the >> font size (66px) plus padding
-	mid_ctrl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	mid_margin.add_child(mid_ctrl)
+	var mid_hbox := HBoxContainer.new()
+	mid_hbox.add_theme_constant_override("separation", 8)
+	mid_hbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	mid_hbox.alignment             = BoxContainer.ALIGNMENT_CENTER
+	mid_margin.add_child(mid_hbox)
 
-	# Both buttons pinned to the same vertical center (50% of mid_ctrl) with identical
-	# half-height offsets — their geometric centers are guaranteed to match regardless
-	# of how Godot resolves font metrics against button minimum sizes.
-	const _BTN_HALF_H := 37.0   # half of mid_ctrl custom_minimum_size.y (74px)
+	# Heavily-emboldened Bebas Neue — used for ALL text in this section so that
+	# VERTICAL_ALIGNMENT_CENTER produces the same visual offset in every label.
+	var bold_font := FontVariation.new()
+	bold_font.base_font          = UIFonts.header()
+	bold_font.variation_embolden = 1.6
 
+	# >> send-wave button — dark background with gold border, same 50px height as
+	# the multiplier pill. Text is a Label child (not Button.text) so we can use
+	# VERTICAL_ALIGNMENT_CENTER with the same Bebas Neue font as the ×N labels.
 	_send_wave_btn = Button.new()
-	_send_wave_btn.text          = ">>"
-	_send_wave_btn.anchor_left   = 0.0
-	_send_wave_btn.anchor_right  = 1.0
-	_send_wave_btn.anchor_top    = 0.5
-	_send_wave_btn.anchor_bottom = 0.5
-	_send_wave_btn.offset_left   = 0.0
-	_send_wave_btn.offset_right  = 0.0
-	_send_wave_btn.offset_top    = -_BTN_HALF_H
-	_send_wave_btn.offset_bottom =  _BTN_HALF_H
+	_send_wave_btn.text                  = ""
+	_send_wave_btn.custom_minimum_size   = Vector2(0, 50)
+	_send_wave_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_send_wave_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_apply_ff_button_style(_send_wave_btn)
-	_send_wave_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_send_wave_btn.add_theme_font_size_override("font_size", 66)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
-	mid_ctrl.add_child(_send_wave_btn)
+	mid_hbox.add_child(_send_wave_btn)
 
+	var ff_label := Label.new()
+	ff_label.text                 = ">>"
+	ff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	ff_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	ff_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	ff_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	ff_label.add_theme_font_override("font", bold_font)
+	ff_label.add_theme_font_size_override("font_size", 44)
+	ff_label.add_theme_color_override("font_color", COLOR_GOLD_BORDER)
+	_send_wave_btn.add_child(ff_label)
+
+	# Multiplier pill — gold filled, same 50px height as the >> button.
 	_multiplier_btn = Button.new()
-	_multiplier_btn.text          = ""
-	_multiplier_btn.anchor_left   = 1.0
-	_multiplier_btn.anchor_right  = 1.0
-	_multiplier_btn.anchor_top    = 0.5
-	_multiplier_btn.anchor_bottom = 0.5
-	_multiplier_btn.offset_left   = -54.0
-	_multiplier_btn.offset_right  = 0.0
-	_multiplier_btn.offset_top    = -_BTN_HALF_H
-	_multiplier_btn.offset_bottom =  _BTN_HALF_H
-	_apply_gold_button_style(_multiplier_btn)
+	_multiplier_btn.text                  = ""
+	_multiplier_btn.custom_minimum_size   = Vector2(80, 50)
+	_multiplier_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	_multiplier_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_apply_toggle_btn_style(_multiplier_btn)
 	_multiplier_btn.pressed.connect(_on_multiplier_btn_pressed)
-	mid_ctrl.add_child(_multiplier_btn)
+	mid_hbox.add_child(_multiplier_btn)
+
+	# HBoxContainer fills the button via PRESET_FULL_RECT; labels use
+	# SIZE_EXPAND_FILL vertical + VERTICAL_ALIGNMENT_CENTER so Godot's font-metric
+	# centering math handles the positioning rather than geometric assumptions.
+	var mult_hbox := HBoxContainer.new()
+	mult_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	mult_hbox.add_theme_constant_override("separation", 0)
+	mult_hbox.alignment   = BoxContainer.ALIGNMENT_CENTER
+	mult_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_multiplier_btn.add_child(mult_hbox)
+
+	var mult_x_lbl := Label.new()
+	mult_x_lbl.text                 = "×"
+	mult_x_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	mult_x_lbl.size_flags_vertical  = Control.SIZE_EXPAND_FILL
+	mult_x_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	mult_x_lbl.add_theme_font_override("font", bold_font)
+	mult_x_lbl.add_theme_font_size_override("font_size", 32)
+	mult_x_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
+	mult_hbox.add_child(mult_x_lbl)
 
 	_multiplier_label = Label.new()
-	_multiplier_label.text                 = "×1"
-	_multiplier_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_multiplier_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_multiplier_label.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_multiplier_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_multiplier_label.add_theme_font_override("font", UIFonts.header())
-	_multiplier_label.add_theme_font_size_override("font_size", 52)
+	_multiplier_label.text                = "1"
+	_multiplier_label.vertical_alignment  = VERTICAL_ALIGNMENT_CENTER
+	_multiplier_label.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	_multiplier_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	_multiplier_label.add_theme_font_override("font", bold_font)
+	_multiplier_label.add_theme_font_size_override("font_size", 28)
 	_multiplier_label.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
-	_multiplier_btn.add_child(_multiplier_label)
+	mult_hbox.add_child(_multiplier_label)
 
-	# Bottom section — MarginContainer keeps the reward bar inset from the panel border.
+	# Bottom — reward bar. SIZE_SHRINK_CENTER so it takes only its fixed height;
+	# extra bottom margin keeps the bar visually clear of the panel's border/corners.
 	var bar_margin := MarginContainer.new()
 	bar_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	bar_margin.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	bar_margin.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	bar_margin.add_theme_constant_override("margin_left",   6)
 	bar_margin.add_theme_constant_override("margin_right",  6)
-	bar_margin.add_theme_constant_override("margin_top",    3)
-	bar_margin.add_theme_constant_override("margin_bottom", 6)
+	bar_margin.add_theme_constant_override("margin_top",    4)
+	bar_margin.add_theme_constant_override("margin_bottom", 8)
 	inner_vbox.add_child(bar_margin)
 
 	_reward_bar_container = Control.new()
@@ -1378,7 +1408,7 @@ func _on_multiplier_btn_pressed() -> void:
 		1:   _wave_multiplier = 5
 		5:   _wave_multiplier = 10
 		10:  _wave_multiplier = 1
-	_multiplier_label.text = "×%d" % _wave_multiplier
+	_multiplier_label.text = "%d" % _wave_multiplier
 	_refresh_reward_label()
 
 
@@ -1716,9 +1746,10 @@ func _on_boost_tab_pressed() -> void:
 func _update_tab_styles() -> void:
 	for i in range(_tab_btns.size()):
 		var is_active := (i == _active_tab)
-		var bg_normal := Color(0.22, 0.22, 0.38, 1.0) if is_active else Color(0.09, 0.09, 0.17, 1.0)
+		# Silver theme: active tab is a medium steel-gray; inactive is near-black.
+		var bg_normal := Color(0.42, 0.44, 0.48, 1.0) if is_active else Color(0.12, 0.12, 0.14, 1.0)
 		var bg_hover  := bg_normal.lightened(0.08)
-		var border_c  := Color(0.60, 0.60, 0.82, 1.0) if is_active else Color(0.22, 0.22, 0.38, 1.0)
+		var border_c  := Color(0.78, 0.80, 0.84, 1.0) if is_active else Color(0.30, 0.32, 0.34, 1.0)
 		for state_name in ["normal", "hover", "pressed"]:
 			var box := StyleBoxFlat.new()
 			box.bg_color     = bg_hover if state_name == "hover" else bg_normal
@@ -1729,7 +1760,7 @@ func _update_tab_styles() -> void:
 			box.set_corner_radius_all(4)
 			_tab_btns[i].add_theme_stylebox_override(state_name, box)
 		_tab_btns[i].add_theme_color_override("font_color",
-			Color(0.95, 0.95, 1.0) if is_active else Color(0.55, 0.55, 0.70))
+			Color(0.96, 0.97, 0.98, 1.0) if is_active else Color(0.50, 0.52, 0.55, 1.0))
 
 
 # ---------------------------------------------------------------------------
@@ -2042,20 +2073,45 @@ func _apply_send_wave_btn_style(btn: Button) -> void:
 	btn.focus_mode = Control.FOCUS_NONE
 
 
+func _apply_toggle_btn_style(btn: Button) -> void:
+	# Pill-shaped toggle button using the same gold palette as the HUD control buttons.
+	for pair: Array in [
+		["normal",   COLOR_GOLD_BG_NORMAL],
+		["hover",    COLOR_GOLD_BG_HOVER],
+		["pressed",  COLOR_GOLD_BG_PRESSED],
+		["disabled", Color(0.45, 0.35, 0.03, 1.0)],
+	]:
+		var box := StyleBoxFlat.new()
+		box.bg_color     = pair[1] as Color
+		box.border_color = COLOR_GOLD_BORDER
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(100)
+		# Zero content margins so the anchored HBoxContainer inside the button
+		# fills the full button rect without being pushed inward by StyleBox padding.
+		box.set_content_margin_all(0)
+		btn.add_theme_stylebox_override(pair[0] as String, box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.focus_mode = Control.FOCUS_NONE
+
+
 func _apply_ff_button_style(btn: Button) -> void:
-	# Transparent background — only pressed adds a subtle dark tint.
-	btn.add_theme_stylebox_override("normal",   StyleBoxEmpty.new())
-	btn.add_theme_stylebox_override("hover",    StyleBoxEmpty.new())
-	btn.add_theme_stylebox_override("focus",    StyleBoxEmpty.new())
-	btn.add_theme_stylebox_override("disabled", StyleBoxEmpty.new())
-	var pressed_box := StyleBoxFlat.new()
-	pressed_box.bg_color = Color(0.0, 0.0, 0.0, 0.22)
-	pressed_box.set_corner_radius_all(4)
-	btn.add_theme_stylebox_override("pressed", pressed_box)
-	btn.add_theme_color_override("font_color",          COLOR_GOLD_BORDER)
-	btn.add_theme_color_override("font_color_hover",    COLOR_GOLD_BORDER)
-	btn.add_theme_color_override("font_color_pressed",  Color(0.72, 0.62, 0.18, 1.0))
-	btn.add_theme_color_override("font_color_disabled", Color(0.52, 0.46, 0.14, 1.0))
+	# Dark background with gold border — visually pairs with the gold multiplier pill
+	# while remaining visually distinct (outlined vs filled). Content margins are zero
+	# so the Label child placed via PRESET_FULL_RECT fills the entire button rect.
+	for pair: Array in [
+		["normal",   Color(0.16, 0.16, 0.16, 1.0)],
+		["hover",    Color(0.24, 0.24, 0.24, 1.0)],
+		["pressed",  Color(0.10, 0.10, 0.10, 1.0)],
+		["disabled", Color(0.14, 0.14, 0.14, 0.6)],
+	]:
+		var box := StyleBoxFlat.new()
+		box.bg_color     = pair[1] as Color
+		box.border_color = COLOR_GOLD_BORDER
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(5)
+		box.set_content_margin_all(0)
+		btn.add_theme_stylebox_override(pair[0] as String, box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.focus_mode = Control.FOCUS_NONE
 
 
