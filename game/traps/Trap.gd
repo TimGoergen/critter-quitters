@@ -1804,12 +1804,16 @@ func _spawn_fly_strip_launcher_visual() -> void:
 
 
 ## Creates the invisible-at-rest radial glow plane for the Bait Station fire animation.
-## The plane covers the full trap footprint at world y = 0.11 (just above the grate bars).
-## Its ShaderMaterial starts at opacity 0; _play_bait_animation() tweens it to 1 then back.
+## Sized to 1.5× the range diameter so the pulse visibly illuminates a large portion of
+## the trap's attack area.  Its ShaderMaterial starts at opacity 0; _play_bait_animation()
+## tweens it to 1 then back on each pulse.
 func _spawn_bait_glow_plane() -> void:
-	var fp    := Grid.CELL_SIZE * 1.9
-	var plane := PlaneMesh.new()
-	plane.size = Vector2(fp, fp)
+	# _range is in cells; multiply by CELL_SIZE to get world units.
+	# × 1.5 gives a diameter equal to 75% of the full range circle, so the glow clearly
+	# radiates outward without covering the entire range indicator.
+	var glow_side := _range * Grid.CELL_SIZE * 1.5
+	var plane     := PlaneMesh.new()
+	plane.size = Vector2(glow_side, glow_side)
 
 	var mi  := MeshInstance3D.new()
 	mi.mesh = plane
