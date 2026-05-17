@@ -212,6 +212,20 @@ var _fogger_animating:     bool   = false
 var _zapper_uv_light: Node3D = null
 var _zapper_animating: bool  = false
 
+# Fly Strip Launcher animation nodes — null for all other trap types.
+# _fly_strip_root bobs at idle; _fly_strip_barrel_pivot recoils on each shot.
+var _fly_strip_root:          Node3D = null
+var _fly_strip_barrel_pivot:  Node3D = null
+var _fly_strip_barrel_base_y: float  = 0.0   # resting Y stored so recoil can return to origin
+var _fly_strip_bob_time:      float  = 0.0
+var _fly_strip_animating:     bool   = false
+
+# Bait Station animation state — null for all other trap types.
+# _bait_bg_mat is the background plate material; it is normally invisible and
+# strobes red when the trap fires.
+var _bait_bg_mat:    StandardMaterial3D = null
+var _bait_animating: bool               = false
+
 # Tracks how many particle batches from this trap are still visually alive.
 # Each fire increments the count; a timer decrements it after the particles expire.
 # Firing is blocked when the count reaches the cap (~6 puffs on screen).
@@ -555,6 +569,11 @@ func _process(delta: float) -> void:
 		_fogger_bob_time += delta
 		_fogger_root.position.y = sin(_fogger_bob_time * 1.5) * Grid.CELL_SIZE * 0.035
 
+	# Fly Strip Launcher idle animation: gentle bob matching the Fogger cadence.
+	if _trap_type == TrapType.FLY_STRIP_LAUNCHER and _fly_strip_root != null:
+		_fly_strip_bob_time += delta
+		_fly_strip_root.position.y = sin(_fly_strip_bob_time * 1.3) * Grid.CELL_SIZE * 0.028
+
 	_cooldown_remaining -= delta
 	if _cooldown_remaining > 0.0:
 		return
@@ -571,10 +590,14 @@ func _process(delta: float) -> void:
 				func(): _active_fog_batches = maxi(0, _active_fog_batches - 1)
 			)
 	elif _trap_type == TrapType.FLY_STRIP_LAUNCHER:
-		did_fire = _fire_fly_strip()
+		var fly_target := _fire_fly_strip()
+		did_fire = fly_target != null
 		if did_fire:
+			# Cosmetic projectile toward the nearest flying enemy; cloud handles all damage.
+			fired.emit(global_position, fly_target.global_position, fly_target, 0.0, _trap_type)
 			fly_strip_fired.emit(global_position, _range, _damage * _damage_multiplier,
 				_fly_strip_adhesion, _fly_strip_cloud_duration, _active_enemies)
+			_play_fly_strip_animation()
 			_active_fly_strip_batches += 1
 			# Timer matches the cloud lifetime so the batch counter clears when it fades.
 			get_tree().create_timer(_fly_strip_cloud_duration + 0.50).timeout.connect(
@@ -682,17 +705,18 @@ func _refresh_glue_slow() -> void:
 			enemy.add_slow_source(self, _damage)
 
 
-## Returns true if at least one flying enemy is in range and the batch cap is not reached.
+## Returns the first in-range flying enemy, or null if the batch cap is reached or none qualify.
 ## Damage is NOT applied here — FlyStripCloud ticks it while alive.
-func _fire_fly_strip() -> bool:
+## The returned node is used by the combat loop as the cosmetic projectile's visual target.
+func _fire_fly_strip() -> Node3D:
 	if _active_fly_strip_batches >= FLY_STRIP_BATCH_CAP:
-		return false
+		return null
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
 			continue
 		if enemy.get_is_flying() and _xz_distance(enemy.global_position) <= _range:
-			return true
-	return false
+			return enemy
+	return null
 
 
 ## Pulses damage + poison to all ground enemies in range on a fixed interval.
@@ -716,6 +740,7 @@ func _update_bait_station(delta: float) -> void:
 		hit_any = true
 	if hit_any:
 		AudioManager.play_trap_fire(TrapType.BAIT_STATION)
+		_play_bait_animation()
 
 
 # ---------------------------------------------------------------------------
@@ -1105,7 +1130,8 @@ func _spawn_shadow(color: Color) -> void:
 ## Adds a dark, slightly transparent background plate that fills most of the cell.
 ## The shadow (larger) bleeds out softly beyond this plate's edges, giving a
 ## colored shadow-halo effect.  Sits above the shadow, below all trap geometry.
-func _spawn_background(color: Color) -> void:
+## Returns the material so callers that need to animate it (e.g. Bait Station) can hold a ref.
+func _spawn_background(color: Color) -> StandardMaterial3D:
 	var bg_mi  := MeshInstance3D.new()
 	var plane  := PlaneMesh.new()
 	plane.size  = Vector2(Grid.CELL_SIZE * 1.85, Grid.CELL_SIZE * 1.85)
@@ -1121,6 +1147,7 @@ func _spawn_background(color: Color) -> void:
 	bg_mi.position.y = 0.07 - 0.25
 	add_child(bg_mi)
 	_decorator_nodes.append(bg_mi)
+	return mat
 
 
 ## Creates the trap's placeholder visual. All four trap types get multi-part
@@ -1139,7 +1166,7 @@ func _spawn_visual(_color: Color) -> void:
 		_:                           c = Color(0.80, 0.80, 0.80)
 	_base_color = c
 	_spawn_shadow(c)
-	_spawn_background(c)
+	var bg_mat := _spawn_background(c)
 	if _trap_type == TrapType.SNAP_TRAP:
 		_spawn_footprint_outline(c)
 		_spawn_snap_trap_visual()
@@ -1156,7 +1183,17 @@ func _spawn_visual(_color: Color) -> void:
 		_spawn_footprint_outline(c)
 		_spawn_glue_board_visual()
 		return
-	# FLY_STRIP_LAUNCHER and BAIT_STATION use a placeholder colored box until Phase 8.
+	if _trap_type == TrapType.FLY_STRIP_LAUNCHER:
+		_spawn_footprint_outline(c)
+		_spawn_fly_strip_launcher_visual()
+		return
+	if _trap_type == TrapType.BAIT_STATION:
+		# No outline — the trap is hidden from enemies; blending in is the design intent.
+		# Background starts invisible; _play_bait_animation() strobes it red on each pulse.
+		_bait_bg_mat = bg_mat
+		_bait_bg_mat.albedo_color = Color(0.0, 0.0, 0.0, 0.0)
+		_spawn_bait_station_visual()
+		return
 	_spawn_footprint_outline(c)
 	_spawn_placeholder_visual(c)
 
@@ -1668,7 +1705,6 @@ func _play_snap_animation() -> void:
 
 
 ## Simple flat box placeholder for trap types that don't have a dedicated visual yet.
-## Replaced in Phase 8 (Sprite Art Migration) with the proper illustrated model.
 func _spawn_placeholder_visual(color: Color) -> void:
 	var fp      := Grid.CELL_SIZE * 1.9
 	var box_mi  := MeshInstance3D.new()
@@ -1681,3 +1717,223 @@ func _spawn_placeholder_visual(color: Color) -> void:
 	mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	box_mi.material_override = mat
 	add_child(box_mi)
+
+
+## Builds the Fly Strip Launcher visual: a compact mortar-style launcher seen from above.
+##
+## Layout from above (X = right, Z = down):
+##   Flat circular base plate → cylindrical body → offset barrel tube + tape roll
+##
+## The whole assembly is parented to _fly_strip_root so the idle bob can move it as a unit.
+## _fly_strip_barrel_pivot is offset so the recoil kicks the barrel inward on fire.
+func _spawn_fly_strip_launcher_visual() -> void:
+	var fp := Grid.CELL_SIZE * 1.9
+
+	_fly_strip_root = Node3D.new()
+	add_child(_fly_strip_root)
+
+	# Base disc — dark magenta platform that the launcher sits on.
+	var base_mi   := MeshInstance3D.new()
+	var base_mesh := CylinderMesh.new()
+	base_mesh.radial_segments = 20
+	base_mesh.top_radius      = fp * 0.42
+	base_mesh.bottom_radius   = fp * 0.42
+	base_mesh.height          = fp * 0.028
+	base_mi.mesh       = base_mesh
+	base_mi.position.y = fp * 0.014   # half height above ground
+	var base_mat := StandardMaterial3D.new()
+	base_mat.albedo_color = Color(0.80, 0.18, 0.65)
+	base_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	base_mi.material_override = base_mat
+	_fly_strip_root.add_child(base_mi)
+
+	# Body cylinder — the main launcher housing, bright magenta.
+	var body_mi   := MeshInstance3D.new()
+	var body_mesh := CylinderMesh.new()
+	body_mesh.radial_segments = 16
+	body_mesh.top_radius      = fp * 0.22
+	body_mesh.bottom_radius   = fp * 0.22
+	body_mesh.height          = fp * 0.22
+	body_mi.mesh       = body_mesh
+	body_mi.position.y = fp * 0.028 + fp * 0.11   # sits on top of base disc
+	var body_mat := StandardMaterial3D.new()
+	body_mat.albedo_color = Color(0.92, 0.30, 0.78)
+	body_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	body_mi.material_override = body_mat
+	_fly_strip_root.add_child(body_mi)
+
+	# Tape roll — a torus at the edge of the body representing coiled fly strip ammunition.
+	# Pale gold-tan so it reads clearly against the magenta body from above.
+	var roll_mi   := MeshInstance3D.new()
+	var roll_mesh := TorusMesh.new()
+	roll_mesh.inner_radius = fp * 0.04
+	roll_mesh.outer_radius = fp * 0.12
+	roll_mesh.rings        = 12
+	roll_mesh.ring_segments = 8
+	roll_mi.mesh       = roll_mesh
+	roll_mi.position.x = fp * 0.28   # offset toward barrel side
+	roll_mi.position.y = fp * 0.028 + fp * 0.22   # sits on top of body
+	var roll_mat := StandardMaterial3D.new()
+	roll_mat.albedo_color = Color(0.98, 0.85, 0.55)
+	roll_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	roll_mi.material_override = roll_mat
+	_fly_strip_root.add_child(roll_mi)
+
+	# Barrel pivot — offset from centre so the barrel appears to jut out from the body.
+	# On fire, this node is nudged down then back to simulate a recoil kick.
+	_fly_strip_barrel_pivot = Node3D.new()
+	_fly_strip_barrel_pivot.position.x = fp * 0.10
+	_fly_strip_barrel_base_y = fp * 0.028 + fp * 0.22 + fp * 0.075
+	_fly_strip_barrel_pivot.position.y = _fly_strip_barrel_base_y
+	_fly_strip_root.add_child(_fly_strip_barrel_pivot)
+
+	# Barrel tube — slightly tapered cylinder, darker magenta.
+	var barrel_mi   := MeshInstance3D.new()
+	var barrel_mesh := CylinderMesh.new()
+	barrel_mesh.radial_segments = 10
+	barrel_mesh.top_radius      = fp * 0.07
+	barrel_mesh.bottom_radius   = fp * 0.09
+	barrel_mesh.height          = fp * 0.15
+	barrel_mi.mesh = barrel_mesh
+	var barrel_mat := StandardMaterial3D.new()
+	barrel_mat.albedo_color = Color(0.65, 0.18, 0.55)
+	barrel_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	barrel_mi.material_override = barrel_mat
+	_fly_strip_barrel_pivot.add_child(barrel_mi)
+
+
+## Builds the Bait Station visual: a low-profile black metal grate sitting flush at ground level.
+##
+## Layout from above: rectangular outer frame with evenly-spaced bars running along both axes,
+## leaving open cells between them so the background plate shows through.
+##
+## No outline is spawned — the trap is intentionally hidden (enemies walk straight over it).
+## The background plate is made invisible at spawn; _play_bait_animation() strobes it red on fire.
+func _spawn_bait_station_visual() -> void:
+	var fp := Grid.CELL_SIZE * 1.9
+	var y  := fp * 0.009   # just above the background plane to avoid z-fighting
+
+	var frame_w := fp * 0.62
+	var frame_d := fp * 0.44
+	var bar_h   := fp * 0.022   # grate thickness — flat but distinct from the background
+	var bar_t   := fp * 0.032   # bar cross-section width
+
+	var grate_mat := StandardMaterial3D.new()
+	grate_mat.albedo_color = Color(0.08, 0.08, 0.08)
+	grate_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	var bar_mat := StandardMaterial3D.new()
+	bar_mat.albedo_color = Color(0.14, 0.14, 0.14)
+	bar_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+
+	# Outer frame — four thin border bars forming a rectangle.
+	# Top and bottom bars (along X).
+	for sign_z: float in [-1.0, 1.0]:
+		var mi   := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size      = Vector3(frame_w, bar_h, bar_t)
+		mi.mesh        = mesh
+		mi.position.y  = y
+		mi.position.z  = sign_z * (frame_d * 0.5 - bar_t * 0.5)
+		mi.material_override = grate_mat
+		add_child(mi)
+
+	# Left and right bars (along Z).
+	for sign_x: float in [-1.0, 1.0]:
+		var mi   := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size      = Vector3(bar_t, bar_h, frame_d - bar_t * 2.0)
+		mi.mesh        = mesh
+		mi.position.y  = y
+		mi.position.x  = sign_x * (frame_w * 0.5 - bar_t * 0.5)
+		mi.material_override = grate_mat
+		add_child(mi)
+
+	# Interior cross-bars along Z (three evenly-spaced, running front-to-back).
+	var inner_d := frame_d - bar_t * 2.0
+	for i in range(3):
+		var t  := (float(i) + 1.0) / 4.0   # positions at 1/4, 1/2, 3/4 of inner width
+		var xp := lerpf(-frame_w * 0.5 + bar_t, frame_w * 0.5 - bar_t, t)
+		var mi   := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size      = Vector3(bar_t, bar_h, inner_d)
+		mi.mesh        = mesh
+		mi.position.x  = xp
+		mi.position.y  = y + bar_h * 0.001   # fractionally above frame to avoid z-fighting
+		mi.material_override = bar_mat
+		add_child(mi)
+
+	# Interior cross-bars along X (two evenly-spaced, running side-to-side).
+	var inner_w := frame_w - bar_t * 2.0
+	for i in range(2):
+		var t  := (float(i) + 1.0) / 3.0
+		var zp := lerpf(-frame_d * 0.5 + bar_t, frame_d * 0.5 - bar_t, t)
+		var mi   := MeshInstance3D.new()
+		var mesh := BoxMesh.new()
+		mesh.size      = Vector3(inner_w, bar_h, bar_t)
+		mi.mesh        = mesh
+		mi.position.z  = zp
+		mi.position.y  = y + bar_h * 0.001
+		mi.material_override = bar_mat
+		add_child(mi)
+
+
+## Plays the launch animation: squishes the root outward on XZ and kicks the barrel
+## down, then springs both back to rest. Guards against overlap.
+func _play_fly_strip_animation() -> void:
+	if _fly_strip_root == null or _fly_strip_animating:
+		return
+	_fly_strip_animating = true
+	AudioManager.play_trap_fire(TrapType.FLY_STRIP_LAUNCHER)
+
+	var fp       := Grid.CELL_SIZE * 1.9
+	var kick_y   := _fly_strip_barrel_base_y - fp * 0.06   # push barrel down on fire
+
+	var squish := create_tween()
+	squish.tween_property(_fly_strip_root, "scale",
+		Vector3(1.25, 0.65, 1.25), 0.07).set_ease(Tween.EASE_OUT)
+	if _fly_strip_barrel_pivot != null:
+		var kick := create_tween()
+		kick.tween_property(_fly_strip_barrel_pivot, "position:y",
+			kick_y, 0.06).set_ease(Tween.EASE_OUT)
+
+	await squish.finished
+	if not is_inside_tree():
+		_fly_strip_animating = false
+		return
+
+	var spring := create_tween()
+	spring.tween_property(_fly_strip_root, "scale",
+		Vector3(1.0, 1.0, 1.0), 0.25).set_ease(Tween.EASE_OUT)
+	if _fly_strip_barrel_pivot != null:
+		var reset := create_tween()
+		reset.tween_property(_fly_strip_barrel_pivot, "position:y",
+			_fly_strip_barrel_base_y, 0.20).set_ease(Tween.EASE_OUT)
+
+	await spring.finished
+	_fly_strip_animating = false
+
+
+## Plays the bait station fire animation: the background plate flashes bright red then
+## fades back to invisible, simulating a toxic pulse visible through the grate.
+## The grate itself does not move.
+func _play_bait_animation() -> void:
+	if _bait_bg_mat == null or _bait_animating:
+		return
+	_bait_animating = true
+
+	# Snap to bright red immediately.
+	_bait_bg_mat.albedo_color = Color(0.90, 0.06, 0.06, 0.82)
+
+	await get_tree().create_timer(0.05).timeout
+	if not is_inside_tree():
+		_bait_animating = false
+		return
+
+	# Fade back to fully transparent.
+	var fade := create_tween()
+	fade.tween_property(_bait_bg_mat, "albedo_color",
+		Color(0.90, 0.06, 0.06, 0.0), 0.55).set_ease(Tween.EASE_IN)
+	await fade.finished
+
+	_bait_animating = false
