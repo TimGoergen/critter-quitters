@@ -1816,7 +1816,7 @@ func _spawn_bait_glow_plane() -> void:
 	var fp := Grid.CELL_SIZE * 1.9
 	# Preview: match the trap footprint so the glow stays within the grate boundary.
 	# Placed:  extend to 75% of the range diameter so the pulse radiates visibly outward.
-	var glow_side := fp * 2.0 if _is_preview else _range * Grid.CELL_SIZE * 1.5
+	var glow_side := fp * 2.0 if _is_preview else _range * Grid.CELL_SIZE * 1.05
 	var plane     := PlaneMesh.new()
 	plane.size = Vector2(glow_side, glow_side)
 
