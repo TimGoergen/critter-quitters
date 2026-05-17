@@ -1467,6 +1467,9 @@ func _neon_color(base: Color) -> Color:
 ##   rectangles simulate ~2 px line width.
 func _draw_trap_outline(anchor: Vector2i) -> void:
 	var trap_type: int = _trap_nodes[anchor].get_type()
+	# Floor traps are intentionally hidden — no outline at any hover or select state.
+	if trap_type == Trap.TrapType.BAIT_STATION:
+		return
 	var base: Color    = Trap.STATS[trap_type]["color"]
 	var neon: Color    = _neon_color(base)
 

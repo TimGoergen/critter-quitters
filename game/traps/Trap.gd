@@ -34,6 +34,7 @@ const Projectile         = preload("res://traps/Projectile.gd")
 const FogCloud           = preload("res://traps/FogCloud.gd")
 const UIFonts            = preload("res://ui/UIFonts.gd")
 const SHADOW_OUTLINE_SHADER = preload("res://assets/shadow_outline.gdshader")
+const BAIT_GLOW_SHADER      = preload("res://assets/bait_glow.gdshader")
 
 
 # ---------------------------------------------------------------------------
@@ -221,10 +222,10 @@ var _fly_strip_bob_time:      float  = 0.0
 var _fly_strip_animating:     bool   = false
 
 # Bait Station animation state — null for all other trap types.
-# _bait_bg_mat is the background plate material; it is normally invisible and
-# strobes red when the trap fires.
-var _bait_bg_mat:    StandardMaterial3D = null
-var _bait_animating: bool               = false
+# _bait_glow_mat is the radial glow shader material; it is normally at opacity 0
+# and tweened to 1 then back to 0 each time the trap fires.
+var _bait_glow_mat:  ShaderMaterial = null
+var _bait_animating: bool           = false
 
 # Tracks how many particle batches from this trap are still visually alive.
 # Each fire increments the count; a timer decrements it after the particles expire.
@@ -1165,10 +1166,14 @@ func _spawn_visual(_color: Color) -> void:
 		TrapType.BAIT_STATION:       c = Color(0.52, 0.30, 0.65)
 		_:                           c = Color(0.80, 0.80, 0.80)
 	_base_color = c
-	# Bait Station is a walkable floor trap — no shadow, so it casts no visible halo
-	# that would hint at its presence to the player or occlude enemies walking over it.
-	if _trap_type != TrapType.BAIT_STATION:
-		_spawn_shadow(c)
+	# Bait Station is a floor trap: it must be invisible at rest and never draw a
+	# coloured background plate or shadow halo that would reveal its position.
+	# It gets a dedicated radial glow plane instead, spawned by _spawn_bait_glow_plane().
+	if _trap_type == TrapType.BAIT_STATION:
+		_spawn_bait_glow_plane()
+		_spawn_bait_station_visual()
+		return
+	_spawn_shadow(c)
 	var bg_mat := _spawn_background(c)
 	if _trap_type == TrapType.SNAP_TRAP:
 		_spawn_footprint_outline(c)
@@ -1189,13 +1194,6 @@ func _spawn_visual(_color: Color) -> void:
 	if _trap_type == TrapType.FLY_STRIP_LAUNCHER:
 		_spawn_footprint_outline(c)
 		_spawn_fly_strip_launcher_visual()
-		return
-	if _trap_type == TrapType.BAIT_STATION:
-		# No outline — the trap is hidden from enemies; blending in is the design intent.
-		# Background starts invisible; _play_bait_animation() strobes it red on each pulse.
-		_bait_bg_mat = bg_mat
-		_bait_bg_mat.albedo_color = Color(0.0, 0.0, 0.0, 0.0)
-		_spawn_bait_station_visual()
 		return
 	_spawn_footprint_outline(c)
 	_spawn_placeholder_visual(c)
@@ -1805,6 +1803,31 @@ func _spawn_fly_strip_launcher_visual() -> void:
 	_fly_strip_barrel_pivot.add_child(barrel_mi)
 
 
+## Creates the invisible-at-rest radial glow plane for the Bait Station fire animation.
+## The plane covers the full trap footprint at world y = 0.11 (just above the grate bars).
+## Its ShaderMaterial starts at opacity 0; _play_bait_animation() tweens it to 1 then back.
+func _spawn_bait_glow_plane() -> void:
+	var fp    := Grid.CELL_SIZE * 1.9
+	var plane := PlaneMesh.new()
+	plane.size = Vector2(fp, fp)
+
+	var mi  := MeshInstance3D.new()
+	mi.mesh = plane
+	# World y = 0.11 — above the grate bars (0.09) and below enemy sprites (0.25).
+	# Expressed as a local offset: desired_world_y − trap_root_y = 0.11 − 0.25.
+	mi.position.y = 0.11 - 0.25
+
+	var mat := ShaderMaterial.new()
+	mat.shader = BAIT_GLOW_SHADER
+	mat.set_shader_parameter("opacity",    0.0)
+	mat.set_shader_parameter("glow_color", Vector3(0.90, 0.06, 0.06))
+	mi.material_override = mat
+
+	_bait_glow_mat = mat
+	add_child(mi)
+	_decorator_nodes.append(mi)   # hide_decorators() will suppress it for icon previews
+
+
 ## Builds the Bait Station visual: a low-profile black metal grate sitting flush at ground level.
 ##
 ## Layout from above: a rectangular outer frame with two families of diagonal bars at ±45°
@@ -1820,18 +1843,22 @@ func _spawn_bait_station_visual() -> void:
 	var fp := Grid.CELL_SIZE * 1.9
 	# World y = 0.09; local offset = desired_world_y − trap_root_y = 0.09 − 0.25.
 	var y      := 0.09 - 0.25
-	var bar_h  := fp * 0.022   # grate thickness — flat but distinct from the background
-	var bar_t  := fp * 0.045   # bar cross-section — thicker than a simple grid to read clearly as diamonds
+	var bar_h  := fp * 0.030   # grate depth — slightly taller than before for wrought-iron mass
+	var bar_t  := fp * 0.065   # bar cross-section — substantially thicker for a heavy iron look
 
-	var frame_w := fp * 0.62
-	var frame_d := fp * 0.44
+	# Square frame: equal width and depth so the diamond cells read as proper squares.
+	var frame_s := fp * 0.58   # side length of the square outer frame
+	var frame_w := frame_s
+	var frame_d := frame_s
 
+	# Wrought iron colours: dark charcoal with a slight warm (brownish) undertone,
+	# not pure black.  Frame is slightly darker than the interior bars to read as a border.
 	var grate_mat := StandardMaterial3D.new()
-	grate_mat.albedo_color = Color(0.08, 0.08, 0.08)
+	grate_mat.albedo_color = Color(0.20, 0.18, 0.15)
 	grate_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
 	var bar_mat := StandardMaterial3D.new()
-	bar_mat.albedo_color = Color(0.14, 0.14, 0.14)
+	bar_mat.albedo_color = Color(0.30, 0.27, 0.23)
 	bar_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
 	# Outer frame: four axis-aligned border bars.
@@ -1865,7 +1892,9 @@ func _spawn_bait_station_visual() -> void:
 	var inner_d := frame_d - bar_t * 2.0
 	var hw      := inner_w * 0.5   # half-width of the clip rectangle
 	var hd      := inner_d * 0.5   # half-depth of the clip rectangle
-	var spacing := fp * 0.12       # centre-to-centre distance between parallel diagonal bars
+	# Spacing chosen so each family has 5 visible bars (k = −2 … +2), producing a
+	# diamond pattern with ~8 visible cells inside the square frame.
+	var spacing := fp * 0.145
 
 	var bar_count := int(ceil((hw + hd) / spacing))
 
@@ -1947,26 +1976,27 @@ func _play_fly_strip_animation() -> void:
 	_fly_strip_animating = false
 
 
-## Plays the bait station fire animation: the background plate flashes bright red then
-## fades back to invisible, simulating a toxic pulse visible through the grate.
-## The grate itself does not move.
+## Plays the Bait Station fire animation: the radial glow plane snaps to full opacity
+## then fades back to invisible, simulating a toxic pulse seen through the grate.
+## The grate itself does not move.  Opacity is a shader parameter so the radial gradient
+## stays intact throughout — only its overall intensity changes.
 func _play_bait_animation() -> void:
-	if _bait_bg_mat == null or _bait_animating:
+	if _bait_glow_mat == null or _bait_animating:
 		return
 	_bait_animating = true
 
-	# Snap to bright red immediately.
-	_bait_bg_mat.albedo_color = Color(0.90, 0.06, 0.06, 0.82)
+	# Snap to full glow immediately.
+	_bait_glow_mat.set_shader_parameter("opacity", 1.0)
 
 	await get_tree().create_timer(0.05).timeout
 	if not is_inside_tree():
 		_bait_animating = false
 		return
 
-	# Fade back to fully transparent.
+	# Tween opacity back to zero.  Godot 4 supports "shader_parameter/name" as a property path.
 	var fade := create_tween()
-	fade.tween_property(_bait_bg_mat, "albedo_color",
-		Color(0.90, 0.06, 0.06, 0.0), 0.55).set_ease(Tween.EASE_IN)
+	fade.tween_property(_bait_glow_mat, "shader_parameter/opacity",
+		0.0, 0.55).set_ease(Tween.EASE_IN)
 	await fade.finished
 
 	_bait_animating = false
