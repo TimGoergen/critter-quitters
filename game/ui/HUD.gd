@@ -1580,7 +1580,7 @@ func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 	# reads clearly.  All other traps use a near-transparent dark background.
 	var icon_bg_style := StyleBoxFlat.new()
 	if type == Trap.TrapType.BAIT_STATION:
-		icon_bg_style.bg_color = Color(0.38, 0.24, 0.52, 0.90)
+		icon_bg_style.bg_color = Color(0.53, 0.34, 0.73, 0.90)
 	else:
 		icon_bg_style.bg_color = Color(0.0, 0.0, 0.0, 0.35)
 	icon_bg_style.set_corner_radius_all(4)
