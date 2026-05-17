@@ -597,26 +597,37 @@ void fragment() {
 	mid_ctrl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	mid_margin.add_child(mid_ctrl)
 
+	# Both buttons pinned to the same vertical center (50% of mid_ctrl) with identical
+	# half-height offsets — their geometric centers are guaranteed to match regardless
+	# of how Godot resolves font metrics against button minimum sizes.
+	const _BTN_HALF_H := 37.0   # half of mid_ctrl custom_minimum_size.y (74px)
+
 	_send_wave_btn = Button.new()
-	_send_wave_btn.text = ">>"
-	_send_wave_btn.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_send_wave_btn.text          = ">>"
+	_send_wave_btn.anchor_left   = 0.0
+	_send_wave_btn.anchor_right  = 1.0
+	_send_wave_btn.anchor_top    = 0.5
+	_send_wave_btn.anchor_bottom = 0.5
+	_send_wave_btn.offset_left   = 0.0
+	_send_wave_btn.offset_right  = 0.0
+	_send_wave_btn.offset_top    = -_BTN_HALF_H
+	_send_wave_btn.offset_bottom =  _BTN_HALF_H
 	_apply_ff_button_style(_send_wave_btn)
 	_send_wave_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_send_wave_btn.add_theme_font_size_override("font_size", 66)
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	mid_ctrl.add_child(_send_wave_btn)
 
-	# Multiplier toggle — spans the full height of mid_ctrl so it vertically aligns with >>.
 	_multiplier_btn = Button.new()
 	_multiplier_btn.text          = ""
 	_multiplier_btn.anchor_left   = 1.0
 	_multiplier_btn.anchor_right  = 1.0
-	_multiplier_btn.anchor_top    = 0.0
-	_multiplier_btn.anchor_bottom = 1.0
+	_multiplier_btn.anchor_top    = 0.5
+	_multiplier_btn.anchor_bottom = 0.5
 	_multiplier_btn.offset_left   = -54.0
 	_multiplier_btn.offset_right  = 0.0
-	_multiplier_btn.offset_top    = 0.0
-	_multiplier_btn.offset_bottom = 0.0
+	_multiplier_btn.offset_top    = -_BTN_HALF_H
+	_multiplier_btn.offset_bottom =  _BTN_HALF_H
 	_apply_gold_button_style(_multiplier_btn)
 	_multiplier_btn.pressed.connect(_on_multiplier_btn_pressed)
 	mid_ctrl.add_child(_multiplier_btn)
@@ -628,7 +639,7 @@ void fragment() {
 	_multiplier_label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_multiplier_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_multiplier_label.add_theme_font_override("font", UIFonts.header())
-	_multiplier_label.add_theme_font_size_override("font_size", 33)
+	_multiplier_label.add_theme_font_size_override("font_size", 52)
 	_multiplier_label.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
 	_multiplier_btn.add_child(_multiplier_label)
 
@@ -1601,7 +1612,7 @@ func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.size       = 3.1   # larger = more world units visible = smaller-appearing trap
+	cam.size       = 2.2   # larger = more world units visible = smaller-appearing trap
 	cam.position   = Vector3(0.0, 5.0, 0.0)
 	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
 	svp.add_child(cam)
@@ -1650,7 +1661,7 @@ func _build_floating_trap_icon(parent: Control, type: int) -> Control:
 
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.size       = 3.1   # larger = more world units visible = smaller-appearing trap
+	cam.size       = 2.2   # larger = more world units visible = smaller-appearing trap
 	cam.position   = Vector3(0.0, 5.0, 0.0)
 	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
 	svp.add_child(cam)
@@ -1840,7 +1851,7 @@ func _build_boost_row(parent: VBoxContainer, type: int) -> Control:
 
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.size       = 3.1
+	cam.size       = 2.2
 	cam.position   = Vector3(0.0, 5.0, 0.0)
 	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
 	svp.add_child(cam)
@@ -1879,7 +1890,7 @@ func _build_floating_boost_icon(parent: Control, type: int) -> Control:
 
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	cam.size       = 3.1
+	cam.size       = 2.2
 	cam.position   = Vector3(0.0, 5.0, 0.0)
 	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
 	svp.add_child(cam)
