@@ -284,7 +284,7 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 
 	if _trap_type == TrapType.BAIT_STATION:
 		_bait_pulse_interval         = stats.get("pulse_interval", 4.0)
-		_bait_pulse_timer            = _bait_pulse_interval
+		_bait_pulse_timer            = 0.0   # fire on the first frame an enemy is in range
 		_bait_poison_damage_per_tick = stats.get("poison_damage_per_tick", 1.5)
 		_bait_base_poison_damage     = _bait_poison_damage_per_tick
 		_bait_poison_duration        = stats.get("poison_duration", 3.0)
