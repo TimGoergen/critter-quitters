@@ -1856,7 +1856,7 @@ func _spawn_bait_station_visual() -> void:
 	var bar_t  := fp * 0.065   # bar cross-section — substantially thicker for a heavy iron look
 
 	# Square frame at 90% of the standard trap footprint.
-	var frame_s := fp * 0.9
+	var frame_s := fp * 0.8
 	var frame_w := frame_s
 	var frame_d := frame_s
 
