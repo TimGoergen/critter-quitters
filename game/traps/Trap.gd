@@ -1165,7 +1165,10 @@ func _spawn_visual(_color: Color) -> void:
 		TrapType.BAIT_STATION:       c = Color(0.52, 0.30, 0.65)
 		_:                           c = Color(0.80, 0.80, 0.80)
 	_base_color = c
-	_spawn_shadow(c)
+	# Bait Station is a walkable floor trap — no shadow, so it casts no visible halo
+	# that would hint at its presence to the player or occlude enemies walking over it.
+	if _trap_type != TrapType.BAIT_STATION:
+		_spawn_shadow(c)
 	var bg_mat := _spawn_background(c)
 	if _trap_type == TrapType.SNAP_TRAP:
 		_spawn_footprint_outline(c)
@@ -1804,19 +1807,24 @@ func _spawn_fly_strip_launcher_visual() -> void:
 
 ## Builds the Bait Station visual: a low-profile black metal grate sitting flush at ground level.
 ##
-## Layout from above: rectangular outer frame with evenly-spaced bars running along both axes,
-## leaving open cells between them so the background plate shows through.
+## Layout from above: a rectangular outer frame with two families of diagonal bars at ±45°
+## intersecting to create a diamond grid pattern.  Each interior bar is clipped to the
+## inner frame area so no bar end protrudes past the border.
 ##
-## No outline is spawned — the trap is intentionally hidden (enemies walk straight over it).
-## The background plate is made invisible at spawn; _play_bait_animation() strobes it red on fire.
+## Positioned at world y = 0.09 — above the background plate (0.07) but well below enemy
+## sprites (0.25), so the opaque grate bars never depth-occlude an enemy overhead.
+##
+## No footprint outline or shadow is spawned — the trap blends into the floor.
+## The background plate starts invisible; _play_bait_animation() strobes it red on each pulse.
 func _spawn_bait_station_visual() -> void:
 	var fp := Grid.CELL_SIZE * 1.9
-	var y  := fp * 0.009   # just above the background plane to avoid z-fighting
+	# World y = 0.09; local offset = desired_world_y − trap_root_y = 0.09 − 0.25.
+	var y      := 0.09 - 0.25
+	var bar_h  := fp * 0.022   # grate thickness — flat but distinct from the background
+	var bar_t  := fp * 0.045   # bar cross-section — thicker than a simple grid to read clearly as diamonds
 
 	var frame_w := fp * 0.62
 	var frame_d := fp * 0.44
-	var bar_h   := fp * 0.022   # grate thickness — flat but distinct from the background
-	var bar_t   := fp * 0.032   # bar cross-section width
 
 	var grate_mat := StandardMaterial3D.new()
 	grate_mat.albedo_color = Color(0.08, 0.08, 0.08)
@@ -1826,56 +1834,81 @@ func _spawn_bait_station_visual() -> void:
 	bar_mat.albedo_color = Color(0.14, 0.14, 0.14)
 	bar_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 
-	# Outer frame — four thin border bars forming a rectangle.
-	# Top and bottom bars (along X).
+	# Outer frame: four axis-aligned border bars.
+	# Raised one bar_h above the interior diagonal bars so the frame visually masks any
+	# diagonal bar end that reaches the frame boundary, keeping the border clean.
+	var frame_y := y + bar_h
 	for sign_z: float in [-1.0, 1.0]:
 		var mi   := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
-		mesh.size      = Vector3(frame_w, bar_h, bar_t)
-		mi.mesh        = mesh
-		mi.position.y  = y
-		mi.position.z  = sign_z * (frame_d * 0.5 - bar_t * 0.5)
+		mesh.size     = Vector3(frame_w, bar_h, bar_t)
+		mi.mesh       = mesh
+		mi.position.y = frame_y
+		mi.position.z = sign_z * (frame_d * 0.5 - bar_t * 0.5)
 		mi.material_override = grate_mat
 		add_child(mi)
-
-	# Left and right bars (along Z).
 	for sign_x: float in [-1.0, 1.0]:
 		var mi   := MeshInstance3D.new()
 		var mesh := BoxMesh.new()
-		mesh.size      = Vector3(bar_t, bar_h, frame_d - bar_t * 2.0)
-		mi.mesh        = mesh
-		mi.position.y  = y
-		mi.position.x  = sign_x * (frame_w * 0.5 - bar_t * 0.5)
+		mesh.size     = Vector3(bar_t, bar_h, frame_d - bar_t * 2.0)
+		mi.mesh       = mesh
+		mi.position.y = frame_y
+		mi.position.x = sign_x * (frame_w * 0.5 - bar_t * 0.5)
 		mi.material_override = grate_mat
 		add_child(mi)
 
-	# Interior cross-bars along Z (three evenly-spaced, running front-to-back).
-	var inner_d := frame_d - bar_t * 2.0
-	for i in range(3):
-		var t  := (float(i) + 1.0) / 4.0   # positions at 1/4, 1/2, 3/4 of inner width
-		var xp := lerpf(-frame_w * 0.5 + bar_t, frame_w * 0.5 - bar_t, t)
-		var mi   := MeshInstance3D.new()
-		var mesh := BoxMesh.new()
-		mesh.size      = Vector3(bar_t, bar_h, inner_d)
-		mi.mesh        = mesh
-		mi.position.x  = xp
-		mi.position.y  = y + bar_h * 0.001   # fractionally above frame to avoid z-fighting
-		mi.material_override = bar_mat
-		add_child(mi)
-
-	# Interior cross-bars along X (two evenly-spaced, running side-to-side).
+	# Interior diamond bars: two families of parallel bars at +45° and −45°.
+	# Bars in each family are evenly spaced along their perpendicular direction.
+	# The clipping logic trims each bar to fit exactly inside the inner frame area —
+	# bars that don't intersect the inner rectangle at all are skipped entirely.
 	var inner_w := frame_w - bar_t * 2.0
-	for i in range(2):
-		var t  := (float(i) + 1.0) / 3.0
-		var zp := lerpf(-frame_d * 0.5 + bar_t, frame_d * 0.5 - bar_t, t)
-		var mi   := MeshInstance3D.new()
-		var mesh := BoxMesh.new()
-		mesh.size      = Vector3(inner_w, bar_h, bar_t)
-		mi.mesh        = mesh
-		mi.position.z  = zp
-		mi.position.y  = y + bar_h * 0.001
-		mi.material_override = bar_mat
-		add_child(mi)
+	var inner_d := frame_d - bar_t * 2.0
+	var hw      := inner_w * 0.5   # half-width of the clip rectangle
+	var hd      := inner_d * 0.5   # half-depth of the clip rectangle
+	var spacing := fp * 0.12       # centre-to-centre distance between parallel diagonal bars
+
+	var bar_count := int(ceil((hw + hd) / spacing))
+
+	for angle: float in [PI / 4.0, -PI / 4.0]:
+		# In Godot, rotation.y = angle maps local +Z to world direction (sin(angle), 0, cos(angle)).
+		# That is the bar's running direction.  The perpendicular (CCW 90° in XZ) is (−cos, 0, sin).
+		var dx := sin(angle)     # running direction X
+		var dz := cos(angle)     # running direction Z
+		var px := -cos(angle)    # perpendicular direction X (used to offset parallel bars)
+		var pz :=  sin(angle)    # perpendicular direction Z
+
+		for k in range(-bar_count, bar_count + 1):
+			var cx := k * spacing * px   # bar centre X before clipping
+			var cz := k * spacing * pz   # bar centre Z before clipping
+
+			# Parametric clip: find t range where (cx + t·dx, cz + t·dz) ∈ [−hw, hw] × [−hd, hd].
+			var t_min := -1e9
+			var t_max :=  1e9
+			if abs(dx) > 1e-6:
+				var t0 := (-hw - cx) / dx
+				var t1 := ( hw - cx) / dx
+				t_min = maxf(t_min, minf(t0, t1))
+				t_max = minf(t_max, maxf(t0, t1))
+			if abs(dz) > 1e-6:
+				var t0 := (-hd - cz) / dz
+				var t1 := ( hd - cz) / dz
+				t_min = maxf(t_min, minf(t0, t1))
+				t_max = minf(t_max, maxf(t0, t1))
+			if t_min >= t_max:
+				continue   # this bar does not intersect the inner frame rectangle
+
+			var t_mid   := (t_min + t_max) * 0.5
+			var bar_len := t_max - t_min
+			var mi   := MeshInstance3D.new()
+			var mesh := BoxMesh.new()
+			mesh.size       = Vector3(bar_t, bar_h, bar_len)
+			mi.mesh         = mesh
+			mi.position.x   = cx + t_mid * dx
+			mi.position.y   = y
+			mi.position.z   = cz + t_mid * dz
+			mi.rotation.y   = angle
+			mi.material_override = bar_mat
+			add_child(mi)
 
 
 ## Plays the launch animation: squishes the root outward on XZ and kicks the barrel
