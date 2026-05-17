@@ -1803,15 +1803,20 @@ func _spawn_fly_strip_launcher_visual() -> void:
 	_fly_strip_barrel_pivot.add_child(barrel_mi)
 
 
-## Creates the invisible-at-rest radial glow plane for the Bait Station fire animation.
-## Sized to 1.5× the range diameter so the pulse visibly illuminates a large portion of
-## the trap's attack area.  Its ShaderMaterial starts at opacity 0; _play_bait_animation()
-## tweens it to 1 then back on each pulse.
+## Creates the radial glow plane for the Bait Station.
+##
+## Two modes:
+##   Placement preview — trap footprint size (fp), opacity 0.45 so the glow reads
+##     clearly while dragging without extending past the trap boundary.
+##   Placed trap — range-based size (75% of range diameter), opacity 0 at rest,
+##     tweened to 1 and back by _play_bait_animation() on each pulse.
+##
+## hide_decorators() suppresses the plane entirely for HUD icon renders.
 func _spawn_bait_glow_plane() -> void:
-	# _range is in cells; multiply by CELL_SIZE to get world units.
-	# × 1.5 gives a diameter equal to 75% of the full range circle, so the glow clearly
-	# radiates outward without covering the entire range indicator.
-	var glow_side := _range * Grid.CELL_SIZE * 1.5
+	var fp := Grid.CELL_SIZE * 1.9
+	# Preview: match the trap footprint so the glow stays within the grate boundary.
+	# Placed:  extend to 75% of the range diameter so the pulse radiates visibly outward.
+	var glow_side := fp if _is_preview else _range * Grid.CELL_SIZE * 1.5
 	var plane     := PlaneMesh.new()
 	plane.size = Vector2(glow_side, glow_side)
 
@@ -1823,9 +1828,7 @@ func _spawn_bait_glow_plane() -> void:
 
 	var mat := ShaderMaterial.new()
 	mat.shader = BAIT_GLOW_SHADER
-	# Placement previews show a faint static glow so the player can see the trap's
-	# area of effect while dragging.  hide_decorators() will suppress this for HUD icons.
-	mat.set_shader_parameter("opacity",    0.15 if _is_preview else 0.0)
+	mat.set_shader_parameter("opacity",    0.45 if _is_preview else 0.0)
 	mat.set_shader_parameter("glow_color", Vector3(0.90, 0.06, 0.06))
 	mi.material_override = mat
 
