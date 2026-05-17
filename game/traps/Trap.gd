@@ -1823,7 +1823,9 @@ func _spawn_bait_glow_plane() -> void:
 
 	var mat := ShaderMaterial.new()
 	mat.shader = BAIT_GLOW_SHADER
-	mat.set_shader_parameter("opacity",    0.0)
+	# Placement previews show a faint static glow so the player can see the trap's
+	# area of effect while dragging.  hide_decorators() will suppress this for HUD icons.
+	mat.set_shader_parameter("opacity",    0.15 if _is_preview else 0.0)
 	mat.set_shader_parameter("glow_color", Vector3(0.90, 0.06, 0.06))
 	mi.material_override = mat
 
