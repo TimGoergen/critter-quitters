@@ -1846,8 +1846,9 @@ func _spawn_bait_station_visual() -> void:
 	var bar_h  := fp * 0.030   # grate depth — slightly taller than before for wrought-iron mass
 	var bar_t  := fp * 0.065   # bar cross-section — substantially thicker for a heavy iron look
 
-	# Square frame: equal width and depth so the diamond cells read as proper squares.
-	var frame_s := fp * 0.58   # side length of the square outer frame
+	# Square frame sized to the full trap footprint so the grate covers the whole 2×2 cell.
+	# fp is already defined as Grid.CELL_SIZE * 1.9 — the standard visual footprint for all traps.
+	var frame_s := fp
 	var frame_w := frame_s
 	var frame_d := frame_s
 
@@ -1892,9 +1893,9 @@ func _spawn_bait_station_visual() -> void:
 	var inner_d := frame_d - bar_t * 2.0
 	var hw      := inner_w * 0.5   # half-width of the clip rectangle
 	var hd      := inner_d * 0.5   # half-depth of the clip rectangle
-	# Spacing chosen so each family has 5 visible bars (k = −2 … +2), producing a
-	# diamond pattern with ~8 visible cells inside the square frame.
-	var spacing := fp * 0.145
+	# Spacing scaled with the larger frame: still 5 visible bars per family (k = −2 … +2),
+	# giving ~8 visible diamond cells inside the full-footprint frame.
+	var spacing := fp * 0.22
 
 	var bar_count := int(ceil((hw + hd) / spacing))
 
