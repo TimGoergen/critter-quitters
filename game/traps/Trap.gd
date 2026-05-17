@@ -1816,7 +1816,7 @@ func _spawn_bait_glow_plane() -> void:
 	var fp := Grid.CELL_SIZE * 1.9
 	# Preview: match the trap footprint so the glow stays within the grate boundary.
 	# Placed:  extend to 75% of the range diameter so the pulse radiates visibly outward.
-	var glow_side := fp if _is_preview else _range * Grid.CELL_SIZE * 1.5
+	var glow_side := fp * 2.0 if _is_preview else _range * Grid.CELL_SIZE * 1.5
 	var plane     := PlaneMesh.new()
 	plane.size = Vector2(glow_side, glow_side)
 
@@ -1828,7 +1828,7 @@ func _spawn_bait_glow_plane() -> void:
 
 	var mat := ShaderMaterial.new()
 	mat.shader = BAIT_GLOW_SHADER
-	mat.set_shader_parameter("opacity",    0.45 if _is_preview else 0.0)
+	mat.set_shader_parameter("opacity",    0.80 if _is_preview else 0.0)
 	mat.set_shader_parameter("glow_color", Vector3(0.90, 0.06, 0.06))
 	mi.material_override = mat
 
