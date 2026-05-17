@@ -1855,9 +1855,8 @@ func _spawn_bait_station_visual() -> void:
 	var bar_h  := fp * 0.030   # grate depth — slightly taller than before for wrought-iron mass
 	var bar_t  := fp * 0.065   # bar cross-section — substantially thicker for a heavy iron look
 
-	# Square frame sized to the full trap footprint so the grate covers the whole 2×2 cell.
-	# fp is already defined as Grid.CELL_SIZE * 1.9 — the standard visual footprint for all traps.
-	var frame_s := fp
+	# Square frame at 90% of the standard trap footprint.
+	var frame_s := fp * 0.9
 	var frame_w := frame_s
 	var frame_d := frame_s
 
