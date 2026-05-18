@@ -186,8 +186,10 @@ var _duration_level: int   = 0
 var _is_preview: bool = false
 
 # Range indicator shown on mouse hover.
-var _is_hovered:      bool   = false
-var _range_indicator: Node3D = null
+var _is_hovered:      bool              = false
+var _range_indicator: Node3D           = null
+var _range_fill_mat:  StandardMaterial3D = null   # stored so color can be updated without rebuild
+var _range_ring_mat:  StandardMaterial3D = null
 var _hover_area:      Area3D = null
 # When true, the indicator stays visible regardless of hover state (upgrade panel open).
 var _indicator_pinned: bool  = false
@@ -937,11 +939,15 @@ func _update_star_display() -> void:
 		_bait_glow_mat.set_shader_parameter("opacity", _bait_current_rest_opacity())
 
 
-## Shows the range indicator. Called by Arena when a placement preview overlaps this trap.
-func show_range_indicator() -> void:
+## Shows the range indicator. Called by Arena when a placement preview overlaps this trap,
+## or when the upgrade panel pins it open.
+## Pass dimmed=true when shown because a new trap is being placed over this one — the gray
+## tint signals "existing trap" vs. the full-white preview of the trap being placed.
+func show_range_indicator(dimmed: bool = false) -> void:
 	_indicator_pinned = true
 	if _range_indicator != null:
 		_range_indicator.visible = true
+	_set_range_indicator_dimmed(dimmed)
 
 
 ## Hides the range indicator. Called by Arena when the placement preview moves away.
@@ -949,6 +955,16 @@ func hide_range_indicator() -> void:
 	_indicator_pinned = false
 	if _range_indicator != null:
 		_range_indicator.visible = false
+	_set_range_indicator_dimmed(false)   # restore white for next time it appears
+
+
+## Applies or removes the gray tint on the range indicator's materials.
+func _set_range_indicator_dimmed(dimmed: bool) -> void:
+	if _range_fill_mat == null or _range_ring_mat == null:
+		return
+	var tint := Color(0.50, 0.50, 0.50) if dimmed else Color(1.0, 1.0, 1.0)
+	_range_fill_mat.albedo_color = Color(tint.r, tint.g, tint.b, _range_fill_mat.albedo_color.a)
+	_range_ring_mat.albedo_color = Color(tint.r, tint.g, tint.b, _range_ring_mat.albedo_color.a)
 
 
 ## Hides the colored background plate, shadow halo, and footprint outline bars.
@@ -995,22 +1011,22 @@ func _spawn_range_indicator() -> void:
 	fill_mesh.bottom_radius   = _range
 	fill_mesh.height          = 0.001
 	fill_mesh.radial_segments = 64
-	var fill_mat             := StandardMaterial3D.new()
-	fill_mat.albedo_color     = Color(1.0, 1.0, 1.0, fill_alpha)
-	fill_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
-	fill_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
+	_range_fill_mat             = StandardMaterial3D.new()
+	_range_fill_mat.albedo_color = Color(1.0, 1.0, 1.0, fill_alpha)
+	_range_fill_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_range_fill_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	fill_mi.mesh              = fill_mesh
-	fill_mi.material_override = fill_mat
+	fill_mi.material_override = _range_fill_mat
 	_range_indicator.add_child(fill_mi)
 
 	# Outline ring
 	var ring_mi              := MeshInstance3D.new()
 	ring_mi.mesh              = _make_ring_mesh(_range, 0.10)
-	var ring_mat             := StandardMaterial3D.new()
-	ring_mat.albedo_color     = Color(1.0, 1.0, 1.0, ring_alpha)
-	ring_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
-	ring_mat.transparency     = BaseMaterial3D.TRANSPARENCY_ALPHA
-	ring_mi.material_override = ring_mat
+	_range_ring_mat             = StandardMaterial3D.new()
+	_range_ring_mat.albedo_color = Color(1.0, 1.0, 1.0, ring_alpha)
+	_range_ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_range_ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ring_mi.material_override = _range_ring_mat
 	_range_indicator.add_child(ring_mi)
 
 	add_child(_range_indicator)

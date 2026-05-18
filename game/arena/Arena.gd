@@ -168,9 +168,17 @@ var _placement_hover_trap: Node = null
 # True while the HUD is driving a drag-and-drop placement gesture.
 # When set, Arena's own pointer state machine stays idle and placement
 # is controlled entirely by HUD calling begin/update/commit_hud_drag().
-var _hud_drag_active:     bool                 = false
-var _hud_drag_is_boost:   bool                 = false
-var _hud_drag_boost_type: BoostUnit.BoostType  = BoostUnit.BoostType.PHEROMONE_DISPENSER
+var _hud_drag_active:          bool                 = false
+var _hud_drag_is_boost:        bool                 = false
+var _hud_drag_boost_type:      BoostUnit.BoostType  = BoostUnit.BoostType.PHEROMONE_DISPENSER
+# Most-recent placement preview position supplied by HUD; used for edge-scroll.
+var _hud_drag_last_screen_pos: Vector2              = Vector2.ZERO
+
+# Edge-scroll: when dragging a trap and the ghost enters a band at any arena edge,
+# the camera pans toward that edge so the player can reach off-screen cells.
+# Only active when zoomed in; in overview the whole arena is already visible.
+const EDGE_SCROLL_ZONE_PX: float  = 80.0   # width of the trigger band in virtual pixels
+const EDGE_SCROLL_MAX_SPEED: float = 10.0  # world units per second at full penetration
 
 # Camera zoom — two discrete levels: overview (full-arena fit) and zoomed-in (2×).
 enum ZoomState { OVERVIEW, ZOOMED_IN }
@@ -441,7 +449,8 @@ func _update_drag_preview(screen_pos: Vector2) -> void:
 		_drag_place_preview.hide_range_indicator()
 		var blocked_trap := _find_trap_at_cells(cells)
 		if blocked_trap != null:
-			blocked_trap.show_range_indicator()
+			# dimmed=true: gray tint distinguishes this existing trap's range from the pending placement's white circle
+			blocked_trap.show_range_indicator(true)
 			_placement_hover_trap = blocked_trap
 
 
@@ -474,8 +483,9 @@ func _clear_drag_preview() -> void:
 ## placement_screen_pos is the centre of the floating icon (cursor + offset),
 ## which is the cell the trap will be placed in — not the raw cursor position.
 func begin_hud_drag(_trap_type: int, placement_screen_pos: Vector2) -> void:
-	_hud_drag_active = true
-	_touch_state     = TouchState.IDLE   # keep Arena's own state machine inert
+	_hud_drag_active          = true
+	_hud_drag_last_screen_pos = placement_screen_pos
+	_touch_state              = TouchState.IDLE   # keep Arena's own state machine inert
 	# GameState.selected_trap_type is already set by HUD before this call.
 	_update_drag_preview(placement_screen_pos)
 
@@ -483,6 +493,7 @@ func begin_hud_drag(_trap_type: int, placement_screen_pos: Vector2) -> void:
 ## Called by HUD each frame as the floating icon moves.
 func update_hud_drag(placement_screen_pos: Vector2) -> void:
 	if _hud_drag_active:
+		_hud_drag_last_screen_pos = placement_screen_pos
 		_update_drag_preview(placement_screen_pos)
 
 
@@ -507,10 +518,11 @@ func cancel_hud_drag() -> void:
 ## Called by HUD when the user begins dragging a boost icon.
 ## Uses a SNAP_TRAP ghost (same 2×2 footprint) so the placement preview renders correctly.
 func begin_hud_drag_boost(boost_type: BoostUnit.BoostType, placement_screen_pos: Vector2) -> void:
-	_hud_drag_active     = true
-	_hud_drag_is_boost   = true
-	_hud_drag_boost_type = boost_type
-	_touch_state         = TouchState.IDLE
+	_hud_drag_active          = true
+	_hud_drag_is_boost        = true
+	_hud_drag_boost_type      = boost_type
+	_hud_drag_last_screen_pos = placement_screen_pos
+	_touch_state              = TouchState.IDLE
 	GameState.select_trap_type(Trap.TrapType.SNAP_TRAP)
 	_update_drag_preview(placement_screen_pos)
 
@@ -2300,6 +2312,10 @@ func _process(delta: float) -> void:
 		var p := _followed_enemy.global_position
 		_apply_pan(Vector2(p.x, p.z))
 
+	# Pan toward whichever arena edge the drag ghost is approaching.
+	if _hud_drag_active and _zoom_state == ZoomState.ZOOMED_IN:
+		_apply_edge_scroll(delta)
+
 	# Hold-to-place from the arena is removed: placement now only initiates
 	# via drag from the HUD trap icon panel (see begin_hud_drag / update_hud_drag).
 
@@ -2335,6 +2351,40 @@ func _apply_pan(pos: Vector2) -> void:
 	_pan_world_pos   = Vector2(cx, cz)
 	_camera.h_offset = _camera_base_h_offset + cx
 	_camera.v_offset = -cz
+
+
+## Scrolls the camera based on how far the drag ghost has entered the edge bands.
+## Called every frame while a HUD drag is active and the camera is zoomed in.
+## Scroll speed ramps linearly from 0 at the inner edge of the band to
+## EDGE_SCROLL_MAX_SPEED at the outer edge; _apply_pan clamps to arena bounds.
+func _apply_edge_scroll(delta: float) -> void:
+	var vp          := get_viewport().get_visible_rect().size
+	var pos         := _hud_drag_last_screen_pos
+
+	# Arena zone boundaries — mirror the margins used in _fit_camera_to_grid.
+	var left_edge   := HUD.LEFT_PANEL_W + HUD.ARENA_MARGIN_PX
+	var right_edge  := vp.x - HUD.RIGHT_PANEL_W - HUD.ARENA_MARGIN_PX
+	var top_edge    := HUD.SCREEN_EDGE_MARGIN
+	var bottom_edge := vp.y - HUD.SCREEN_EDGE_MARGIN
+
+	# Signed scroll factors: negative = pan left/up, positive = pan right/down.
+	var scroll_x := 0.0
+	var scroll_z := 0.0
+
+	if pos.x < left_edge + EDGE_SCROLL_ZONE_PX:
+		scroll_x = -clampf((left_edge + EDGE_SCROLL_ZONE_PX - pos.x) / EDGE_SCROLL_ZONE_PX, 0.0, 1.0)
+	elif pos.x > right_edge - EDGE_SCROLL_ZONE_PX:
+		scroll_x =  clampf((pos.x - (right_edge - EDGE_SCROLL_ZONE_PX)) / EDGE_SCROLL_ZONE_PX, 0.0, 1.0)
+
+	if pos.y < top_edge + EDGE_SCROLL_ZONE_PX:
+		scroll_z = -clampf((top_edge + EDGE_SCROLL_ZONE_PX - pos.y) / EDGE_SCROLL_ZONE_PX, 0.0, 1.0)
+	elif pos.y > bottom_edge - EDGE_SCROLL_ZONE_PX:
+		scroll_z =  clampf((pos.y - (bottom_edge - EDGE_SCROLL_ZONE_PX)) / EDGE_SCROLL_ZONE_PX, 0.0, 1.0)
+
+	if scroll_x == 0.0 and scroll_z == 0.0:
+		return
+
+	_apply_pan(_pan_world_pos + Vector2(scroll_x, scroll_z) * EDGE_SCROLL_MAX_SPEED * delta)
 
 
 ## Resets camera to overview when a run ends.
