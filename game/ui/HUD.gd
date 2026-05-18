@@ -603,11 +603,12 @@ void fragment() {
 	mid_hbox.alignment             = BoxContainer.ALIGNMENT_CENTER
 	mid_margin.add_child(mid_hbox)
 
-	# Heavily-emboldened Bebas Neue — used for ALL text in this section so that
+	# Lightly-emboldened Bebas Neue — used for ALL text in this section so that
 	# VERTICAL_ALIGNMENT_CENTER produces the same visual offset in every label.
+	# Embolden kept low (0.4) so ×5 and ×10 remain legible at small sizes.
 	var bold_font := FontVariation.new()
 	bold_font.base_font          = UIFonts.header()
-	bold_font.variation_embolden = 1.6
+	bold_font.variation_embolden = 0.4
 
 	# >> send-wave button — dark background with gold border, same 50px height as
 	# the multiplier pill. Text is a Label child (not Button.text) so we can use
@@ -638,13 +639,14 @@ void fragment() {
 	ff_label.offset_bottom = 4
 	ff_label.add_theme_font_override("font", bold_font)
 	ff_label.add_theme_font_size_override("font_size", 44)
-	ff_label.add_theme_color_override("font_color", COLOR_GOLD_BORDER)
+	ff_label.add_theme_color_override("font_color",        COLOR_GOLD_BORDER)
+	ff_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
 	_send_wave_btn.add_child(ff_label)
 
-	# Multiplier pill — gold filled, same 50px height as the >> button.
+	# Multiplier button — gold filled, true square (50×50) matching the >> button height.
 	_multiplier_btn = Button.new()
 	_multiplier_btn.text                  = ""
-	_multiplier_btn.custom_minimum_size   = Vector2(80, 50)
+	_multiplier_btn.custom_minimum_size   = Vector2(50, 50)
 	_multiplier_btn.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	_multiplier_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_apply_toggle_btn_style(_multiplier_btn)
@@ -674,7 +676,8 @@ void fragment() {
 	mult_x_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	mult_x_lbl.add_theme_font_override("font", bold_font)
 	mult_x_lbl.add_theme_font_size_override("font_size", 32)
-	mult_x_lbl.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
+	mult_x_lbl.add_theme_color_override("font_color",        COLOR_GOLD_TEXT)
+	mult_x_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
 	mult_hbox.add_child(mult_x_lbl)
 
 	_multiplier_label = Label.new()
@@ -684,7 +687,8 @@ void fragment() {
 	_multiplier_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	_multiplier_label.add_theme_font_override("font", bold_font)
 	_multiplier_label.add_theme_font_size_override("font_size", 28)
-	_multiplier_label.add_theme_color_override("font_color", COLOR_GOLD_TEXT)
+	_multiplier_label.add_theme_color_override("font_color",        COLOR_GOLD_TEXT)
+	_multiplier_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
 	mult_hbox.add_child(_multiplier_label)
 
 	# Bottom — reward bar. SIZE_SHRINK_CENTER so it takes only its fixed height;
