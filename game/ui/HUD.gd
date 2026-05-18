@@ -1929,6 +1929,7 @@ func _build_boost_row(parent: VBoxContainer, type: int) -> Control:
 	boost_preview.set_script(BoostUnit)
 	boost_preview.initialize_preview(type as BoostUnit.BoostType)
 	svp.add_child(boost_preview)
+	boost_preview.call_deferred("hide_range_indicator")
 
 	var svc := SubViewportContainer.new()
 	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1968,6 +1969,7 @@ func _build_floating_boost_icon(parent: Control, type: int) -> Control:
 	boost_preview.set_script(BoostUnit)
 	boost_preview.initialize_preview(type as BoostUnit.BoostType)
 	svp.add_child(boost_preview)
+	boost_preview.call_deferred("hide_range_indicator")
 
 	var svc := SubViewportContainer.new()
 	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
