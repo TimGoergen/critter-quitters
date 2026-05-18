@@ -516,6 +516,23 @@ func get_type_name() -> String:
 		TrapType.BAIT_STATION:       return "Bait Station"
 	return "Unknown"
 
+## Short description shown in the upgrade panel.
+func get_description() -> String:
+	match _trap_type:
+		TrapType.SNAP_TRAP:
+			return "Targets the nearest pest in range. Fast fire rate, low damage. Can hit flying pests."
+		TrapType.ZAPPER:
+			return "Targets the pest farthest along the path. Slow rate, high damage. Cannot hit flying pests."
+		TrapType.FOGGER:
+			return "Fires an expanding cloud that hits all pests from closest to farthest. Cannot hit flying pests."
+		TrapType.GLUE_BOARD:
+			return "Continuously slows every pest inside its range. Passive — no firing."
+		TrapType.FLY_STRIP_LAUNCHER:
+			return "Targets flying pests only. Releases a sticky cloud on impact that slows and damages."
+		TrapType.BAIT_STATION:
+			return "Passable by enemies. Pulses poison onto every pest in range, dealing damage over time."
+	return ""
+
 ## Returns the Bug Bucks cost to place this trap.
 func get_cost() -> int:
 	return _cost

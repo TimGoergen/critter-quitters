@@ -24,6 +24,7 @@ const BoostUnit = preload("res://boosts/BoostUnit.gd")
 const PADDING:    float = 10.0
 const BORDER_W:   float = 2.0
 const STAT_ROW_H: float = 100.0
+const DESC_H:     float = 52.0
 
 # Theme colors — derived from the boost's identity color at initialize time.
 var COLOR_BG:                  Color
@@ -103,10 +104,10 @@ func _build_ui() -> void:
 	var vp      := get_viewport().get_visible_rect().size
 	var panel_w := maxf(360.0, vp.x * 0.50)
 
-	# Height: header + 2 or 3 stat rows + optional capacity bar + bottom padding.
+	# Height: header + description + 2 or 3 stat rows + optional capacity bar + bottom padding.
 	var row_count    := 3 if _boost.has_stat_c() else 2
 	var extra_h      := 36.0 if _is_perishable() else 0.0
-	var panel_h      := PADDING + 74.0 + (STAT_ROW_H + 8.0) * (row_count - 1) + STAT_ROW_H + extra_h + PADDING
+	var panel_h      := PADDING + 74.0 + DESC_H + 8.0 + (STAT_ROW_H + 8.0) * (row_count - 1) + STAT_ROW_H + extra_h + PADDING
 
 	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
 	var px       := arena_cx - panel_w * 0.5
@@ -190,6 +191,19 @@ func _build_ui() -> void:
 	header.add_child(btn_close)
 
 	y += 74.0
+
+	# --- Description label ---
+	var lbl_desc := Label.new()
+	lbl_desc.position      = Vector2(PADDING, y)
+	lbl_desc.size          = Vector2(inner_w, DESC_H)
+	lbl_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_ARBITRARY
+	lbl_desc.add_theme_font_override("font", UIFonts.primary())
+	lbl_desc.add_theme_font_size_override("font_size", 18)
+	lbl_desc.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	lbl_desc.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	lbl_desc.text          = _boost.get_description()
+	_bg.add_child(lbl_desc)
+	y += DESC_H + 8.0
 
 	# Stat rows
 	_rng_row = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0

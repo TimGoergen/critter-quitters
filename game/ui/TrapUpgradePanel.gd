@@ -27,6 +27,8 @@ const BORDER_W:   float = 2.0
 # Stat rows double as upgrade buttons — taller than the old separate buttons
 # so they work well as touch targets in their own right.
 const STAT_ROW_H: float = 100.0
+# Height reserved for the description label block between the header and stat rows.
+const DESC_H:     float = 52.0
 
 # Size of the trap thumbnail in the header.
 const HEADER_ICON_RENDER:  float = 90.0   # SubViewport pixel resolution
@@ -114,8 +116,8 @@ func initialize(trap: Node) -> void:
 func _build_ui() -> void:
 	var vp      := get_viewport().get_visible_rect().size
 	var panel_w := maxf(360.0, vp.x * 0.50)
-	# Height is content-driven: top padding + header gap + three stat rows + bottom padding.
-	var panel_h := PADDING + 74.0 + (STAT_ROW_H + 8.0) * 2.0 + STAT_ROW_H + PADDING
+	# Height: top padding + header + description block + three stat rows + bottom padding.
+	var panel_h := PADDING + 74.0 + DESC_H + 8.0 + (STAT_ROW_H + 8.0) * 2.0 + STAT_ROW_H + PADDING
 
 	# Centre the panel in the arena zone (the space between the two HUD panels).
 	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
@@ -214,6 +216,19 @@ func _build_ui() -> void:
 	header.add_child(btn_close)
 
 	y += 74.0
+
+	# --- Description label ---
+	var lbl_desc := Label.new()
+	lbl_desc.position      = Vector2(PADDING, y)
+	lbl_desc.size          = Vector2(inner_w, DESC_H)
+	lbl_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_ARBITRARY
+	lbl_desc.add_theme_font_override("font", UIFonts.primary())
+	lbl_desc.add_theme_font_size_override("font_size", 18)
+	lbl_desc.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	lbl_desc.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	lbl_desc.text          = _trap.get_description()
+	_bg.add_child(lbl_desc)
+	y += DESC_H + 8.0
 
 	# --- Stat rows: each row IS the upgrade button for that stat ---
 	_dmg_row  = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0

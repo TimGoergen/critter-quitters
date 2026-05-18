@@ -478,6 +478,21 @@ func get_type_name() -> String:
 		BoostType.QUARANTINE_MARKER:   return "Quarantine Marker"
 	return "Unknown"
 
+## Short description shown in the upgrade panel.
+func get_description() -> String:
+	match _boost_type:
+		BoostType.PHEROMONE_DISPENSER:
+			return "Increases damage dealt by all traps within its aura."
+		BoostType.COMPRESSOR:
+			return "Increases the fire rate of all traps within its aura."
+		BoostType.CASH_REGISTER:
+			return "Earns Bug Bucks each wave and pays a bonus per kill inside its aura."
+		BoostType.AIR_FRESHENER:
+			return "Absorbs infestation from pests that escape through its aura. Perishable — has finite capacity."
+		BoostType.QUARANTINE_MARKER:
+			return "Restores infestation for every kill inside its aura. Perishable — has finite capacity."
+	return ""
+
 func get_cost() -> int:
 	return _cost
 
