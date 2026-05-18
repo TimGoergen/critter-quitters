@@ -164,9 +164,10 @@ const PINCH_THRESHOLD_PX: float = 40.0
 var _drag_place_preview: Node3D  = null
 var _drag_place_anchor:  Vector2i = Vector2i(-1, -1)
 
-# The placed trap whose range indicator is shown while the preview hovers over it.
-# Cleared when the preview moves away or is released.
-var _placement_hover_trap: Node = null
+# The placed trap or boost whose range indicator is shown while the preview hovers
+# over it. Cleared when the preview moves away or is released.
+var _placement_hover_trap:  Node = null
+var _placement_hover_boost: Node = null
 
 # True while the HUD is driving a drag-and-drop placement gesture.
 # When set, Arena's own pointer state machine stays idle and placement
@@ -449,15 +450,18 @@ func _update_drag_preview(screen_pos: Vector2) -> void:
 	_drag_place_preview.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 
 	# When placement is invalid, suppress the preview's range circle and surface
-	# any blocked trap's range indicator so the player can see the conflict.
-	# Boost previews have no range indicator node, so skip this block for them.
-	if not valid and not _hud_drag_is_boost:
+	# the blocking trap or boost's range indicator so the player can see the conflict.
+	if not valid:
 		_drag_place_preview.hide_range_indicator()
 		var blocked_trap := _find_trap_at_cells(cells)
 		if blocked_trap != null:
-			# dimmed=true: gray tint distinguishes this existing trap's range from the pending placement's white circle
+			# dimmed=true: gray tint distinguishes the existing unit's range from the placement preview's white circle
 			blocked_trap.show_range_indicator(true)
 			_placement_hover_trap = blocked_trap
+		var blocked_boost := _find_boost_at_cells(cells)
+		if blocked_boost != null:
+			blocked_boost.show_range_indicator(true)
+			_placement_hover_boost = blocked_boost
 
 
 ## Places a trap at the last previewed anchor and frees the preview.
@@ -702,12 +706,26 @@ func _find_trap_at_cells(cells: Array[Vector2i]) -> Node:
 	return null
 
 
-## Hides the range indicator on any trap that was shown during an invalid placement
-## hover, then clears the reference.
+## Returns the placed BoostUnit node whose footprint contains any of the given cells,
+## or null if no placed boost occupies those cells.
+func _find_boost_at_cells(cells: Array[Vector2i]) -> Node:
+	for cell in cells:
+		if _boost_anchors.has(cell):
+			var anchor: Vector2i = _boost_anchors[cell]
+			if _boost_nodes.has(anchor):
+				return _boost_nodes[anchor]
+	return null
+
+
+## Hides the range indicator on any trap or boost that was shown during an invalid
+## placement hover, then clears both references.
 func _release_placement_hover_trap() -> void:
 	if _placement_hover_trap != null and is_instance_valid(_placement_hover_trap):
 		_placement_hover_trap.hide_range_indicator()
 	_placement_hover_trap = null
+	if _placement_hover_boost != null and is_instance_valid(_placement_hover_boost):
+		_placement_hover_boost.hide_range_indicator()
+	_placement_hover_boost = null
 
 
 func _try_place_trap(anchor: Vector2i) -> bool:

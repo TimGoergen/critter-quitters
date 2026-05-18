@@ -146,6 +146,16 @@ var _restore_per_kill: float = 0.0
 
 var _base_color:   Color                     = Color.WHITE
 
+# When true, this node is a visual-only placement preview: no aura logic runs.
+# Set by initialize_preview() before the node enters the tree.
+var _is_preview: bool = false
+
+# Range indicator shown during placement and when the upgrade panel is open.
+var _indicator_pinned: bool              = false
+var _range_indicator:  Node3D           = null
+var _range_fill_mat:   StandardMaterial3D = null
+var _range_ring_mat:   StandardMaterial3D = null
+
 # Star display — one Label3D per possible star (max 3), mirrors Trap._star_labels.
 var _star_labels:  Array[Label3D]            = []
 
@@ -161,6 +171,7 @@ var _shadow_mat:   ShaderMaterial            = null
 ## Lightweight preview-only initializer used by the HUD icon SubViewport.
 ## Passes empty collections so no aura or callback logic runs.
 func initialize_preview(boost_type: BoostType) -> void:
+	_is_preview = true
 	initialize(boost_type, [], {})
 
 
@@ -195,6 +206,7 @@ func initialize(boost_type: BoostType, active_enemies: Array, trap_nodes: Dictio
 
 	_spawn_visual()
 	_spawn_star_display()
+	stats_changed.connect(_rebuild_range_indicator)
 	stats_changed.connect(_update_star_display)
 
 
@@ -206,6 +218,12 @@ func _process(_delta: float) -> void:
 	match _boost_type:
 		BoostType.PHEROMONE_DISPENSER, BoostType.COMPRESSOR:
 			_update_trap_aura()
+
+
+func _ready() -> void:
+	_spawn_range_indicator()
+	if _is_preview and _range_indicator != null:
+		_range_indicator.visible = true
 
 
 func _exit_tree() -> void:
@@ -491,6 +509,119 @@ func get_capacity_fraction() -> float:
 	if _remaining_capacity < 0.0:
 		return 1.0
 	return _remaining_capacity / _max_capacity if _max_capacity > 0.0 else 0.0
+
+
+# ---------------------------------------------------------------------------
+# Range indicator — mirrors Trap._spawn_range_indicator / show_range_indicator
+# ---------------------------------------------------------------------------
+
+## Shows the range indicator. Called by Arena when a placement preview hovers
+## over this Boost (dimmed=true) or when the upgrade panel is open (dimmed=false).
+func show_range_indicator(dimmed: bool = false) -> void:
+	_indicator_pinned = true
+	if _range_indicator != null:
+		_range_indicator.visible = true
+	_set_range_indicator_dimmed(dimmed)
+
+
+## Hides the range indicator. Called by Arena when the placement preview moves away.
+func hide_range_indicator() -> void:
+	_indicator_pinned = false
+	if _range_indicator != null:
+		_range_indicator.visible = false
+	_set_range_indicator_dimmed(false)
+
+
+## Applies or removes the gray tint on the range indicator materials.
+func _set_range_indicator_dimmed(dimmed: bool) -> void:
+	if _range_fill_mat == null or _range_ring_mat == null:
+		return
+	var tint := Color(0.50, 0.50, 0.50) if dimmed else Color(1.0, 1.0, 1.0)
+	_range_fill_mat.albedo_color = Color(tint.r, tint.g, tint.b,
+		_range_fill_mat.albedo_color.a)
+	_range_ring_mat.albedo_color = Color(tint.r, tint.g, tint.b,
+		_range_ring_mat.albedo_color.a)
+
+
+## Rebuilds the range indicator after a Range upgrade changes _range.
+func _rebuild_range_indicator() -> void:
+	if _range_indicator != null:
+		_range_indicator.queue_free()
+		_range_indicator = null
+	_spawn_range_indicator()
+	if _range_indicator != null:
+		_range_indicator.visible = _indicator_pinned
+
+
+## Creates a flat filled disc and outline ring at ground level to show boost range.
+## Hidden by default. Preview instances show it immediately with higher opacity so
+## the aura circle reads clearly while the player is choosing a placement cell.
+func _spawn_range_indicator() -> void:
+	_range_indicator            = Node3D.new()
+	_range_indicator.position.y = 0.02
+	_range_indicator.visible    = false
+
+	var fill_alpha := 0.12 if _is_preview else 0.025
+	var ring_alpha := 0.90 if _is_preview else 0.55
+
+	# Filled disc
+	var fill_mi              := MeshInstance3D.new()
+	var fill_mesh            := CylinderMesh.new()
+	fill_mesh.top_radius      = _range
+	fill_mesh.bottom_radius   = _range
+	fill_mesh.height          = 0.001
+	fill_mesh.radial_segments = 64
+	_range_fill_mat             = StandardMaterial3D.new()
+	_range_fill_mat.albedo_color = Color(1.0, 1.0, 1.0, fill_alpha)
+	_range_fill_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_range_fill_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	fill_mi.mesh              = fill_mesh
+	fill_mi.material_override = _range_fill_mat
+	_range_indicator.add_child(fill_mi)
+
+	# Outline ring
+	var ring_mi              := MeshInstance3D.new()
+	ring_mi.mesh              = _make_ring_mesh(_range, 0.10)
+	_range_ring_mat             = StandardMaterial3D.new()
+	_range_ring_mat.albedo_color = Color(1.0, 1.0, 1.0, ring_alpha)
+	_range_ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	_range_ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	ring_mi.material_override = _range_ring_mat
+	_range_indicator.add_child(ring_mi)
+
+	add_child(_range_indicator)
+
+
+## Builds a flat triangulated annulus (hollow disc) at the given outer radius and ring width.
+## Mirrors Trap._make_ring_mesh().
+func _make_ring_mesh(radius: float, width: float) -> ArrayMesh:
+	var inner    := radius - width
+	var segments := 64
+	var verts    := PackedVector3Array()
+	var indices  := PackedInt32Array()
+
+	for i in range(segments):
+		var angle := TAU * float(i) / float(segments)
+		var c     := cos(angle)
+		var s     := sin(angle)
+		verts.append(Vector3(c * inner,  0.0, s * inner))
+		verts.append(Vector3(c * radius, 0.0, s * radius))
+
+	for i in range(segments):
+		var nx := (i + 1) % segments
+		var a  := i * 2
+		var b  := i * 2 + 1
+		var c  := nx * 2
+		var d  := nx * 2 + 1
+		indices.append_array([a, b, d, a, d, c])
+
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+	arrays[Mesh.ARRAY_INDEX]  = indices
+	var mesh := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+	return mesh
 
 
 # ---------------------------------------------------------------------------
