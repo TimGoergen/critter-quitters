@@ -77,6 +77,14 @@ const UPGRADE_DAMAGE_FACTOR:    float = 0.20  # +20% of base damage per level
 const UPGRADE_RANGE_FACTOR:     float = 0.10  # +10% of base range per level
 const UPGRADE_FIRE_RATE_FACTOR: float = 0.08  # −8% of base cooldown per level (faster shots)
 
+## Critical hit constants. Crit chance defaults to 0.0 (no crits) so the stats
+## are present on every trap but dormant until the player upgrades them.
+## On a successful crit roll the trap deals damage × (1 + crit_damage_bonus).
+const CRIT_CHANCE_BASE:           float = 0.00  # 0% — dormant by default
+const CRIT_DAMAGE_BONUS_BASE:     float = 0.25  # 25% extra on a crit
+const UPGRADE_CRIT_CHANCE_PER_LEVEL: float = 0.02   # +2% per level
+const UPGRADE_CRIT_DAMAGE_PER_LEVEL: float = 0.25   # +25% per level
+
 ## Glue Board adhesion strength at each damage upgrade level (index = _damage_level).
 ## Values are slow factors: 0.0 = no slow, 1.0 = fully stopped.
 ## Defined as an explicit table because the intended values don't fit the shared
@@ -157,6 +165,12 @@ var _cost:     int             = 0
 var _damage_level: int = 0
 var _range_level:  int = 0
 var _rate_level:   int = 0   # always stays 0 for passive traps
+
+# Critical hit upgrade state.
+var _crit_chance:       float = 0.0
+var _crit_damage_bonus: float = 0.25
+var _crit_chance_level: int   = 0
+var _crit_damage_level: int   = 0
 
 # Set to true once the full-upgrade bonus has been applied, so it only fires once.
 var _bonus_applied: bool = false
@@ -298,6 +312,9 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	_base_range    = _range
 	_base_cooldown = _cooldown
 
+	_crit_chance      = CRIT_CHANCE_BASE
+	_crit_damage_bonus = CRIT_DAMAGE_BONUS_BASE
+
 	if _trap_type == TrapType.FLY_STRIP_LAUNCHER:
 		_fly_strip_adhesion       = stats.get("adhesion", 0.30)
 		_fly_strip_cloud_duration = stats.get("cloud_duration", 3.0)
@@ -367,6 +384,16 @@ func get_duration_upgrade_cost() -> int:
 		return 0
 	return UPGRADE_COSTS[_trap_type][_duration_level]
 
+func get_crit_chance_upgrade_cost() -> int:
+	if _crit_chance_level >= MAX_UPGRADE_LEVEL:
+		return 0
+	return UPGRADE_COSTS[_trap_type][_crit_chance_level]
+
+func get_crit_damage_upgrade_cost() -> int:
+	if _crit_damage_level >= MAX_UPGRADE_LEVEL:
+		return 0
+	return UPGRADE_COSTS[_trap_type][_crit_damage_level]
+
 
 # ---------------------------------------------------------------------------
 # Upgrade — stat previews
@@ -419,6 +446,14 @@ func get_duration_after_upgrade() -> float:
 		return BAIT_POISON_DURATION_LEVELS[mini(_duration_level + 1, MAX_UPGRADE_LEVEL)]
 	return GLUE_DURATION_LEVELS[mini(_duration_level + 1, MAX_UPGRADE_LEVEL)]
 
+## Crit chance value after the next crit chance upgrade.
+func get_crit_chance_after_upgrade() -> float:
+	return _crit_chance + UPGRADE_CRIT_CHANCE_PER_LEVEL
+
+## Crit damage bonus after the next crit damage upgrade.
+func get_crit_damage_after_upgrade() -> float:
+	return _crit_damage_bonus + UPGRADE_CRIT_DAMAGE_PER_LEVEL
+
 
 # ---------------------------------------------------------------------------
 # Upgrade — apply
@@ -470,6 +505,20 @@ func apply_duration_upgrade() -> void:
 	_check_full_upgrade_bonus()
 	stats_changed.emit()
 
+## Increases crit chance by UPGRADE_CRIT_CHANCE_PER_LEVEL. Only call when not maxed.
+func apply_crit_chance_upgrade() -> void:
+	_crit_chance += UPGRADE_CRIT_CHANCE_PER_LEVEL
+	_crit_chance_level += 1
+	_check_full_upgrade_bonus()
+	stats_changed.emit()
+
+## Increases crit damage bonus by UPGRADE_CRIT_DAMAGE_PER_LEVEL. Only call when not maxed.
+func apply_crit_damage_upgrade() -> void:
+	_crit_damage_bonus += UPGRADE_CRIT_DAMAGE_PER_LEVEL
+	_crit_damage_level += 1
+	_check_full_upgrade_bonus()
+	stats_changed.emit()
+
 
 # ---------------------------------------------------------------------------
 # Upgrade — accessors
@@ -499,6 +548,24 @@ func get_duration_level() -> int:
 func is_duration_maxed() -> bool:
 	return _duration_level >= MAX_UPGRADE_LEVEL
 
+func get_crit_chance() -> float:
+	return _crit_chance
+
+func get_crit_damage_bonus() -> float:
+	return _crit_damage_bonus
+
+func get_crit_chance_level() -> int:
+	return _crit_chance_level
+
+func get_crit_damage_level() -> int:
+	return _crit_damage_level
+
+func is_crit_chance_maxed() -> bool:
+	return _crit_chance_level >= MAX_UPGRADE_LEVEL
+
+func is_crit_damage_maxed() -> bool:
+	return _crit_damage_level >= MAX_UPGRADE_LEVEL
+
 ## Glue Board — slow duration in seconds. Bait Station — poison duration in seconds.
 func get_duration() -> float:
 	if _trap_type == TrapType.BAIT_STATION:
@@ -506,12 +573,15 @@ func get_duration() -> float:
 	return _slow_duration
 
 ## True when every upgradeable stat is at MAX_UPGRADE_LEVEL.
+## All traps now have 5 upgradeable stats: Damage, Range, Fire Rate / Duration, Crit Chance, Crit Damage.
 func is_fully_upgraded() -> bool:
+	if not (is_damage_maxed() and is_range_maxed() and is_crit_chance_maxed() and is_crit_damage_maxed()):
+		return false
 	match _trap_type:
 		TrapType.GLUE_BOARD, TrapType.BAIT_STATION:
-			return is_damage_maxed() and is_range_maxed() and is_duration_maxed()
+			return is_duration_maxed()
 		_:
-			return is_damage_maxed() and is_range_maxed() and is_rate_maxed()
+			return is_rate_maxed()
 
 func get_damage() -> float:
 	return _damage
@@ -604,8 +674,10 @@ func get_adhesion_after_upgrade_pct() -> float:
 ## Returns how many stats are currently at MAX_UPGRADE_LEVEL.
 func get_maxed_stat_count() -> int:
 	var count := 0
-	if is_damage_maxed(): count += 1
-	if is_range_maxed():  count += 1
+	if is_damage_maxed():      count += 1
+	if is_range_maxed():       count += 1
+	if is_crit_chance_maxed(): count += 1
+	if is_crit_damage_maxed(): count += 1
 	match _trap_type:
 		TrapType.GLUE_BOARD, TrapType.BAIT_STATION:
 			if is_duration_maxed(): count += 1
@@ -614,9 +686,9 @@ func get_maxed_stat_count() -> int:
 	return count
 
 ## Returns the total number of independently upgradeable stats for this trap.
-## All trap types have 3: active traps upgrade Fire Rate; Glue Board upgrades Duration.
+## All trap types have 5: Damage, Range, Fire Rate / Duration, Crit Chance, Crit Damage.
 func get_total_upgradeable_stats() -> int:
-	return 3
+	return 5
 
 ## Fraction of total spending returned when the trap is sold.
 const SELL_REFUND_FRACTION: float = 0.49
@@ -633,6 +705,10 @@ func get_sell_value() -> int:
 	for lvl in range(_rate_level):
 		total_spent += UPGRADE_COSTS[_trap_type][lvl]
 	for lvl in range(_duration_level):
+		total_spent += UPGRADE_COSTS[_trap_type][lvl]
+	for lvl in range(_crit_chance_level):
+		total_spent += UPGRADE_COSTS[_trap_type][lvl]
+	for lvl in range(_crit_damage_level):
 		total_spent += UPGRADE_COSTS[_trap_type][lvl]
 	return int(total_spent * SELL_REFUND_FRACTION)
 
@@ -667,7 +743,8 @@ func _process(delta: float) -> void:
 	if _trap_type == TrapType.FOGGER:
 		did_fire = _fire_fogger()
 		if did_fire:
-			aoe_fired.emit(global_position, _range, _damage * _damage_multiplier, _active_enemies)
+			# One crit roll per burst covers all pests caught in the cloud.
+			aoe_fired.emit(global_position, _range, _roll_damage(_damage * _damage_multiplier), _active_enemies)
 			_play_fogger_animation()
 			_active_fog_batches += 1
 			var expire := FogCloud.PARTICLE_LIFETIME * 2.0 + 0.20
@@ -679,8 +756,9 @@ func _process(delta: float) -> void:
 		did_fire = fly_target != null
 		if did_fire:
 			# Cosmetic projectile toward the nearest flying enemy; cloud handles all damage.
+			# One crit roll per cloud launch so the entire cloud benefits or doesn't.
 			fired.emit(global_position, fly_target.global_position, fly_target, 0.0, _trap_type)
-			fly_strip_fired.emit(global_position, _range, _damage * _damage_multiplier,
+			fly_strip_fired.emit(global_position, _range, _roll_damage(_damage * _damage_multiplier),
 				_fly_strip_adhesion, _fly_strip_cloud_duration, _active_enemies)
 			_play_fly_strip_animation()
 			_active_fly_strip_batches += 1
@@ -692,7 +770,7 @@ func _process(delta: float) -> void:
 		var target := _find_target()
 		if target != null:
 			fired.emit(global_position, target.global_position, target,
-				_damage * _damage_multiplier, _trap_type)
+				_roll_damage(_damage * _damage_multiplier), _trap_type)
 			did_fire = true
 			if _trap_type == TrapType.SNAP_TRAP:
 				_play_snap_animation()
@@ -819,7 +897,8 @@ func _update_bait_station(delta: float) -> void:
 			continue   # Bait Station only affects ground pests
 		if _xz_distance(enemy.global_position) > _range:
 			continue
-		enemy.take_damage(_damage * _damage_multiplier, Color(0.72, 0.42, 0.08))
+		# Crit roll applies to the burst damage only; poison tick rate is unaffected.
+		enemy.take_damage(_roll_damage(_damage * _damage_multiplier), Color(0.72, 0.42, 0.08))
 		enemy.apply_poison(_bait_poison_damage_per_tick, _bait_poison_duration, _bait_poison_tick_rate)
 		hit_any = true
 	if hit_any:
@@ -916,6 +995,15 @@ func _xz_distance(world_pos: Vector3) -> float:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+## Rolls a critical hit check and returns the appropriately scaled damage.
+## Returns base_damage × (1 + crit_damage_bonus) on a successful roll, or
+## base_damage unchanged if the roll fails or crit chance is zero.
+func _roll_damage(base_damage: float) -> float:
+	if _crit_chance > 0.0 and randf() < _crit_chance:
+		return base_damage * (1.0 + _crit_damage_bonus)
+	return base_damage
+
 
 ## Called after each upgrade. If all stats are now maxed and the bonus has not
 ## yet been applied, boosts every stat by 7.5% as a reward for full investment.

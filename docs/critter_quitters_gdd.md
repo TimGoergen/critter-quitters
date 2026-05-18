@@ -1,6 +1,6 @@
 ﻿# **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.30 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
+**Version:** Draft v0.31 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
 
 ---
 
@@ -38,6 +38,7 @@
 | v0.28 | Phase 6 (Sound) marked complete. Remaining audio assets (music, enemy sounds, UI sounds) deferred to post-roadmap cleanup checklist. New Phase 7 (Define New Traps, Enemies, and Boosts) inserted as a design phase before implementation begins. Previous phases 7–10 renumbered to 8–11. |
 | v0.29 | Phase 7 design complete. New traps: Fly Strip Launcher (anti-air, AoE cloud, flying enemies only) and Bait Station (floor trap, passable cells, poison DoT). New enemies: Mosquito (flying, straight-line path), Cockroach Nymph (splits on death), Mouse (steals Bug Bucks on exit, releases Gnats on death). New unit category: Boosts (5 types — Pheromone Dispenser, Compressor, Cash Register, Air Freshener, Quarantine Marker). Boost rules: block pathfinding, 2×2 footprint, store-only availability, cost comparable to traps, custom upgrade stats per Boost. New systems identified: is_flying flag, straight-line path, FLOOR_TRAP cell state, Poisoned status effect, BoostUnit class, aura system, split-on-death spawn, Bug Bucks theft on exit. Section 4b (Boost Roster) added. Future Pass updated. |
 | v0.30 | Phase 9 updated: game mode design added as a first deliverable within the phase (design-first, like Phase 7). Three game modes confirmed: Endless (infinite waves, current dev pattern), Journey (structured Rounds → Levels / Contracts progression), Challenge (pre-defined scenarios with constrained starting conditions — e.g. limited Bug Bucks, restricted trap roster). Section 15 (Game Modes) added. |
+| v0.31 | Critical hit system added. Every trap now carries two new upgradeable stats: Crit Chance (default 0%, +2% per tier) and Crit Damage Bonus (default 25%, +25% per tier). When Crit Chance is greater than zero, each firing rolls against the percentage; on success the damage is multiplied by (1 + Crit Damage Bonus). AoE traps roll once per burst. Glue Board holds the stats for consistency but they have no mechanical effect. Upgrade panel expanded from three to five rows; row height reduced to 80px to keep the panel within the 600px virtual resolution. |
 
 ---
 
@@ -168,14 +169,18 @@ Each trap is a tool in an exterminator's kit.
 
 **Availability:** Not all traps are available at run start. The player selects 2 of 3 randomly offered traps before wave 1. Remaining traps may be unlocked through the store.
 
-**Upgrade system (implemented):** Traps are upgraded directly through the trap context panel. Each placed trap tracks three independent upgrade levels — one per stat (Damage, Range, Fire Rate). Each stat can be upgraded up to 3 times. Two traps of the same type can be independently upgraded.
+**Upgrade system (implemented):** Traps are upgraded directly through the trap context panel. Each placed trap tracks five independent upgrade levels — one per stat (Damage, Range, Fire Rate, Crit Chance, Crit Damage). Each stat can be upgraded up to 3 times. Two traps of the same type can be independently upgraded.
 
-The upgrade panel shows current stat values with per-stat star indicators (e.g. ★★☆) and three upgrade buttons. Each button shows the current value and the value after that upgrade so the choice is informed.
+The upgrade panel shows current stat values with per-stat star indicators (e.g. ★★☆) and five upgrade buttons. Each button shows the current value and the value after that upgrade so the choice is informed.
 
 **Stat increments per upgrade level:**
 - Damage: +25% of base value per level
 - Range: +10% of base value per level
 - Fire Rate: −8% of base cooldown per level (faster shots); minimum cooldown 0.1 s
+- Crit Chance: +2% per level (default 0% — dormant until upgraded)
+- Crit Damage Bonus: +25% per level (default 25%; a crit deals damage × (1 + bonus))
+
+**Critical hit system (implemented):** Every trap carries a Crit Chance and a Crit Damage Bonus stat. By default Crit Chance is 0%, so crits never fire and the stat is dormant. When Crit Chance is upgraded above 0%, each firing rolls randomly against that percentage; on a successful roll the trap's damage output is multiplied by (1 + Crit Damage Bonus). At base values a crit deals 1.25× damage. With all three Crit Damage tiers purchased the bonus reaches 100%, meaning a maxed-out crit deals 2× damage at 6% probability per shot. AoE traps (Fogger, Fly Strip Launcher) roll once per burst, so the entire burst either crits or does not. Passive traps (Glue Board) carry the stats but do not deal discrete damage shots, so upgrading crits on a Glue Board has no mechanical effect — the stats exist for consistency and future design flexibility.
 
 **Upgrade costs** are defined per trap type and per level (values are tuning placeholders):
 

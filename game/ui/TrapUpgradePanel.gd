@@ -24,9 +24,9 @@ const Trap    = preload("res://traps/Trap.gd")
 
 const PADDING:    float = 10.0
 const BORDER_W:   float = 2.0
-# Stat rows double as upgrade buttons — taller than the old separate buttons
-# so they work well as touch targets in their own right.
-const STAT_ROW_H:          float = 100.0
+# Stat rows double as upgrade buttons — 80px keeps all five rows within the 600px
+# virtual viewport height while still hitting the 48px minimum touch target (80 × 0.60).
+const STAT_ROW_H:          float = 80.0
 # Height reserved for the description label block between the header and stat rows.
 const DESC_H:              float = 52.0
 # Active-boost section at the panel bottom (shown only when boosts are in range).
@@ -88,9 +88,11 @@ var _lbl_title:  Label     = null
 
 # Each stat row is a Button containing child labels.
 # Dictionary keys: btn, name, stars, cur, after, cost.
-var _dmg_row:  Dictionary = {}
-var _rng_row:  Dictionary = {}
-var _rate_row: Dictionary = {}
+var _dmg_row:        Dictionary = {}
+var _rng_row:        Dictionary = {}
+var _rate_row:       Dictionary = {}
+var _crit_chance_row: Dictionary = {}
+var _crit_damage_row: Dictionary = {}
 
 var _btn_sell:       Button = null
 var _lbl_sell_value: Label  = null
@@ -126,8 +128,8 @@ func _build_ui() -> void:
 	var boosts:  Array = _trap.get_active_boost_display()
 	var boost_h: float = BOOST_SECTION_LEAD + BOOST_ENTRY_H * boosts.size() if not boosts.is_empty() else 0.0
 
-	# Height: top padding + header + description block + three stat rows + active boosts + bottom padding.
-	var panel_h := PADDING + 74.0 + DESC_H + 8.0 + (STAT_ROW_H + 8.0) * 2.0 + STAT_ROW_H + boost_h + PADDING
+	# Height: top padding + header + description block + five stat rows + active boosts + bottom padding.
+	var panel_h := PADDING + 74.0 + DESC_H + 8.0 + (STAT_ROW_H + 8.0) * 4.0 + STAT_ROW_H + boost_h + PADDING
 
 	# Centre the panel in the arena zone (the space between the two HUD panels).
 	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
@@ -241,13 +243,17 @@ func _build_ui() -> void:
 	y += DESC_H + 8.0
 
 	# --- Stat rows: each row IS the upgrade button for that stat ---
-	_dmg_row  = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
-	_rng_row  = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
-	_rate_row = _build_stat_button_row(y, inner_w)
+	_dmg_row         = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_rng_row         = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_rate_row        = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_crit_chance_row = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_crit_damage_row = _build_stat_button_row(y, inner_w)
 
 	_dmg_row["btn"].pressed.connect(_on_btn_a)
 	_rng_row["btn"].pressed.connect(_on_btn_b)
 	_rate_row["btn"].pressed.connect(_on_btn_c)
+	_crit_chance_row["btn"].pressed.connect(_on_btn_d)
+	_crit_damage_row["btn"].pressed.connect(_on_btn_e)
 
 	# --- Active boosts section ---
 	# Advance y past the last stat row, then draw one compact row per active boost.
@@ -392,6 +398,22 @@ func _refresh() -> void:
 			_trap.is_rate_maxed(), _trap.get_rate_upgrade_cost()
 		)
 
+	# Crit rows — present on every trap type.
+	# "Crit Chance" shows the current hit probability as a percentage.
+	# "Crit Bonus" shows the extra damage multiplier applied on a successful crit.
+	_refresh_stat_row(
+		_crit_chance_row, "Crit Chance", _trap.get_crit_chance_level(),
+		"%.0f%%" % (_trap.get_crit_chance() * 100.0),
+		"+%.0f%%" % ((_trap.get_crit_chance_after_upgrade() - _trap.get_crit_chance()) * 100.0),
+		_trap.is_crit_chance_maxed(), _trap.get_crit_chance_upgrade_cost()
+	)
+	_refresh_stat_row(
+		_crit_damage_row, "Crit Bonus", _trap.get_crit_damage_level(),
+		"%.0f%%" % (_trap.get_crit_damage_bonus() * 100.0),
+		"+%.0f%%" % ((_trap.get_crit_damage_after_upgrade() - _trap.get_crit_damage_bonus()) * 100.0),
+		_trap.is_crit_damage_maxed(), _trap.get_crit_damage_upgrade_cost()
+	)
+
 	# Sell button: keep the refund amount current as upgrades are purchased.
 	if _lbl_sell_value != null:
 		_lbl_sell_value.text = "🪙%d" % _trap.get_sell_value()
@@ -480,6 +502,24 @@ func _on_btn_c() -> void:
 			return
 		_trap.apply_fire_rate_upgrade()
 		AudioManager.play_ui("upgrade")
+
+
+func _on_btn_d() -> void:
+	if _trap.is_crit_chance_maxed():
+		return
+	if not GameState.spend_bug_bucks(_trap.get_crit_chance_upgrade_cost()):
+		return
+	_trap.apply_crit_chance_upgrade()
+	AudioManager.play_ui("upgrade")
+
+
+func _on_btn_e() -> void:
+	if _trap.is_crit_damage_maxed():
+		return
+	if not GameState.spend_bug_bucks(_trap.get_crit_damage_upgrade_cost()):
+		return
+	_trap.apply_crit_damage_upgrade()
+	AudioManager.play_ui("upgrade")
 
 
 func _on_btn_sell() -> void:
