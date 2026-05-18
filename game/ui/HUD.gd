@@ -626,6 +626,10 @@ void fragment() {
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	mid_hbox.add_child(_send_wave_btn)
 
+	var ff_bold_font := FontVariation.new()
+	ff_bold_font.base_font          = UIFonts.header()
+	ff_bold_font.variation_embolden = 1.12
+
 	var ff_label := Label.new()
 	ff_label.text                 = ">>"
 	ff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -641,7 +645,7 @@ void fragment() {
 	ff_label.anchor_bottom = 1.0
 	ff_label.offset_top    = 4
 	ff_label.offset_bottom = 4
-	ff_label.add_theme_font_override("font", bold_font)
+	ff_label.add_theme_font_override("font", ff_bold_font)
 	ff_label.add_theme_font_size_override("font_size", 44)
 	ff_label.add_theme_color_override("font_color",        COLOR_GOLD_BORDER)
 	ff_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
