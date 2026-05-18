@@ -97,13 +97,12 @@ const ROW_H:          float = 72.0     # fixed height for every trap and boost s
 const COLOR_SILVER_BORDER := Color(0.72, 0.72, 0.80, 1.0)
 const SILVER_BORDER_W: float = 4.0    # thickness of the silver panel border lines
 
-const PAUSE_BANNER_H:      float = 40.0
+const PAUSE_BANNER_H:      float = 50.0
 # How many px each side angles inward from the top edge to the bottom edge.
-const PAUSE_BANNER_TAPER:  float = 20.0
-# 25% of the arena width (1280 virtual px minus the two 220px side panels).
-# This is the width of the wide top edge; the bottom edge is 2×TAPER narrower.
-const PAUSE_BANNER_W:      float = (1280.0 - LEFT_PANEL_W - RIGHT_PANEL_W) * 0.25
-const COLOR_PAUSE_BANNER_BG := Color(0.12, 0.12, 0.14, 0.80)  # dark gray, alpha matches upgrade panel
+const PAUSE_BANNER_TAPER:  float = 25.0
+# ~31% of the arena width (25% × 1.25); wide top edge, bottom edge is 2×TAPER narrower.
+const PAUSE_BANNER_W:      float = (1280.0 - LEFT_PANEL_W - RIGHT_PANEL_W) * 0.3125
+const COLOR_PAUSE_BANNER_BG := Color(0.28, 0.16, 0.16, 0.85)  # reddish-gray
 
 # Incoming wave banner — slides up from the bottom during the between-wave countdown.
 # Reverse trapezoid: wide bottom edge flush with the screen, narrow top edge visible.
@@ -871,7 +870,7 @@ func _build_incoming_overlay() -> void:
 	_countdown_seconds_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_seconds_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_countdown_seconds_label.add_theme_font_override("font", UIFonts.header())
-	_countdown_seconds_label.add_theme_font_size_override("font_size", 22)
+	_countdown_seconds_label.add_theme_font_size_override("font_size", 28)
 	_countdown_seconds_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_countdown_seconds_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_countdown_seconds_label.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -1017,7 +1016,7 @@ func _build_pause_banner() -> void:
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	label.add_theme_font_override("font", UIFonts.header())
-	label.add_theme_font_size_override("font_size", 22)
+	label.add_theme_font_size_override("font_size", 28)
 	label.add_theme_color_override("font_color", COLOR_TEXT)
 	label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_pause_banner.add_child(label)
