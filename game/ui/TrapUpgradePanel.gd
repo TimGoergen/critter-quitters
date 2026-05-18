@@ -221,7 +221,7 @@ func _build_ui() -> void:
 	var lbl_desc := Label.new()
 	lbl_desc.position      = Vector2(PADDING, y)
 	lbl_desc.size          = Vector2(inner_w, DESC_H)
-	lbl_desc.autowrap_mode = TextServer.AUTOWRAP_WORD_ARBITRARY
+	lbl_desc.autowrap_mode = 3   # TextServer.AUTOWRAP_WORD_ARBITRARY
 	lbl_desc.add_theme_font_override("font", UIFonts.primary())
 	lbl_desc.add_theme_font_size_override("font_size", 18)
 	lbl_desc.add_theme_color_override("font_color", COLOR_TEXT_DIM)
