@@ -850,7 +850,9 @@ func _open_boost_upgrade_panel(anchor: Vector2i) -> void:
 	panel.sell_requested.connect(_on_sell_boost_requested.bind(anchor))
 	add_child(panel)
 	panel.initialize(_boost_nodes[anchor])
-	_upgrade_panel = panel   # shared slot — _close_upgrade_panel frees it correctly
+	_upgrade_panel  = panel   # shared slot — _close_upgrade_panel frees it correctly
+	_selected_trap  = _boost_nodes[anchor]   # reuse _selected_trap so close logic hides the range circle
+	_selected_trap.show_range_indicator()
 	_show_selected_trap_outline(anchor)
 	_selected_trap_anchor = anchor
 	if _boost_outlines.has(anchor):

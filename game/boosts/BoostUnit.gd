@@ -222,8 +222,15 @@ func _process(_delta: float) -> void:
 
 func _ready() -> void:
 	_spawn_range_indicator()
-	if _is_preview and _range_indicator != null:
-		_range_indicator.visible = true
+	if _is_preview:
+		if _range_indicator != null:
+			_range_indicator.visible = true
+		return
+	# Apply the aura immediately on placement rather than waiting for the first
+	# _process frame — ensures nearby traps are boosted before any panel opens.
+	match _boost_type:
+		BoostType.PHEROMONE_DISPENSER, BoostType.COMPRESSOR:
+			_update_trap_aura()
 
 
 func _exit_tree() -> void:
