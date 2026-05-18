@@ -163,6 +163,10 @@ var _star_labels:  Array[Label3D]            = []
 var _outline_mats: Array[StandardMaterial3D] = []
 var _shadow_mat:   ShaderMaterial            = null
 
+# Arena-decorator nodes: background plate, shadow halo, and footprint outline bars.
+# Populated in _spawn_visual() so hide_decorators() can suppress them for icon previews.
+var _decorator_nodes: Array[Node3D] = []
+
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -554,6 +558,14 @@ func hide_range_indicator() -> void:
 	_set_range_indicator_dimmed(false)
 
 
+## Hides the background plate, shadow halo, and footprint outline bars.
+## Called on icon-only previews (HUD panel, drag overlay) so only the boost model shows,
+## matching the visual treatment applied to trap icons via Trap.hide_decorators().
+func hide_decorators() -> void:
+	for node: Node3D in _decorator_nodes:
+		node.hide()
+
+
 ## Applies or removes the gray tint on the range indicator materials.
 func _set_range_indicator_dimmed(dimmed: bool) -> void:
 	if _range_fill_mat == null or _range_ring_mat == null:
@@ -839,6 +851,7 @@ func _spawn_visual() -> void:
 	_shadow_mat = shadow_mat
 	shadow_mi.position.y           = 0.05 - 0.25
 	add_child(shadow_mi)
+	_decorator_nodes.append(shadow_mi)
 
 	# Background plate — same size as Trap._spawn_background().
 	var bg_plane  := PlaneMesh.new()
@@ -852,6 +865,7 @@ func _spawn_visual() -> void:
 	bg_mi.position.y        = 0.07 - 0.25
 	bg_mi.material_override = bg_mat
 	add_child(bg_mi)
+	_decorator_nodes.append(bg_mi)
 
 	# Footprint outline — four thin bars matching Trap._spawn_footprint_outline().
 	var fp        := Grid.CELL_SIZE * 1.9
@@ -870,6 +884,7 @@ func _spawn_visual() -> void:
 		mi.position          = Vector3(0.0, ol_y, sz)
 		mi.material_override = mat
 		add_child(mi)
+		_decorator_nodes.append(mi)
 
 	for sx: float in [-(fp * 0.5 - thickness * 0.5), fp * 0.5 - thickness * 0.5]:
 		var mat              := _mat(c)
@@ -881,6 +896,7 @@ func _spawn_visual() -> void:
 		mi.position          = Vector3(sx, ol_y, 0.0)
 		mi.material_override = mat
 		add_child(mi)
+		_decorator_nodes.append(mi)
 
 	# Per-type body — each boost gets a distinct procedural shape.
 	match _boost_type:
