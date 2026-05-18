@@ -650,13 +650,28 @@ func _make_ring_mesh(radius: float, width: float) -> ArrayMesh:
 # Aura management (PHEROMONE_DISPENSER + COMPRESSOR)
 # ---------------------------------------------------------------------------
 
+## Returns true if any part of the trap's 2×2 footprint overlaps the boost's range circle.
+## Uses closest-point-on-AABB: clamp the boost center into the trap's bounding box and
+## compare the squared distance to the squared range. This beats a simple center check
+## so traps whose corner falls inside the aura circle still receive the boost.
+func _trap_in_aura_range(trap: Node3D) -> bool:
+	var tc   := trap.global_position
+	var bc   := global_position
+	var half := Grid.CELL_SIZE   # 2×2 footprint → 1-cell half-extent on each axis
+	var cx   := clampf(bc.x, tc.x - half, tc.x + half)
+	var cz   := clampf(bc.z, tc.z - half, tc.z + half)
+	var dx   := bc.x - cx
+	var dz   := bc.z - cz
+	return dx * dx + dz * dz <= _range * _range
+
+
 ## Updates which traps are in aura range and applies / removes the boost effect.
 ## Two-pass pattern: clean up traps that left range, then apply to newly-in-range traps.
 func _update_trap_aura() -> void:
 	# Build the current set of in-range traps from Arena's live trap dictionary.
 	var in_range: Array = []
 	for trap in _trap_nodes.values():
-		if is_instance_valid(trap) and _xz_distance(trap.global_position) <= _range:
+		if is_instance_valid(trap) and _trap_in_aura_range(trap):
 			in_range.append(trap)
 
 	# Remove boost from traps that left range.

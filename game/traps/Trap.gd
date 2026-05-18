@@ -198,6 +198,10 @@ var _indicator_pinned: bool  = false
 # All three labels are pre-spawned; _update_star_display() shows/hides and repositions them.
 var _star_labels: Array[Label3D] = []
 
+# Boost indicator — small diamond shown in the trap's top-right corner whenever at
+# least one boost aura is currently active on this trap.
+var _boost_indicator: Label3D = null
+
 # Upgrade tint — materials updated in _update_star_display() to lerp toward gold.
 var _base_color:   Color                       = Color.WHITE
 var _outline_mats: Array[StandardMaterial3D]   = []
@@ -308,6 +312,7 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 
 	_spawn_visual(stats["color"])
 	_spawn_star_display()
+	_spawn_boost_indicator()
 	stats_changed.connect(_rebuild_range_indicator)
 	stats_changed.connect(_update_star_display)
 	if _trap_type == TrapType.GLUE_BOARD:
@@ -388,6 +393,25 @@ func get_shots_per_sec() -> float:
 func get_shots_per_sec_after_upgrade() -> float:
 	var new_cooldown := maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
 	return 1.0 / new_cooldown
+
+## Effective damage including all active boost multipliers.
+## Use this in the upgrade panel's current-value column so the player sees the actual
+## damage output, not the base value that excludes nearby Pheromone Dispensers.
+func get_effective_damage() -> float:
+	return _damage * _damage_multiplier
+
+## Effective damage the trap would deal after the next damage upgrade, with boosts applied.
+func get_effective_damage_after_upgrade() -> float:
+	return get_damage_after_upgrade() * _damage_multiplier
+
+## Effective fire rate including the fire-rate multiplier from Compressor boosts.
+func get_effective_shots_per_sec() -> float:
+	return (_fire_rate_multiplier / _cooldown) if _cooldown > 0.0 else 0.0
+
+## Effective fire rate after the next fire-rate upgrade, with boosts applied.
+func get_effective_shots_per_sec_after_upgrade() -> float:
+	return _fire_rate_multiplier / maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
+
 
 ## Glue Board / Bait Station — duration value after the next duration upgrade.
 func get_duration_after_upgrade() -> float:
@@ -849,6 +873,8 @@ func _recalculate_multipliers() -> void:
 		fire_rate_bonus += factor
 	_fire_rate_multiplier = 1.0 + fire_rate_bonus
 
+	_update_boost_indicator()
+
 
 ## Returns the enemy in range closest to this trap (used by Snap Trap).
 func _nearest_in_range() -> Node3D:
@@ -985,6 +1011,33 @@ func _update_star_display() -> void:
 	# will take effect naturally when the next pulse finishes and fades back.
 	if _bait_glow_mat != null and not _bait_animating:
 		_bait_glow_mat.set_shader_parameter("opacity", _bait_current_rest_opacity())
+
+
+## Spawns the small diamond Label3D that lights up when at least one boost aura is active.
+## Positioned at the back-right corner of the 2×2 footprint, same height as the stars,
+## so it reads clearly without overlapping the star display at the front.
+func _spawn_boost_indicator() -> void:
+	_boost_indicator            = Label3D.new()
+	_boost_indicator.font       = UIFonts.primary_bold()
+	_boost_indicator.font_size  = 72
+	_boost_indicator.pixel_size = 0.009
+	_boost_indicator.modulate   = Color(1.0, 1.0, 1.0, 1.0)
+	_boost_indicator.outline_size        = 6
+	_boost_indicator.outline_modulate    = Color(0.0, 0.0, 0.0, 0.85)
+	_boost_indicator.billboard           = BaseMaterial3D.BILLBOARD_DISABLED
+	_boost_indicator.no_depth_test       = true
+	_boost_indicator.text                = "◆"
+	_boost_indicator.position            = Vector3(0.72, 0.65, -0.72)
+	_boost_indicator.visible             = false
+	add_child(_boost_indicator)
+
+
+## Shows the boost diamond when any boost source is active; hides it otherwise.
+func _update_boost_indicator() -> void:
+	if _boost_indicator == null:
+		return
+	var boosted := not _damage_boost_sources.is_empty() or not _fire_rate_boost_sources.is_empty()
+	_boost_indicator.visible = boosted
 
 
 ## Shows the range indicator. Called by Arena when a placement preview overlaps this trap,

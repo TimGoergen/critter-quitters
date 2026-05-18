@@ -352,15 +352,15 @@ func _refresh() -> void:
 	elif trap_type == Trap.TrapType.FOGGER:
 		_refresh_stat_row(
 			_dmg_row, "Potency", _trap.get_damage_level(),
-			"%.1f" % _trap.get_damage(),
-			"+%.1f" % (_trap.get_damage_after_upgrade() - _trap.get_damage()),
+			"%.1f" % _trap.get_effective_damage(),
+			"+%.1f" % (_trap.get_effective_damage_after_upgrade() - _trap.get_effective_damage()),
 			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
 		)
 	else:
 		_refresh_stat_row(
 			_dmg_row, "Damage", _trap.get_damage_level(),
-			"%.1f" % _trap.get_damage(),
-			"+%.1f" % (_trap.get_damage_after_upgrade() - _trap.get_damage()),
+			"%.1f" % _trap.get_effective_damage(),
+			"+%.1f" % (_trap.get_effective_damage_after_upgrade() - _trap.get_effective_damage()),
 			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
 		)
 
@@ -387,8 +387,8 @@ func _refresh() -> void:
 		_rate_row["row"].visible = true
 		_refresh_stat_row(
 			_rate_row, "Fire Rate", _trap.get_rate_level(),
-			"%.2f /s" % _trap.get_shots_per_sec(),
-			"+%.2f /s" % (_trap.get_shots_per_sec_after_upgrade() - _trap.get_shots_per_sec()),
+			"%.2f /s" % _trap.get_effective_shots_per_sec(),
+			"+%.2f /s" % (_trap.get_effective_shots_per_sec_after_upgrade() - _trap.get_effective_shots_per_sec()),
 			_trap.is_rate_maxed(), _trap.get_rate_upgrade_cost()
 		)
 
