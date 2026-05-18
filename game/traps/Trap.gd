@@ -1028,8 +1028,8 @@ func _spawn_boost_indicator() -> void:
 	_boost_indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_boost_indicator.billboard           = BaseMaterial3D.BILLBOARD_ENABLED
 	_boost_indicator.no_depth_test       = true
-	_boost_indicator.text                = "◆"
-	_boost_indicator.position            = Vector3(0.0, 1.4, 0.0)
+	_boost_indicator.text                = "✦"   # U+2726 four-pointed star — concave sides
+	_boost_indicator.position            = Vector3(0.75, 1.0, -0.75)
 	_boost_indicator.visible             = false
 	add_child(_boost_indicator)
 
