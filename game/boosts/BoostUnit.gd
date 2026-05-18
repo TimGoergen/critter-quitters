@@ -692,7 +692,10 @@ func _update_trap_aura() -> void:
 		if not is_instance_valid(trap) or not in_range.has(trap):
 			to_release.append(trap)
 	for trap in to_release:
-		_remove_aura_effect(trap)
+		# Guard before the call — Godot 4 enforces the typed parameter at the call
+		# site, so a freed object raises a type error before the body's own check runs.
+		if is_instance_valid(trap):
+			_remove_aura_effect(trap)
 		_aura_traps.erase(trap)
 
 	# Apply boost to newly-entered traps.
@@ -725,7 +728,8 @@ func _remove_aura_effect(trap: Node3D) -> void:
 ## Removes this Boost's effect from all traps in its aura. Called on _exit_tree().
 func _remove_all_aura_effects() -> void:
 	for trap in _aura_traps:
-		_remove_aura_effect(trap)
+		if is_instance_valid(trap):
+			_remove_aura_effect(trap)
 	_aura_traps.clear()
 
 
