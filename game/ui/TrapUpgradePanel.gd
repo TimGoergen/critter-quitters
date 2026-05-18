@@ -26,9 +26,12 @@ const PADDING:    float = 10.0
 const BORDER_W:   float = 2.0
 # Stat rows double as upgrade buttons — taller than the old separate buttons
 # so they work well as touch targets in their own right.
-const STAT_ROW_H: float = 100.0
+const STAT_ROW_H:          float = 100.0
 # Height reserved for the description label block between the header and stat rows.
-const DESC_H:     float = 52.0
+const DESC_H:              float = 52.0
+# Active-boost section at the panel bottom (shown only when boosts are in range).
+const BOOST_SECTION_LEAD:  float = 10.0   # gap + 1px divider before the first entry
+const BOOST_ENTRY_H:       float = 22.0   # height per boost entry row
 
 # Size of the trap thumbnail in the header.
 const HEADER_ICON_RENDER:  float = 90.0   # SubViewport pixel resolution
@@ -116,8 +119,15 @@ func initialize(trap: Node) -> void:
 func _build_ui() -> void:
 	var vp      := get_viewport().get_visible_rect().size
 	var panel_w := maxf(360.0, vp.x * 0.50)
-	# Height: top padding + header + description block + three stat rows + bottom padding.
-	var panel_h := PADDING + 74.0 + DESC_H + 8.0 + (STAT_ROW_H + 8.0) * 2.0 + STAT_ROW_H + PADDING
+
+	# Read active boost entries now so we know how much extra height they need.
+	# Boosts cannot enter or leave range while the panel is open (the game tree is
+	# paused while the upgrade panel is visible), so reading once at build time is safe.
+	var boosts     := _trap.get_active_boost_display()
+	var boost_h    := BOOST_SECTION_LEAD + BOOST_ENTRY_H * boosts.size() if not boosts.is_empty() else 0.0
+
+	# Height: top padding + header + description block + three stat rows + active boosts + bottom padding.
+	var panel_h := PADDING + 74.0 + DESC_H + 8.0 + (STAT_ROW_H + 8.0) * 2.0 + STAT_ROW_H + boost_h + PADDING
 
 	# Centre the panel in the arena zone (the space between the two HUD panels).
 	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
@@ -238,6 +248,12 @@ func _build_ui() -> void:
 	_dmg_row["btn"].pressed.connect(_on_btn_a)
 	_rng_row["btn"].pressed.connect(_on_btn_b)
 	_rate_row["btn"].pressed.connect(_on_btn_c)
+
+	# --- Active boosts section ---
+	# Advance y past the last stat row, then draw one compact row per active boost.
+	y += STAT_ROW_H
+	if not boosts.is_empty():
+		_build_active_boosts_section(y, inner_w, boosts)
 
 
 ## Derives the panel's colour palette from the placed trap's identity colour.
@@ -523,6 +539,51 @@ func _on_bug_bucks_changed(_amount: int) -> void:
 # ---------------------------------------------------------------------------
 # UI helpers
 # ---------------------------------------------------------------------------
+
+## Draws a thin divider followed by one compact row per active boost entry.
+## Each row shows the boost name on the left and the stat effect on the right.
+func _build_active_boosts_section(y: float, inner_w: float, boosts: Array) -> void:
+	# Thin divider — uses the same color as the section dividers above the stat rows.
+	var divider        := ColorRect.new()
+	divider.color       = COLOR_DIVIDER
+	divider.position    = Vector2(PADDING, y + 8.0)
+	divider.size        = Vector2(inner_w, 1.0)
+	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_bg.add_child(divider)
+
+	var entry_y := y + BOOST_SECTION_LEAD
+	for entry: Dictionary in boosts:
+		var row_ctrl              := Control.new()
+		row_ctrl.position          = Vector2(PADDING, entry_y)
+		row_ctrl.size              = Vector2(inner_w, BOOST_ENTRY_H)
+		row_ctrl.mouse_filter      = Control.MOUSE_FILTER_IGNORE
+		_bg.add_child(row_ctrl)
+
+		var lbl_name := Label.new()
+		lbl_name.position             = Vector2(0.0, 0.0)
+		lbl_name.size                 = Vector2(inner_w * 0.65, BOOST_ENTRY_H)
+		lbl_name.text                 = "  • " + entry["name"]   # bullet character
+		lbl_name.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+		lbl_name.add_theme_font_override("font", UIFonts.primary())
+		lbl_name.add_theme_font_size_override("font_size", 16)
+		lbl_name.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+		lbl_name.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+		row_ctrl.add_child(lbl_name)
+
+		var lbl_detail := Label.new()
+		lbl_detail.position              = Vector2(inner_w * 0.65, 0.0)
+		lbl_detail.size                  = Vector2(inner_w * 0.35, BOOST_ENTRY_H)
+		lbl_detail.text                  = entry["detail"]
+		lbl_detail.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
+		lbl_detail.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+		lbl_detail.add_theme_font_override("font", UIFonts.primary_bold())
+		lbl_detail.add_theme_font_size_override("font_size", 16)
+		lbl_detail.add_theme_color_override("font_color", COLOR_DELTA_AFFORDABLE)
+		lbl_detail.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+		row_ctrl.add_child(lbl_detail)
+
+		entry_y += BOOST_ENTRY_H
+
 
 ## Builds one stat row: a full-width background panel with an inset upgrade button
 ## overlaid on the right portion.

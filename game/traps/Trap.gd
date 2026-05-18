@@ -533,6 +533,33 @@ func get_description() -> String:
 			return "Passable by enemies. Pulses poison onto every pest in range, dealing damage over time."
 	return ""
 
+## Returns a list of active boost effects currently amplifying this trap.
+## Entries are aggregated by boost name so two Pheromone Dispensers appear
+## as one entry with their combined bonus, not as two separate lines.
+## Each entry is a Dictionary: { "name": String, "detail": String }
+## Used by TrapUpgradePanel to display which boosts are in range.
+func get_active_boost_display() -> Array:
+	var result: Array = []
+
+	var dmg_totals: Dictionary = {}
+	for source in _damage_boost_sources:
+		if is_instance_valid(source):
+			var n: String = source.get_type_name()
+			dmg_totals[n] = dmg_totals.get(n, 0.0) + _damage_boost_sources[source]
+	for n: String in dmg_totals:
+		result.append({ "name": n, "detail": "+%d%% damage" % int(dmg_totals[n] * 100) })
+
+	var rate_totals: Dictionary = {}
+	for source in _fire_rate_boost_sources:
+		if is_instance_valid(source):
+			var n: String = source.get_type_name()
+			rate_totals[n] = rate_totals.get(n, 0.0) + _fire_rate_boost_sources[source]
+	for n: String in rate_totals:
+		result.append({ "name": n, "detail": "+%d%% fire rate" % int(rate_totals[n] * 100) })
+
+	return result
+
+
 ## Returns the Bug Bucks cost to place this trap.
 func get_cost() -> int:
 	return _cost
