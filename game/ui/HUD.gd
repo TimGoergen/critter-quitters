@@ -608,7 +608,7 @@ void fragment() {
 	# Embolden kept low (0.4) so ×5 and ×10 remain legible at small sizes.
 	var bold_font := FontVariation.new()
 	bold_font.base_font          = UIFonts.header()
-	bold_font.variation_embolden = 0.4
+	bold_font.variation_embolden = 0.8
 
 	# >> send-wave button — dark background with gold border, same 50px height as
 	# the multiplier pill. Text is a Label child (not Button.text) so we can use
