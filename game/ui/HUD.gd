@@ -117,6 +117,7 @@ var _countdown_seconds_label: Label
 var _send_wave_btn:           Button           # ">>" fast-forward button inside the send-wave panel
 var _multiplier_btn:          Button           # small gold button cycling ×1 → ×5 → ×10
 var _multiplier_label:        Label
+var _send_wave_header_label:  Label            # "SEND 1 WAVE" / "SEND 5 WAVES" — updates with multiplier
 var _send_wave_reward_label:  Label            # bucks amount overlaid on the reward bar
 var _reward_bar_fill_rect:    Panel            # green bar shrinking right→left as reward depletes
 var _reward_bar_container:    Control          # bottom-third container; used to size the fill rect
@@ -200,11 +201,14 @@ var _drag_tween:     Tween   = null
 
 # SubViewport render resolution for trap preview icons (panel and floating).
 const DRAG_ICON_SIZE: float = 90.0
-# Screen-space size of the floating drag icon.  Matches the panel icon width.
-const DRAG_ICON_DISPLAY: float = 72.0
-# Offset from the cursor/finger to the floating icon center.
-# Above-and-left so the placement zone cell is visible at the icon's lower-right corner.
+# Screen-space size of the floating drag icon (20% smaller than the panel icon).
+const DRAG_ICON_DISPLAY: float = 45.0
+# Offset from the cursor/finger to the placement-zone center sent to Arena.
+# Above-and-left so the ghost preview is not hidden under the finger.
 const DRAG_OFFSET: Vector2 = Vector2(-15.0, -47.5)
+# Additional offset applied only to the floating icon's screen position, not to Arena.
+# Shifts the opaque cursor image further up-left so the ghost preview behind it stays readable.
+const DRAG_ICON_EXTRA_OFFSET: Vector2 = Vector2(-15.0, -15.0)
 
 
 
@@ -574,15 +578,15 @@ void fragment() {
 	top_margin.add_theme_constant_override("margin_bottom", 4)
 	inner_vbox.add_child(top_margin)
 
-	var send_wave_lbl := Label.new()
-	send_wave_lbl.text                 = "SEND WAVE"
-	send_wave_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	send_wave_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	send_wave_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	send_wave_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	send_wave_lbl.add_theme_font_size_override("font_size", 22)
-	send_wave_lbl.add_theme_color_override("font_color", COLOR_TEXT)
-	top_margin.add_child(send_wave_lbl)
+	_send_wave_header_label = Label.new()
+	_send_wave_header_label.text                 = "SEND 1 WAVE"
+	_send_wave_header_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_send_wave_header_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	_send_wave_header_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	_send_wave_header_label.add_theme_font_override("font", UIFonts.primary_bold())
+	_send_wave_header_label.add_theme_font_size_override("font_size", 22)
+	_send_wave_header_label.add_theme_color_override("font_color", COLOR_TEXT)
+	top_margin.add_child(_send_wave_header_label)
 
 	# Middle section — >> send button on the left, ×N multiplier toggle on the right.
 	# Both buttons share the same fixed height (50px) so their vertical centers are
@@ -675,7 +679,7 @@ void fragment() {
 	mult_x_lbl.size_flags_vertical  = Control.SIZE_EXPAND_FILL
 	mult_x_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	mult_x_lbl.add_theme_font_override("font", bold_font)
-	mult_x_lbl.add_theme_font_size_override("font_size", 32)
+	mult_x_lbl.add_theme_font_size_override("font_size", 38)
 	mult_x_lbl.add_theme_color_override("font_color",        COLOR_GOLD_TEXT)
 	mult_x_lbl.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
 	mult_hbox.add_child(mult_x_lbl)
@@ -703,7 +707,7 @@ void fragment() {
 	inner_vbox.add_child(bar_margin)
 
 	_reward_bar_container = Control.new()
-	_reward_bar_container.custom_minimum_size   = Vector2(0, 24)
+	_reward_bar_container.custom_minimum_size   = Vector2(0, 30)
 	_reward_bar_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_reward_bar_container.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_reward_bar_container.clip_contents         = true
@@ -1250,7 +1254,7 @@ func _process(delta: float) -> void:
 	# locked to position even when the cursor is stationary.
 	if _drag_active and _drag_icon_ctrl != null and is_instance_valid(_drag_icon_ctrl):
 		var half := DRAG_ICON_DISPLAY * 0.5
-		_drag_icon_ctrl.global_position = _drag_cursor_pos + DRAG_OFFSET - Vector2(half, half)
+		_drag_icon_ctrl.global_position = _drag_cursor_pos + DRAG_OFFSET + DRAG_ICON_EXTRA_OFFSET - Vector2(half, half)
 
 	if _send_wave_cooldown > 0.0:
 		_send_wave_cooldown -= delta
@@ -1348,7 +1352,8 @@ func _start_drag(trap_type: int) -> void:
 	_arena.begin_hud_drag(trap_type, icon_center + DRAG_OFFSET)
 
 	# Slide the icon from its resting position to its drag position above the cursor.
-	var target_pos := icon_center + DRAG_OFFSET - Vector2(half, half)
+	# DRAG_ICON_EXTRA_OFFSET shifts the opaque icon further up-left from the ghost preview.
+	var target_pos := icon_center + DRAG_OFFSET + DRAG_ICON_EXTRA_OFFSET - Vector2(half, half)
 	_drag_tween = create_tween()
 	_drag_tween.set_ease(Tween.EASE_OUT)
 	_drag_tween.set_trans(Tween.TRANS_CUBIC)
@@ -1428,6 +1433,8 @@ func _on_multiplier_btn_pressed() -> void:
 		5:   _wave_multiplier = 10
 		10:  _wave_multiplier = 1
 	_multiplier_label.text = "%d" % _wave_multiplier
+	var wave_word := "WAVE" if _wave_multiplier == 1 else "WAVES"
+	_send_wave_header_label.text = "SEND %d %s" % [_wave_multiplier, wave_word]
 	_refresh_reward_label()
 
 
@@ -2009,7 +2016,7 @@ func _start_boost_drag(boost_type: int) -> void:
 
 	_arena.begin_hud_drag_boost(boost_type as BoostUnit.BoostType, icon_center + DRAG_OFFSET)
 
-	var target_pos := icon_center + DRAG_OFFSET - Vector2(half, half)
+	var target_pos := icon_center + DRAG_OFFSET + DRAG_ICON_EXTRA_OFFSET - Vector2(half, half)
 	_drag_tween = create_tween()
 	_drag_tween.set_ease(Tween.EASE_OUT)
 	_drag_tween.set_trans(Tween.TRANS_CUBIC)

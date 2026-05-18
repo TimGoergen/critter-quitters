@@ -95,6 +95,18 @@ const FLY_STRIP_ADHESION_LEVELS: Array[float] = [0.30, 0.40, 0.55, 0.70]
 ## How long the DoT persists on an enemy after the pulse hits them.
 const BAIT_POISON_DURATION_LEVELS: Array[float] = [3.0, 4.5, 6.0, 8.0]
 
+## Bait Station glow plane appearance at rest (between pulses).
+## The plane is always visible at this subdued level so the trap reads as dangerous.
+## On each pulse it expands to full scale (1.0) and full opacity (1.0), then
+## returns here.
+const BAIT_GLOW_REST_OPACITY: float = 0.25   # dim persistent glow at zero stars
+const BAIT_GLOW_REST_SCALE:   float = 0.50   # roughly footprint-sized at rest
+
+## Resting glow opacity indexed by number of maxed stats (0–3).
+## As the player upgrades the Bait Station, the persistent red glow brightens to
+## signal increasing toxicity — 0 stars is faint, 3 stars is noticeably intense.
+const BAIT_GLOW_OPACITY_BY_STARS: Array[float] = [0.25, 0.40, 0.55, 0.70]
+
 ## Bug Bucks cost for each upgrade level per trap type.
 ## Index 0 = first upgrade, 1 = second, 2 = third.
 ## All values are tuning placeholders — finalize via playtesting.
@@ -222,10 +234,12 @@ var _fly_strip_bob_time:      float  = 0.0
 var _fly_strip_animating:     bool   = false
 
 # Bait Station animation state — null for all other trap types.
-# _bait_glow_mat is the radial glow shader material; it is normally at opacity 0
-# and tweened to 1 then back to 0 each time the trap fires.
-var _bait_glow_mat:  ShaderMaterial = null
-var _bait_animating: bool           = false
+# _bait_glow_mat is the radial glow shader material; at rest it holds
+# BAIT_GLOW_REST_OPACITY and BAIT_GLOW_REST_SCALE, then pulses to full on each fire.
+# _bait_glow_mi is the plane node so its scale can be tweened during the pulse.
+var _bait_glow_mat:  ShaderMaterial  = null
+var _bait_glow_mi:   MeshInstance3D  = null
+var _bait_animating: bool            = false
 
 # Tracks how many particle batches from this trap are still visually alive.
 # Each fire increments the count; a timer decrements it after the particles expire.
@@ -915,6 +929,12 @@ func _update_star_display() -> void:
 		_shadow_mat.set_shader_parameter("shadow_color",
 			Vector3(shadow_tint.r * brightness, shadow_tint.g * brightness, shadow_tint.b * brightness))
 		_shadow_mat.set_shader_parameter("opacity", shadow_opacity)
+
+	# --- Bait Station resting glow brightness ---
+	# Skip update mid-pulse so the tween isn't interrupted; the corrected opacity
+	# will take effect naturally when the next pulse finishes and fades back.
+	if _bait_glow_mat != null and not _bait_animating:
+		_bait_glow_mat.set_shader_parameter("opacity", _bait_current_rest_opacity())
 
 
 ## Shows the range indicator. Called by Arena when a placement preview overlaps this trap.
@@ -1806,10 +1826,10 @@ func _spawn_fly_strip_launcher_visual() -> void:
 ## Creates the radial glow plane for the Bait Station.
 ##
 ## Two modes:
-##   Placement preview — trap footprint size (fp), opacity 0.45 so the glow reads
-##     clearly while dragging without extending past the trap boundary.
-##   Placed trap — range-based size (75% of range diameter), opacity 0 at rest,
-##     tweened to 1 and back by _play_bait_animation() on each pulse.
+##   Placement preview — trap footprint size (fp), BAIT_GLOW_REST_OPACITY so the preview
+##     matches the placed trap's at-rest appearance rather than a firing pulse.
+##   Placed trap — range-based size (75% of range diameter), starts at BAIT_GLOW_REST_SCALE
+##     and BAIT_GLOW_REST_OPACITY; _play_bait_animation() expands it to full on each pulse.
 ##
 ## hide_decorators() suppresses the plane entirely for HUD icon renders.
 func _spawn_bait_glow_plane() -> void:
@@ -1828,11 +1848,17 @@ func _spawn_bait_glow_plane() -> void:
 
 	var mat := ShaderMaterial.new()
 	mat.shader = BAIT_GLOW_SHADER
-	mat.set_shader_parameter("opacity",    0.80 if _is_preview else 0.0)
+	mat.set_shader_parameter("opacity",    BAIT_GLOW_REST_OPACITY)
 	mat.set_shader_parameter("glow_color", Vector3(0.90, 0.06, 0.06))
 	mi.material_override = mat
 
+	# Preview keeps scale 1.0 (footprint-sized).  Placed traps start at rest scale;
+	# _play_bait_animation() grows them to 1.0 on each pulse then shrinks back.
+	if not _is_preview:
+		mi.scale = Vector3(BAIT_GLOW_REST_SCALE, 1.0, BAIT_GLOW_REST_SCALE)
+
 	_bait_glow_mat = mat
+	_bait_glow_mi  = mi
 	add_child(mi)
 	_decorator_nodes.append(mi)   # hide_decorators() will suppress it for icon previews
 
@@ -1847,7 +1873,7 @@ func _spawn_bait_glow_plane() -> void:
 ## sprites (0.25), so the opaque grate bars never depth-occlude an enemy overhead.
 ##
 ## No footprint outline or shadow is spawned — the trap blends into the floor.
-## The background plate starts invisible; _play_bait_animation() strobes it red on each pulse.
+## The glow plane sits at a persistent dim red; _play_bait_animation() strobes it on each pulse.
 func _spawn_bait_station_visual() -> void:
 	var fp := Grid.CELL_SIZE * 1.9
 	# World y = 0.09; local offset = desired_world_y − trap_root_y = 0.09 − 0.25.
@@ -1985,27 +2011,45 @@ func _play_fly_strip_animation() -> void:
 	_fly_strip_animating = false
 
 
+## Returns the resting glow opacity for the current star count.
+## Used both when updating stars and when fading back after a pulse.
+func _bait_current_rest_opacity() -> float:
+	return BAIT_GLOW_OPACITY_BY_STARS[mini(get_maxed_stat_count(), BAIT_GLOW_OPACITY_BY_STARS.size() - 1)]
+
+
 ## Plays the Bait Station fire animation: the radial glow plane snaps to full opacity
 ## then fades back to invisible, simulating a toxic pulse seen through the grate.
 ## The grate itself does not move.  Opacity is a shader parameter so the radial gradient
 ## stays intact throughout — only its overall intensity changes.
 func _play_bait_animation() -> void:
-	if _bait_glow_mat == null or _bait_animating:
+	if _bait_glow_mat == null or _bait_glow_mi == null or _bait_animating:
 		return
 	_bait_animating = true
 
-	# Snap to full glow immediately.
-	_bait_glow_mat.set_shader_parameter("opacity", 1.0)
+	# Expand from resting scale to full range coverage and brighten simultaneously.
+	# set_parallel(true) lets both tweens run at the same time on the same Tween object.
+	var expand := create_tween().set_parallel(true)
+	expand.tween_property(_bait_glow_mat, "shader_parameter/opacity",
+		1.0, 0.12).set_ease(Tween.EASE_OUT)
+	expand.tween_property(_bait_glow_mi, "scale",
+		Vector3.ONE, 0.12).set_ease(Tween.EASE_OUT)
+	await expand.finished
+
+	if not is_inside_tree():
+		_bait_animating = false
+		return
 
 	await get_tree().create_timer(0.05).timeout
 	if not is_inside_tree():
 		_bait_animating = false
 		return
 
-	# Tween opacity back to zero.  Godot 4 supports "shader_parameter/name" as a property path.
-	var fade := create_tween()
+	# Shrink and fade back to the current star-level resting glow (not fully invisible).
+	var fade := create_tween().set_parallel(true)
 	fade.tween_property(_bait_glow_mat, "shader_parameter/opacity",
-		0.0, 0.55).set_ease(Tween.EASE_IN)
+		_bait_current_rest_opacity(), 0.55).set_ease(Tween.EASE_IN)
+	fade.tween_property(_bait_glow_mi, "scale",
+		Vector3(BAIT_GLOW_REST_SCALE, 1.0, BAIT_GLOW_REST_SCALE), 0.55).set_ease(Tween.EASE_IN)
 	await fade.finished
 
 	_bait_animating = false

@@ -24,7 +24,9 @@ const COLOR_BAR_FILL := Color(0.85, 0.22, 0.22, 1.0)
 const COLOR_TEXT     := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM := Color(0.60, 0.60, 0.65, 1.0)
 # Amber matches the Glue Board splatter color used on the enemy sprite.
-const COLOR_SLOW     := Color(0.88, 0.70, 0.18, 1.0)
+const COLOR_SLOW   := Color(0.88, 0.70, 0.18, 1.0)
+# Green matches the POISON_FLASH_COLOR used on the enemy sprite.
+const COLOR_POISON := Color(0.20, 0.80, 0.20, 1.0)
 
 const PANEL_W:      float = 260.0
 const PANEL_H_BASE: float = 110.0   # height when no status effects are active
@@ -212,15 +214,12 @@ func _update_hp() -> void:
 
 ## Builds the status-effects line from the enemy's current active effects.
 ## If any effects are active, the panel expands downward to fit the row.
-## Currently handles: slow (Glue Board). Add further conditions as new effects land.
+## Handles: slow (Glue Board / Fly Strip Launcher), poison (Bait Station).
 func _update_status() -> void:
-	var effects: PackedStringArray = []
+	var slowed:   bool = _tracked_enemy.is_slowed()
+	var poisoned: bool = _tracked_enemy.is_poisoned()
 
-	if _tracked_enemy.is_slowed():
-		var pct := int(round(_tracked_enemy.get_slow_factor() * 100.0))
-		effects.append("SLOWED  %d%%" % pct)
-
-	var has_effects := effects.size() > 0
+	var has_effects := slowed or poisoned
 	_status_label.visible = has_effects
 
 	# Expand or contract the panel to match.
@@ -228,10 +227,24 @@ func _update_status() -> void:
 	_bg.size.y     = panel_h
 	_border.size.y = panel_h + BORDER_W * 2.0
 
-	if has_effects:
-		# Single concatenated string; amber for slow. A future multi-effect pass
-		# would use separate labels with per-effect colors.
-		_status_label.text = "  ".join(effects)
+	if not has_effects:
+		return
+
+	var parts: PackedStringArray = []
+	if slowed:
+		var pct := int(round(_tracked_enemy.get_slow_factor() * 100.0))
+		parts.append("SLOWED  %d%%" % pct)
+	if poisoned:
+		var secs: float = _tracked_enemy.get_poison_remaining()
+		parts.append("POISONED  %.1fs" % secs)
+
+	_status_label.text = "  ".join(parts)
+
+	# Color: green when only poisoned, amber when only slowed, green when both
+	# (poison is the more immediately dangerous effect and reads more urgently).
+	if poisoned:
+		_status_label.add_theme_color_override("font_color", COLOR_POISON)
+	else:
 		_status_label.add_theme_color_override("font_color", COLOR_SLOW)
 
 

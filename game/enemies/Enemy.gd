@@ -437,6 +437,16 @@ func get_slow_factor() -> float:
 	return _slow_sources.values().max()
 
 
+## Returns true if the poison DoT is currently active on this enemy.
+func is_poisoned() -> bool:
+	return _is_poisoned
+
+
+## Returns the seconds of poison remaining (0.0 when not poisoned).
+func get_poison_remaining() -> float:
+	return _poison_remaining_duration if _is_poisoned else 0.0
+
+
 ## Returns the base color for this enemy type (used by kill-burst particles).
 func get_color() -> Color:
 	return _base_color
