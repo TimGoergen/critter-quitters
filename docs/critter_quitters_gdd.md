@@ -1,6 +1,6 @@
 ﻿# **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.29 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
+**Version:** Draft v0.30 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
 
 ---
 
@@ -37,6 +37,7 @@
 | v0.27 | GDD audited against implemented code. Section 2 step 5 corrected (no between-wave store). Section 10 upgrade panel description updated to match implementation (3-level per-stat, not star 0–5/tier-up). Section 11 upgrade system entry clarified. Phase 6 status updated to reflect partial completion (AudioManager infrastructure and trap fire sounds done; enemy/UI/music audio pending). README updated to reflect Phase 5 complete. |
 | v0.28 | Phase 6 (Sound) marked complete. Remaining audio assets (music, enemy sounds, UI sounds) deferred to post-roadmap cleanup checklist. New Phase 7 (Define New Traps, Enemies, and Boosts) inserted as a design phase before implementation begins. Previous phases 7–10 renumbered to 8–11. |
 | v0.29 | Phase 7 design complete. New traps: Fly Strip Launcher (anti-air, AoE cloud, flying enemies only) and Bait Station (floor trap, passable cells, poison DoT). New enemies: Mosquito (flying, straight-line path), Cockroach Nymph (splits on death), Mouse (steals Bug Bucks on exit, releases Gnats on death). New unit category: Boosts (5 types — Pheromone Dispenser, Compressor, Cash Register, Air Freshener, Quarantine Marker). Boost rules: block pathfinding, 2×2 footprint, store-only availability, cost comparable to traps, custom upgrade stats per Boost. New systems identified: is_flying flag, straight-line path, FLOOR_TRAP cell state, Poisoned status effect, BoostUnit class, aura system, split-on-death spawn, Bug Bucks theft on exit. Section 4b (Boost Roster) added. Future Pass updated. |
+| v0.30 | Phase 9 updated: game mode design added as a first deliverable within the phase (design-first, like Phase 7). Three game modes confirmed: Endless (infinite waves, current dev pattern), Journey (structured Rounds → Levels / Contracts progression), Challenge (pre-defined scenarios with constrained starting conditions — e.g. limited Bug Bucks, restricted trap roster). Section 15 (Game Modes) added. |
 
 ---
 
@@ -58,6 +59,7 @@
 12. Future Pass
 13. Tech Stack
 14. Development Path
+15. Game Modes
 
 ---
 
@@ -845,6 +847,16 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 *Goal: all gameplay-visible assets are illustrated sprites; no colored cylinders, boxes, or placeholder meshes remain*
 
 ### **Phase 9 — Full Game Loop**
+
+Phase 9 begins with a design pass (like Phase 7) before any implementation work starts. The first deliverable is a fully specified game mode design written into Section 15 of the GDD.
+
+**Design deliverables (before implementation):**
+- Game mode selection screen design — how the player chooses a mode from the main menu
+- Full specification of all three modes — win/loss conditions, structure, and constraints (see Section 15)
+- Challenge scenario definitions — a starter set of named scenarios with their specific constraints
+- Mode-specific UI requirements identified
+
+**Implementation deliverables:**
 - Wave composition system — complexity curve, group-based spawning, boss waves
 - All 4 trap types
 - All 5 enemy types
@@ -852,12 +864,13 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 - Between-wave store — basic version (trap upgrades, player upgrades, trap unlocks)
 - Arena Evolution — obstacle spawning every 10 waves
 - Save file system — multiple independent run slots
+- Game mode selection and routing from main menu
 
-*Goal: complete playable game from start to run-end*
+*Goal: complete playable game from start to run-end, across all three game modes*
 
 ### **Prototype note (Phase 9)**
 
-The current prototype uses an endless-wave structure for testing and balancing purposes. The target shipped design groups waves into Rounds (3–5 waves) and Rounds into Levels (Contracts, 5–10 rounds). At the end of each Round, the player picks 1 of 3 randomly offered temporary perks that last for the remainder of the run. Completing a Level (Contract) awards Service Fees for meta progression. The prototype will remain endless until the core loop is balanced and the grouping structure is fully designed.
+The current prototype uses an endless-wave structure for testing and balancing purposes. This corresponds to the Endless mode target. The Journey mode groups waves into Rounds (3–5 waves) and Rounds into Levels (Contracts, 5–10 rounds). At the end of each Round, the player picks 1 of 3 randomly offered temporary perks that last for the remainder of the run. Completing a Level (Contract) awards Service Fees for meta progression. The prototype will remain endless until the core loop is balanced and the mode designs are fully specified.
 
 ### **Phase 9b — Meta Progression**
 - Service Fees earned at run end based on performance
@@ -883,6 +896,60 @@ The current prototype uses an endless-wave structure for testing and balancing p
 - Performance optimisation
 
 *Goal: shippable on target platforms*
+
+---
+
+## **15. Game Modes**
+
+The player selects a game mode from the main menu before beginning a run. Each mode uses the same core gameplay — trap placement, pathfinding, enemy waves, Bug Bucks economy — but differs in structure, win/loss conditions, and starting constraints.
+
+Three modes are confirmed for v1. Full specifications for each mode are a Phase 9 design deliverable and will be written into this section before implementation begins.
+
+---
+
+### **Endless**
+
+The player survives as long as possible against an infinite escalating wave sequence. There is no structured end — the run continues until the Infestation Level reaches its maximum threshold.
+
+This mode mirrors the current prototype structure and is the baseline difficulty reference. High score is the primary goal: composite of total pests eliminated and highest wave reached.
+
+**Win condition:** None — the run always ends in infestation. Score is the measure of success.
+**Loss condition:** Infestation Level reaches maximum threshold.
+**Structure:** Infinite waves with smooth complexity curve. Boss waves every 10 waves. Arena Evolution applies.
+
+---
+
+### **Journey**
+
+A structured campaign of increasing difficulty. Waves are grouped into Rounds (3–5 waves each), and Rounds are grouped into Levels (Contracts, 5–10 rounds each). Completing a Contract awards Service Fees for meta progression.
+
+At the end of each Round, the player chooses 1 of 3 randomly offered temporary perks that apply for the remainder of the run. Completing a Contract is a meaningful milestone — the player has survived a defined gauntlet and earned a permanent reward.
+
+**Win condition:** Complete all Contracts in the campaign.
+**Loss condition:** Infestation Level reaches maximum threshold at any point during a run.
+**Structure:** Rounds → Levels (Contracts) → Campaign. Perk selection at each Round boundary. Service Fees awarded on Contract completion.
+
+*Full contract count, perk pool, and campaign structure: TBD during Phase 9 design.*
+
+---
+
+### **Challenge**
+
+A pre-defined scenario with specific starting constraints the player must survive. Each challenge presents a named context — a particular job with unusual conditions — that forces the player to adapt their strategy to a constrained situation.
+
+Challenges are discrete, replayable, and completable. A challenge is either beaten or not. High score within a challenge may apply for leaderboard or personal best purposes.
+
+**Win condition:** Survive the defined wave sequence without the Infestation Level reaching its maximum threshold.
+**Loss condition:** Infestation Level reaches maximum threshold.
+**Structure:** Fixed wave sequence defined per challenge. Starting constraints are set by the scenario definition.
+
+**Constraint types** (examples — not exhaustive):
+- Limited starting Bug Bucks — the player begins with significantly fewer resources than a standard run
+- Restricted trap roster — only a specific subset of trap types is available for the run
+- Pre-placed obstacles — the arena begins with blocking terrain already in place
+- Other scenario-specific rules TBD during Phase 9 design
+
+*Starter set of named challenge scenarios: TBD during Phase 9 design.*
 
 ---
 
