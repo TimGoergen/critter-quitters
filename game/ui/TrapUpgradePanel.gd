@@ -123,8 +123,8 @@ func _build_ui() -> void:
 	# Read active boost entries now so we know how much extra height they need.
 	# Boosts cannot enter or leave range while the panel is open (the game tree is
 	# paused while the upgrade panel is visible), so reading once at build time is safe.
-	var boosts     := _trap.get_active_boost_display()
-	var boost_h    := BOOST_SECTION_LEAD + BOOST_ENTRY_H * boosts.size() if not boosts.is_empty() else 0.0
+	var boosts:  Array = _trap.get_active_boost_display()
+	var boost_h: float = BOOST_SECTION_LEAD + BOOST_ENTRY_H * boosts.size() if not boosts.is_empty() else 0.0
 
 	# Height: top padding + header + description block + three stat rows + active boosts + bottom padding.
 	var panel_h := PADDING + 74.0 + DESC_H + 8.0 + (STAT_ROW_H + 8.0) * 2.0 + STAT_ROW_H + boost_h + PADDING
