@@ -19,6 +19,10 @@ const TRAVEL_SPEED: float = 20.0
 ## Zapper bolt travels faster — electricity should feel near-instant.
 const ZAPPER_TRAVEL_SPEED: float = 32.0
 
+## Probability (0.0–1.0) that a Zapper hit electrifies the target.
+## Tuning placeholder — adjust via playtesting.
+const ZAPPER_ELECTRIFY_CHANCE: float = 0.07
+
 ## Fallback colour for generic projectiles (non-snap-trap types).
 const COLOR_PROJECTILE := Color(1.0, 0.90, 0.25)   # bright yellow
 const COLOR_IMPACT     := Color(1.0, 0.80, 0.15)   # golden burst
@@ -99,6 +103,10 @@ func _process(delta: float) -> void:
 			if _trap_type != _GLUE_BOARD_TYPE and _trap_type != _FLY_STRIP_TYPE:
 				_target.take_damage(_damage, _trap_flash_color(), _trap_type)
 				killed = _target.get_hp_fraction() == 0.0
+			# Zapper has a small chance to electrify a surviving target — freezes it
+			# in place and shakes it like it's being electrocuted for 0.75 seconds.
+			if _trap_type == _ZAPPER_TYPE and not killed and randf() < ZAPPER_ELECTRIFY_CHANCE:
+				_target.apply_electrify()
 		_spawn_impact_effect(killed, enemy_color)
 		queue_free()
 		return
@@ -165,8 +173,8 @@ func _spawn_cheese_visual() -> void:
 	var hole_r  := Grid.CELL_SIZE * 0.054
 	var face_y  := bh * 0.5 - hole_r * 0.45   # sphere centre inset so cap pokes through face
 	var hole_xz := [Vector2(-bw * 0.20, -bd * 0.12),
-	                Vector2( bw * 0.18,  bd * 0.16),
-	                Vector2(-bw * 0.04, -bd * 0.26)]
+					Vector2( bw * 0.18,  bd * 0.16),
+					Vector2(-bw * 0.04, -bd * 0.26)]
 
 	for yf: float in [1.0, -1.0]:
 		for off: Vector2 in hole_xz:

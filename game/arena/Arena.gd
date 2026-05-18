@@ -34,6 +34,7 @@ const BoostUnit         = preload("res://boosts/BoostUnit.gd")
 const UIFonts           = preload("res://ui/UIFonts.gd")
 const HUD               = preload("res://ui/HUD.gd")
 const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
+const BoostUpgradePanel = preload("res://ui/BoostUpgradePanel.gd")
 const EnemyStatsPanel   = preload("res://ui/EnemyStatsPanel.gd")
 const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
 
@@ -119,9 +120,11 @@ var _display_path: Array[Vector2i] = []
 # Gold perimeter drawn around the 2×2 footprint of the currently open upgrade panel.
 var _selected_trap_outline: MeshInstance3D = null
 
-# Per-placed-trap inset perimeter outlines. Redrawn when hover or selection state changes.
-var _trap_outlines: Dictionary = {}           # anchor Vector2i -> MeshInstance3D
+# Per-placed-unit inset perimeter outlines. Redrawn when hover or selection state changes.
+var _trap_outlines:  Dictionary = {}           # anchor Vector2i -> MeshInstance3D
+var _boost_outlines: Dictionary = {}           # anchor Vector2i -> MeshInstance3D
 var _hovered_trap_anchor:  Vector2i = Vector2i(-1, -1)
+# Shared between traps and boosts — only one unit panel is ever open at a time.
 var _selected_trap_anchor: Vector2i = Vector2i(-1, -1)
 
 # The currently open upgrade panel, or null if none is open.
@@ -438,14 +441,17 @@ func _update_drag_preview(screen_pos: Vector2) -> void:
 		and _all_cells_buildable(cells) \
 		and not _footprint_overlaps_enemy(cells) \
 		and _can_place_at(cells)
-	_drag_place_preview = _make_trap_preview(GameState.selected_trap_type, 0.5, valid)
+	if _hud_drag_is_boost:
+		_drag_place_preview = _make_boost_preview(_hud_drag_boost_type, 0.5, valid)
+	else:
+		_drag_place_preview = _make_trap_preview(GameState.selected_trap_type, 0.5, valid)
 	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 	_drag_place_preview.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 
-	# When placement is invalid, suppress the preview's range circle.
-	# If the footprint covers an existing trap, surface that trap's range indicator
-	# so the player can see the conflict clearly.
-	if not valid:
+	# When placement is invalid, suppress the preview's range circle and surface
+	# any blocked trap's range indicator so the player can see the conflict.
+	# Boost previews have no range indicator node, so skip this block for them.
+	if not valid and not _hud_drag_is_boost:
 		_drag_place_preview.hide_range_indicator()
 		var blocked_trap := _find_trap_at_cells(cells)
 		if blocked_trap != null:
@@ -516,14 +522,12 @@ func cancel_hud_drag() -> void:
 
 
 ## Called by HUD when the user begins dragging a boost icon.
-## Uses a SNAP_TRAP ghost (same 2×2 footprint) so the placement preview renders correctly.
 func begin_hud_drag_boost(boost_type: BoostUnit.BoostType, placement_screen_pos: Vector2) -> void:
 	_hud_drag_active          = true
 	_hud_drag_is_boost        = true
 	_hud_drag_boost_type      = boost_type
 	_hud_drag_last_screen_pos = placement_screen_pos
 	_touch_state              = TouchState.IDLE
-	GameState.select_trap_type(Trap.TrapType.SNAP_TRAP)
 	_update_drag_preview(placement_screen_pos)
 
 
@@ -593,6 +597,15 @@ func _handle_tap(screen_pos: Vector2) -> void:
 			var wp := _cell_to_world(_trap_anchors[cell])
 			_apply_pan(Vector2(wp.x, wp.z))
 		_open_upgrade_panel(_trap_anchors[cell])
+		return
+
+	# Tap on a placed boost → open the boost upgrade panel.
+	if _boost_anchors.has(cell):
+		if _zoom_state == ZoomState.ZOOMED_IN:
+			_set_followed_enemy(null)
+			var wp := _cell_to_world(_boost_anchors[cell])
+			_apply_pan(Vector2(wp.x, wp.z))
+		_open_boost_upgrade_panel(_boost_anchors[cell])
 		return
 
 	# Tapping an empty arena cell no longer places a trap.
@@ -801,6 +814,40 @@ func _on_sell_trap_requested(anchor: Vector2i) -> void:
 	_try_remove_trap_by_anchor(anchor)
 
 
+## Opens the boost upgrade panel for the boost at anchor.
+## Reuses the same _upgrade_panel slot and _close_upgrade_panel helper as traps
+## so only one panel is ever open at a time.
+func _open_boost_upgrade_panel(anchor: Vector2i) -> void:
+	_close_upgrade_panel()
+	if not _boost_nodes.has(anchor):
+		return
+
+	if _zoom_state == ZoomState.ZOOMED_IN:
+		_set_followed_enemy(null)
+		var wp := _cell_to_world(anchor)
+		_apply_pan(Vector2(wp.x, wp.z))
+
+	var panel := BoostUpgradePanel.new()
+	panel.closed.connect(_on_upgrade_panel_closed)
+	panel.sell_requested.connect(_on_sell_boost_requested.bind(anchor))
+	add_child(panel)
+	panel.initialize(_boost_nodes[anchor])
+	_upgrade_panel = panel   # shared slot — _close_upgrade_panel frees it correctly
+	_show_selected_trap_outline(anchor)
+	_selected_trap_anchor = anchor
+	if _boost_outlines.has(anchor):
+		_draw_boost_outline(anchor)
+	if not get_tree().paused:
+		get_tree().paused = true
+		_panel_paused = true
+
+
+## Sells the boost at anchor (70% refund via _try_remove_boost_by_anchor) and closes the panel.
+func _on_sell_boost_requested(anchor: Vector2i) -> void:
+	_close_upgrade_panel()
+	_try_remove_boost_by_anchor(anchor)
+
+
 ## Removes the trap at anchor and refunds placement cost plus all upgrade costs at 70%.
 func _try_remove_trap_by_anchor(anchor: Vector2i) -> void:
 	if _trap_nodes.has(anchor):
@@ -837,6 +884,8 @@ func _close_upgrade_panel() -> void:
 	_selected_trap_anchor = Vector2i(-1, -1)
 	if _trap_outlines.has(prev_selected):
 		_draw_trap_outline(prev_selected)
+	elif _boost_outlines.has(prev_selected):
+		_draw_boost_outline(prev_selected)
 	if _panel_paused:
 		get_tree().paused = false
 		_panel_paused = false
@@ -852,6 +901,8 @@ func _on_upgrade_panel_closed() -> void:
 	_selected_trap_anchor = Vector2i(-1, -1)
 	if _trap_outlines.has(prev_selected):
 		_draw_trap_outline(prev_selected)
+	elif _boost_outlines.has(prev_selected):
+		_draw_boost_outline(prev_selected)
 	if _panel_paused:
 		get_tree().paused = false
 		_panel_paused = false
@@ -1562,6 +1613,85 @@ func _draw_trap_outline(anchor: Vector2i) -> void:
 		_trap_outlines[anchor] = mi
 
 
+## Draws (or redraws) the inset outline + fill for a placed boost.
+## Identical logic to _draw_trap_outline but reads color from the BoostUnit node
+## and stores the mesh in _boost_outlines instead of _trap_outlines.
+func _draw_boost_outline(anchor: Vector2i) -> void:
+	if not _boost_nodes.has(anchor):
+		return
+	var base: Color = _boost_nodes[anchor].get_base_color()
+	var neon: Color = _neon_color(base)
+
+	var is_selected := anchor == _selected_trap_anchor
+
+	var outline_color: Color
+	if is_selected:
+		outline_color = base.lightened(0.70); outline_color.a = 1.0
+	else:
+		outline_color = base.darkened(0.2);   outline_color.a = 0.60
+
+	var fill_color := neon
+	fill_color.a   = 0.03
+
+	var hs := Grid.CELL_SIZE * 0.5
+	var cs := Grid.CELL_SIZE
+	var c  := _cell_to_world(anchor)
+
+	var min_x := c.x - hs;       var max_x := c.x + hs + cs
+	var min_z := c.z - hs;       var max_z := c.z + hs + cs
+	var cx    := (min_x + max_x) * 0.5
+	var cz    := (min_z + max_z) * 0.5
+
+	const CORNER_R:    float = 0.15
+	const CORNER_SEGS: int   = 5
+
+	var y_fill    := 0.03
+	var y_outline := 0.06
+
+	var im := ImmediateMesh.new()
+
+	var fill_pts := _rounded_rect_pts(min_x, max_x, min_z, max_z, y_fill, CORNER_R, CORNER_SEGS)
+	var center   := Vector3(cx, y_fill, cz)
+	var n        := fill_pts.size()
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(n):
+		var a: Vector3 = fill_pts[i]
+		var b: Vector3 = fill_pts[(i + 1) % n]
+		im.surface_set_color(fill_color); im.surface_add_vertex(center)
+		im.surface_set_color(fill_color); im.surface_add_vertex(a)
+		im.surface_set_color(fill_color); im.surface_add_vertex(b)
+	im.surface_end()
+
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	for inset: float in [0.04, 0.08]:
+		var r: float = maxf(CORNER_R - inset, 0.0)
+		var pts := _rounded_rect_pts(
+			min_x + inset, max_x - inset,
+			min_z + inset, max_z - inset,
+			y_outline, r, CORNER_SEGS
+		)
+		for i in range(pts.size()):
+			var a: Vector3 = pts[i]
+			var b: Vector3 = pts[(i + 1) % pts.size()]
+			im.surface_set_color(outline_color); im.surface_add_vertex(a)
+			im.surface_set_color(outline_color); im.surface_add_vertex(b)
+	im.surface_end()
+
+	if _boost_outlines.has(anchor):
+		_boost_outlines[anchor].mesh = im
+	else:
+		var mi  := MeshInstance3D.new()
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.vertex_color_use_as_albedo = true
+		mat.cull_mode                  = BaseMaterial3D.CULL_DISABLED
+		mi.material_override           = mat
+		add_child(mi)
+		mi.mesh                  = im
+		_boost_outlines[anchor]  = mi
+
+
 ## Returns perimeter points for a rounded rectangle in the XZ plane, traversed
 ## clockwise from above.  Each of the four corners has CORNER_SEGS+1 points
 ## (including both tangent endpoints), so the total count is (segs+1)*4.
@@ -2229,6 +2359,7 @@ func _try_place_boost(anchor: Vector2i, boost_type: BoostUnit.BoostType) -> bool
 	boost.boost_depleted.connect(_try_remove_boost_by_anchor.bind(anchor))
 	add_child(boost)
 	_boost_nodes[anchor] = boost
+	_draw_boost_outline(anchor)
 	GameState.spend_bug_bucks(boost.get_cost())
 	# cell_changed from place_trap() above triggers Pathfinder recalculation automatically.
 	return true
@@ -2238,10 +2369,12 @@ func _try_place_boost(anchor: Vector2i, boost_type: BoostUnit.BoostType) -> bool
 func _try_remove_boost_by_anchor(anchor: Vector2i) -> void:
 	if _boost_nodes.has(anchor):
 		var boost: Node3D = _boost_nodes[anchor]
-		var refund: int = int(boost.get_cost() * 0.70)
-		GameState.add_bug_bucks(refund)
+		GameState.add_bug_bucks(boost.get_sell_value())
 		boost.queue_free()
 		_boost_nodes.erase(anchor)
+	if _boost_outlines.has(anchor):
+		_boost_outlines[anchor].queue_free()
+		_boost_outlines.erase(anchor)
 	for c in _get_trap_cells(anchor):
 		_grid.remove_trap(c)
 		_boost_anchors.erase(c)
@@ -2413,6 +2546,18 @@ func _make_trap_preview(trap_type: int, alpha: float, valid: bool = true) -> Nod
 	var preview := Trap.new()
 	preview.process_mode = Node.PROCESS_MODE_DISABLED
 	preview.initialize_preview(trap_type as Trap.TrapType)
+	_apply_ghost_transparency(preview, alpha, valid)
+	add_child(preview)
+	return preview
+
+
+## Builds a BoostUnit preview node: full mesh hierarchy, no aura or callback logic.
+## Mirrors _make_trap_preview but uses BoostUnit instead of Trap.
+func _make_boost_preview(boost_type: BoostUnit.BoostType, alpha: float, valid: bool = true) -> Node3D:
+	var preview := Node3D.new()
+	preview.set_script(BoostUnit)
+	preview.process_mode = Node.PROCESS_MODE_DISABLED
+	preview.initialize_preview(boost_type)
 	_apply_ghost_transparency(preview, alpha, valid)
 	add_child(preview)
 	return preview

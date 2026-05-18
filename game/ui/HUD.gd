@@ -1998,9 +1998,6 @@ func _start_boost_drag(boost_type: int) -> void:
 	if not _can_afford_boost(boost_type):
 		return
 
-	# Use SNAP_TRAP selection so the ghost preview shows a valid 2×2 footprint.
-	GameState.select_trap_type(Trap.TrapType.SNAP_TRAP)
-
 	var icon_rect   := _boost_icon_area_controls[boost_type].get_global_rect()
 	var icon_center := icon_rect.get_center()
 

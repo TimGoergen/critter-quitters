@@ -168,6 +168,16 @@ const SPRITE_BRIGHTNESS: Dictionary = {
 ## Flash color applied to the enemy sprite when poison ticks deal damage.
 const POISON_FLASH_COLOR: Color = Color(0.20, 0.80, 0.20)
 
+## How long the electrified freeze lasts in seconds.
+const ELECTRIFIED_DURATION: float = 0.75
+## Shake offset amplitude in world units — enough to be readable without looking ridiculous.
+const ELECTRIFIED_SHAKE_AMPLITUDE: float = 0.10
+## Shake frequency in radians/second — fast enough to read as an electric convulsion.
+const ELECTRIFIED_SHAKE_FREQ: float = 28.0
+## Two colors alternated rapidly during electrification: neon blue and overdriven white.
+const ELECTRIFIED_COLOR_A: Color = Color(0.40, 0.80, 4.00, 1.0)
+const ELECTRIFIED_COLOR_B: Color = Color(4.00, 4.00, 4.00, 1.0)
+
 # HP bar — colors match the infestation level bar (COLOR_BAR_BG / COLOR_BAR_FILL in HUD.gd).
 const HP_BAR_BG_COLOR   := Color(0.28, 0.28, 0.28, 1.0)
 const HP_BAR_FILL_COLOR := Color(0.85, 0.22, 0.22, 1.0)
@@ -262,6 +272,12 @@ var _poison_damage_per_tick: float = 0.0
 var _poison_tick_rate: float = 0.5
 var _poison_remaining_duration: float = 0.0
 var _poison_tick_timer: float = 0.0
+
+# Electrified status — applied by the Zapper on a rare proc; freezes the enemy
+# in place and shakes the visual for ELECTRIFIED_DURATION seconds.
+var _is_electrified: bool = false
+var _electrified_timer: float = 0.0
+var _electrified_shake_time: float = 0.0
 
 # Yellow disc shown beneath the enemy while the camera is following it.
 var _selection_glow: MeshInstance3D = null
@@ -463,6 +479,21 @@ func get_bug_bucks_steal() -> int:
 	return _bug_bucks_steal
 
 
+## Freezes the enemy and plays the electrocution shake for ELECTRIFIED_DURATION seconds.
+## Safe to call on an already-electrified enemy — the timer simply resets.
+func apply_electrify() -> void:
+	if _is_dead:
+		return
+	_is_electrified = true
+	_electrified_timer = ELECTRIFIED_DURATION
+	_electrified_shake_time = 0.0
+
+
+## Returns true if the electrified freeze is currently active.
+func is_electrified() -> bool:
+	return _is_electrified
+
+
 ## Applies a poison DoT effect.  If already poisoned, the duration resets
 ## (effects do not stack — the Bait Station refreshes rather than compounds).
 func apply_poison(damage_per_tick: float, duration: float, tick_rate: float) -> void:
@@ -523,6 +554,10 @@ func _process(delta: float) -> void:
 
 	if _is_dead:   # poison may have killed the enemy this frame
 		return
+
+	if _is_electrified:
+		_tick_electrified(delta)
+		return   # movement is suspended for the duration of the effect
 
 	if _is_flying:
 		_process_flying(delta)
@@ -585,6 +620,34 @@ func _tick_poison(delta: float) -> void:
 		_poison_tick_timer += _poison_tick_rate   # add to avoid drift on slow frames
 	if _poison_remaining_duration <= 0.0:
 		_is_poisoned = false
+
+
+## Runs each frame while the enemy is electrified.
+## Advances the timer, applies a rapid position shake and a blue/white color flicker
+## to the visual sprite, then clears both when the duration expires.
+func _tick_electrified(delta: float) -> void:
+	_electrified_timer -= delta
+	_electrified_shake_time += delta
+
+	if _visual != null:
+		# Two-axis shake: primary on X, secondary offset on Z with a slightly different
+		# frequency so the motion feels erratic rather than rhythmically back-and-forth.
+		var shake_x := sin(_electrified_shake_time * ELECTRIFIED_SHAKE_FREQ) * ELECTRIFIED_SHAKE_AMPLITUDE
+		var shake_z := cos(_electrified_shake_time * ELECTRIFIED_SHAKE_FREQ * 1.4) * ELECTRIFIED_SHAKE_AMPLITUDE * 0.6
+		_visual.position.x = shake_x
+		_visual.position.z = shake_z
+
+		# Rapid flicker: a sin wave mapped to [0,1] blends between neon blue and white.
+		var t := (sin(_electrified_shake_time * ELECTRIFIED_SHAKE_FREQ * 0.9) + 1.0) * 0.5
+		_visual_material.albedo_color = ELECTRIFIED_COLOR_A.lerp(ELECTRIFIED_COLOR_B, t)
+
+	if _electrified_timer <= 0.0:
+		_is_electrified = false
+		# Restore the visual to its resting state before normal movement resumes.
+		if _visual != null:
+			_visual.position.x = 0.0
+			_visual.position.z = 0.0
+			_visual_material.albedo_color = Color(_sprite_brightness, _sprite_brightness, _sprite_brightness, 1.0)
 
 
 ## Moves a flying enemy in a straight line toward the exit; called from _process().
