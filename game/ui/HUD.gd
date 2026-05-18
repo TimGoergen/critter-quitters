@@ -568,10 +568,10 @@ void fragment() {
 	# in the middle of a third of the panel.
 	var top_margin := MarginContainer.new()
 	top_margin.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	top_margin.add_theme_constant_override("margin_left",   8)
-	top_margin.add_theme_constant_override("margin_right",  8)
-	top_margin.add_theme_constant_override("margin_top",    8)
-	top_margin.add_theme_constant_override("margin_bottom", 2)
+	top_margin.add_theme_constant_override("margin_left",   12)
+	top_margin.add_theme_constant_override("margin_right",  12)
+	top_margin.add_theme_constant_override("margin_top",    10)
+	top_margin.add_theme_constant_override("margin_bottom", 4)
 	inner_vbox.add_child(top_margin)
 
 	var send_wave_lbl := Label.new()
@@ -591,10 +591,10 @@ void fragment() {
 	# from VERTICAL_ALIGNMENT_CENTER are identical, keeping text visually aligned.
 	var mid_margin := MarginContainer.new()
 	mid_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	mid_margin.add_theme_constant_override("margin_left",   8)
-	mid_margin.add_theme_constant_override("margin_right",  8)
-	mid_margin.add_theme_constant_override("margin_top",    6)
-	mid_margin.add_theme_constant_override("margin_bottom", 6)
+	mid_margin.add_theme_constant_override("margin_left",   12)
+	mid_margin.add_theme_constant_override("margin_right",  12)
+	mid_margin.add_theme_constant_override("margin_top",    4)
+	mid_margin.add_theme_constant_override("margin_bottom", 4)
 	inner_vbox.add_child(mid_margin)
 
 	var mid_hbox := HBoxContainer.new()
@@ -626,7 +626,16 @@ void fragment() {
 	ff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	ff_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	ff_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	ff_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Bebas Neue's reported descender (no visible glyphs below baseline) makes
+	# VERTICAL_ALIGNMENT_CENTER place glyphs above the geometric center. Shifting
+	# the rect down 4px (equal offset_top/bottom keeps height at 50px) moves the
+	# content center to y=29 so after the font-metric bias the glyphs land at y≈25.
+	ff_label.anchor_left   = 0.0
+	ff_label.anchor_right  = 1.0
+	ff_label.anchor_top    = 0.0
+	ff_label.anchor_bottom = 1.0
+	ff_label.offset_top    = 4
+	ff_label.offset_bottom = 4
 	ff_label.add_theme_font_override("font", bold_font)
 	ff_label.add_theme_font_size_override("font_size", 44)
 	ff_label.add_theme_color_override("font_color", COLOR_GOLD_BORDER)
@@ -646,7 +655,13 @@ void fragment() {
 	# SIZE_EXPAND_FILL vertical + VERTICAL_ALIGNMENT_CENTER so Godot's font-metric
 	# centering math handles the positioning rather than geometric assumptions.
 	var mult_hbox := HBoxContainer.new()
-	mult_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
+	# Same 4px downward shift as ff_label — identical font so identical bias.
+	mult_hbox.anchor_left   = 0.0
+	mult_hbox.anchor_right  = 1.0
+	mult_hbox.anchor_top    = 0.0
+	mult_hbox.anchor_bottom = 1.0
+	mult_hbox.offset_top    = 4
+	mult_hbox.offset_bottom = 4
 	mult_hbox.add_theme_constant_override("separation", 0)
 	mult_hbox.alignment   = BoxContainer.ALIGNMENT_CENTER
 	mult_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -677,10 +692,10 @@ void fragment() {
 	var bar_margin := MarginContainer.new()
 	bar_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar_margin.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	bar_margin.add_theme_constant_override("margin_left",   6)
-	bar_margin.add_theme_constant_override("margin_right",  6)
+	bar_margin.add_theme_constant_override("margin_left",   12)
+	bar_margin.add_theme_constant_override("margin_right",  12)
 	bar_margin.add_theme_constant_override("margin_top",    4)
-	bar_margin.add_theme_constant_override("margin_bottom", 8)
+	bar_margin.add_theme_constant_override("margin_bottom", 10)
 	inner_vbox.add_child(bar_margin)
 
 	_reward_bar_container = Control.new()
@@ -2074,7 +2089,8 @@ func _apply_send_wave_btn_style(btn: Button) -> void:
 
 
 func _apply_toggle_btn_style(btn: Button) -> void:
-	# Pill-shaped toggle button using the same gold palette as the HUD control buttons.
+	# Rounded-rectangle toggle button — matches the >> button's corner radius (5)
+	# so the two buttons look like a cohesive pair within the send-wave panel.
 	for pair: Array in [
 		["normal",   COLOR_GOLD_BG_NORMAL],
 		["hover",    COLOR_GOLD_BG_HOVER],
@@ -2085,7 +2101,7 @@ func _apply_toggle_btn_style(btn: Button) -> void:
 		box.bg_color     = pair[1] as Color
 		box.border_color = COLOR_GOLD_BORDER
 		box.set_border_width_all(2)
-		box.set_corner_radius_all(100)
+		box.set_corner_radius_all(5)
 		# Zero content margins so the anchored HBoxContainer inside the button
 		# fills the full button rect without being pushed inward by StyleBox padding.
 		box.set_content_margin_all(0)
