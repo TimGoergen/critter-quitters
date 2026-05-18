@@ -16,6 +16,8 @@ const Trap      = preload("res://traps/Trap.gd")
 const BoostUnit = preload("res://boosts/BoostUnit.gd")
 const UIFonts   = preload("res://ui/UIFonts.gd")
 
+const GEAR_OUTLINE_SHADER = preload("res://assets/gear_outline.gdshader")
+
 const COLOR_PANEL_BG    := Color(0.144, 0.144, 0.235, 0.88)
 const COLOR_BAR_BG      := Color(0.28, 0.28, 0.28, 1.0)
 const COLOR_BAR_FILL    := Color(0.85, 0.22, 0.22, 1.0)
@@ -421,6 +423,12 @@ func _build_right_panel() -> void:
 	gear_rect.offset_right  = -8.0
 	gear_rect.offset_bottom = -8.0
 	gear_rect.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	# Silver outline traces the gear silhouette rather than the square button boundary.
+	var gear_mat := ShaderMaterial.new()
+	gear_mat.shader = GEAR_OUTLINE_SHADER
+	gear_mat.set_shader_parameter("outline_color", COLOR_BTN_BORDER)
+	gear_mat.set_shader_parameter("outline_width", 0.7)
+	gear_rect.material = gear_mat
 	_settings_btn.add_child(gear_rect)
 
 	# --- Wave row: "WAVE" left-aligned, number right-aligned ---

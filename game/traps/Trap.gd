@@ -742,7 +742,6 @@ func _update_bait_station(delta: float) -> void:
 	_bait_pulse_timer -= delta
 	if _bait_pulse_timer > 0.0:
 		return
-	_bait_pulse_timer = _bait_pulse_interval
 
 	var hit_any := false
 	for enemy in _active_enemies:
@@ -756,8 +755,13 @@ func _update_bait_station(delta: float) -> void:
 		enemy.apply_poison(_bait_poison_damage_per_tick, _bait_poison_duration, _bait_poison_tick_rate)
 		hit_any = true
 	if hit_any:
+		# Only start the cooldown after a successful hit — keeps the trap "ready"
+		# when no enemy was in range, so the first enemy to enter is hit immediately.
+		_bait_pulse_timer = _bait_pulse_interval
 		AudioManager.play_trap_fire(TrapType.BAIT_STATION)
 		_play_bait_animation()
+	else:
+		_bait_pulse_timer = 0.0
 
 
 # ---------------------------------------------------------------------------
