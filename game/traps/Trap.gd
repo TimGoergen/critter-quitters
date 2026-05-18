@@ -1014,20 +1014,22 @@ func _update_star_display() -> void:
 
 
 ## Spawns the small diamond Label3D that lights up when at least one boost aura is active.
-## Positioned at the back-right corner of the 2×2 footprint, same height as the stars,
-## so it reads clearly without overlapping the star display at the front.
+## Floats centered above the trap at y=1.4 so it is clearly visible regardless of which
+## direction the stars are facing. Uses BILLBOARD_ENABLED so it always faces the camera,
+## matching the star label setup.
 func _spawn_boost_indicator() -> void:
-	_boost_indicator            = Label3D.new()
-	_boost_indicator.font       = UIFonts.primary_bold()
-	_boost_indicator.font_size  = 72
-	_boost_indicator.pixel_size = 0.009
-	_boost_indicator.modulate   = Color(1.0, 1.0, 1.0, 1.0)
-	_boost_indicator.outline_size        = 6
-	_boost_indicator.outline_modulate    = Color(0.0, 0.0, 0.0, 0.85)
-	_boost_indicator.billboard           = BaseMaterial3D.BILLBOARD_DISABLED
+	_boost_indicator                     = Label3D.new()
+	_boost_indicator.font                = UIFonts.primary_bold()
+	_boost_indicator.font_size           = 72
+	_boost_indicator.pixel_size          = 0.009
+	_boost_indicator.modulate            = Color(1.0, 1.0, 1.0, 1.0)
+	_boost_indicator.outline_size        = 8
+	_boost_indicator.outline_modulate    = Color(0.0, 0.0, 0.0, 0.90)
+	_boost_indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_boost_indicator.billboard           = BaseMaterial3D.BILLBOARD_ENABLED
 	_boost_indicator.no_depth_test       = true
 	_boost_indicator.text                = "◆"
-	_boost_indicator.position            = Vector3(0.72, 0.65, -0.72)
+	_boost_indicator.position            = Vector3(0.0, 1.4, 0.0)
 	_boost_indicator.visible             = false
 	add_child(_boost_indicator)
 
