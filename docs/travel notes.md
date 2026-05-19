@@ -17,3 +17,7 @@ This will help the arena look more like a maze than a bunch of random objects
 ## Update zapper sprite to be more visually distinct. Don't allow different traps to look too similar. 
 
 Instead of circle, should it look like a can from the side? 
+
+## there is a boost that can reduce infestation, but it should never allow infestation to become negative. 
+
+## boost that generates income should show totals collected in upgrade panel
