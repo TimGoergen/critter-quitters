@@ -263,7 +263,7 @@ func _build_enemy_section(parent: Control, y: float) -> Control:
 	_check_all_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_check_all_btn.add_theme_font_size_override("font_size", 18)
 	_check_all_btn.add_theme_font_override("font", UIFonts.primary())
-	_style_button(_check_all_btn)
+	_style_checkbox_btn(_check_all_btn)
 	_check_all_btn.toggled.connect(func(pressed: bool) -> void:
 		_check_all_btn.text = "✓" if pressed else ""
 		for btn: Button in _enemy_type_checks.values():
