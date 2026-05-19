@@ -20,8 +20,9 @@ const PANEL_H: float = 432.0
 const PADDING: float = 28.0
 
 ## Height added to the panel when Static Enemies is toggled on.
-## 1px border + 28px header + 2px separator + 7 rows × 16px + 6 row-dividers × 1px + 1px border = 150px.
-const ENEMY_SECTION_H: float = 150.0
+## 1px border + 28px header + 2px separator + 7 rows × 20px + 6 row-dividers × 1px + 1px border = 178px.
+## Row height is capped at 20px so the expanded panel's Start button stays within the 600px viewport.
+const ENEMY_SECTION_H: float = 178.0
 
 const COLOR_BG       := Color(0.04, 0.22, 0.00, 0.95)
 const COLOR_OUTLINE  := Color(0.22, 0.60, 0.04, 1.0)
@@ -274,22 +275,22 @@ func _build_enemy_section(parent: Control, y: float) -> Control:
 	# 2px separator below header to visually distinguish it from the data rows.
 	_section_line(section, 1.0, 29.0, w - 2.0, 2.0)
 
-	# --- Enemy type rows (y=31 + i×17, h=16 each, 1px divider between rows) ---
-	# Stride is 17px: 16px row content + 1px grid line drawn after each non-last row.
+	# --- Enemy type rows (y=31 + i×21, h=20 each, 1px divider between rows) ---
+	# Stride is 21px: 20px row content + 1px grid line drawn after each non-last row.
 	for i: int in range(STATIC_ENEMY_TYPES.size()):
 		var enemy_type: int = STATIC_ENEMY_TYPES[i]
-		var row_top    := 31.0 + float(i) * 17.0
+		var row_top    := 31.0 + float(i) * 21.0
 
 		var type_row := HBoxContainer.new()
 		type_row.position            = Vector2(1.0, row_top)
-		type_row.custom_minimum_size = Vector2(w - 2.0, 16.0)
+		type_row.custom_minimum_size = Vector2(w - 2.0, 20.0)
 		type_row.add_theme_constant_override("separation", 4)
 		section.add_child(type_row)
 
 		var type_lbl := Label.new()
 		type_lbl.text                  = ENEMY_TYPE_NAMES[enemy_type]
 		type_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		type_lbl.add_theme_font_size_override("font_size", 14)
+		type_lbl.add_theme_font_size_override("font_size", 16)
 		type_lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 		type_lbl.add_theme_font_override("font", UIFonts.primary())
 		type_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
@@ -300,9 +301,9 @@ func _build_enemy_section(parent: Control, y: float) -> Control:
 		type_btn.button_pressed      = true   # all checked by default
 		type_btn.text                = "✓"
 		type_btn.focus_mode          = Control.FOCUS_NONE
-		type_btn.custom_minimum_size = Vector2(36.0, 16.0)
+		type_btn.custom_minimum_size = Vector2(36.0, 20.0)
 		type_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		type_btn.add_theme_font_size_override("font_size", 14)
+		type_btn.add_theme_font_size_override("font_size", 16)
 		type_btn.add_theme_font_override("font", UIFonts.primary())
 		_style_button(type_btn)
 		type_btn.toggled.connect(func(pressed: bool) -> void:
@@ -313,7 +314,7 @@ func _build_enemy_section(parent: Control, y: float) -> Control:
 
 		# 1px grid line after this row; the outer bottom border handles the last row's edge.
 		if i < STATIC_ENEMY_TYPES.size() - 1:
-			_section_line(section, 1.0, row_top + 16.0, w - 2.0, 1.0)
+			_section_line(section, 1.0, row_top + 20.0, w - 2.0, 1.0)
 
 	return section
 
