@@ -71,6 +71,12 @@ const RAT_FRAMES: Array[Texture2D] = [
 	preload("res://assets/rat_walk_3.svg"),
 	preload("res://assets/rat_walk_4.svg"),
 ]
+const MOSQUITO_FRAMES: Array[Texture2D] = [
+	preload("res://assets/mosquito_walk_1.svg"),
+	preload("res://assets/mosquito_walk_2.svg"),
+	preload("res://assets/mosquito_walk_3.svg"),
+	preload("res://assets/mosquito_walk_4.svg"),
+]
 
 
 # ---------------------------------------------------------------------------
@@ -153,15 +159,15 @@ const DEATH_FLASH_DURATION: float = 0.12
 ## Values above 1.0 boost saturation and brightness. Muted types (Rat, Mouse) stay at
 ## 1.0 because boosting them would wash their defining gray tones to white.
 const SPRITE_BRIGHTNESS: Dictionary = {
-	EnemyType.ANT:            2.2,
-	EnemyType.GNAT:           2.2,
-	EnemyType.CRICKET:        2.2,
-	EnemyType.BEETLE:         2.2,
-	EnemyType.COCKROACH:      2.2,
+	EnemyType.ANT:            1.6,
+	EnemyType.GNAT:           1.6,
+	EnemyType.CRICKET:        1.6,
+	EnemyType.BEETLE:         1.6,
+	EnemyType.COCKROACH:      1.6,
 	EnemyType.RAT:            1.0,
-	EnemyType.MOSQUITO:       2.2,
-	EnemyType.COCKROACH_NYMPH:2.2,
-	EnemyType.COCKROACH_MINI: 2.2,
+	EnemyType.MOSQUITO:       1.6,
+	EnemyType.COCKROACH_NYMPH:1.6,
+	EnemyType.COCKROACH_MINI: 1.6,
 	EnemyType.MOUSE:          1.0,
 }
 
@@ -669,19 +675,32 @@ func _process_flying(delta: float) -> void:
 	if _visual == null:
 		return
 	_waddle_time += delta
-	var sway      := sin(_waddle_time * _waddle_speed) * _waddle_offset
 	var world_dir := offset.normalized()
-	# Sway perpendicular to the direction of travel, same as ground enemy waddle.
-	if abs(world_dir.x) >= abs(world_dir.z):
+	if _enemy_type == EnemyType.MOSQUITO:
+		# Hovering insects bob vertically rather than swaying side-to-side.
 		_visual.position.x = 0.0
-		_visual.position.z = sway
-	else:
 		_visual.position.z = 0.0
-		_visual.position.x = sway
-	var travel_dir := Vector2i(int(sign(world_dir.x)), int(sign(world_dir.z)))
+		_visual.position.y = sin(_waddle_time * 4.0) * 0.096
+	else:
+		var sway := sin(_waddle_time * _waddle_speed) * _waddle_offset
+		if abs(world_dir.x) >= abs(world_dir.z):
+			_visual.position.x = 0.0
+			_visual.position.z = sway
+		else:
+			_visual.position.z = 0.0
+			_visual.position.x = sway
+	# Snap to the dominant axis — flying enemies travel at arbitrary angles but the
+	# sprite only has four orientations. Using raw sign() on both axes produces a
+	# 45° diagonal facing whenever x and z components are both non-zero.
+	var travel_dir: Vector2i
+	if abs(world_dir.x) >= abs(world_dir.z):
+		travel_dir = Vector2i(int(sign(world_dir.x)), 0)
+	else:
+		travel_dir = Vector2i(0, int(sign(world_dir.z)))
 	_visual.basis   = _facing_basis(travel_dir)
 	_walk_time     += delta
-	_visual_material.albedo_texture = _walk_frames[int(_walk_time * _move_speed * 3.0) % _walk_frames.size()]
+	var _anim_rate := 6.0 if _enemy_type == EnemyType.MOSQUITO else 3.0
+	_visual_material.albedo_texture = _walk_frames[int(_walk_time * _move_speed * _anim_rate) % _walk_frames.size()]
 
 
 ## Kills the enemy: stops movement, emits died, plays a white flash, then frees.
@@ -855,7 +874,7 @@ func _build_glue_blob_mesh(base_r: float, color: Color) -> ImmediateMesh:
 
 
 ## Returns the walk-frame array for the given enemy type.
-## New types use placeholder frames from the nearest visual match until Phase 8 art migration.
+## Remaining placeholders use the nearest visual match until dedicated art is created.
 func _frames_for_type(enemy_type: EnemyType) -> Array[Texture2D]:
 	match enemy_type:
 		EnemyType.ANT:            return ANT_FRAMES
@@ -864,7 +883,7 @@ func _frames_for_type(enemy_type: EnemyType) -> Array[Texture2D]:
 		EnemyType.BEETLE:         return BEETLE_FRAMES
 		EnemyType.COCKROACH:      return COCKROACH_FRAMES
 		EnemyType.RAT:            return RAT_FRAMES
-		EnemyType.MOSQUITO:       return GNAT_FRAMES       # placeholder — small flying bug
+		EnemyType.MOSQUITO:       return MOSQUITO_FRAMES
 		EnemyType.COCKROACH_NYMPH:return COCKROACH_FRAMES  # placeholder — cockroach variant
 		EnemyType.COCKROACH_MINI: return COCKROACH_FRAMES  # placeholder — smaller cockroach
 		EnemyType.MOUSE:          return RAT_FRAMES        # placeholder — rodent sibling

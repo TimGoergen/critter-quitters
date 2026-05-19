@@ -409,10 +409,10 @@ func _build_right_panel() -> void:
 	_settings_btn.pressed.connect(_on_settings_btn_pressed)
 	settings_row.add_child(_settings_btn)
 
-	# TextureRect child centers the SVG gear inside the button with equal inset on all sides.
-	# SVG fill is #000000 so the icon is always solid black regardless of font/emoji settings.
+	# TextureRect child centers the PNG gear inside the button with equal inset on all sides.
+	# The PNG carries its own silver/gray styling and baked outline — no shader needed.
 	var gear_rect := TextureRect.new()
-	gear_rect.texture      = load("res://assets/gear_icon.svg") as Texture2D
+	gear_rect.texture      = load("res://assets/gear_icon.png") as Texture2D
 	gear_rect.expand_mode  = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	gear_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	gear_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -422,12 +422,6 @@ func _build_right_panel() -> void:
 	gear_rect.offset_right  = -8.0
 	gear_rect.offset_bottom = -8.0
 	gear_rect.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	# Silver outline traces the gear silhouette rather than the square button boundary.
-	var gear_mat := ShaderMaterial.new()
-	gear_mat.shader = GEAR_OUTLINE_SHADER
-	gear_mat.set_shader_parameter("outline_color", COLOR_BTN_BORDER)
-	gear_mat.set_shader_parameter("outline_width", 0.7)
-	gear_rect.material = gear_mat
 	_settings_btn.add_child(gear_rect)
 
 	# --- Wave row: "WAVE" left-aligned, number right-aligned ---
@@ -1416,6 +1410,14 @@ func _on_viewport_resized() -> void:
 
 func _on_speed_btn_pressed() -> void:
 	AudioManager.play_ui("button")
+	if _is_paused:
+		# Clicking >> while paused resumes play; handle visuals directly to avoid
+		# playing the button sound a second time through _on_pause_btn_pressed().
+		_is_paused = false
+		get_tree().paused = false
+		_pause_btn.text = ""
+		_pause_bar_icon.show()
+		_show_pause_banner(false)
 	_is_fast = not _is_fast
 	Engine.time_scale = 2.0 if _is_fast else 1.0
 	# Icon colour signals the active speed: bright gold for 2×, black for 1×.

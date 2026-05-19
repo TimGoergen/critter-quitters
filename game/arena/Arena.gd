@@ -1116,6 +1116,8 @@ func _enemy_type_for_wave(wave: int) -> Enemy.EnemyType:
 		pool.append_array([Enemy.EnemyType.BEETLE, Enemy.EnemyType.BEETLE])
 	if wave >= 8:
 		pool.append_array([Enemy.EnemyType.COCKROACH, Enemy.EnemyType.COCKROACH, Enemy.EnemyType.COCKROACH])
+	if wave >= 3:
+		pool.append(Enemy.EnemyType.MOSQUITO)
 
 	return pool[randi() % pool.size()]
 
@@ -1341,6 +1343,7 @@ func _launch_wave(additive: bool = false) -> void:
 			Enemy.EnemyType.BEETLE,
 			Enemy.EnemyType.COCKROACH,
 			Enemy.EnemyType.RAT,
+			Enemy.EnemyType.MOSQUITO,
 		]
 		for t: Enemy.EnemyType in types:
 			for _i in STATIC_GROUP_SIZE:
