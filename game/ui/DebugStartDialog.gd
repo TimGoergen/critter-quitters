@@ -20,8 +20,8 @@ const PANEL_H: float = 432.0
 const PADDING: float = 28.0
 
 ## Height added to the panel when Static Enemies is toggled on.
-## 36px (select-all row) + 4 rows × 30px (enemy pairs) = 156px.
-const ENEMY_SECTION_H: float = 156.0
+## 1px border + 28px header + 2px separator + 7 rows × 16px + 6 row-dividers × 1px + 1px border = 150px.
+const ENEMY_SECTION_H: float = 150.0
 
 const COLOR_BG       := Color(0.04, 0.22, 0.00, 0.95)
 const COLOR_OUTLINE  := Color(0.22, 0.60, 0.04, 1.0)
@@ -34,6 +34,8 @@ const COLOR_BTN_PRESSED := Color(0.01, 0.10, 0.00, 1.0)
 const COLOR_BTN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
 const COLOR_FIELD_BG    := Color(0.02, 0.14, 0.00, 1.0)
 const COLOR_FIELD_BORDER := Color(0.22, 0.60, 0.04, 1.0)
+const COLOR_GRID        := Color(0.12, 0.42, 0.04, 1.0)   # enemy list borders and row separators
+const COLOR_GRID_HEADER := Color(0.06, 0.26, 0.01, 1.0)   # slightly lighter bg for header row
 
 const UIFonts = preload("res://ui/UIFonts.gd")
 const HUD     = preload("res://ui/HUD.gd")
@@ -204,8 +206,9 @@ func _build_ui() -> void:
 
 
 ## Builds the enemy-type checkbox section shown when Static Enemies is enabled.
-## Lays out a full-width "select all" row followed by 7 enemy types in a 2-column grid.
-## Returns the container; it is hidden by default.
+## Single-column list: a header row with the select-all toggle, then one row per enemy
+## type, separated by 1px grid lines with a full outer border.
+## Returns the section container; it is hidden by default.
 func _build_enemy_section(parent: Control, y: float) -> Control:
 	var section             := Control.new()
 	section.position         = Vector2(PADDING, y)
@@ -213,33 +216,51 @@ func _build_enemy_section(parent: Control, y: float) -> Control:
 	section.visible          = false
 	parent.add_child(section)
 
-	var inner_w := PANEL_W - PADDING * 2.0
-	var sy      := 0.0   # y offset within section
+	var w := PANEL_W - PADDING * 2.0   # 544px
 
-	# "All Enemy Types" select-all row — checks or unchecks every type at once.
-	var all_row := HBoxContainer.new()
-	all_row.position            = Vector2(0.0, sy)
-	all_row.custom_minimum_size = Vector2(inner_w, 36.0)
-	all_row.add_theme_constant_override("separation", 4)
-	section.add_child(all_row)
+	# Section background fills the full area; grid lines and borders are drawn on top.
+	var bg     := ColorRect.new()
+	bg.color    = COLOR_BG
+	bg.size     = Vector2(w, ENEMY_SECTION_H)
+	section.add_child(bg)
 
-	var all_lbl := Label.new()
-	all_lbl.text                  = "All Enemy Types"
-	all_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	all_lbl.add_theme_font_size_override("font_size", 22)
-	all_lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
-	all_lbl.add_theme_font_override("font", UIFonts.primary())
-	all_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
-	all_row.add_child(all_lbl)
+	# Outer border: four 1px edges.
+	_section_line(section, 0.0, 0.0, w, 1.0)                          # top
+	_section_line(section, 0.0, ENEMY_SECTION_H - 1.0, w, 1.0)       # bottom
+	_section_line(section, 0.0, 0.0, 1.0, ENEMY_SECTION_H)            # left
+	_section_line(section, w - 1.0, 0.0, 1.0, ENEMY_SECTION_H)       # right
+
+	# --- Header row (y=1, h=28): "Enemy Types" label + select-all toggle ---
+	# Slightly different background to distinguish the header from data rows.
+	var header_bg        := ColorRect.new()
+	header_bg.color       = COLOR_GRID_HEADER
+	header_bg.position    = Vector2(1.0, 1.0)
+	header_bg.size        = Vector2(w - 2.0, 28.0)
+	section.add_child(header_bg)
+
+	var header_row := HBoxContainer.new()
+	header_row.position            = Vector2(1.0, 1.0)
+	header_row.custom_minimum_size = Vector2(w - 2.0, 28.0)
+	header_row.add_theme_constant_override("separation", 4)
+	section.add_child(header_row)
+
+	var header_lbl := Label.new()
+	header_lbl.text                  = "Enemy Types"
+	header_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	header_lbl.add_theme_font_size_override("font_size", 18)
+	header_lbl.add_theme_color_override("font_color", COLOR_TEXT)
+	header_lbl.add_theme_font_override("font", UIFonts.primary())
+	header_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+	header_row.add_child(header_lbl)
 
 	_check_all_btn                    = Button.new()
 	_check_all_btn.toggle_mode         = true
 	_check_all_btn.button_pressed      = true   # all types checked by default
 	_check_all_btn.text                = "✓"
 	_check_all_btn.focus_mode          = Control.FOCUS_NONE
-	_check_all_btn.custom_minimum_size = Vector2(36.0, 36.0)
+	_check_all_btn.custom_minimum_size = Vector2(36.0, 28.0)
 	_check_all_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_check_all_btn.add_theme_font_size_override("font_size", 22)
+	_check_all_btn.add_theme_font_size_override("font_size", 18)
 	_check_all_btn.add_theme_font_override("font", UIFonts.primary())
 	_style_button(_check_all_btn)
 	_check_all_btn.toggled.connect(func(pressed: bool) -> void:
@@ -248,28 +269,27 @@ func _build_enemy_section(parent: Control, y: float) -> Control:
 			btn.button_pressed = pressed
 			btn.text = "✓" if pressed else ""
 	)
-	all_row.add_child(_check_all_btn)
-	sy += 36.0
+	header_row.add_child(_check_all_btn)
 
-	# Enemy type rows — two types per row, each in half the available width.
-	var col_w := inner_w * 0.5
-	var row_h := 30.0
+	# 2px separator below header to visually distinguish it from the data rows.
+	_section_line(section, 1.0, 29.0, w - 2.0, 2.0)
 
+	# --- Enemy type rows (y=31 + i×17, h=16 each, 1px divider between rows) ---
+	# Stride is 17px: 16px row content + 1px grid line drawn after each non-last row.
 	for i: int in range(STATIC_ENEMY_TYPES.size()):
 		var enemy_type: int = STATIC_ENEMY_TYPES[i]
-		var col: int = i % 2
-		var row: int = i / 2
+		var row_top    := 31.0 + float(i) * 17.0
 
 		var type_row := HBoxContainer.new()
-		type_row.position            = Vector2(col * col_w, sy + row * row_h)
-		type_row.custom_minimum_size = Vector2(col_w, row_h)
+		type_row.position            = Vector2(1.0, row_top)
+		type_row.custom_minimum_size = Vector2(w - 2.0, 16.0)
 		type_row.add_theme_constant_override("separation", 4)
 		section.add_child(type_row)
 
 		var type_lbl := Label.new()
 		type_lbl.text                  = ENEMY_TYPE_NAMES[enemy_type]
 		type_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-		type_lbl.add_theme_font_size_override("font_size", 20)
+		type_lbl.add_theme_font_size_override("font_size", 14)
 		type_lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 		type_lbl.add_theme_font_override("font", UIFonts.primary())
 		type_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
@@ -280,9 +300,9 @@ func _build_enemy_section(parent: Control, y: float) -> Control:
 		type_btn.button_pressed      = true   # all checked by default
 		type_btn.text                = "✓"
 		type_btn.focus_mode          = Control.FOCUS_NONE
-		type_btn.custom_minimum_size = Vector2(36.0, 30.0)
+		type_btn.custom_minimum_size = Vector2(36.0, 16.0)
 		type_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		type_btn.add_theme_font_size_override("font_size", 20)
+		type_btn.add_theme_font_size_override("font_size", 14)
 		type_btn.add_theme_font_override("font", UIFonts.primary())
 		_style_button(type_btn)
 		type_btn.toggled.connect(func(pressed: bool) -> void:
@@ -291,7 +311,20 @@ func _build_enemy_section(parent: Control, y: float) -> Control:
 		type_row.add_child(type_btn)
 		_enemy_type_checks[enemy_type] = type_btn
 
+		# 1px grid line after this row; the outer bottom border handles the last row's edge.
+		if i < STATIC_ENEMY_TYPES.size() - 1:
+			_section_line(section, 1.0, row_top + 16.0, w - 2.0, 1.0)
+
 	return section
+
+
+## Adds a colored rectangle to parent, used for grid lines and outer borders.
+func _section_line(parent: Control, x: float, y: float, w: float, h: float) -> void:
+	var line     := ColorRect.new()
+	line.color    = COLOR_GRID
+	line.position = Vector2(x, y)
+	line.size     = Vector2(w, h)
+	parent.add_child(line)
 
 
 ## Shows or hides the enemy-type selector section when the static toggle changes.
