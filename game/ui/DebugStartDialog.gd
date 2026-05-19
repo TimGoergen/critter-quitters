@@ -303,9 +303,9 @@ func _build_enemy_section(parent: Control, y: float) -> Control:
 		type_btn.focus_mode          = Control.FOCUS_NONE
 		type_btn.custom_minimum_size = Vector2(36.0, 20.0)
 		type_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-		type_btn.add_theme_font_size_override("font_size", 16)
+		type_btn.add_theme_font_size_override("font_size", 14)
 		type_btn.add_theme_font_override("font", UIFonts.primary())
-		_style_button(type_btn)
+		_style_checkbox_btn(type_btn)
 		type_btn.toggled.connect(func(pressed: bool) -> void:
 			type_btn.text = "✓" if pressed else ""
 		)
@@ -494,6 +494,27 @@ func _style_button(btn: Button) -> void:
 		box.content_margin_right  = 8.0
 		box.content_margin_top    = 4.0
 		box.content_margin_bottom = 4.0
+		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.add_theme_color_override("font_color", COLOR_TEXT)
+
+
+## Variant of _style_button for compact row checkboxes.
+## Sets vertical content margins to zero so the button's natural height equals
+## the glyph height alone, allowing it to fit inside the tight enemy-list rows.
+## (_style_button's 4px top+bottom margins push the button to ~26px, which
+## overrides custom_minimum_size and overflows 20px rows.)
+func _style_checkbox_btn(btn: Button) -> void:
+	for state: Array in [["normal", COLOR_BTN_NORMAL], ["hover", COLOR_BTN_HOVER], ["pressed", COLOR_BTN_PRESSED]]:
+		var box := StyleBoxFlat.new()
+		box.bg_color           = state[1]
+		box.border_color       = COLOR_BTN_BORDER
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(0)
+		box.content_margin_left   = 4.0
+		box.content_margin_right  = 4.0
+		box.content_margin_top    = 0.0
+		box.content_margin_bottom = 0.0
 		btn.add_theme_stylebox_override(state[0], box)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
