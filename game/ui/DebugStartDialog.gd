@@ -6,9 +6,11 @@
 
 extends CanvasLayer
 
-## Emitted when the player presses Start. Arena connects here to apply
-## the values and then begin the first wave countdown.
-signal confirmed(bug_bucks: int, wave_size: int, static_enemies: bool)
+## Emitted when the player presses Start. Arena connects here to apply the
+## values and then begin the first wave countdown.
+## allowed_types is an Array of Enemy.EnemyType int values indicating which
+## enemy types should appear in static mode; empty array means all types.
+signal confirmed(bug_bucks: int, wave_size: int, static_enemies: bool, allowed_types: Array)
 
 const DEFAULT_BUG_BUCKS: int = 1000
 const DEFAULT_WAVE_SIZE:  int = 10
@@ -17,11 +19,15 @@ const PANEL_W: float = 600.0
 const PANEL_H: float = 432.0
 const PADDING: float = 28.0
 
-const COLOR_BG      := Color(0.04, 0.22, 0.00, 0.95)
-const COLOR_OUTLINE := Color(0.22, 0.60, 0.04, 1.0)
-const COLOR_TEXT    := Color(0.90, 0.90, 0.90, 1.0)
+## Height added to the panel when Static Enemies is toggled on.
+## 36px (select-all row) + 4 rows × 30px (enemy pairs) = 156px.
+const ENEMY_SECTION_H: float = 156.0
+
+const COLOR_BG       := Color(0.04, 0.22, 0.00, 0.95)
+const COLOR_OUTLINE  := Color(0.22, 0.60, 0.04, 1.0)
+const COLOR_TEXT     := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM := Color(0.55, 0.78, 0.50, 1.0)
-const COLOR_DIVIDER := Color(0.06, 0.22, 0.01, 1.0)
+const COLOR_DIVIDER  := Color(0.06, 0.22, 0.01, 1.0)
 const COLOR_BTN_NORMAL  := Color(0.02, 0.15, 0.00, 1.0)
 const COLOR_BTN_HOVER   := Color(0.07, 0.32, 0.02, 1.0)
 const COLOR_BTN_PRESSED := Color(0.01, 0.10, 0.00, 1.0)
@@ -31,11 +37,47 @@ const COLOR_FIELD_BORDER := Color(0.22, 0.60, 0.04, 1.0)
 
 const UIFonts = preload("res://ui/UIFonts.gd")
 const HUD     = preload("res://ui/HUD.gd")
+const Enemy   = preload("res://enemies/Enemy.gd")
 
-var _field_bucks:  LineEdit  = null
-var _field_waves:  LineEdit  = null
-var _check_static: Button    = null  # toggle_mode button; checked = "✓" centered, matching ± size
-var _panel_rect:   Rect2     = Rect2()
+## The enemy types offered in the selector, in the same order as the static spawn queue.
+const STATIC_ENEMY_TYPES: Array = [
+	Enemy.EnemyType.ANT,
+	Enemy.EnemyType.GNAT,
+	Enemy.EnemyType.CRICKET,
+	Enemy.EnemyType.BEETLE,
+	Enemy.EnemyType.COCKROACH,
+	Enemy.EnemyType.RAT,
+	Enemy.EnemyType.MOSQUITO,
+]
+
+const ENEMY_TYPE_NAMES: Dictionary = {
+	Enemy.EnemyType.ANT:       "Ant",
+	Enemy.EnemyType.GNAT:      "Gnat",
+	Enemy.EnemyType.CRICKET:   "Cricket",
+	Enemy.EnemyType.BEETLE:    "Beetle",
+	Enemy.EnemyType.COCKROACH: "Cockroach",
+	Enemy.EnemyType.RAT:       "Rat",
+	Enemy.EnemyType.MOSQUITO:  "Mosquito",
+}
+
+var _field_bucks:  LineEdit = null
+var _field_waves:  LineEdit = null
+var _check_static: Button   = null  # toggle_mode button; checked = "✓" centered, matching ± size
+var _panel_rect:   Rect2    = Rect2()
+
+## References held so _on_static_toggled can resize and reposition the panel.
+var _bg:              ColorRect = null
+var _border:          ColorRect = null
+var _div_before_start: ColorRect = null
+var _btn_start:        Button   = null
+var _enemy_section:    Control  = null
+
+## EnemyType int value → toggle Button for each type in STATIC_ENEMY_TYPES.
+var _enemy_type_checks: Dictionary = {}
+var _check_all_btn: Button = null
+
+## Horizontal position of the panel — used when rebuilding _panel_rect on resize.
+var _base_px: float = 0.0
 
 
 func _ready() -> void:
@@ -49,31 +91,32 @@ func _build_ui() -> void:
 	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
 	var px       := arena_cx - PANEL_W * 0.5
 	var py       := (vp.y - PANEL_H) * 0.5
+	_base_px      = px
 
 	# Fullscreen darkening overlay — covers the arena behind the dialog.
 	# Added first so it renders beneath the panel and border.
-	var overlay       := ColorRect.new()
-	overlay.anchor_right  = 1.0
-	overlay.anchor_bottom = 1.0
-	overlay.color = Color(0.0, 0.02, 0.0, 0.60)
+	var overlay           := ColorRect.new()
+	overlay.anchor_right   = 1.0
+	overlay.anchor_bottom  = 1.0
+	overlay.color          = Color(0.0, 0.02, 0.0, 0.60)
 	add_child(overlay)
 
 	# Store the full panel rect (including border) for outside-click detection.
 	_panel_rect = Rect2(Vector2(px - 8.0, py - 8.0), Vector2(PANEL_W + 16.0, PANEL_H + 16.0))
 
 	# Outline border
-	var border       := ColorRect.new()
-	border.color      = COLOR_OUTLINE
-	border.position   = Vector2(px - 8.0, py - 8.0)
-	border.size       = Vector2(PANEL_W + 16.0, PANEL_H + 16.0)
-	add_child(border)
+	_border          = ColorRect.new()
+	_border.color     = COLOR_OUTLINE
+	_border.position  = Vector2(px - 8.0, py - 8.0)
+	_border.size      = Vector2(PANEL_W + 16.0, PANEL_H + 16.0)
+	add_child(_border)
 
 	# Background
-	var bg       := ColorRect.new()
-	bg.color      = COLOR_BG
-	bg.position   = Vector2(px, py)
-	bg.size       = Vector2(PANEL_W, PANEL_H)
-	add_child(bg)
+	_bg          = ColorRect.new()
+	_bg.color     = COLOR_BG
+	_bg.position  = Vector2(px, py)
+	_bg.size      = Vector2(PANEL_W, PANEL_H)
+	add_child(_bg)
 
 	var inner_w := PANEL_W - PADDING * 2.0
 	var y       := PADDING
@@ -85,7 +128,7 @@ func _build_ui() -> void:
 	lbl_title.add_theme_font_size_override("font_size", 48)
 	lbl_title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	lbl_title.add_theme_font_override("font", UIFonts.header())
-	bg.add_child(lbl_title)
+	_bg.add_child(lbl_title)
 	y += 56.0
 
 	# Divider
@@ -93,15 +136,15 @@ func _build_ui() -> void:
 	div.color      = COLOR_DIVIDER
 	div.position   = Vector2(PADDING, y)
 	div.size       = Vector2(inner_w, 2.0)
-	bg.add_child(div)
+	_bg.add_child(div)
 	y += 20.0
 
 	# Bug Bucks row
-	_field_bucks = _add_field_row(bg, y, "Starting Bug Bucks", str(DEFAULT_BUG_BUCKS), 10000, 0)
+	_field_bucks = _add_field_row(_bg, y, "Starting Bug Bucks", str(DEFAULT_BUG_BUCKS), 10000, 0)
 	y += 72.0
 
 	# Wave size row
-	_field_waves = _add_field_row(bg, y, "Enemies per Wave", str(DEFAULT_WAVE_SIZE), 10, 1)
+	_field_waves = _add_field_row(_bg, y, "Enemies per Wave", str(DEFAULT_WAVE_SIZE), 10, 1)
 	y += 72.0
 
 	# Static enemies toggle — when on, each wave spawns 3 of every enemy type for visual review
@@ -109,7 +152,7 @@ func _build_ui() -> void:
 	static_row.position            = Vector2(PADDING, y)
 	static_row.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, 56.0)
 	static_row.add_theme_constant_override("separation", 4)
-	bg.add_child(static_row)
+	_bg.add_child(static_row)
 
 	var static_lbl := Label.new()
 	static_lbl.text                  = "Static Enemies (review mode)"
@@ -123,39 +166,164 @@ func _build_ui() -> void:
 	# Toggle button instead of CheckBox so it is the same 56×56 size as the ± buttons
 	# and the checkmark is naturally centered in the box.
 	_check_static = Button.new()
-	_check_static.toggle_mode          = true
-	_check_static.button_pressed       = false
-	_check_static.focus_mode           = Control.FOCUS_NONE
-	_check_static.custom_minimum_size  = Vector2(56.0, 56.0)
-	_check_static.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
+	_check_static.toggle_mode         = true
+	_check_static.button_pressed      = false
+	_check_static.focus_mode          = Control.FOCUS_NONE
+	_check_static.custom_minimum_size = Vector2(56.0, 56.0)
+	_check_static.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_check_static.add_theme_font_size_override("font_size", 30)
 	_check_static.add_theme_font_override("font", UIFonts.primary())
 	_style_button(_check_static)
-	_check_static.toggled.connect(func(pressed: bool) -> void:
-		_check_static.text = "✓" if pressed else ""
-	)
+	_check_static.toggled.connect(_on_static_toggled)
 	static_row.add_child(_check_static)
 	y += 72.0
 
-	# Divider
-	var div2       := ColorRect.new()
-	div2.color      = COLOR_DIVIDER
-	div2.position   = Vector2(PADDING, y)
-	div2.size       = Vector2(inner_w, 2.0)
-	bg.add_child(div2)
+	# Enemy type selector — hidden until Static Enemies is checked.
+	# Positioned at the current y so it expands the panel downward when shown.
+	_enemy_section = _build_enemy_section(_bg, y)
+
+	# Divider before the Start button — stored so it can slide down when the section opens.
+	_div_before_start         = ColorRect.new()
+	_div_before_start.color    = COLOR_DIVIDER
+	_div_before_start.position = Vector2(PADDING, y)
+	_div_before_start.size     = Vector2(inner_w, 2.0)
+	_bg.add_child(_div_before_start)
 	y += 20.0
 
-	# Start button
-	var btn               := Button.new()
-	btn.text               = "Start"
-	btn.focus_mode         = Control.FOCUS_NONE
-	btn.position           = Vector2(PADDING, y)
-	btn.custom_minimum_size = Vector2(inner_w, 64.0)
-	btn.add_theme_font_size_override("font_size", 30)
-	btn.add_theme_font_override("font", UIFonts.primary_bold())
-	btn.pressed.connect(_on_start_pressed)
-	_style_start_button(btn)
-	bg.add_child(btn)
+	# Start button — stored so it can slide down when the section opens.
+	_btn_start               = Button.new()
+	_btn_start.text           = "Start"
+	_btn_start.focus_mode     = Control.FOCUS_NONE
+	_btn_start.position       = Vector2(PADDING, y)
+	_btn_start.custom_minimum_size = Vector2(inner_w, 64.0)
+	_btn_start.add_theme_font_size_override("font_size", 30)
+	_btn_start.add_theme_font_override("font", UIFonts.primary_bold())
+	_btn_start.pressed.connect(_on_start_pressed)
+	_style_start_button(_btn_start)
+	_bg.add_child(_btn_start)
+
+
+## Builds the enemy-type checkbox section shown when Static Enemies is enabled.
+## Lays out a full-width "select all" row followed by 7 enemy types in a 2-column grid.
+## Returns the container; it is hidden by default.
+func _build_enemy_section(parent: Control, y: float) -> Control:
+	var section             := Control.new()
+	section.position         = Vector2(PADDING, y)
+	section.custom_minimum_size = Vector2(PANEL_W - PADDING * 2.0, ENEMY_SECTION_H)
+	section.visible          = false
+	parent.add_child(section)
+
+	var inner_w := PANEL_W - PADDING * 2.0
+	var sy      := 0.0   # y offset within section
+
+	# "All Enemy Types" select-all row — checks or unchecks every type at once.
+	var all_row := HBoxContainer.new()
+	all_row.position            = Vector2(0.0, sy)
+	all_row.custom_minimum_size = Vector2(inner_w, 36.0)
+	all_row.add_theme_constant_override("separation", 4)
+	section.add_child(all_row)
+
+	var all_lbl := Label.new()
+	all_lbl.text                  = "All Enemy Types"
+	all_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	all_lbl.add_theme_font_size_override("font_size", 22)
+	all_lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	all_lbl.add_theme_font_override("font", UIFonts.primary())
+	all_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+	all_row.add_child(all_lbl)
+
+	_check_all_btn                    = Button.new()
+	_check_all_btn.toggle_mode         = true
+	_check_all_btn.button_pressed      = true   # all types checked by default
+	_check_all_btn.text                = "✓"
+	_check_all_btn.focus_mode          = Control.FOCUS_NONE
+	_check_all_btn.custom_minimum_size = Vector2(36.0, 36.0)
+	_check_all_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_check_all_btn.add_theme_font_size_override("font_size", 22)
+	_check_all_btn.add_theme_font_override("font", UIFonts.primary())
+	_style_button(_check_all_btn)
+	_check_all_btn.toggled.connect(func(pressed: bool) -> void:
+		_check_all_btn.text = "✓" if pressed else ""
+		for btn: Button in _enemy_type_checks.values():
+			btn.button_pressed = pressed
+			btn.text = "✓" if pressed else ""
+	)
+	all_row.add_child(_check_all_btn)
+	sy += 36.0
+
+	# Enemy type rows — two types per row, each in half the available width.
+	var col_w := inner_w * 0.5
+	var row_h := 30.0
+
+	for i: int in range(STATIC_ENEMY_TYPES.size()):
+		var enemy_type: int = STATIC_ENEMY_TYPES[i]
+		var col: int = i % 2
+		var row: int = i / 2
+
+		var type_row := HBoxContainer.new()
+		type_row.position            = Vector2(col * col_w, sy + row * row_h)
+		type_row.custom_minimum_size = Vector2(col_w, row_h)
+		type_row.add_theme_constant_override("separation", 4)
+		section.add_child(type_row)
+
+		var type_lbl := Label.new()
+		type_lbl.text                  = ENEMY_TYPE_NAMES[enemy_type]
+		type_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		type_lbl.add_theme_font_size_override("font_size", 20)
+		type_lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+		type_lbl.add_theme_font_override("font", UIFonts.primary())
+		type_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+		type_row.add_child(type_lbl)
+
+		var type_btn := Button.new()
+		type_btn.toggle_mode         = true
+		type_btn.button_pressed      = true   # all checked by default
+		type_btn.text                = "✓"
+		type_btn.focus_mode          = Control.FOCUS_NONE
+		type_btn.custom_minimum_size = Vector2(36.0, 30.0)
+		type_btn.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		type_btn.add_theme_font_size_override("font_size", 20)
+		type_btn.add_theme_font_override("font", UIFonts.primary())
+		_style_button(type_btn)
+		type_btn.toggled.connect(func(pressed: bool) -> void:
+			type_btn.text = "✓" if pressed else ""
+		)
+		type_row.add_child(type_btn)
+		_enemy_type_checks[enemy_type] = type_btn
+
+	return section
+
+
+## Shows or hides the enemy-type selector section when the static toggle changes.
+## Resizes the panel background and border, slides the divider and Start button,
+## and recentres the entire panel vertically so it stays within the viewport.
+func _on_static_toggled(pressed: bool) -> void:
+	_check_static.text     = "✓" if pressed else ""
+	_enemy_section.visible = pressed
+
+	var extra_h    := ENEMY_SECTION_H if pressed else 0.0
+	var new_panel_h := PANEL_H + extra_h
+
+	# Resize background and border to fit the expanded content.
+	_bg.size.y     = new_panel_h
+	_border.size.y = new_panel_h + 16.0
+
+	# Slide the divider and Start button down (or back up) by the section height.
+	# 320.0 is the y offset of the divider in the collapsed panel (see _build_ui layout).
+	_div_before_start.position.y = 320.0 + extra_h
+	_btn_start.position.y        = 340.0 + extra_h
+
+	# Recentre the panel; clamp so the border (8px above bg) never goes off-screen.
+	var vp     := get_viewport().get_visible_rect().size
+	var new_py := maxf(8.0, (vp.y - new_panel_h) * 0.5)
+	_bg.position.y     = new_py
+	_border.position.y = new_py - 8.0
+
+	# Rebuild the click-detection rect for the new size and position.
+	_panel_rect = Rect2(
+		Vector2(_base_px - 8.0, new_py - 8.0),
+		Vector2(PANEL_W + 16.0, new_panel_h + 16.0)
+	)
 
 
 ## Builds one label + [−] LineEdit [+] row and returns the LineEdit.
@@ -178,8 +346,8 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 	row.add_child(lbl)
 
 	var minus_btn := Button.new()
-	minus_btn.text              = "−"
-	minus_btn.focus_mode        = Control.FOCUS_NONE
+	minus_btn.text               = "−"
+	minus_btn.focus_mode         = Control.FOCUS_NONE
 	minus_btn.custom_minimum_size = Vector2(56.0, 56.0)
 	minus_btn.add_theme_font_size_override("font_size", 30)
 	minus_btn.add_theme_font_override("font", UIFonts.primary())
@@ -187,9 +355,9 @@ func _add_field_row(parent: Control, y: float, label_text: String, default_value
 	row.add_child(minus_btn)
 
 	var field := LineEdit.new()
-	field.text                  = default_value
-	field.custom_minimum_size   = Vector2(128.0, 56.0)
-	field.alignment             = HORIZONTAL_ALIGNMENT_CENTER
+	field.text                = default_value
+	field.custom_minimum_size = Vector2(128.0, 56.0)
+	field.alignment           = HORIZONTAL_ALIGNMENT_CENTER
 	field.add_theme_font_size_override("font_size", 26)
 	field.add_theme_font_override("font", UIFonts.primary())
 	_style_field(field)
@@ -245,7 +413,16 @@ func _on_start_pressed() -> void:
 	var waves := int(_field_waves.text) if _field_waves.text.is_valid_int() else DEFAULT_WAVE_SIZE
 	bucks = maxi(bucks, 0)
 	waves = maxi(waves, 1)
-	confirmed.emit(bucks, waves, _check_static.button_pressed)
+
+	# Collect the checked enemy types — only relevant when static mode is on.
+	# An empty array passed to Arena means "use all types".
+	var allowed: Array = []
+	if _check_static.button_pressed:
+		for enemy_type: int in _enemy_type_checks:
+			if _enemy_type_checks[enemy_type].button_pressed:
+				allowed.append(enemy_type)
+
+	confirmed.emit(bucks, waves, _check_static.button_pressed, allowed)
 	queue_free()
 
 

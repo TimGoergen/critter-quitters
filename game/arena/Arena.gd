@@ -110,8 +110,10 @@ var _seconds_remaining: int      = 0     # last value broadcast during the activ
 # in order instead of using normal wave composition. Toggled at startup via DebugStartDialog.
 const STATIC_GROUP_SIZE: int  = 3
 const STATIC_GROUP_GAP: float = 1.5   # seconds of pause between each enemy type group
-var _static_enemies_mode: bool                   = false
-var _static_spawn_queue:  Array[Enemy.EnemyType] = []
+var _static_enemies_mode:  bool                   = false
+var _static_spawn_queue:   Array[Enemy.EnemyType] = []
+## Enemy types allowed in static mode; set from DebugStartDialog. Empty = all types.
+var _static_allowed_types: Array                  = []
 
 # The path currently drawn as yellow markers. Updated on every grid change
 # and trimmed forward as the enemy advances through cells.
@@ -1232,10 +1234,11 @@ func _handle_key(_keycode: int) -> void:
 
 
 ## Receives the confirmed playtest values from DebugStartDialog and starts the run.
-func _on_debug_confirmed(bug_bucks: int, wave_size: int, static_enemies: bool) -> void:
-	_wave_size            = wave_size
-	_static_enemies_mode  = static_enemies
-	GameState.bug_bucks   = bug_bucks
+func _on_debug_confirmed(bug_bucks: int, wave_size: int, static_enemies: bool, allowed_types: Array) -> void:
+	_wave_size             = wave_size
+	_static_enemies_mode   = static_enemies
+	_static_allowed_types  = allowed_types
+	GameState.bug_bucks    = bug_bucks
 	GameState.bug_bucks_changed.emit(bug_bucks)
 	_start_wave()
 
@@ -1345,6 +1348,14 @@ func _launch_wave(additive: bool = false) -> void:
 			Enemy.EnemyType.RAT,
 			Enemy.EnemyType.MOSQUITO,
 		]
+		# Restrict to the subset selected in the playtest dialog (empty = all types).
+		if not _static_allowed_types.is_empty():
+			var filtered: Array[Enemy.EnemyType] = []
+			for t: Enemy.EnemyType in types:
+				if _static_allowed_types.has(t):
+					filtered.append(t)
+			if not filtered.is_empty():
+				types = filtered
 		for t: Enemy.EnemyType in types:
 			for _i in STATIC_GROUP_SIZE:
 				_static_spawn_queue.append(t)
