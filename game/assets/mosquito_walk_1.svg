@@ -1,13 +1,13 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
   <!-- Wings: triangular, spread outward from thorax sides; frame 1 = neutral mid position -->
-  <!-- Left wing: attachment edge along thorax left, outer tip pointing left at mid-height -->
-  <path d="M 56 57 L 14 65 L 56 73 Z" fill="#9B7040" opacity="0.65"/>
-  <line x1="56" y1="57" x2="14" y2="65" stroke="#7A5828" stroke-width="0.8" opacity="0.65"/>
-  <line x1="56" y1="65" x2="14" y2="65" stroke="#7A5828" stroke-width="0.6" opacity="0.55"/>
+  <!-- Left wing: swept back — outer tip at y=69, angled toward abdomen along the thorax attachment edge -->
+  <path d="M 56 57 L 14 69 L 56 73 Z" fill="#9B7040" opacity="0.65"/>
+  <line x1="56" y1="57" x2="14" y2="69" stroke="#7A5828" stroke-width="0.8" opacity="0.65"/>
+  <line x1="56" y1="65" x2="14" y2="69" stroke="#7A5828" stroke-width="0.6" opacity="0.55"/>
   <!-- Right wing: mirror -->
-  <path d="M 72 57 L 114 65 L 72 73 Z" fill="#9B7040" opacity="0.65"/>
-  <line x1="72" y1="57" x2="114" y2="65" stroke="#7A5828" stroke-width="0.8" opacity="0.65"/>
-  <line x1="72" y1="65" x2="114" y2="65" stroke="#7A5828" stroke-width="0.6" opacity="0.55"/>
+  <path d="M 72 57 L 114 69 L 72 73 Z" fill="#9B7040" opacity="0.65"/>
+  <line x1="72" y1="57" x2="114" y2="69" stroke="#7A5828" stroke-width="0.8" opacity="0.65"/>
+  <line x1="72" y1="65" x2="114" y2="69" stroke="#7A5828" stroke-width="0.6" opacity="0.55"/>
 
   <!-- Antennae: short -->
   <path d="M 59 37 Q 55 31 48 26" stroke="#2A1A08" stroke-width="1.8" stroke-linecap="round" fill="none"/>
