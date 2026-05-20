@@ -27,6 +27,7 @@ const COLOR_COUNTDOWN        := Color(1.00, 1.00, 1.00, 1.00)
 const COLOR_COUNTDOWN_SHADOW := Color(0.00, 0.00, 0.00, 0.70)
 const COLOR_INCOMING         := Color(1.00, 1.00, 1.00, 1.00)
 const COLOR_INFESTED    := Color(0.85, 0.10, 0.10, 1.0)
+const COLOR_GOLD_OUTLINE := Color(0.85, 0.62, 0.00, 1.0)  # outline for bucks icon, bucks label, wave label
 const COLOR_OVERLAY_BG  := Color(0.04, 0.02, 0.02, 0.82)
 
 const COLOR_GREEN_NORMAL  := Color(0.04, 0.25, 0.00, 1.0)
@@ -356,6 +357,21 @@ func _build_left_panel() -> void:
 # Right panel — info and controls
 # ---------------------------------------------------------------------------
 
+## Returns the StyleBoxFlat used for the wave and bug bucks panel borders:
+## transparent fill, 2px gold outline, 6px corner radius.
+func _gold_panel_style() -> StyleBoxFlat:
+	var style := StyleBoxFlat.new()
+	style.draw_center           = false
+	style.border_color          = COLOR_GOLD_OUTLINE
+	style.set_border_width_all(2)
+	style.set_corner_radius_all(6)
+	style.content_margin_left   = 2.0
+	style.content_margin_right  = 2.0
+	style.content_margin_top    = 2.0
+	style.content_margin_bottom = 2.0
+	return style
+
+
 func _build_right_panel() -> void:
 	var bg := ColorRect.new()
 	bg.color         = COLOR_PANEL_BG
@@ -427,14 +443,21 @@ func _build_right_panel() -> void:
 	_settings_btn.add_child(gear_rect)
 
 	# --- Wave row: "WAVE" left-aligned, number right-aligned ---
+	# PanelContainer sizes itself from the HBoxContainer's minimum height,
+	# draws the gold rounded border, and insets the content by the border width.
+	var wave_panel := PanelContainer.new()
+	wave_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	wave_panel.add_theme_stylebox_override("panel", _gold_panel_style())
+	vbox.add_child(wave_panel)
+
 	var wave_row := HBoxContainer.new()
 	wave_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	wave_row.add_theme_constant_override("separation", 0)
-	vbox.add_child(wave_row)
+	wave_panel.add_child(wave_row)
 
 	var wave_text_lbl := Label.new()
 	wave_text_lbl.text                  = "WAVE"
-	wave_text_lbl.add_theme_font_size_override("font_size", 42)
+	wave_text_lbl.add_theme_font_size_override("font_size", 34)
 	wave_text_lbl.add_theme_font_override("font", UIFonts.header())
 	wave_text_lbl.add_theme_color_override("font_color", COLOR_TEXT)
 	wave_text_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
@@ -451,9 +474,14 @@ func _build_right_panel() -> void:
 	wave_row.add_child(_wave_label)
 
 	# --- Bug Bucks row ---
+	var bucks_panel := PanelContainer.new()
+	bucks_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bucks_panel.add_theme_stylebox_override("panel", _gold_panel_style())
+	vbox.add_child(bucks_panel)
+
 	var bucks_row := HBoxContainer.new()
 	bucks_row.add_theme_constant_override("separation", 4)
-	vbox.add_child(bucks_row)
+	bucks_panel.add_child(bucks_row)
 
 	var coin_icon := TextureRect.new()
 	coin_icon.texture             = load("res://assets/bug_buck_coin_medium.png")
@@ -465,7 +493,7 @@ func _build_right_panel() -> void:
 
 	_bucks_label = Label.new()
 	_bucks_label.text = "0"
-	_bucks_label.add_theme_font_size_override("font_size", 42)
+	_bucks_label.add_theme_font_size_override("font_size", 36)
 	_bucks_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_bucks_label.add_theme_color_override("font_color", Color(1.00, 0.82, 0.18))
 	_bucks_label.size_flags_vertical    = Control.SIZE_SHRINK_CENTER
