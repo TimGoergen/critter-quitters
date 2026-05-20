@@ -505,11 +505,13 @@ func _build_right_panel() -> void:
 	bucks_row.add_child(_bucks_label)
 
 	# --- Infestation section — single bar element ---
-	# The bar background is the root container; the fill grows from the left;
-	# the icon and percentage are overlaid and centered vertically inside it.
+	# The fill grows from the left; icon and percentage are overlaid on top;
+	# the border overlay is the last child so it always renders above the fill.
+	# clip_children prevents any child from rendering outside this rectangle.
 	var inf_container := Control.new()
-	inf_container.custom_minimum_size   = Vector2(0, 62)  # 20% taller than the original 52px height
+	inf_container.custom_minimum_size   = Vector2(0, 62)
 	inf_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	inf_container.clip_children         = CanvasItem.CLIP_CHILDREN_ONLY
 	vbox.add_child(inf_container)
 
 	var inf_track := Panel.new()
@@ -522,21 +524,20 @@ func _build_right_panel() -> void:
 	inf_track.add_theme_stylebox_override("panel", inf_track_style)
 	inf_container.add_child(inf_track)
 
-	# Fill grows rightward; anchor_bottom=1 keeps it full height automatically.
-	# Panel + StyleBoxFlat with matching corner radius so the fill stays within
-	# the rounded border at all fill levels — a plain ColorRect bleeds into corners.
-	_infestation_fill              = Panel.new()
+	# Fill is inset by the border width (3px) on all sides so its rounded arcs are
+	# concentric with the border's arcs — same center point, inner radius = outer − 3.
+	# This prevents the antialiasing fringe from bleeding past the dark red outline.
+	_infestation_fill               = Panel.new()
 	_infestation_fill.anchor_bottom = 1.0
-	_infestation_fill.offset_right  = 0.0
+	_infestation_fill.offset_top    = 3.0
+	_infestation_fill.offset_bottom = -3.0
+	_infestation_fill.offset_left   = 3.0
+	_infestation_fill.offset_right  = 3.0   # zero initial width; grows via _on_infestation_changed
 	_infestation_fill.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	var fill_style := StyleBoxFlat.new()
 	fill_style.bg_color = COLOR_BAR_FILL
 	fill_style.set_border_width_all(0)
-	fill_style.set_corner_radius_all(6)
-	fill_style.content_margin_left   = 0.0
-	fill_style.content_margin_right  = 0.0
-	fill_style.content_margin_top    = 0.0
-	fill_style.content_margin_bottom = 0.0
+	fill_style.set_corner_radius_all(3)   # inner radius = outer(6) − border_width(3)
 	_infestation_fill.add_theme_stylebox_override("panel", fill_style)
 	inf_container.add_child(_infestation_fill)
 
@@ -594,8 +595,8 @@ void fragment() {
 	_infestation_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	inf_overlay.add_child(_infestation_label)
 
-	# Border overlay — drawn last so it sits above the fill and the icon/label.
-	# draw_center=false makes the interior transparent; only the border renders.
+	# Border overlay — last child so it renders above the fill and icon at all times.
+	# draw_center=false keeps the interior transparent; only the outline is drawn.
 	var inf_border := Panel.new()
 	inf_border.set_anchors_preset(Control.PRESET_FULL_RECT)
 	inf_border.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -1280,7 +1281,10 @@ func _on_bucks_changed(amount: int) -> void:
 
 func _on_infestation_changed(level: float) -> void:
 	var container: Control = _infestation_fill.get_parent()
-	_infestation_fill.offset_right = container.size.x * level
+	# Fill is inset 3px on each side, so usable inner width = container width − 6.
+	# offset_right = left inset + proportion of inner width.
+	var inner_w: float = container.size.x - 6.0
+	_infestation_fill.offset_right = 3.0 + inner_w * level
 	_infestation_label.text        = "%d%%" % roundi(level * 100.0)
 
 
