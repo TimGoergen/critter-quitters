@@ -102,7 +102,7 @@ const PAUSE_BANNER_H:      float = 50.0
 const PAUSE_BANNER_TAPER:  float = 25.0
 # ~31% of the arena width (25% × 1.25); wide top edge, bottom edge is 2×TAPER narrower.
 const PAUSE_BANNER_W:      float = (1280.0 - LEFT_PANEL_W - RIGHT_PANEL_W) * 0.3125
-const COLOR_PAUSE_BANNER_BG := Color(0.28, 0.16, 0.16, 0.85)  # reddish-gray
+const COLOR_PAUSE_BANNER_BG := Color(0.48, 0.04, 0.04, 0.92)  # deep crimson
 
 # Incoming wave banner — slides up from the bottom during the between-wave countdown.
 # Reverse trapezoid: wide bottom edge flush with the screen, narrow top edge visible.
