@@ -481,9 +481,14 @@ func _build_right_panel() -> void:
 	inf_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	vbox.add_child(inf_container)
 
-	var inf_track := ColorRect.new()
-	inf_track.color = COLOR_BAR_BG
+	var inf_track := Panel.new()
 	inf_track.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inf_track.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var inf_track_style := StyleBoxFlat.new()
+	inf_track_style.bg_color = COLOR_BAR_BG
+	inf_track_style.set_border_width_all(0)
+	inf_track_style.set_corner_radius_all(6)
+	inf_track.add_theme_stylebox_override("panel", inf_track_style)
 	inf_container.add_child(inf_track)
 
 	# Fill grows rightward; anchor_bottom=1 keeps it full height automatically.
@@ -546,6 +551,19 @@ void fragment() {
 	_infestation_label.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
 	_infestation_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	inf_overlay.add_child(_infestation_label)
+
+	# Border overlay — drawn last so it sits above the fill and the icon/label.
+	# draw_center=false makes the interior transparent; only the border renders.
+	var inf_border := Panel.new()
+	inf_border.set_anchors_preset(Control.PRESET_FULL_RECT)
+	inf_border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var inf_border_style := StyleBoxFlat.new()
+	inf_border_style.draw_center  = false
+	inf_border_style.border_color = Color(0.50, 0.04, 0.04, 1.0)
+	inf_border_style.set_border_width_all(3)
+	inf_border_style.set_corner_radius_all(6)
+	inf_border.add_theme_stylebox_override("panel", inf_border_style)
+	inf_container.add_child(inf_border)
 
 	# --- Send Wave panel — gray panel with silver border, three visual thirds:
 	# "SEND WAVE" header, ">>" + multiplier buttons, and a green reward bar.
