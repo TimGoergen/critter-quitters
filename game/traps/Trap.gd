@@ -620,7 +620,7 @@ func get_description() -> String:
 		TrapType.FOGGER:
 			return "Fires an expanding cloud that hits all pests from closest to farthest. Cannot hit flying pests."
 		TrapType.GLUE_BOARD:
-			return "Continuously slows every pest inside its range. Passive — no firing."
+			return "Continuously slows every ground pest inside its range. Passive — no firing. Cannot hit flying pests."
 		TrapType.FLY_STRIP_LAUNCHER:
 			return "Targets flying pests only. Releases a sticky cloud on impact that slows and damages."
 		TrapType.BAIT_STATION:
@@ -804,13 +804,16 @@ func _find_target() -> Node3D:
 	return null
 
 
-## Returns true if at least one enemy is in range and the batch cap has not been reached.
+## Returns true if at least one non-flying enemy is in range and the batch cap has not been reached.
 ## Damage is NOT applied here — FogCloud ticks it on a fixed interval while alive.
+## Flying enemies are excluded — the Fogger cannot hit airborne pests.
 func _fire_fogger() -> bool:
 	if _active_fog_batches >= FOG_BATCH_CAP:
 		return false
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
+			continue
+		if enemy.get_is_flying():
 			continue
 		if _xz_distance(enemy.global_position) <= _range:
 			return true
@@ -845,10 +848,13 @@ func _update_glue_aoe(delta: float) -> void:
 			enemy.remove_slow_source(self)
 		_glue_slowed_enemies.erase(enemy)
 
-	# Second pass: apply slow to newly-in-range enemies and fire a cosmetic projectile.
+	# Second pass: apply slow to newly-in-range ground enemies and fire a cosmetic projectile.
+	# Flying enemies are excluded — they never contact the adhesive surface.
 	var newly_caught := false
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
+			continue
+		if enemy.get_is_flying():
 			continue
 		if _xz_distance(enemy.global_position) <= _range and not _glue_slowed_enemies.has(enemy):
 			enemy.add_slow_source(self, _damage)
@@ -971,11 +977,14 @@ func _nearest_in_range() -> Node3D:
 
 ## Returns the enemy in range farthest along the path to the exit
 ## (used by Zapper — highest path index = closest to exit = biggest threat).
+## Flying enemies are excluded — the Zapper cannot hit airborne pests.
 func _farthest_in_range() -> Node3D:
 	var best: Node3D = null
 	var best_index   := -1
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
+			continue
+		if enemy.get_is_flying():
 			continue
 		if _xz_distance(enemy.global_position) <= _range:
 			var idx: int = enemy.get_path_index()

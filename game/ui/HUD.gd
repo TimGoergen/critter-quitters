@@ -93,7 +93,7 @@ const MARGIN: float = 10.0             # inner padding for both panels
 const SCREEN_EDGE_MARGIN: float = 24.0 # extra inset on the screen-edge side and top/bottom to clear rounded corners
 const RIGHT_BTN_H: float = 52.0        # fixed height for all right-panel buttons
 const INNER_BORDER_W: float = 2.0      # black separator line at the arena-facing edge of each panel
-const ROW_H:          float = 72.0     # fixed height for every trap and boost selector row
+const ROW_H:          float = 56.0     # fixed height for every trap and boost selector row
 const COLOR_SILVER_BORDER := Color(0.72, 0.72, 0.80, 1.0)
 const SILVER_BORDER_W: float = 4.0    # thickness of the silver panel border lines
 
@@ -318,7 +318,9 @@ func _build_left_panel() -> void:
 	_trap_scroll = ScrollContainer.new()
 	_trap_scroll.size_flags_vertical    = Control.SIZE_EXPAND_FILL
 	_trap_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_trap_scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_AUTO
+	# SHOW_ALWAYS reserves the scrollbar gutter permanently so both tabs have
+	# identical content widths regardless of whether scrolling is needed.
+	_trap_scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
 	vbox.add_child(_trap_scroll)
 
 	var trap_vbox := VBoxContainer.new()
@@ -334,7 +336,7 @@ func _build_left_panel() -> void:
 	_boost_scroll = ScrollContainer.new()
 	_boost_scroll.size_flags_vertical    = Control.SIZE_EXPAND_FILL
 	_boost_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_boost_scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_AUTO
+	_boost_scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
 	_boost_scroll.visible                = false
 	vbox.add_child(_boost_scroll)
 
@@ -1612,8 +1614,10 @@ func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 	name_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	cvbox.add_child(name_lbl)
 
+	# cost_row fills full width so the badge can right-align against the text column edge.
 	var cost_row := HBoxContainer.new()
 	cost_row.add_theme_constant_override("separation", 3)
+	cost_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cost_row.alignment    = BoxContainer.ALIGNMENT_BEGIN
 	cost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cvbox.add_child(cost_row)
@@ -1636,20 +1640,21 @@ func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
 
+	# Badge sits on the same row as the cost, pushed to the right edge.
 	var badge_lbl := Label.new()
 	badge_lbl.text                  = TRAP_BRAND[type]["badge"]
-	badge_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
+	badge_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
 	badge_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	badge_lbl.clip_text             = true
 	badge_lbl.add_theme_font_size_override("font_size", 11)
 	badge_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	badge_lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
 	badge_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
-	cvbox.add_child(badge_lbl)
+	cost_row.add_child(badge_lbl)
 
 	# --- Right: 3D trap preview with framed background ---
 	var icon_ctrl := Control.new()
-	icon_ctrl.custom_minimum_size   = Vector2(60.0, 60.0)
+	icon_ctrl.custom_minimum_size   = Vector2(48.0, 48.0)
 	icon_ctrl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon_ctrl.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	icon_ctrl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
@@ -1858,8 +1863,10 @@ func _build_boost_row(parent: VBoxContainer, type: int) -> Control:
 	name_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	cvbox.add_child(name_lbl)
 
+	# cost_row fills full width so the badge can right-align against the text column edge.
 	var cost_row := HBoxContainer.new()
 	cost_row.add_theme_constant_override("separation", 3)
+	cost_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	cost_row.alignment    = BoxContainer.ALIGNMENT_BEGIN
 	cost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	cvbox.add_child(cost_row)
@@ -1882,20 +1889,21 @@ func _build_boost_row(parent: VBoxContainer, type: int) -> Control:
 	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
 
+	# Badge sits on the same row as the cost, pushed to the right edge.
 	var badge_lbl := Label.new()
 	badge_lbl.text                  = BOOST_BRAND[type]["badge"]
-	badge_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
+	badge_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
 	badge_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	badge_lbl.clip_text             = true
 	badge_lbl.add_theme_font_size_override("font_size", 11)
 	badge_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	badge_lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
 	badge_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
-	cvbox.add_child(badge_lbl)
+	cost_row.add_child(badge_lbl)
 
 	# 3D boost preview icon using a SubViewport with a BoostUnit instance.
 	var icon_ctrl := Control.new()
-	icon_ctrl.custom_minimum_size   = Vector2(60.0, 60.0)
+	icon_ctrl.custom_minimum_size   = Vector2(48.0, 48.0)
 	icon_ctrl.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	icon_ctrl.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	icon_ctrl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
