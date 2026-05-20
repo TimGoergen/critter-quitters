@@ -147,7 +147,7 @@ var _zoom_icon:      Control # procedural magnifying glass inside _zoom_btn
 
 var _wave_label:        Label
 var _bucks_label:       Label
-var _infestation_fill:  ColorRect
+var _infestation_fill:  Panel
 var _infestation_label: Label
 
 var _is_fast:        bool = false
@@ -359,13 +359,15 @@ func _build_left_panel() -> void:
 
 ## Returns the StyleBoxFlat used for the wave and bug bucks panel borders:
 ## transparent fill, 2px gold outline, 6px corner radius.
-func _gold_panel_style() -> StyleBoxFlat:
+## extra_left adds to the base 8px left margin — used so the WAVE label
+## sits as far from the border as the coin icon does in the bucks panel.
+func _gold_panel_style(extra_left: float = 0.0) -> StyleBoxFlat:
 	var style := StyleBoxFlat.new()
 	style.draw_center           = false
 	style.border_color          = COLOR_GOLD_OUTLINE
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(6)
-	style.content_margin_left   = 8.0
+	style.content_margin_left   = 8.0 + extra_left
 	style.content_margin_right  = 8.0
 	style.content_margin_top    = 6.0
 	style.content_margin_bottom = 6.0
@@ -447,7 +449,7 @@ func _build_right_panel() -> void:
 	# draws the gold rounded border, and insets the content by the border width.
 	var wave_panel := PanelContainer.new()
 	wave_panel.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	wave_panel.add_theme_stylebox_override("panel", _gold_panel_style())
+	wave_panel.add_theme_stylebox_override("panel", _gold_panel_style(6.0))
 	vbox.add_child(wave_panel)
 
 	var wave_row := HBoxContainer.new()
@@ -521,10 +523,21 @@ func _build_right_panel() -> void:
 	inf_container.add_child(inf_track)
 
 	# Fill grows rightward; anchor_bottom=1 keeps it full height automatically.
-	_infestation_fill                  = ColorRect.new()
-	_infestation_fill.color            = COLOR_BAR_FILL
-	_infestation_fill.anchor_bottom    = 1.0
-	_infestation_fill.offset_right     = 0.0
+	# Panel + StyleBoxFlat with matching corner radius so the fill stays within
+	# the rounded border at all fill levels — a plain ColorRect bleeds into corners.
+	_infestation_fill              = Panel.new()
+	_infestation_fill.anchor_bottom = 1.0
+	_infestation_fill.offset_right  = 0.0
+	_infestation_fill.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	var fill_style := StyleBoxFlat.new()
+	fill_style.bg_color = COLOR_BAR_FILL
+	fill_style.set_border_width_all(0)
+	fill_style.set_corner_radius_all(6)
+	fill_style.content_margin_left   = 0.0
+	fill_style.content_margin_right  = 0.0
+	fill_style.content_margin_top    = 0.0
+	fill_style.content_margin_bottom = 0.0
+	_infestation_fill.add_theme_stylebox_override("panel", fill_style)
 	inf_container.add_child(_infestation_fill)
 
 	# Overlay: icon on the left, percentage on the right, both centered vertically.

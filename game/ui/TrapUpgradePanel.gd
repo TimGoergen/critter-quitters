@@ -22,20 +22,20 @@ const HUD     = preload("res://ui/HUD.gd")
 const UIFonts = preload("res://ui/UIFonts.gd")
 const Trap    = preload("res://traps/Trap.gd")
 
-const PADDING:    float = 10.0
+const PADDING:    float = 9.0
 const BORDER_W:   float = 2.0
-# Stat rows double as upgrade buttons — 80px keeps all five rows within the 600px
-# virtual viewport height while still hitting the 48px minimum touch target (80 × 0.60).
-const STAT_ROW_H:          float = 80.0
+# Stat rows double as upgrade buttons — 72px keeps all five rows within the 600px
+# virtual viewport height while still hitting the 48px minimum touch target (72 × 0.60).
+const STAT_ROW_H:          float = 72.0
 # Height reserved for the description label block between the header and stat rows.
-const DESC_H:              float = 52.0
+const DESC_H:              float = 47.0
 # Active-boost section at the panel bottom (shown only when boosts are in range).
-const BOOST_SECTION_LEAD:  float = 10.0   # gap + 1px divider before the first entry
-const BOOST_ENTRY_H:       float = 22.0   # height per boost entry row
+const BOOST_SECTION_LEAD:  float = 9.0    # gap + 1px divider before the first entry
+const BOOST_ENTRY_H:       float = 20.0   # height per boost entry row
 
 # Size of the trap thumbnail in the header.
-const HEADER_ICON_RENDER:  float = 90.0   # SubViewport pixel resolution
-const HEADER_ICON_DISPLAY: float = 64.0   # icon displayed as a 64×64 square (matches button height)
+const HEADER_ICON_RENDER:  float = 81.0   # SubViewport pixel resolution
+const HEADER_ICON_DISPLAY: float = 58.0   # icon displayed as a 58×58 square (matches button height)
 
 # Theme colours — derived from the placed trap's identity colour at runtime.
 # Declared as vars so _apply_trap_theme() can assign them before _build_ui() runs
@@ -129,7 +129,7 @@ func _build_ui() -> void:
 	var boost_h: float = BOOST_SECTION_LEAD + BOOST_ENTRY_H * boosts.size() if not boosts.is_empty() else 0.0
 
 	# Height: top padding + header + description block + five stat rows + active boosts + bottom padding.
-	var panel_h := PADDING + 74.0 + DESC_H + 8.0 + (STAT_ROW_H + 8.0) * 4.0 + STAT_ROW_H + boost_h + PADDING
+	var panel_h := PADDING + 67.0 + DESC_H + 7.0 + (STAT_ROW_H + 7.0) * 4.0 + STAT_ROW_H + boost_h + PADDING
 
 	# Centre the panel in the arena zone (the space between the two HUD panels).
 	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
@@ -163,52 +163,69 @@ func _build_ui() -> void:
 	var inner_w := panel_w - PADDING * 2.0
 	var y       := PADDING
 
-	# --- Header: trap name | sell button | close button ---
+	# --- Header: icon | trap name | sell button | close button ---
 	var header := HBoxContainer.new()
 	header.position            = Vector2(PADDING, y)
-	header.custom_minimum_size = Vector2(inner_w, 64.0)
-	header.add_theme_constant_override("separation", 8)
+	header.custom_minimum_size = Vector2(inner_w, 58.0)
+	header.add_theme_constant_override("separation", 7)
 	_bg.add_child(header)
+
+	# Trap thumbnail — left-aligned so the player has an instant visual reference
+	# before reading the name.
+	header.add_child(_build_header_trap_icon())
 
 	_lbl_title = Label.new()
 	_lbl_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_lbl_title.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
-	_lbl_title.add_theme_font_size_override("font_size", 48)
+	_lbl_title.add_theme_font_size_override("font_size", 43)
 	_lbl_title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	_lbl_title.add_theme_font_override("font", UIFonts.header())
 	header.add_child(_lbl_title)
 
-	# Trap thumbnail — a small top-down render of the trap type placed immediately
-	# right of the name so the player has an instant visual reference for which trap
-	# they are upgrading without reading the label.
-	header.add_child(_build_header_trap_icon())
+	# Peek button — hold to make the panel semi-transparent so the paused game is visible.
+	var btn_peek := Button.new()
+	btn_peek.text                = ""
+	btn_peek.custom_minimum_size = Vector2(58.0, 58.0)
+	_apply_neutral_button_style(btn_peek)
+	btn_peek.button_down.connect(_on_peek_down)
+	btn_peek.button_up.connect(_on_peek_up)
+	header.add_child(btn_peek)
+
+	var eye_icon := EyeIcon.new()
+	eye_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	eye_icon.offset_left   =  9.0
+	eye_icon.offset_right  = -9.0
+	eye_icon.offset_top    =  9.0
+	eye_icon.offset_bottom = -9.0
+	eye_icon.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	btn_peek.add_child(eye_icon)
 
 	# Sell button — red, in the header row next to the close button.
 	# Left side: trashcan icon. Right side: coin icon + refund amount.
 	_btn_sell = Button.new()
 	_btn_sell.text                = ""
-	_btn_sell.custom_minimum_size = Vector2(160.0, 64.0)
+	_btn_sell.custom_minimum_size = Vector2(144.0, 58.0)
 	_apply_sell_button_style(_btn_sell)
 	_btn_sell.pressed.connect(_on_btn_sell)
 	header.add_child(_btn_sell)
 
 	var sell_hbox := HBoxContainer.new()
 	sell_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	sell_hbox.offset_left  =  6.0
-	sell_hbox.offset_right = -6.0
+	sell_hbox.offset_left  =  5.0
+	sell_hbox.offset_right = -5.0
 	sell_hbox.alignment    = BoxContainer.ALIGNMENT_CENTER
-	sell_hbox.add_theme_constant_override("separation", 6)
+	sell_hbox.add_theme_constant_override("separation", 5)
 	_btn_sell.add_child(sell_hbox)
 
 	var icon := TrashcanIcon.new()
-	icon.custom_minimum_size = Vector2(54.0, 0.0)
+	icon.custom_minimum_size = Vector2(49.0, 0.0)
 	icon.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sell_hbox.add_child(icon)
 
 	_lbl_sell_value = Label.new()
 	_lbl_sell_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	_lbl_sell_value.add_theme_font_size_override("font_size", 24)
+	_lbl_sell_value.add_theme_font_size_override("font_size", 22)
 	_lbl_sell_value.add_theme_color_override("font_color", COLOR_GOLD)
 	_lbl_sell_value.add_theme_font_override("font", UIFonts.primary_bold())
 	sell_hbox.add_child(_lbl_sell_value)
@@ -220,14 +237,14 @@ func _build_ui() -> void:
 	# sits at the visual centre of the square, not off-centre.
 	var btn_close := Button.new()
 	btn_close.text                = "X"
-	btn_close.custom_minimum_size = Vector2(64.0, 64.0)
-	btn_close.add_theme_font_size_override("font_size", 26)
+	btn_close.custom_minimum_size = Vector2(58.0, 58.0)
+	btn_close.add_theme_font_size_override("font_size", 23)
 	btn_close.add_theme_font_override("font", UIFonts.primary_bold())
 	btn_close.pressed.connect(_on_close)
 	_apply_neutral_button_style(btn_close)
 	header.add_child(btn_close)
 
-	y += 74.0
+	y += 67.0
 
 	# --- Description label ---
 	var lbl_desc := Label.new()
@@ -235,7 +252,7 @@ func _build_ui() -> void:
 	lbl_desc.size          = Vector2(inner_w, DESC_H)
 	lbl_desc.autowrap_mode = 3   # TextServer.AUTOWRAP_WORD_ARBITRARY
 	lbl_desc.add_theme_font_override("font", UIFonts.primary())
-	lbl_desc.add_theme_font_size_override("font_size", 18)
+	lbl_desc.add_theme_font_size_override("font_size", 16)
 	lbl_desc.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 	lbl_desc.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	lbl_desc.text          = _trap.get_description()
@@ -522,6 +539,16 @@ func _on_btn_e() -> void:
 	AudioManager.play_ui("upgrade")
 
 
+func _on_peek_down() -> void:
+	_bg.modulate.a     = 0.18
+	_border.modulate.a = 0.18
+
+
+func _on_peek_up() -> void:
+	_bg.modulate.a     = 1.0
+	_border.modulate.a = 1.0
+
+
 func _on_btn_sell() -> void:
 	_spawn_coin_burst()
 	# Signal Arena to refund the player and remove the trap from the grid.
@@ -586,7 +613,7 @@ func _build_active_boosts_section(y: float, inner_w: float, boosts: Array) -> vo
 	# Thin divider — uses the same color as the section dividers above the stat rows.
 	var divider        := ColorRect.new()
 	divider.color       = COLOR_DIVIDER
-	divider.position    = Vector2(PADDING, y + 8.0)
+	divider.position    = Vector2(PADDING, y + 7.0)
 	divider.size        = Vector2(inner_w, 1.0)
 	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_bg.add_child(divider)
@@ -605,7 +632,7 @@ func _build_active_boosts_section(y: float, inner_w: float, boosts: Array) -> vo
 		lbl_name.text                 = "  • " + entry["name"]   # bullet character
 		lbl_name.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 		lbl_name.add_theme_font_override("font", UIFonts.primary())
-		lbl_name.add_theme_font_size_override("font_size", 16)
+		lbl_name.add_theme_font_size_override("font_size", 14)
 		lbl_name.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 		lbl_name.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 		row_ctrl.add_child(lbl_name)
@@ -617,7 +644,7 @@ func _build_active_boosts_section(y: float, inner_w: float, boosts: Array) -> vo
 		lbl_detail.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
 		lbl_detail.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 		lbl_detail.add_theme_font_override("font", UIFonts.primary_bold())
-		lbl_detail.add_theme_font_size_override("font_size", 16)
+		lbl_detail.add_theme_font_size_override("font_size", 14)
 		lbl_detail.add_theme_color_override("font_color", COLOR_DELTA_AFFORDABLE)
 		lbl_detail.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 		row_ctrl.add_child(lbl_detail)
@@ -625,32 +652,23 @@ func _build_active_boosts_section(y: float, inner_w: float, boosts: Array) -> vo
 		entry_y += BOOST_ENTRY_H
 
 
-## Builds one stat row: a full-width background panel with an inset upgrade button
-## overlaid on the right portion.
+## Builds one stat row: background panel with a single HBoxContainer row.
 ##
-## Layout (absolute coordinates within row_ctrl):
-##   panel_bg  — full width, decorative background only (no child content)
-##   vbox_left — name + stars, anchored to left edge
-##   lbl_cur   — current value, spans x=0..60% of row, text right-aligned to the split
-##   btn       — upgrade button, inset inside the right 40%, smaller than the panel
+## Layout (left to right):
+##   lbl_name  — stat title, left-aligned, expands to fill available space
+##   lbl_cur   — current value, natural width, right-aligned text
+##   btn       — upgrade button, inset via MarginContainer (top/bottom padding)
+##   lbl_stars — star level indicator, rightmost, natural width
 ##
 ## "row" key controls visibility (e.g. Fire Rate on passive traps).
 ## "btn" key is the clickable upgrade button.
 func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
-	# Width reserved for the name+stars column.
-	var left_col  := 140.0
-	# Horizontal split: value label ends here, button begins here.
-	var split_x   := inner_w * 0.60
-
-	# Root plain Control — holds all row elements as absolutely-positioned children.
-	# MOUSE_FILTER_IGNORE on the root so it does not eat events from the Button child.
 	var row_ctrl := Control.new()
 	row_ctrl.position     = Vector2(PADDING, y)
 	row_ctrl.size         = Vector2(inner_w, STAT_ROW_H)
 	row_ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_bg.add_child(row_ctrl)
 
-	# Full-width background panel — purely decorative, no children, no interaction.
 	var panel_bg := Panel.new()
 	panel_bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	panel_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -662,89 +680,95 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 	panel_bg.add_theme_stylebox_override("panel", bg_style)
 	row_ctrl.add_child(panel_bg)
 
-	# Name + stars — left-aligned, vertically centred.
-	var vbox_left := VBoxContainer.new()
-	vbox_left.position     = Vector2(8.0, 0.0)
-	vbox_left.size         = Vector2(left_col, STAT_ROW_H)
-	vbox_left.alignment    = BoxContainer.ALIGNMENT_CENTER
-	vbox_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox_left.add_theme_constant_override("separation", 0)
-	row_ctrl.add_child(vbox_left)
+	var hbox := HBoxContainer.new()
+	hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hbox.offset_left  =  8.0
+	hbox.offset_right = -8.0
+	hbox.add_theme_constant_override("separation", 6)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row_ctrl.add_child(hbox)
 
+	# Title — fills all space to the left of the value label.
 	var lbl_name := Label.new()
-	lbl_name.add_theme_font_size_override("font_size", 28)
+	lbl_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl_name.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+	lbl_name.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	lbl_name.add_theme_font_size_override("font_size", 22)
 	lbl_name.add_theme_color_override("font_color", COLOR_TEXT)
 	lbl_name.add_theme_font_override("font", UIFonts.primary_bold())
 	lbl_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox_left.add_child(lbl_name)
+	hbox.add_child(lbl_name)
 
+	# Current value — sizes to its text content, right-aligned.
+	var lbl_cur := Label.new()
+	lbl_cur.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	lbl_cur.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	lbl_cur.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
+	lbl_cur.add_theme_font_size_override("font_size", 28)
+	lbl_cur.add_theme_color_override("font_color", COLOR_TEXT)
+	lbl_cur.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl_cur.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(lbl_cur)
+
+	# Upgrade button — MarginContainer provides top/bottom inset so the panel
+	# background remains visible above and below the button face.
+	var v_inset    := int(STAT_ROW_H * 0.20)
+	var btn_margin := MarginContainer.new()
+	btn_margin.custom_minimum_size = Vector2(inner_w * 0.285, 0.0)
+	btn_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	btn_margin.add_theme_constant_override("margin_top",    v_inset)
+	btn_margin.add_theme_constant_override("margin_bottom", v_inset)
+	btn_margin.add_theme_constant_override("margin_left",   0)
+	btn_margin.add_theme_constant_override("margin_right",  0)
+	btn_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(btn_margin)
+
+	var btn := Button.new()
+	btn.text                  = ""
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	btn.focus_mode            = Control.FOCUS_NONE
+	_apply_button_style(btn, false)
+	btn_margin.add_child(btn)
+
+	var btn_hbox := HBoxContainer.new()
+	btn_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	btn_hbox.offset_left  =  7.0
+	btn_hbox.offset_right = -7.0
+	btn_hbox.alignment    = BoxContainer.ALIGNMENT_CENTER
+	btn.add_child(btn_hbox)
+
+	var lbl_after := Label.new()
+	lbl_after.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl_after.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
+	lbl_after.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+	lbl_after.add_theme_font_size_override("font_size", 22)
+	lbl_after.add_theme_color_override("font_color", COLOR_DELTA_AFFORDABLE)
+	lbl_after.add_theme_font_override("font", UIFonts.primary_bold())
+	btn_hbox.add_child(lbl_after)
+
+	var lbl_cost := Label.new()
+	lbl_cost.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl_cost.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
+	lbl_cost.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+	lbl_cost.add_theme_font_size_override("font_size", 22)
+	lbl_cost.add_theme_color_override("font_color", COLOR_GOLD)
+	lbl_cost.add_theme_font_override("font", UIFonts.primary_bold())
+	btn_hbox.add_child(lbl_cost)
+
+	_set_mouse_passthrough(btn_hbox)
+
+	# Stars — rightmost element, sizes to its text content (always 3 characters).
 	var lbl_stars := Label.new()
-	lbl_stars.add_theme_font_size_override("font_size", 44)
+	lbl_stars.vertical_alignment  = VERTICAL_ALIGNMENT_CENTER
+	lbl_stars.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	lbl_stars.add_theme_font_size_override("font_size", 52)
 	lbl_stars.add_theme_color_override("font_color", COLOR_STARS)
 	lbl_stars.add_theme_color_override("font_outline_color", Color(0.08, 0.08, 0.08, 1.0))
 	lbl_stars.add_theme_constant_override("outline_size", 4)
 	lbl_stars.add_theme_font_override("font", UIFonts.primary_bold())
 	lbl_stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox_left.add_child(lbl_stars)
-
-	# Current value — spans x=0 to x=split_x so right-alignment lands at the split point.
-	var lbl_cur := Label.new()
-	lbl_cur.position             = Vector2(0.0, 0.0)
-	lbl_cur.size                 = Vector2(split_x, STAT_ROW_H)
-	lbl_cur.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	lbl_cur.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	lbl_cur.add_theme_font_size_override("font_size", 36)
-	lbl_cur.add_theme_color_override("font_color", COLOR_TEXT)
-	lbl_cur.add_theme_font_override("font", UIFonts.primary_bold())
-	lbl_cur.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	row_ctrl.add_child(lbl_cur)
-
-	# Upgrade button — inset inside the right 40% of the panel.
-	# Height is 60% of the row (≈40% shorter). Top/bottom margin is derived from
-	# that height so all three exposed sides (top, bottom, right) show equal panel background.
-	var btn_h   := STAT_ROW_H * 0.60
-	var v_inset := (STAT_ROW_H - btn_h) * 0.5   # = 20px; applied to top, bottom, and right
-	var btn_x   := split_x + v_inset
-	var btn_w   := inner_w - btn_x - v_inset
-	var btn := Button.new()
-	btn.text       = ""
-	btn.position   = Vector2(btn_x, v_inset)
-	btn.size       = Vector2(btn_w, btn_h)
-	# FOCUS_NONE prevents the button from showing a focus ring after being tapped,
-	# which would otherwise appear as a white outline even on disabled buttons.
-	btn.focus_mode = Control.FOCUS_NONE
-	_apply_button_style(btn, false)
-	row_ctrl.add_child(btn)
-
-	var btn_hbox := HBoxContainer.new()
-	btn_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	btn_hbox.offset_left  =  8.0
-	btn_hbox.offset_right = -8.0
-	btn_hbox.alignment    = BoxContainer.ALIGNMENT_CENTER
-	btn.add_child(btn_hbox)
-
-	# "+X" gain — left-aligned, expands to push cost to the far right.
-	var lbl_after := Label.new()
-	lbl_after.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lbl_after.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
-	lbl_after.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
-	lbl_after.add_theme_font_size_override("font_size", 24)
-	lbl_after.add_theme_color_override("font_color", COLOR_DELTA_AFFORDABLE)
-	lbl_after.add_theme_font_override("font", UIFonts.primary_bold())
-	btn_hbox.add_child(lbl_after)
-
-	# Cost (coin + amount) — right-aligned, expands to fill its side.
-	var lbl_cost := Label.new()
-	lbl_cost.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	lbl_cost.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
-	lbl_cost.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
-	lbl_cost.add_theme_font_size_override("font_size", 24)
-	lbl_cost.add_theme_color_override("font_color", COLOR_GOLD)
-	lbl_cost.add_theme_font_override("font", UIFonts.primary_bold())
-	btn_hbox.add_child(lbl_cost)
-
-	# Labels must not absorb input — clicks anywhere on the button face reach the Button.
-	_set_mouse_passthrough(btn_hbox)
+	hbox.add_child(lbl_stars)
 
 	return {
 		"row":   row_ctrl,
@@ -920,3 +944,29 @@ class TrashcanIcon extends Control:
 		for i in 2:
 			var lx := cx - base_w * 0.5 + base_w * ((i + 1.0) / 3.0)
 			draw_line(Vector2(lx, body_top + 1.0), Vector2(lx, body_bot - 1.0), edge, 2.0, true)
+
+
+# ---------------------------------------------------------------------------
+# Eye icon — drawn procedurally for the peek button.
+# Two symmetric circular arcs form a lens outline; a filled circle is the pupil.
+# ---------------------------------------------------------------------------
+class EyeIcon extends Control:
+	func _draw() -> void:
+		var cx  := size.x * 0.5
+		var cy  := size.y * 0.5
+		var rx  := size.x * 0.42
+		var ry  := size.y * 0.28
+		var lw  := maxf(2.0, minf(size.x, size.y) * 0.09)
+		var blk := Color(0.0, 0.0, 0.0, 1.0)
+		var n   := 24
+
+		# Lens outline: two circular arcs sharing the left/right endpoints.
+		# R is the radius of each arc; d is the vertical offset of each arc centre.
+		var R   := (rx * rx + ry * ry) / (2.0 * ry)
+		var d   := R - ry
+		var ang := atan2(d, rx)
+		draw_arc(Vector2(cx, cy + d), R, -(PI - ang), -ang, n, blk, lw, true)
+		draw_arc(Vector2(cx, cy - d), R,  ang, PI - ang, n, blk, lw, true)
+
+		# Pupil
+		draw_circle(Vector2(cx, cy), ry * 0.52, blk)
