@@ -365,10 +365,10 @@ func _gold_panel_style() -> StyleBoxFlat:
 	style.border_color          = COLOR_GOLD_OUTLINE
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(6)
-	style.content_margin_left   = 2.0
-	style.content_margin_right  = 2.0
-	style.content_margin_top    = 2.0
-	style.content_margin_bottom = 2.0
+	style.content_margin_left   = 8.0
+	style.content_margin_right  = 8.0
+	style.content_margin_top    = 6.0
+	style.content_margin_bottom = 6.0
 	return style
 
 
@@ -462,6 +462,7 @@ func _build_right_panel() -> void:
 	wave_text_lbl.add_theme_color_override("font_color", COLOR_TEXT)
 	wave_text_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_LEFT
 	wave_text_lbl.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	wave_text_lbl.size_flags_vertical   = Control.SIZE_SHRINK_END
 	wave_row.add_child(wave_text_lbl)
 
 	_wave_label = Label.new()
