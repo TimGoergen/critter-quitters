@@ -1500,12 +1500,28 @@ func _spawn_glue_board_visual() -> void:
 	var crease_mesh := BoxMesh.new()
 	crease_mesh.size           = Vector3(glue_w, fp * 0.008, fp * 0.018)
 	crease_mi.mesh             = crease_mesh
-	crease_mi.position.y       = y3
+	crease_mi.position         = Vector3(0.0, y3, fp * 0.147)   # bottom third of board
 	var crease_mat             := StandardMaterial3D.new()
 	crease_mat.albedo_color     = Color(0.48, 0.34, 0.10)
 	crease_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
 	crease_mi.material_override = crease_mat
 	add_child(crease_mi)
+
+	# "GLUE" text label — diagonal text on the adhesive surface to identify the trap.
+	# Euler rotation Vector3(90, 30, 0) in YXZ order: Y=30 sets the diagonal angle,
+	# then X=90 tips the label flat onto the XZ plane so it faces the top-down camera.
+	# Positioned above the crease line (y3 top = fp*0.036) so nothing obscures the text.
+	var label                  := Label3D.new()
+	label.text                 = "GLUE"
+	label.font_size            = 32
+	label.pixel_size           = fp * 0.0042   # 30% larger than original fp*0.0032
+	label.modulate             = Color(0.90, 0.12, 0.08)
+	label.outline_size         = 0
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	label.position             = Vector3(0.0, fp * 0.038, -fp * 0.073)   # top two-thirds center
+	label.rotation_degrees     = Vector3(-90.0, 18.0, 0.0)   # -90 maps local +Y → world -Z (screen-up); +90 was screen-down (upside down)
+	add_child(label)
 
 
 ## Builds the Snap Trap visual: a wooden base plate (portrait — taller than wide),
@@ -1525,7 +1541,40 @@ func _spawn_snap_trap_visual() -> void:
 	base_mat.albedo_color = Color(0.62, 0.40, 0.16)
 	base_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	base_mi.material_override = base_mat
+
+	# Perimeter outline — a slightly wider/deeper dark brown box placed just below the
+	# base in Y. Its XZ footprint extends fp*0.05 beyond each edge of the base, so that
+	# border peeks out on all four sides from the top-down camera as a dark frame.
+	# The base center is at fp*0.016; the outline center is at fp*0.013 so the base top
+	# face (fp*0.032) sits above the outline top (fp*0.029) and hides the interior.
+	var outline_mi   := MeshInstance3D.new()
+	var outline_mesh := BoxMesh.new()
+	outline_mesh.size           = Vector3(fp * 0.42 + fp * 0.10, fp * 0.032, fp * 0.82 + fp * 0.10)
+	outline_mi.mesh             = outline_mesh
+	outline_mi.position.y       = fp * 0.013
+	var outline_mat             := StandardMaterial3D.new()
+	outline_mat.albedo_color     = Color(0.28, 0.13, 0.04)
+	outline_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
+	outline_mi.material_override = outline_mat
+	add_child(outline_mi)
+
 	add_child(base_mi)
+
+	# Wood grain lines — three narrow strips running the full length of the base.
+	# Positioned fp*0.001 above the base top face so they render over it; from the
+	# top-down camera they read as painted-on grain marks on a wooden board.
+	var grain_mat := StandardMaterial3D.new()
+	grain_mat.albedo_color = Color(0.37, 0.18, 0.06)
+	grain_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	var grain_y := fp * 0.032 + fp * 0.001   # grain mesh centre; top face sits at fp*0.034
+	for grain_x: float in [-fp * 0.13, 0.0, fp * 0.13]:
+		var grain_mi   := MeshInstance3D.new()
+		var grain_mesh := BoxMesh.new()
+		grain_mesh.size           = Vector3(fp * 0.020, fp * 0.002, fp * 0.78)
+		grain_mi.mesh             = grain_mesh
+		grain_mi.position         = Vector3(grain_x, grain_y, 0.0)
+		grain_mi.material_override = grain_mat
+		add_child(grain_mi)
 
 	# Coil spring — fixed at the far end of the base (the hinge side).
 	var spring_mi   := MeshInstance3D.new()

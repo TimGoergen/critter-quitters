@@ -570,12 +570,15 @@ func _begin_pinch() -> void:
 ## Called when either finger lifts during a pinch.
 ## Compares final span to starting span and toggles zoom if the change is large enough.
 ## Spreading fingers (span grows) zooms in; pinching (span shrinks) zooms out.
+## On zoom-in the camera centres on the midpoint between the two fingers.
 func _end_pinch() -> void:
 	_pinch_active = false
 	_touch_state  = TouchState.IDLE
 	var delta := _pinch_finger0_pos.distance_to(_pinch_finger1_pos) - _pinch_start_span
 	if delta > PINCH_THRESHOLD_PX and _zoom_state == ZoomState.OVERVIEW:
-		_toggle_zoom()
+		var midpoint     := (_pinch_finger0_pos + _pinch_finger1_pos) * 0.5
+		var world_center := _screen_to_world_xz(midpoint)
+		_toggle_zoom(world_center)
 	elif delta < -PINCH_THRESHOLD_PX and _zoom_state == ZoomState.ZOOMED_IN:
 		_toggle_zoom()
 
@@ -1084,6 +1087,18 @@ func _screen_to_grid(screen_pos: Vector2) -> Vector2i:
 	var row    := floori((world_pos.z + half_h) / Grid.CELL_SIZE)
 
 	return Vector2i(col, row)
+
+
+## Projects a screen-space position to world XZ coordinates at y = 0 (the arena floor).
+## Returns Vector2.ZERO if the ray is nearly parallel to the floor.
+func _screen_to_world_xz(screen_pos: Vector2) -> Vector2:
+	var ray_origin := _camera.project_ray_origin(screen_pos)
+	var ray_dir    := _camera.project_ray_normal(screen_pos)
+	if abs(ray_dir.y) < 0.001:
+		return Vector2.ZERO
+	var t         := -ray_origin.y / ray_dir.y
+	var world_pos := ray_origin + ray_dir * t
+	return Vector2(world_pos.x, world_pos.z)
 
 
 ## Converts a grid coordinate to its world-space centre position at y = 0.
@@ -2501,12 +2516,12 @@ func _process(delta: float) -> void:
 
 ## Toggles between OVERVIEW and ZOOMED_IN camera levels.
 ## ZOOMED_IN is 2× magnification (half the overview camera.size), with panning enabled.
-func _toggle_zoom() -> void:
+## center_pos (world XZ) is where the camera centres when zooming in; defaults to arena centre.
+func _toggle_zoom(center_pos: Vector2 = Vector2.ZERO) -> void:
 	if _zoom_state == ZoomState.OVERVIEW:
-		_zoom_state     = ZoomState.ZOOMED_IN
-		_camera.size    = _overview_camera_size * 0.5
-		_pan_world_pos  = Vector2.ZERO
-		_apply_pan(_pan_world_pos)
+		_zoom_state  = ZoomState.ZOOMED_IN
+		_camera.size = _overview_camera_size * 0.5
+		_apply_pan(center_pos)
 	else:
 		_zoom_state      = ZoomState.OVERVIEW
 		_set_followed_enemy(null)
