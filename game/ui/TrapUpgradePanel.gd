@@ -949,6 +949,8 @@ class TrashcanIcon extends Control:
 # ---------------------------------------------------------------------------
 # Eye icon — drawn procedurally for the peek button.
 # Two symmetric circular arcs form a lens outline; a filled circle is the pupil.
+# A diagonal slash crosses the whole icon — the universal "hidden" indicator,
+# matching what the button does: hold to hide the panel.
 # ---------------------------------------------------------------------------
 class EyeIcon extends Control:
 	func _draw() -> void:
@@ -970,3 +972,13 @@ class EyeIcon extends Control:
 
 		# Pupil
 		draw_circle(Vector2(cx, cy), ry * 0.52, blk)
+
+		# Diagonal slash drawn last so it sits on top of the lens and pupil.
+		# Extends from below-left to above-right, clearing the eye bounds by ~20%
+		# so the line visually cuts through the entire icon rather than stopping
+		# at the edge of the lens shape.
+		draw_line(
+			Vector2(cx - rx * 0.95, cy + ry * 1.20),
+			Vector2(cx + rx * 0.95, cy - ry * 1.20),
+			blk, lw * 1.5, true
+		)
