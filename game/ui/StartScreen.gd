@@ -224,10 +224,40 @@ func _spawn_exhaust_puffs() -> void:
 
 
 func _on_van_exited() -> void:
-	# Brief pause so the exhaust cloud can begin dissipating before the scene cuts.
-	var tween := create_tween()
-	tween.tween_interval(0.4)
-	tween.tween_callback(func(): get_tree().change_scene_to_file("res://Main.tscn"))
+	# The van is now off-screen. Spawn fill puffs spread across the full viewport
+	# width at the exhaust trail's height. Each puff grows until it covers the
+	# entire screen from its position, creating a cloud-wipe scene transition.
+	var vp        := get_viewport().get_visible_rect().size
+	var exhaust_y := _van.position.y + (TAILPIPE_IMG_Y - _van.texture.get_size().y / 2.0) * _van.scale.y
+
+	const FILL_COUNT    := 7
+	const FILL_DURATION := 0.85
+
+	for i: int in FILL_COUNT:
+		var fx := (float(i) + 0.5) / float(FILL_COUNT) * vp.x
+		var fy := exhaust_y + randf_range(-30.0, 30.0)
+		# Each puff must reach the farthest corner of the viewport from its spawn
+		# position — that guarantees no gaps regardless of where it is placed.
+		var farthest := maxf(
+			Vector2(fx, fy).distance_to(Vector2(0.0,   0.0)),
+			maxf(
+				Vector2(fx, fy).distance_to(Vector2(vp.x, 0.0)),
+				maxf(
+					Vector2(fx, fy).distance_to(Vector2(0.0,   vp.y)),
+					Vector2(fx, fy).distance_to(Vector2(vp.x, vp.y))
+				)
+			)
+		)
+		var puff            := _FillPuff.new()
+		puff.position       = Vector2(fx, fy)
+		puff.target_radius  = farthest * 1.15  # 15 % overshoot so corners are fully covered
+		puff.duration       = FILL_DURATION + randf_range(0.0, 0.12)
+		add_child(puff)
+
+	# Change scene after the fill animation has had time to complete.
+	get_tree().create_timer(FILL_DURATION + 0.25).timeout.connect(
+		func(): get_tree().change_scene_to_file("res://Main.tscn")
+	)
 
 
 func _apply_green_btn_style(btn: Button) -> void:
@@ -355,3 +385,44 @@ class _ExhaustPuff extends Node2D:
 			var offset := Vector2(float(lobe[0]) * _radius, float(lobe[1]) * _radius)
 			var r: float = float(lobe[2]) * _radius
 			draw_circle(offset, r, Color(0.82, 0.82, 0.85, _alpha * 0.07))
+
+
+# One exhaust puff that expands to fill its section of the screen without fading.
+# Spawned after the van exits to create a cloud-wipe scene transition.
+# Visual structure mirrors _ExhaustPuff (same lobe layout and colour) for continuity,
+# but uses a higher per-lobe alpha so multiple overlapping puffs reach full opacity.
+class _FillPuff extends Node2D:
+	var target_radius: float = 600.0
+	var duration:      float = 0.85
+
+	var _radius: float = 12.0
+	var _alpha:  float = 0.0
+	var _lobes:  Array = []
+
+	func _ready() -> void:
+		_lobes.append([0.0, 0.0, 0.72])
+		for i: int in 6:
+			var angle := TAU * float(i) / 6.0 + randf_range(-0.45, 0.45)
+			var dist  := randf_range(0.26, 0.50)
+			var r     := randf_range(0.36, 0.56)
+			_lobes.append([cos(angle) * dist, sin(angle) * dist, r])
+
+		var anim := create_tween()
+		anim.tween_method(_expand, 0.0, 1.0, duration)
+
+	func _expand(t: float) -> void:
+		# Ease-in growth: starts slow, accelerates like gas expanding under pressure.
+		_radius = lerp(12.0, target_radius, t * t)
+		# Reach full opacity in the first third of the animation, then stay opaque.
+		_alpha  = minf(t * 3.0, 1.0)
+		queue_redraw()
+
+	func _draw() -> void:
+		if _alpha <= 0.0:
+			return
+		# Higher per-lobe alpha than _ExhaustPuff (0.16 vs 0.07): these puffs need
+		# to fully obscure the screen rather than layer into a wispy cloud effect.
+		for lobe: Array in _lobes:
+			var offset := Vector2(float(lobe[0]) * _radius, float(lobe[1]) * _radius)
+			var r: float = float(lobe[2]) * _radius
+			draw_circle(offset, r, Color(0.82, 0.82, 0.85, _alpha * 0.16))
