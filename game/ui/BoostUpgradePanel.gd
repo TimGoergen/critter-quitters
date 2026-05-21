@@ -111,7 +111,10 @@ func _build_ui() -> void:
 	# Height: header + description + 2 or 3 stat rows + optional capacity bar + bottom padding.
 	var row_count    := 3 if _boost.has_stat_c() else 2
 	var extra_h      := 36.0 if _is_perishable() else 0.0
-	var panel_h      := PADDING + 67.0 + DESC_H + 7.0 + (STAT_ROW_H + 7.0) * (row_count - 1) + STAT_ROW_H + extra_h + PADDING
+	# Height: each row occupies STAT_ROW_H + 8 px (row height plus gap).
+	# The trailing 8 px after the last row acts as top margin for the capacity bar
+	# (or merges into the bottom padding for non-perishable boosts).
+	var panel_h      := PADDING + 67.0 + DESC_H + 8.0 + row_count * (STAT_ROW_H + 8.0) + extra_h + PADDING
 
 	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
 	var px       := arena_cx - panel_w * 0.5
@@ -151,8 +154,10 @@ func _build_ui() -> void:
 	header.add_child(_build_header_boost_icon())
 
 	_lbl_title = Label.new()
-	_lbl_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_lbl_title.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+	_lbl_title.size_flags_horizontal  = Control.SIZE_EXPAND_FILL
+	_lbl_title.vertical_alignment     = VERTICAL_ALIGNMENT_CENTER
+	_lbl_title.clip_text              = true
+	_lbl_title.text_overrun_behavior  = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_lbl_title.add_theme_font_size_override("font_size", 43)
 	_lbl_title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	_lbl_title.add_theme_font_override("font", UIFonts.header())
@@ -232,7 +237,7 @@ func _build_ui() -> void:
 	# Stat rows
 	_rng_row = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
 	_b_row   = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
-	_c_row   = _build_stat_button_row(y, inner_w)
+	_c_row   = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
 
 	_rng_row["btn"].pressed.connect(_on_btn_range)
 	_b_row["btn"].pressed.connect(_on_btn_stat_b)

@@ -175,8 +175,10 @@ func _build_ui() -> void:
 	header.add_child(_build_header_trap_icon())
 
 	_lbl_title = Label.new()
-	_lbl_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_lbl_title.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+	_lbl_title.size_flags_horizontal  = Control.SIZE_EXPAND_FILL
+	_lbl_title.vertical_alignment     = VERTICAL_ALIGNMENT_CENTER
+	_lbl_title.clip_text              = true
+	_lbl_title.text_overrun_behavior  = TextServer.OVERRUN_TRIM_ELLIPSIS
 	_lbl_title.add_theme_font_size_override("font_size", 43)
 	_lbl_title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	_lbl_title.add_theme_font_override("font", UIFonts.header())
