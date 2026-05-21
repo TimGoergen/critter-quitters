@@ -152,6 +152,24 @@ func _build_ui() -> void:
 	_lbl_title.add_theme_font_override("font", UIFonts.header())
 	header.add_child(_lbl_title)
 
+	# Peek button — hold to make the panel semi-transparent so the paused game is visible.
+	var btn_peek := Button.new()
+	btn_peek.text                = ""
+	btn_peek.custom_minimum_size = Vector2(64.0, 64.0)
+	_apply_neutral_button_style(btn_peek)
+	btn_peek.button_down.connect(_on_peek_down)
+	btn_peek.button_up.connect(_on_peek_up)
+	header.add_child(btn_peek)
+
+	var eye_icon := EyeIcon.new()
+	eye_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	eye_icon.offset_left   =  9.0
+	eye_icon.offset_right  = -9.0
+	eye_icon.offset_top    =  9.0
+	eye_icon.offset_bottom = -9.0
+	eye_icon.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	btn_peek.add_child(eye_icon)
+
 	_btn_sell = Button.new()
 	_btn_sell.text                = ""
 	_btn_sell.custom_minimum_size = Vector2(136.0, 64.0)
@@ -399,6 +417,16 @@ func _on_btn_stat_c() -> void:
 		return
 	_boost.apply_stat_c_upgrade()
 	AudioManager.play_ui("upgrade")
+
+
+func _on_peek_down() -> void:
+	_bg.modulate.a     = 0.18
+	_border.modulate.a = 0.18
+
+
+func _on_peek_up() -> void:
+	_bg.modulate.a     = 1.0
+	_border.modulate.a = 1.0
 
 
 func _on_btn_sell() -> void:
@@ -703,3 +731,33 @@ class TrashcanIcon extends Control:
 		for i in 2:
 			var lx := cx - base_w * 0.5 + base_w * ((i + 1.0) / 3.0)
 			draw_line(Vector2(lx, body_top + 1.0), Vector2(lx, body_bot - 1.0), edge, 2.0, true)
+
+
+# ---------------------------------------------------------------------------
+# Eye icon — identical to TrapUpgradePanel.EyeIcon.
+# Two arcs form the lens outline; a filled circle is the pupil; a diagonal
+# slash marks the button as "hides the panel while held".
+# ---------------------------------------------------------------------------
+class EyeIcon extends Control:
+	func _draw() -> void:
+		var cx  := size.x * 0.5
+		var cy  := size.y * 0.5
+		var rx  := size.x * 0.42
+		var ry  := size.y * 0.28
+		var lw  := maxf(2.0, minf(size.x, size.y) * 0.09)
+		var blk := Color(0.0, 0.0, 0.0, 1.0)
+		var n   := 24
+
+		var R   := (rx * rx + ry * ry) / (2.0 * ry)
+		var d   := R - ry
+		var ang := atan2(d, rx)
+		draw_arc(Vector2(cx, cy + d), R, -(PI - ang), -ang, n, blk, lw, true)
+		draw_arc(Vector2(cx, cy - d), R,  ang, PI - ang, n, blk, lw, true)
+
+		draw_circle(Vector2(cx, cy), ry * 0.52, blk)
+
+		draw_line(
+			Vector2(cx - rx * 0.95, cy + ry * 1.20),
+			Vector2(cx + rx * 0.95, cy - ry * 1.20),
+			blk, lw * 1.5, true
+		)
