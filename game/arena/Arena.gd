@@ -364,7 +364,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			else:
 				_on_pointer_released(event.position)
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			_try_remove_trap(_screen_to_grid(event.position))
+			var cell := _screen_to_grid(event.position)
+			_try_remove_trap(cell)
+			_try_remove_boost(cell)
 		return
 
 	# InputEventMouseMotion carries no button state — guard with is_mouse_button_pressed.
@@ -765,6 +767,16 @@ func _try_remove_trap(cell: Vector2i) -> void:
 	if _trap_nodes.has(anchor):
 		_spawn_sell_coin_burst(_trap_nodes[anchor])
 	_try_remove_trap_by_anchor(anchor)
+
+
+func _try_remove_boost(cell: Vector2i) -> void:
+	if not _boost_anchors.has(cell):
+		return
+	_close_upgrade_panel()
+	var anchor: Vector2i = _boost_anchors[cell]
+	if _boost_nodes.has(anchor):
+		_spawn_sell_coin_burst(_boost_nodes[anchor])
+	_try_remove_boost_by_anchor(anchor)
 
 
 ## Spawns gold coin particles at the trap's screen position, identical to the
