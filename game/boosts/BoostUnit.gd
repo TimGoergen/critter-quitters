@@ -90,6 +90,16 @@ const STAT_C_DELTA: Dictionary = {
 	BoostType.QUARANTINE_MARKER: 40.0,  # +40 total restoration capacity
 }
 
+## Pulsing-light color per boost type — more vivid than the boost's base color so the
+## indicator reads clearly against the body mesh without blending into it.
+const GLOW_COLORS: Dictionary = {
+	BoostType.PHEROMONE_DISPENSER: Color(1.0,  0.45, 0.0),   # deep amber
+	BoostType.COMPRESSOR:          Color(0.0,  0.85, 1.0),   # electric cyan
+	BoostType.CASH_REGISTER:       Color(1.0,  0.90, 0.0),   # bright gold
+	BoostType.AIR_FRESHENER:       Color(0.65, 0.65, 1.0),   # soft violet
+	BoostType.QUARANTINE_MARKER:   Color(0.55, 1.0,  0.0),   # lime green
+}
+
 
 # ---------------------------------------------------------------------------
 # Signals
@@ -167,6 +177,12 @@ var _shadow_mat:   ShaderMaterial            = null
 # Populated in _spawn_visual() so hide_decorators() can suppress them for icon previews.
 var _decorator_nodes: Array[Node3D] = []
 
+# Idle animation references — assigned in _spawn_X_visual(), used in _start_idle_animations().
+# Tweens are created in _ready() and loop forever; they clean up automatically when the node exits.
+var _anim_pivot:         Node3D             = null  # the one moving part per boost type
+var _glow_light:         OmniLight3D        = null  # pulsing colored point light
+var _glow_indicator_mat: StandardMaterial3D = null  # emission material on the small LED dot
+
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -235,6 +251,7 @@ func _ready() -> void:
 	match _boost_type:
 		BoostType.PHEROMONE_DISPENSER, BoostType.COMPRESSOR:
 			_update_trap_aura()
+	_start_idle_animations()
 
 
 func _exit_tree() -> void:
@@ -913,11 +930,13 @@ func _spawn_visual() -> void:
 
 ## Pheromone Dispenser — emitter sprinkler head.
 ## Top-down silhouette: octagonal hub with four radiating nozzle arms at the cardinal points.
+## Idle animation: the hub, arms, and tips all rotate together on Y (sprinkler spin).
+## The octagonal base plate stays static so the unit looks planted on the ground.
 func _spawn_pheromone_dispenser_visual(c: Color) -> void:
 	var fp  := Grid.CELL_SIZE * 1.9
 	var dim := Color(c.r * 0.65, c.g * 0.65, c.b * 0.65)
 
-	# Flat octagonal base plate — 8 segments gives a clear polygon silhouette from above.
+	# Flat octagonal base plate — stays static, anchors the dispenser visually.
 	var base_mesh              := CylinderMesh.new()
 	base_mesh.top_radius        = fp * 0.38
 	base_mesh.bottom_radius     = fp * 0.38
@@ -927,7 +946,13 @@ func _spawn_pheromone_dispenser_visual(c: Color) -> void:
 	base_mi.position.y          = fp * 0.015
 	add_child(base_mi)
 
-	# Central dome hub.
+	# Spin pivot — the hub, arms, and tips are all children of this node so they
+	# rotate together when _animate_pheromone_dispenser() tweens its Y rotation.
+	var spin_pivot := Node3D.new()
+	add_child(spin_pivot)
+	_anim_pivot = spin_pivot
+
+	# Central dome hub (child of pivot).
 	var hub_mesh            := CylinderMesh.new()
 	hub_mesh.top_radius      = fp * 0.12
 	hub_mesh.bottom_radius   = fp * 0.12
@@ -935,25 +960,24 @@ func _spawn_pheromone_dispenser_visual(c: Color) -> void:
 	hub_mesh.radial_segments = 10
 	var hub_mi              := _mi(hub_mesh, _mat(c))
 	hub_mi.position.y        = fp * 0.09
-	add_child(hub_mi)
+	spin_pivot.add_child(hub_mi)
 
-	# Four nozzle arms — one at each cardinal direction on the XZ plane.
-	# Each is a thin box extending from the hub center outward.
+	# Four nozzle arms — one at each cardinal direction (children of pivot).
 	var arm_mesh      := BoxMesh.new()
 	arm_mesh.size      = Vector3(fp * 0.14, fp * 0.03, fp * 0.06)
 	for offset: Vector3 in [
-		Vector3( fp * 0.25, fp * 0.04, 0.0),   # +X
-		Vector3(-fp * 0.25, fp * 0.04, 0.0),   # -X
-		Vector3(0.0,        fp * 0.04,  fp * 0.25),  # +Z
-		Vector3(0.0,        fp * 0.04, -fp * 0.25),  # -Z
+		Vector3( fp * 0.25, fp * 0.04, 0.0),
+		Vector3(-fp * 0.25, fp * 0.04, 0.0),
+		Vector3(0.0,        fp * 0.04,  fp * 0.25),
+		Vector3(0.0,        fp * 0.04, -fp * 0.25),
 	]:
 		var arm_mi              := MeshInstance3D.new()
 		arm_mi.mesh              = arm_mesh
 		arm_mi.material_override = _mat(c)
 		arm_mi.position          = offset
-		add_child(arm_mi)
+		spin_pivot.add_child(arm_mi)
 
-	# Small nozzle tip dot at the end of each arm.
+	# Small nozzle tip dot at the end of each arm (children of pivot).
 	var tip_mesh            := CylinderMesh.new()
 	tip_mesh.top_radius      = fp * 0.04
 	tip_mesh.bottom_radius   = fp * 0.04
@@ -967,52 +991,64 @@ func _spawn_pheromone_dispenser_visual(c: Color) -> void:
 	]:
 		var tip_mi              := MeshInstance3D.new()
 		tip_mi.mesh              = tip_mesh
-		tip_mi.material_override = _mat(Color(1.0, 1.0, 1.0, 1.0))   # bright white tips
+		tip_mi.material_override = _mat(Color(1.0, 1.0, 1.0, 1.0))
 		tip_mi.position          = offset
-		add_child(tip_mi)
+		spin_pivot.add_child(tip_mi)
+
+	# Amber glow indicator mounted at hub height.
+	_spawn_glow_indicator(Vector3(0.0, fp * 0.16, 0.0), GLOW_COLORS[_boost_type])
 
 
 ## Compressor — compressed-air tank on a rectangular base.
 ## Top-down silhouette: long rectangular base with a round tank circle offset to one side.
+## Idle animation: the pressure tank and its band ring spin around the tank's own Y axis,
+## like a pressurised vessel venting and rotating. The base, gauge, and gauge face stay still.
 func _spawn_compressor_visual(c: Color) -> void:
 	var fp  := Grid.CELL_SIZE * 1.9
 	var dim := Color(c.r * 0.55, c.g * 0.55, c.b * 0.55)
 
-	# Rectangular base chassis.
+	# Rectangular base chassis — stays static.
 	var base_mesh      := BoxMesh.new()
 	base_mesh.size      = Vector3(fp * 0.65, fp * 0.06, fp * 0.46)
 	var base_mi        := _mi(base_mesh, _mat(dim))
 	base_mi.position    = Vector3(0.0, fp * 0.03, 0.0)
 	add_child(base_mi)
 
-	# Round pressure tank — offset toward -X so the gauge on +X is visible.
+	# Tank spin pivot — centered on the tank's XZ position so it spins in place.
+	# The pivot's Y origin is at ground level; the tank and band are offset upward inside it.
+	var tank_pivot := Node3D.new()
+	tank_pivot.position = Vector3(-fp * 0.12, 0.0, 0.0)
+	add_child(tank_pivot)
+	_anim_pivot = tank_pivot
+
+	# Round pressure tank (child of pivot) — the main cylindrical vessel.
 	var tank_mesh            := CylinderMesh.new()
 	tank_mesh.top_radius      = fp * 0.17
 	tank_mesh.bottom_radius   = fp * 0.17
 	tank_mesh.height          = fp * 0.22
 	tank_mesh.radial_segments = 16
 	var tank_mi              := _mi(tank_mesh, _mat(c))
-	tank_mi.position          = Vector3(-fp * 0.12, fp * 0.17, 0.0)
-	add_child(tank_mi)
+	tank_mi.position.y        = fp * 0.17   # local to pivot, same world height as before
+	tank_pivot.add_child(tank_mi)
 
-	# Pressure band ring around the tank — a darker, slightly wider ring at mid-height.
+	# Pressure band ring (child of pivot) — darker stripe that spins with the tank.
 	var band_mesh            := CylinderMesh.new()
 	band_mesh.top_radius      = fp * 0.175
 	band_mesh.bottom_radius   = fp * 0.175
 	band_mesh.height          = fp * 0.04
 	band_mesh.radial_segments = 16
 	var band_mi              := _mi(band_mesh, _mat(dim))
-	band_mi.position          = Vector3(-fp * 0.12, fp * 0.17, 0.0)
-	add_child(band_mi)
+	band_mi.position.y        = fp * 0.17
+	tank_pivot.add_child(band_mi)
 
-	# Pressure gauge — small box protruding on the +X side of the chassis.
+	# Pressure gauge — stays static on the chassis.
 	var gauge_mesh      := BoxMesh.new()
 	gauge_mesh.size      = Vector3(fp * 0.08, fp * 0.10, fp * 0.08)
 	var gauge_mi        := _mi(gauge_mesh, _mat(Color(0.85, 0.85, 0.85)))
 	gauge_mi.position    = Vector3(fp * 0.22, fp * 0.11, 0.0)
 	add_child(gauge_mi)
 
-	# Gauge face — tiny dark circle on the front of the gauge box.
+	# Gauge face — tiny dark circle on the front of the gauge box, stays static.
 	var face_mesh            := CylinderMesh.new()
 	face_mesh.top_radius      = fp * 0.028
 	face_mesh.bottom_radius   = fp * 0.028
@@ -1022,15 +1058,24 @@ func _spawn_compressor_visual(c: Color) -> void:
 	face_mi.position          = Vector3(fp * 0.265, fp * 0.11, 0.0)
 	add_child(face_mi)
 
+	# Cyan glow indicator mounted above the tank.
+	_spawn_glow_indicator(Vector3(-fp * 0.12, fp * 0.32, 0.0), GLOW_COLORS[_boost_type])
+
 
 ## Cash Register — stacked coins viewed from above.
 ## Top-down silhouette: three concentric disc layers decreasing in diameter.
+## Idle animation: the entire coin stack bobs slowly up and down, like coins being counted.
 func _spawn_cash_register_visual(c: Color) -> void:
 	var fp   := Grid.CELL_SIZE * 1.9
 	var gold := Color(1.00, 0.82, 0.10)
 	var mid  := Color(0.90, 0.72, 0.08)
 	var top  := Color(1.00, 0.95, 0.60)
 	var dark := Color(c.r * 0.45, c.g * 0.55, c.b * 0.30)
+
+	# Bob pivot — all coins and the nub are children so they rise and fall together.
+	var bob_pivot := Node3D.new()
+	add_child(bob_pivot)
+	_anim_pivot = bob_pivot
 
 	# Bottom coin — largest, full green-gold.
 	var bot_mesh            := CylinderMesh.new()
@@ -1040,7 +1085,7 @@ func _spawn_cash_register_visual(c: Color) -> void:
 	bot_mesh.radial_segments = 24
 	var bot_mi              := _mi(bot_mesh, _mat(gold))
 	bot_mi.position.y        = fp * 0.02
-	add_child(bot_mi)
+	bob_pivot.add_child(bot_mi)
 
 	# Middle coin — slightly smaller and lighter.
 	var mid_mesh            := CylinderMesh.new()
@@ -1050,7 +1095,7 @@ func _spawn_cash_register_visual(c: Color) -> void:
 	mid_mesh.radial_segments = 24
 	var mid_mi              := _mi(mid_mesh, _mat(mid))
 	mid_mi.position.y        = fp * 0.065
-	add_child(mid_mi)
+	bob_pivot.add_child(mid_mi)
 
 	# Top coin — smallest, palest.
 	var top_mesh            := CylinderMesh.new()
@@ -1060,7 +1105,7 @@ func _spawn_cash_register_visual(c: Color) -> void:
 	top_mesh.radial_segments = 24
 	var top_mi              := _mi(top_mesh, _mat(top))
 	top_mi.position.y        = fp * 0.11
-	add_child(top_mi)
+	bob_pivot.add_child(top_mi)
 
 	# Dollar-sign nub — small dark cylinder at the apex of the stack.
 	var nub_mesh            := CylinderMesh.new()
@@ -1070,16 +1115,21 @@ func _spawn_cash_register_visual(c: Color) -> void:
 	nub_mesh.radial_segments = 8
 	var nub_mi              := _mi(nub_mesh, _mat(dark))
 	nub_mi.position.y        = fp * 0.16
-	add_child(nub_mi)
+	bob_pivot.add_child(nub_mi)
+
+	# Gold glow indicator above the coin stack.
+	_spawn_glow_indicator(Vector3(0.0, fp * 0.22, 0.0), GLOW_COLORS[_boost_type])
 
 
 ## Air Freshener — spray can viewed from above.
 ## Top-down silhouette: a narrow cylinder (can body) with a rectangular nozzle cap.
+## Idle animation: the can rocks gently on its Z axis, like it's intermittently spraying.
+## The base ring stays flat on the ground; only the can body tilts.
 func _spawn_air_freshener_visual(c: Color) -> void:
 	var fp  := Grid.CELL_SIZE * 1.9
 	var dim := Color(c.r * 0.70, c.g * 0.75, c.b * 0.80)
 
-	# Wider base ring — gives the can a stable, planted look.
+	# Wider base ring — stays static, anchors the can on the ground.
 	var base_mesh            := CylinderMesh.new()
 	base_mesh.top_radius      = fp * 0.22
 	base_mesh.bottom_radius   = fp * 0.24
@@ -1089,7 +1139,13 @@ func _spawn_air_freshener_visual(c: Color) -> void:
 	base_mi.position.y        = fp * 0.015
 	add_child(base_mi)
 
-	# Can body — tall, narrow cylinder.
+	# Rock pivot — the can body, stripe, cap, and tip rock together on Z.
+	# Pivot is at origin so the can tilts from its base rather than its center.
+	var rock_pivot := Node3D.new()
+	add_child(rock_pivot)
+	_anim_pivot = rock_pivot
+
+	# Can body — tall, narrow cylinder (child of pivot).
 	var body_mesh            := CylinderMesh.new()
 	body_mesh.top_radius      = fp * 0.18
 	body_mesh.bottom_radius   = fp * 0.20
@@ -1097,9 +1153,9 @@ func _spawn_air_freshener_visual(c: Color) -> void:
 	body_mesh.radial_segments = 16
 	var body_mi              := _mi(body_mesh, _mat(c))
 	body_mi.position.y        = fp * 0.17
-	add_child(body_mi)
+	rock_pivot.add_child(body_mi)
 
-	# Label stripe — a thin darker band across the middle of the can.
+	# Label stripe — thin darker band across the middle of the can (child of pivot).
 	var stripe_mesh            := CylinderMesh.new()
 	stripe_mesh.top_radius      = fp * 0.185
 	stripe_mesh.bottom_radius   = fp * 0.185
@@ -1107,31 +1163,36 @@ func _spawn_air_freshener_visual(c: Color) -> void:
 	stripe_mesh.radial_segments = 16
 	var stripe_mi              := _mi(stripe_mesh, _mat(dim))
 	stripe_mi.position.y        = fp * 0.17
-	add_child(stripe_mi)
+	rock_pivot.add_child(stripe_mi)
 
-	# Flat nozzle cap — box sitting on top of the can body.
+	# Flat nozzle cap (child of pivot).
 	var cap_mesh      := BoxMesh.new()
 	cap_mesh.size      = Vector3(fp * 0.20, fp * 0.05, fp * 0.16)
 	var cap_mi        := _mi(cap_mesh, _mat(dim))
 	cap_mi.position    = Vector3(0.0, fp * 0.335, 0.0)
-	add_child(cap_mi)
+	rock_pivot.add_child(cap_mi)
 
-	# Spray nozzle tip — tiny box protruding from the front of the cap.
+	# Spray nozzle tip (child of pivot).
 	var tip_mesh      := BoxMesh.new()
 	tip_mesh.size      = Vector3(fp * 0.05, fp * 0.04, fp * 0.08)
 	var tip_mi        := _mi(tip_mesh, _mat(Color(0.60, 0.65, 0.70)))
 	tip_mi.position    = Vector3(0.0, fp * 0.330, fp * 0.12)
-	add_child(tip_mi)
+	rock_pivot.add_child(tip_mi)
+
+	# Violet glow indicator above the nozzle cap.
+	_spawn_glow_indicator(Vector3(0.0, fp * 0.38, 0.0), GLOW_COLORS[_boost_type])
 
 
 ## Quarantine Marker — biohazard zone disc viewed from above.
 ## Top-down silhouette: nested concentric rings with three small hazard tabs at 120° intervals.
+## Idle animation: the three hazard tabs orbit the center counter-clockwise, like a slowly
+## rotating biohazard symbol. The outer disc, middle ring, and inner dot stay static.
 func _spawn_quarantine_marker_visual(c: Color) -> void:
 	var fp      := Grid.CELL_SIZE * 1.9
 	var dark    := Color(c.r * 0.50, c.g * 0.50, c.b * 0.05)
 	var bright  := Color(1.00, 1.00, 0.30)
 
-	# Outer flat disc.
+	# Outer flat disc — stays static.
 	var outer_mesh            := CylinderMesh.new()
 	outer_mesh.top_radius      = fp * 0.40
 	outer_mesh.bottom_radius   = fp * 0.40
@@ -1141,7 +1202,7 @@ func _spawn_quarantine_marker_visual(c: Color) -> void:
 	outer_mi.position.y        = fp * 0.01
 	add_child(outer_mi)
 
-	# Middle raised ring — slightly taller and darker, creating a visible step.
+	# Middle raised ring — stays static.
 	var mid_mesh            := CylinderMesh.new()
 	mid_mesh.top_radius      = fp * 0.27
 	mid_mesh.bottom_radius   = fp * 0.27
@@ -1151,7 +1212,7 @@ func _spawn_quarantine_marker_visual(c: Color) -> void:
 	mid_mi.position.y        = fp * 0.035
 	add_child(mid_mi)
 
-	# Inner dot — bright accent, the focal point of the biohazard symbol.
+	# Inner dot — bright accent, stays static.
 	var dot_mesh            := CylinderMesh.new()
 	dot_mesh.top_radius      = fp * 0.10
 	dot_mesh.bottom_radius   = fp * 0.10
@@ -1161,8 +1222,12 @@ func _spawn_quarantine_marker_visual(c: Color) -> void:
 	dot_mi.position.y        = fp * 0.055
 	add_child(dot_mi)
 
-	# Three hazard tabs at 120° intervals — small boxes offset radially from center.
-	# Rotated 90° so two tabs are on the sides and one is toward the top.
+	# Tab spin pivot — all three hazard tabs orbit around the center when this rotates on Y.
+	var tab_pivot := Node3D.new()
+	add_child(tab_pivot)
+	_anim_pivot = tab_pivot
+
+	# Three hazard tabs at 120° intervals (children of pivot).
 	var tab_mesh      := BoxMesh.new()
 	tab_mesh.size      = Vector3(fp * 0.07, fp * 0.04, fp * 0.08)
 	for i in 3:
@@ -1171,4 +1236,126 @@ func _spawn_quarantine_marker_visual(c: Color) -> void:
 		tab_mi.mesh              = tab_mesh
 		tab_mi.material_override = _mat(bright)
 		tab_mi.position          = Vector3(cos(angle) * fp * 0.32, fp * 0.045, sin(angle) * fp * 0.32)
-		add_child(tab_mi)
+		tab_pivot.add_child(tab_mi)
+
+	# Lime glow indicator above the inner dot.
+	_spawn_glow_indicator(Vector3(0.0, fp * 0.12, 0.0), GLOW_COLORS[_boost_type])
+
+
+# ---------------------------------------------------------------------------
+# Idle animations
+# ---------------------------------------------------------------------------
+
+## Creates the looping motion and glow-pulse tweens for a placed boost.
+## Called from _ready() after the preview guard, so preview instances stay static.
+## All tweens are owned by this node and stop automatically when the node exits.
+func _start_idle_animations() -> void:
+	match _boost_type:
+		BoostType.PHEROMONE_DISPENSER: _animate_pheromone_dispenser()
+		BoostType.COMPRESSOR:          _animate_compressor()
+		BoostType.CASH_REGISTER:       _animate_cash_register()
+		BoostType.AIR_FRESHENER:       _animate_air_freshener()
+		BoostType.QUARANTINE_MARKER:   _animate_quarantine_marker()
+	_animate_glow_pulse()
+
+
+## Pheromone Dispenser: spin the hub+arms+tips pivot continuously clockwise (from above).
+func _animate_pheromone_dispenser() -> void:
+	if _anim_pivot == null:
+		return
+	var tween := create_tween().set_loops()
+	tween.tween_property(_anim_pivot, "rotation_degrees:y", 360.0, 5.0) \
+		.as_relative().set_trans(Tween.TRANS_LINEAR)
+
+
+## Compressor: spin the tank+band pivot slowly around the tank's own vertical axis.
+func _animate_compressor() -> void:
+	if _anim_pivot == null:
+		return
+	var tween := create_tween().set_loops()
+	tween.tween_property(_anim_pivot, "rotation_degrees:y", 360.0, 8.0) \
+		.as_relative().set_trans(Tween.TRANS_LINEAR)
+
+
+## Cash Register: bob the entire coin stack gently up and down.
+func _animate_cash_register() -> void:
+	if _anim_pivot == null:
+		return
+	var bob_amount := Grid.CELL_SIZE * 1.9 * 0.05   # ≈5% of the footprint height
+	var base_y     := _anim_pivot.position.y
+	var tween      := create_tween().set_loops()
+	tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(_anim_pivot, "position:y", base_y + bob_amount, 0.9)
+	tween.tween_property(_anim_pivot, "position:y", base_y,              0.9)
+
+
+## Air Freshener: rock the can body side to side on Z, like it's intermittently spraying.
+func _animate_air_freshener() -> void:
+	if _anim_pivot == null:
+		return
+	var tween := create_tween().set_loops()
+	tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+	tween.tween_property(_anim_pivot, "rotation_degrees:z",  8.0, 1.5)
+	tween.tween_property(_anim_pivot, "rotation_degrees:z", -8.0, 3.0)
+	tween.tween_property(_anim_pivot, "rotation_degrees:z",  0.0, 1.5)
+
+
+## Quarantine Marker: orbit the hazard tabs counter-clockwise — opposite the Pheromone
+## Dispenser's clockwise spin so the two boosts placed near each other look distinct.
+func _animate_quarantine_marker() -> void:
+	if _anim_pivot == null:
+		return
+	var tween := create_tween().set_loops()
+	tween.tween_property(_anim_pivot, "rotation_degrees:y", -360.0, 6.0) \
+		.as_relative().set_trans(Tween.TRANS_LINEAR)
+
+
+## Shared glow pulse: fades the OmniLight and emissive LED dot in and out slowly.
+## Two separate looping tweens run on the same period so they stay in sync.
+func _animate_glow_pulse() -> void:
+	if _glow_light != null:
+		var light_tween := create_tween().set_loops()
+		light_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		light_tween.tween_property(_glow_light, "light_energy", 0.50, 1.8)
+		light_tween.tween_property(_glow_light, "light_energy", 0.08, 1.8)
+
+	if _glow_indicator_mat != null:
+		var mat_tween := create_tween().set_loops()
+		mat_tween.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_IN_OUT)
+		mat_tween.tween_property(_glow_indicator_mat, "emission_energy_multiplier", 3.0, 1.8)
+		mat_tween.tween_property(_glow_indicator_mat, "emission_energy_multiplier", 1.0, 1.8)
+
+
+## Creates the small LED sphere and the OmniLight3D that together form each boost's
+## status light. The LED is a tiny emissive sphere; the OmniLight casts a soft pool of
+## colored light on the surrounding floor. Both references are stored so _animate_glow_pulse()
+## can tween them. Position is in local space relative to the BoostUnit root.
+func _spawn_glow_indicator(world_pos: Vector3, glow_color: Color) -> void:
+	var fp := Grid.CELL_SIZE * 1.9
+
+	# Emissive LED dot — visible indicator of "online" status.
+	var sphere_mesh          := SphereMesh.new()
+	sphere_mesh.radius        = fp * 0.04
+	sphere_mesh.height        = fp * 0.08
+	var indicator_mat                     := StandardMaterial3D.new()
+	indicator_mat.albedo_color             = glow_color
+	indicator_mat.emission_enabled         = true
+	indicator_mat.emission                 = glow_color
+	indicator_mat.emission_energy_multiplier = 1.5   # starts mid-pulse; tweened by _animate_glow_pulse()
+	var sphere_mi              := MeshInstance3D.new()
+	sphere_mi.mesh              = sphere_mesh
+	sphere_mi.material_override = indicator_mat
+	sphere_mi.position          = world_pos
+	add_child(sphere_mi)
+	_glow_indicator_mat = indicator_mat
+
+	# Point light — casts a soft colored pool on the floor and nearby surfaces.
+	# Range is kept tight (1.8 units) so it stays within the boost's 2×2 footprint.
+	var light                  := OmniLight3D.new()
+	light.light_color           = glow_color
+	light.light_energy          = 0.08   # starts dim; pulsed by _animate_glow_pulse()
+	light.omni_range            = 1.8
+	light.omni_attenuation      = 2.0
+	light.position              = world_pos
+	add_child(light)
+	_glow_light = light
