@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Critter Quitters — CI/CD Pipeline Reference</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-size: 15px;
+      line-height: 1.65;
+      color: #e2e8f0;
+      background: #0f1117;
+      padding: 48px 24px 80px;
+    }
+
+    .page { max-width: 900px; margin: 0 auto; }
+
+    /* ── Typography ── */
+    h1 { font-size: 2rem; font-weight: 700; color: #f8fafc; letter-spacing: -0.5px; margin-bottom: 6px; }
+    h2 { font-size: 1.25rem; font-weight: 600; color: #94a3b8; text-transform: uppercase;
+         letter-spacing: 0.08em; margin: 48px 0 16px; border-bottom: 1px solid #1e293b; padding-bottom: 8px; }
+    h3 { font-size: 1.05rem; font-weight: 600; color: #cbd5e1; margin: 24px 0 8px; }
+    p  { margin-bottom: 12px; color: #cbd5e1; }
+    ul, ol { margin: 8px 0 12px 20px; color: #cbd5e1; }
+    li { margin-bottom: 5px; }
+    a  { color: #60a5fa; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    strong { color: #f1f5f9; }
+
+    /* ── Subtitle / meta ── */
+    .subtitle { color: #64748b; font-size: 0.9rem; margin-bottom: 32px; }
+
+    /* ── Callout boxes ── */
+    .callout {
+      border-left: 3px solid;
+      border-radius: 4px;
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 0.93rem;
+    }
+    .callout.info  { border-color: #3b82f6; background: #1e293b; }
+    .callout.warn  { border-color: #f59e0b; background: #1c1a10; }
+    .callout.tip   { border-color: #22c55e; background: #0f1f13; }
+    .callout-title { font-weight: 600; display: block; margin-bottom: 4px; }
+    .callout.info  .callout-title { color: #60a5fa; }
+    .callout.warn  .callout-title { color: #fbbf24; }
+    .callout.tip   .callout-title { color: #4ade80; }
+
+    /* ── Job pipeline diagram ── */
+    .pipeline {
+      display: flex;
+      align-items: flex-start;
+      gap: 0;
+      margin: 24px 0;
+      overflow-x: auto;
+    }
+    .job-col { display: flex; flex-direction: column; align-items: center; }
+    .job-box {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 8px;
+      padding: 14px 18px;
+      min-width: 148px;
+      text-align: center;
+    }
+    .job-box .job-name { font-weight: 600; font-size: 0.9rem; color: #f1f5f9; }
+    .job-box .job-runner {
+      font-size: 0.75rem; color: #64748b; margin-top: 4px;
+    }
+    .job-box .job-condition {
+      font-size: 0.73rem; color: #f59e0b; margin-top: 6px;
+      background: #1c1a10; border-radius: 3px; padding: 2px 6px;
+      display: inline-block;
+    }
+    .arrow {
+      display: flex; align-items: center; justify-content: center;
+      padding: 0 12px; color: #475569; font-size: 1.4rem;
+      margin-top: 24px;
+    }
+    .parallel-col {
+      display: flex; flex-direction: column; gap: 12px;
+    }
+
+    /* ── Artifact destination table ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0 24px;
+      font-size: 0.9rem;
+    }
+    thead th {
+      background: #1e293b;
+      color: #94a3b8;
+      text-align: left;
+      padding: 10px 14px;
+      font-weight: 600;
+      border-bottom: 1px solid #334155;
+    }
+    tbody td {
+      padding: 10px 14px;
+      border-bottom: 1px solid #1e293b;
+      vertical-align: top;
+      color: #cbd5e1;
+    }
+    tbody tr:hover td { background: #161d2c; }
+
+    /* ── Inline code ── */
+    code {
+      font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+      font-size: 0.85em;
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 3px;
+      padding: 1px 6px;
+      color: #7dd3fc;
+    }
+
+    /* ── Code block ── */
+    pre {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 6px;
+      padding: 16px 18px;
+      overflow-x: auto;
+      margin: 12px 0 20px;
+      font-family: "Cascadia Code", "Fira Code", "Consolas", monospace;
+      font-size: 0.83rem;
+      line-height: 1.55;
+      color: #cbd5e1;
+    }
+    pre .comment { color: #475569; }
+    pre .key     { color: #7dd3fc; }
+    pre .val     { color: #86efac; }
+
+    /* ── Section divider ── */
+    hr { border: none; border-top: 1px solid #1e293b; margin: 40px 0; }
+
+    /* ── Step list ── */
+    .step-list { list-style: none; margin: 0; padding: 0; }
+    .step-list li {
+      display: flex; gap: 14px; margin-bottom: 14px; align-items: flex-start;
+    }
+    .step-num {
+      flex-shrink: 0;
+      background: #334155;
+      color: #94a3b8;
+      font-size: 0.78rem;
+      font-weight: 700;
+      width: 26px; height: 26px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      margin-top: 2px;
+    }
+    .step-body { color: #cbd5e1; }
+    .step-body strong { color: #f1f5f9; }
+
+    /* ── Secrets table highlight ── */
+    .secret-name { color: #f472b6; font-family: monospace; font-size: 0.85em; }
+  </style>
+</head>
+<body>
+<div class="page">
+
+  <h1>Critter Quitters — CI/CD Pipeline Reference</h1>
+  <p class="subtitle">
+    Repository: <a href="https://github.com/TimGoergen/critter-quitters">github.com/TimGoergen/critter-quitters</a>
+    &nbsp;·&nbsp; Pipeline file: <code>.github/workflows/build.yml</code>
+  </p>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <h2>What Is This and Where Does It Live?</h2>
+
+  <p>
+    This project uses <strong>GitHub Actions</strong> for its build and deployment pipeline. If you are
+    familiar with Azure DevOps, think of GitHub Actions as <em>Azure Pipelines built directly into GitHub</em>
+    — no separate service to configure, no project to link. The pipeline definition lives alongside the source
+    code in the repository (<code>.github/workflows/build.yml</code>) and is versioned with it.
+  </p>
+
+  <div class="callout info">
+    <span class="callout-title">Azure DevOps equivalent</span>
+    GitHub Actions ≈ Azure Pipelines &nbsp;·&nbsp;
+    Workflow file ≈ <code>azure-pipelines.yml</code> &nbsp;·&nbsp;
+    Job ≈ Stage or Job &nbsp;·&nbsp;
+    Step ≈ Task &nbsp;·&nbsp;
+    GitHub Secrets ≈ Azure DevOps Library / Secret Variable Group
+  </div>
+
+  <p>
+    The pipeline runs entirely on <strong>GitHub-hosted runners</strong> — virtual machines that GitHub
+    provisions, runs the job on, and discards automatically. You pay nothing and manage no build
+    infrastructure. There are two runner types used:
+  </p>
+  <ul>
+    <li><strong>ubuntu-latest</strong> — used for Godot exports and Firebase deployment (Linux VM)</li>
+    <li><strong>windows-latest</strong> — used for Inno Setup packaging (Windows VM with Inno Setup 6 pre-installed)</li>
+  </ul>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <h2>Triggers — What Starts a Build?</h2>
+
+  <h3>Automatic Triggers</h3>
+  <p>A build fires automatically whenever code is pushed to either of these branch patterns:</p>
+  <ul>
+    <li><code>main</code> — the primary branch; triggers the full pipeline including the Windows installer, GitHub release, and Firebase deployment.</li>
+    <li><code>feature/**</code> — any branch whose name starts with <code>feature/</code> (e.g. <code>feature/new-unit-types</code>); triggers only the export job and Firebase deployment. The Windows installer and GitHub release are skipped on feature branches.</li>
+  </ul>
+
+  <div class="callout warn">
+    <span class="callout-title">Branch filter detail</span>
+    Pushing to any other branch name (e.g. <code>hotfix/something</code>, <code>dev</code>) does
+    <em>not</em> trigger a build. Only <code>main</code> and branches matching <code>feature/**</code>
+    are covered.
+  </div>
+
+  <h3>Manual Trigger</h3>
+  <p>
+    You can run the pipeline on demand without pushing any code. In GitHub Actions this is called
+    a <strong>workflow dispatch</strong> — equivalent to clicking "Queue" on a pipeline in Azure DevOps.
+  </p>
+  <ol>
+    <li>Open the repository on GitHub: <a href="https://github.com/TimGoergen/critter-quitters">github.com/TimGoergen/critter-quitters</a></li>
+    <li>Click the <strong>Actions</strong> tab (top navigation).</li>
+    <li>Click <strong>Build &amp; Deploy</strong> in the left-hand workflow list.</li>
+    <li>Click the <strong>Run workflow</strong> button on the right side of the page.</li>
+    <li>Choose the branch to run against and click the green <strong>Run workflow</strong> button.</li>
+  </ol>
+  <p>
+    A manually-triggered run behaves identically to a push-triggered run on the same branch — the same
+    jobs execute, the same artifacts are produced, and the same conditions apply (e.g. the installer and
+    release jobs only run when the selected branch is <code>main</code>).
+  </p>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <h2>Pipeline Structure — The Four Jobs</h2>
+
+  <p>
+    The pipeline is made up of four jobs. In Azure DevOps terms, think of each job as a
+    <em>stage with its own agent</em>. Jobs that depend on a previous job declare that dependency
+    with <code>needs:</code> — equivalent to Azure Pipelines' <code>dependsOn</code>.
+  </p>
+
+  <!-- Diagram -->
+  <div class="pipeline">
+    <div class="job-col">
+      <div class="job-box">
+        <div class="job-name">① Export</div>
+        <div class="job-runner">ubuntu-latest</div>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="job-col">
+      <div class="parallel-col">
+        <div class="job-box">
+          <div class="job-name">② Windows Installer</div>
+          <div class="job-runner">windows-latest</div>
+          <div class="job-condition">main only</div>
+        </div>
+        <div class="job-box">
+          <div class="job-name">④ Firebase Deploy</div>
+          <div class="job-runner">ubuntu-latest</div>
+          <div class="job-condition">if secret set</div>
+        </div>
+      </div>
+    </div>
+    <div class="arrow">→</div>
+    <div class="job-col">
+      <div class="job-box">
+        <div class="job-name">③ Publish Release</div>
+        <div class="job-runner">ubuntu-latest</div>
+        <div class="job-condition">main only</div>
+      </div>
+    </div>
+  </div>
+
+  <p>
+    Jobs ② and ④ both start as soon as ① finishes — they run in parallel, not sequentially.
+    Job ③ waits for both ① and ② to succeed before it runs.
+    This is equivalent to a fan-out/fan-in stage dependency pattern in Azure Pipelines.
+  </p>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <h2>Job-by-Job Walkthrough</h2>
+
+  <!-- ── Job 1 ── -->
+  <h3>① Export — Windows + Android&emsp;<span style="font-weight:400;color:#64748b;font-size:0.85rem">ubuntu-latest · runs on all branches</span></h3>
+  <p>
+    This is the core build job. It downloads the Godot engine, exports the game to two platforms,
+    signs the Android APK, and uploads both outputs as pipeline artifacts (equivalent to Azure Pipelines'
+    <em>Publish Build Artifacts</em> task).
+  </p>
+
+  <ul class="step-list">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <strong>Version stamping.</strong> Computes a 7-character short commit SHA
+        (e.g. <code>ecab1f6</code>) and a zero-padded build number from the
+        sequential GitHub run counter (e.g. <code>0042</code>). These flow into
+        file names and the Android version code/name throughout the rest of the
+        pipeline.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <strong>Godot binary + export templates (cached).</strong> Downloads the
+        Godot 4 Linux headless binary and the platform export templates from the
+        official Godot GitHub releases page. Both are cached between runs using
+        GitHub's cache service — equivalent to the Azure Pipelines Cache task —
+        so subsequent builds skip the download entirely unless the Godot version
+        changes.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <strong>Android signing setup.</strong> Decodes the release keystore from
+        a base64 secret, injects the keystore password into
+        <code>export_presets.cfg</code>, and writes the Android SDK and Java paths
+        into Godot's editor settings file so Godot can locate the build tools.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <strong>Windows export.</strong> Runs Godot in headless (no GUI) mode to
+        produce a single self-contained <code>.exe</code> file. The game code and
+        all assets are embedded into the executable — no separate data directory
+        is needed.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <strong>Android export + signing.</strong> Exports an unsigned APK, then
+        signs it separately using <code>apksigner</code> from the Android build
+        tools. Godot's own signing is disabled for this step due to a known Godot
+        4.5 bug (<a href="https://github.com/godotengine/godot/issues/109551">#109551</a>)
+        that causes the export to fail when the signing config is active in headless mode.
+      </div>
+    </li>
+    <li>
+      <div class="step-num">6</div>
+      <div class="step-body">
+        <strong>Artifact upload.</strong> Renames both output files to include the
+        short SHA (e.g. <code>critter_quitters_ecab1f6_win.exe</code>) and uploads
+        them as two named pipeline artifacts: <code>windows-exe</code> and
+        <code>android-apk</code>. Downstream jobs download these artifacts rather
+        than re-running the export.
+      </div>
+    </li>
+  </ul>
+
+  <!-- ── Job 2 ── -->
+  <h3>② Windows Installer&emsp;<span style="font-weight:400;color:#64748b;font-size:0.85rem">windows-latest · main branch only</span></h3>
+  <p>
+    Wraps the exported <code>.exe</code> in a proper Windows installer using
+    <strong>Inno Setup 6</strong>, which is pre-installed on GitHub's Windows runners.
+  </p>
+  <ul>
+    <li>Downloads the <code>windows-exe</code> artifact from Job ①.</li>
+    <li>Calls <code>ISCC.exe</code> with the version string, source executable path, and output location passed as command-line defines.</li>
+    <li>
+      The installer (<code>build/setup.iss</code>) configures a user-level install
+      (no administrator rights required), LZMA compression, Start Menu shortcuts,
+      an optional desktop icon, and a stable app GUID so Windows recognises upgrades
+      and removes previous versions cleanly.
+    </li>
+    <li>Uploads the resulting setup <code>.exe</code> as the <code>windows-installer</code> artifact.</li>
+  </ul>
+
+  <!-- ── Job 3 ── -->
+  <h3>③ Publish Release&emsp;<span style="font-weight:400;color:#64748b;font-size:0.85rem">ubuntu-latest · main branch only · waits for ① and ②</span></h3>
+  <p>
+    Creates a <strong>GitHub Release</strong> — a versioned snapshot in the repository that
+    bundles the downloadable artifacts. Think of it as a package version in Octopus Deploy's
+    built-in feed, or a versioned drop in Azure Artifacts.
+  </p>
+  <ul>
+    <li>Downloads both the <code>windows-installer</code> and <code>android-apk</code> artifacts.</li>
+    <li>
+      Creates a <em>pre-release</em> (not a full production release) tagged
+      <code>build-{sha}</code> (e.g. <code>build-ecab1f6</code>), with installation
+      instructions in the release body.
+    </li>
+    <li>
+      Attaches both files — the Windows installer <code>.exe</code> and the signed
+      Android <code>.apk</code> — directly to the release as downloadable assets.
+    </li>
+  </ul>
+  <p>
+    You can find all releases at:
+    <a href="https://github.com/TimGoergen/critter-quitters/releases">github.com/TimGoergen/critter-quitters/releases</a>
+  </p>
+
+  <!-- ── Job 4 ── -->
+  <h3>④ Firebase Deploy&emsp;<span style="font-weight:400;color:#64748b;font-size:0.85rem">ubuntu-latest · all branches · waits for ①</span></h3>
+  <p>
+    Pushes the signed APK to <strong>Firebase App Distribution</strong>, which functions
+    similarly to Octopus Deploy pushing to an environment — it delivers the build to a
+    designated group of testers and notifies them automatically.
+  </p>
+  <ul>
+    <li>
+      The job checks whether the <code>FIREBASE_APP_ID</code> secret is configured. If it
+      is not set, all subsequent steps are skipped and the job exits cleanly rather than
+      failing the pipeline. This allows the pipeline to work before Firebase is set up.
+    </li>
+    <li>Downloads the <code>android-apk</code> artifact from Job ①.</li>
+    <li>
+      Uploads the APK to Firebase App Distribution targeting the <code>testers</code> group.
+      The registered tester (<code>goergen.tim@gmail.com</code>) receives an
+      install/update notification automatically.
+    </li>
+    <li>
+      Release notes are stamped automatically in the format:<br/>
+      <code>[feature/new-unit-types] ecab1f6: Add cloud-wipe scene transition on start screen</code>
+    </li>
+  </ul>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <h2>Outputs and Artifacts — Where Everything Goes</h2>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Output</th>
+        <th>File name pattern</th>
+        <th>Where it lives</th>
+        <th>Retained for</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Raw Windows .exe</strong></td>
+        <td><code>critter_quitters_{sha}_win.exe</code></td>
+        <td>Pipeline artifact <code>windows-exe</code> — transient, consumed by Job ②</td>
+        <td>90 days (GitHub default)</td>
+      </tr>
+      <tr>
+        <td><strong>Signed Android APK</strong></td>
+        <td><code>critter_quitters_{sha}.apk</code></td>
+        <td>Pipeline artifact <code>android-apk</code>; also attached to the GitHub Release</td>
+        <td>90 days (artifact) / permanent (release asset)</td>
+      </tr>
+      <tr>
+        <td><strong>Windows Installer</strong></td>
+        <td><code>critter_quitters_setup_{sha}.exe</code></td>
+        <td>Pipeline artifact <code>windows-installer</code>; also attached to the GitHub Release</td>
+        <td>90 days (artifact) / permanent (release asset)</td>
+      </tr>
+      <tr>
+        <td><strong>GitHub Release</strong></td>
+        <td>Tag: <code>build-{sha}</code></td>
+        <td>
+          <a href="https://github.com/TimGoergen/critter-quitters/releases">github.com/…/releases</a><br/>
+          Contains the installer .exe and signed .apk as direct download links
+        </td>
+        <td>Permanent (unless manually deleted)</td>
+      </tr>
+      <tr>
+        <td><strong>Firebase distribution</strong></td>
+        <td>Displayed in Firebase console</td>
+        <td>
+          <a href="https://console.firebase.google.com">console.firebase.google.com</a> →
+          App Distribution → Android app
+        </td>
+        <td>Permanent (Firebase retains all builds)</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout tip">
+    <span class="callout-title">Accessing pipeline artifacts mid-run</span>
+    Pipeline artifacts (the transient ones consumed between jobs) can also be downloaded
+    manually from the Actions run page: Actions tab → click the run → scroll to
+    <strong>Artifacts</strong> at the bottom of the summary page.
+    This is equivalent to downloading a drop artifact from an Azure Pipelines run.
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <h2>Versioning</h2>
+
+  <p>
+    Every build is stamped with two version identifiers computed from GitHub's environment:
+  </p>
+  <ul>
+    <li>
+      <strong>Short SHA</strong> — first 7 characters of the Git commit hash (e.g. <code>ecab1f6</code>).
+      Used in file names and the GitHub release tag so every artifact is traceable to the exact commit.
+    </li>
+    <li>
+      <strong>Build number</strong> — GitHub's sequential run counter, zero-padded to 4 digits
+      (e.g. <code>0042</code>). Used in the version string <code>0.0.0.0042</code>, which appears
+      in the Windows installer and in the Android version code/name. This counter never resets and
+      always increases, so Windows and Android can always identify which build is newer.
+    </li>
+  </ul>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <h2>Secrets and Configuration</h2>
+
+  <p>
+    Secrets are stored in <strong>GitHub Secrets</strong>, accessed via the repository's
+    Settings → Secrets and variables → Actions page. This is equivalent to Azure DevOps'
+    Library with secret variable groups — values are write-only in the UI, masked in all logs,
+    and injected as environment variables at runtime.
+  </p>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Secret name</th>
+        <th>What it contains</th>
+        <th>Used by</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><span class="secret-name">ANDROID_KEYSTORE_BASE64</span></td>
+        <td>The Android release keystore file, base64-encoded</td>
+        <td>Job ① — decoded to disk for APK signing</td>
+      </tr>
+      <tr>
+        <td><span class="secret-name">ANDROID_KEYSTORE_PASS</span></td>
+        <td>Password for both the keystore and the signing key (they share a password)</td>
+        <td>Job ① — injected into <code>export_presets.cfg</code> and passed to <code>apksigner</code></td>
+      </tr>
+      <tr>
+        <td><span class="secret-name">FIREBASE_APP_ID</span></td>
+        <td>Firebase Android App ID (format: <code>1:123…:android:abc…</code>)</td>
+        <td>Job ④ — identifies the app in Firebase. If absent, Job ④ skips gracefully.</td>
+      </tr>
+      <tr>
+        <td><span class="secret-name">FIREBASE_SERVICE_ACCOUNT_KEY</span></td>
+        <td>Full JSON content of a GCP service account key with the Firebase App Distribution Admin role</td>
+        <td>Job ④ — authenticates the upload to Firebase</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout warn">
+    <span class="callout-title">Godot version upgrades</span>
+    The Godot version is set via the <code>GODOT_VERSION</code> environment variable at the
+    top of <code>build.yml</code> (currently <code>4.5.1</code>). When upgrading, change that
+    value and then clear the Actions cache from the repository's
+    Actions → Caches page. The next run will re-download the binary and export templates
+    and rebuild the cache.
+  </div>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <h2>Viewing and Monitoring Runs</h2>
+
+  <ul>
+    <li>
+      <strong>All runs:</strong>
+      <a href="https://github.com/TimGoergen/critter-quitters/actions">github.com/TimGoergen/critter-quitters/actions</a>
+      — equivalent to the Azure Pipelines runs list.
+    </li>
+    <li>
+      <strong>Live logs:</strong> Click any run, then any job, to see real-time step output.
+      Equivalent to the Azure Pipelines job log view.
+    </li>
+    <li>
+      <strong>Re-run a failed job:</strong> On the run summary page, click
+      <strong>Re-run failed jobs</strong> or <strong>Re-run all jobs</strong>. Equivalent to
+      retrying a failed stage in Azure Pipelines.
+    </li>
+    <li>
+      <strong>Firebase builds:</strong>
+      <a href="https://console.firebase.google.com">console.firebase.google.com</a> →
+      your project → App Distribution. Each build shows its release notes (branch, SHA, and commit message)
+      and the tester delivery status.
+    </li>
+  </ul>
+
+  <!-- ════════════════════════════════════════════════════════ -->
+  <h2>Full Pipeline Flow Summary</h2>
+
+  <pre><code><span class="comment">── push to feature/** ─────────────────────────────────────────────────────────</span>
+
+  <span class="key">Job ①</span> <span class="val">Export</span> (Linux)
+    · Download + cache Godot binary and export templates
+    · Export Windows .exe and sign Android APK
+    · Upload artifacts: windows-exe, android-apk
+            │
+            ├─→ <span class="key">Job ④</span> <span class="val">Firebase Deploy</span> (Linux)  ← runs in parallel
+                  · Push APK to Firebase App Distribution
+                  · Notify tester: goergen.tim@gmail.com
+
+<span class="comment">── push to main (or manual run on main) ───────────────────────────────────────</span>
+
+  <span class="key">Job ①</span> <span class="val">Export</span> (Linux)
+    · Same as above
+            │
+            ├─→ <span class="key">Job ②</span> <span class="val">Windows Installer</span> (Windows)  ← runs in parallel
+            │     · Build Inno Setup installer (.exe)
+            │     · Upload artifact: windows-installer
+            │             │
+            ├─→ <span class="key">Job ④</span> <span class="val">Firebase Deploy</span> (Linux)        ← runs in parallel
+            │     · Push APK to Firebase App Distribution
+            │
+            └─→ <span class="key">Job ③</span> <span class="val">Publish Release</span> (Linux)        ← waits for ① + ②
+                  · Create GitHub pre-release tagged build-{sha}
+                  · Attach: critter_quitters_setup_{sha}.exe
+                  · Attach: critter_quitters_{sha}.apk</code></pre>
+
+  <hr/>
+  <p style="color:#475569;font-size:0.82rem;text-align:center;">
+    Critter Quitters Pest Control &nbsp;·&nbsp; Pipeline reference &nbsp;·&nbsp;
+    Generated 2026-05-20
+  </p>
+
+</div>
+</body>
+</html>
