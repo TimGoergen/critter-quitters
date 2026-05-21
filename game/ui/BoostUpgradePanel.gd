@@ -21,10 +21,14 @@ const HUD      = preload("res://ui/HUD.gd")
 const UIFonts  = preload("res://ui/UIFonts.gd")
 const BoostUnit = preload("res://boosts/BoostUnit.gd")
 
-const PADDING:    float = 10.0
+const PADDING:    float = 9.0
 const BORDER_W:   float = 2.0
-const STAT_ROW_H: float = 100.0
-const DESC_H:     float = 52.0
+const STAT_ROW_H: float = 72.0
+const DESC_H:     float = 47.0
+
+# Size of the boost thumbnail in the header — mirrors TrapUpgradePanel.
+const HEADER_ICON_RENDER:  float = 81.0   # SubViewport pixel resolution
+const HEADER_ICON_DISPLAY: float = 58.0   # displayed as a 58×58 square
 
 # Theme colors — derived from the boost's identity color at initialize time.
 var COLOR_BG:                  Color
@@ -107,7 +111,7 @@ func _build_ui() -> void:
 	# Height: header + description + 2 or 3 stat rows + optional capacity bar + bottom padding.
 	var row_count    := 3 if _boost.has_stat_c() else 2
 	var extra_h      := 36.0 if _is_perishable() else 0.0
-	var panel_h      := PADDING + 74.0 + DESC_H + 8.0 + (STAT_ROW_H + 8.0) * (row_count - 1) + STAT_ROW_H + extra_h + PADDING
+	var panel_h      := PADDING + 67.0 + DESC_H + 7.0 + (STAT_ROW_H + 7.0) * (row_count - 1) + STAT_ROW_H + extra_h + PADDING
 
 	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
 	var px       := arena_cx - panel_w * 0.5
@@ -137,25 +141,27 @@ func _build_ui() -> void:
 	var inner_w := panel_w - PADDING * 2.0
 	var y       := PADDING
 
-	# Header: boost name | sell button | close button
+	# Header: boost icon | boost name | peek button | sell button | close button
 	var header := HBoxContainer.new()
 	header.position            = Vector2(PADDING, y)
-	header.custom_minimum_size = Vector2(inner_w, 64.0)
-	header.add_theme_constant_override("separation", 8)
+	header.custom_minimum_size = Vector2(inner_w, 58.0)
+	header.add_theme_constant_override("separation", 7)
 	_bg.add_child(header)
+
+	header.add_child(_build_header_boost_icon())
 
 	_lbl_title = Label.new()
 	_lbl_title.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	_lbl_title.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
-	_lbl_title.add_theme_font_size_override("font_size", 42)
-	_lbl_title.add_theme_color_override("font_color", COLOR_TEXT)
+	_lbl_title.add_theme_font_size_override("font_size", 43)
+	_lbl_title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	_lbl_title.add_theme_font_override("font", UIFonts.header())
 	header.add_child(_lbl_title)
 
 	# Peek button — hold to make the panel semi-transparent so the paused game is visible.
 	var btn_peek := Button.new()
 	btn_peek.text                = ""
-	btn_peek.custom_minimum_size = Vector2(64.0, 64.0)
+	btn_peek.custom_minimum_size = Vector2(58.0, 58.0)
 	_apply_neutral_button_style(btn_peek)
 	btn_peek.button_down.connect(_on_peek_down)
 	btn_peek.button_up.connect(_on_peek_up)
@@ -172,21 +178,21 @@ func _build_ui() -> void:
 
 	_btn_sell = Button.new()
 	_btn_sell.text                = ""
-	_btn_sell.custom_minimum_size = Vector2(136.0, 64.0)
+	_btn_sell.custom_minimum_size = Vector2(144.0, 58.0)
 	_apply_sell_button_style(_btn_sell)
 	_btn_sell.pressed.connect(_on_btn_sell)
 	header.add_child(_btn_sell)
 
 	var sell_hbox := HBoxContainer.new()
 	sell_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	sell_hbox.offset_left  =  6.0
-	sell_hbox.offset_right = -6.0
+	sell_hbox.offset_left  =  5.0
+	sell_hbox.offset_right = -5.0
 	sell_hbox.alignment    = BoxContainer.ALIGNMENT_CENTER
-	sell_hbox.add_theme_constant_override("separation", 6)
+	sell_hbox.add_theme_constant_override("separation", 5)
 	_btn_sell.add_child(sell_hbox)
 
 	var trash := TrashcanIcon.new()
-	trash.custom_minimum_size = Vector2(46.0, 0.0)
+	trash.custom_minimum_size = Vector2(49.0, 0.0)
 	trash.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	trash.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sell_hbox.add_child(trash)
@@ -201,14 +207,14 @@ func _build_ui() -> void:
 
 	var btn_close := Button.new()
 	btn_close.text                = "X"
-	btn_close.custom_minimum_size = Vector2(64.0, 64.0)
-	btn_close.add_theme_font_size_override("font_size", 26)
+	btn_close.custom_minimum_size = Vector2(58.0, 58.0)
+	btn_close.add_theme_font_size_override("font_size", 23)
 	btn_close.add_theme_font_override("font", UIFonts.primary_bold())
 	btn_close.pressed.connect(_on_close)
 	_apply_neutral_button_style(btn_close)
 	header.add_child(btn_close)
 
-	y += 74.0
+	y += 67.0
 
 	# --- Description label ---
 	var lbl_desc := Label.new()
@@ -216,7 +222,7 @@ func _build_ui() -> void:
 	lbl_desc.size          = Vector2(inner_w, DESC_H)
 	lbl_desc.autowrap_mode = 3   # TextServer.AUTOWRAP_WORD_ARBITRARY
 	lbl_desc.add_theme_font_override("font", UIFonts.primary())
-	lbl_desc.add_theme_font_size_override("font_size", 18)
+	lbl_desc.add_theme_font_size_override("font_size", 16)
 	lbl_desc.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 	lbl_desc.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	lbl_desc.text          = _boost.get_description()
@@ -226,7 +232,7 @@ func _build_ui() -> void:
 	# Stat rows
 	_rng_row = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
 	_b_row   = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
-	_c_row   = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_c_row   = _build_stat_button_row(y, inner_w)
 
 	_rng_row["btn"].pressed.connect(_on_btn_range)
 	_b_row["btn"].pressed.connect(_on_btn_stat_b)
@@ -259,6 +265,43 @@ func _apply_boost_theme() -> void:
 	COLOR_BTN_MAX             = Color.from_hsv(h, s * 0.20, v * 0.14, 1.0)
 	COLOR_STAT_DISPLAY        = Color.from_hsv(h, s * 0.40, v * 0.12, 0.50)
 	COLOR_STAT_DISPLAY_BORDER = Color.from_hsv(h, s * 0.70, v * 0.42, 1.0)
+
+
+## Builds a small top-down SubViewport render of the boost for the header row.
+## Mirrors TrapUpgradePanel._build_header_trap_icon so both panels look identical.
+func _build_header_boost_icon() -> Control:
+	var icon_ctrl := Control.new()
+	icon_ctrl.custom_minimum_size = Vector2(HEADER_ICON_DISPLAY, HEADER_ICON_DISPLAY)
+	icon_ctrl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+
+	var svp := SubViewport.new()
+	svp.size                      = Vector2i(int(HEADER_ICON_RENDER), int(HEADER_ICON_RENDER))
+	svp.own_world_3d              = true
+	svp.transparent_bg            = true
+	svp.render_target_update_mode = SubViewport.UPDATE_ALWAYS
+
+	var cam := Camera3D.new()
+	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
+	cam.size       = 1.9
+	cam.position   = Vector3(0.0, 5.0, 0.0)
+	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
+	svp.add_child(cam)
+
+	var boost_preview := Node3D.new()
+	boost_preview.set_script(BoostUnit)
+	boost_preview.initialize_preview(_boost.get_type())
+	svp.add_child(boost_preview)
+	boost_preview.call_deferred("hide_range_indicator")
+
+	var svc := SubViewportContainer.new()
+	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
+	svc.stretch      = true
+	svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	svc.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
+	svc.add_child(svp)
+	icon_ctrl.add_child(svc)
+
+	return icon_ctrl
 
 
 ## Builds the remaining-capacity bar shown below the stat rows for perishable boosts.
@@ -481,9 +524,6 @@ func _on_bug_bucks_changed(_amount: int) -> void:
 # ---------------------------------------------------------------------------
 
 func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
-	var left_col := 140.0
-	var split_x  := inner_w * 0.60
-
 	var row_ctrl := Control.new()
 	row_ctrl.position     = Vector2(PADDING, y)
 	row_ctrl.size         = Vector2(inner_w, STAT_ROW_H)
@@ -501,57 +541,61 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 	panel_bg.add_theme_stylebox_override("panel", bg_style)
 	row_ctrl.add_child(panel_bg)
 
-	var vbox_left := VBoxContainer.new()
-	vbox_left.position     = Vector2(8.0, 0.0)
-	vbox_left.size         = Vector2(left_col, STAT_ROW_H)
-	vbox_left.alignment    = BoxContainer.ALIGNMENT_CENTER
-	vbox_left.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox_left.add_theme_constant_override("separation", 0)
-	row_ctrl.add_child(vbox_left)
+	var hbox := HBoxContainer.new()
+	hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	hbox.offset_left  =  8.0
+	hbox.offset_right = -8.0
+	hbox.add_theme_constant_override("separation", 6)
+	hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row_ctrl.add_child(hbox)
 
+	# Title — fills all space to the left of the value label.
 	var lbl_name := Label.new()
-	lbl_name.add_theme_font_size_override("font_size", 26)
+	lbl_name.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	lbl_name.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
+	lbl_name.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	lbl_name.add_theme_font_size_override("font_size", 22)
 	lbl_name.add_theme_color_override("font_color", COLOR_TEXT)
 	lbl_name.add_theme_font_override("font", UIFonts.primary_bold())
 	lbl_name.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox_left.add_child(lbl_name)
+	hbox.add_child(lbl_name)
 
-	var lbl_stars := Label.new()
-	lbl_stars.add_theme_font_size_override("font_size", 44)
-	lbl_stars.add_theme_color_override("font_color", COLOR_STARS)
-	lbl_stars.add_theme_color_override("font_outline_color", Color(0.08, 0.08, 0.08, 1.0))
-	lbl_stars.add_theme_constant_override("outline_size", 4)
-	lbl_stars.add_theme_font_override("font", UIFonts.primary_bold())
-	lbl_stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	vbox_left.add_child(lbl_stars)
-
+	# Current value — sizes to its text content, right-aligned.
 	var lbl_cur := Label.new()
-	lbl_cur.position             = Vector2(0.0, 0.0)
-	lbl_cur.size                 = Vector2(split_x, STAT_ROW_H)
 	lbl_cur.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	lbl_cur.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	lbl_cur.add_theme_font_size_override("font_size", 34)
+	lbl_cur.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
+	lbl_cur.add_theme_font_size_override("font_size", 28)
 	lbl_cur.add_theme_color_override("font_color", COLOR_TEXT)
 	lbl_cur.add_theme_font_override("font", UIFonts.primary_bold())
-	lbl_cur.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	row_ctrl.add_child(lbl_cur)
+	lbl_cur.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(lbl_cur)
 
-	var btn_h   := STAT_ROW_H * 0.60
-	var v_inset := (STAT_ROW_H - btn_h) * 0.5
-	var btn_x   := split_x + v_inset
-	var btn_w   := inner_w - btn_x - v_inset
+	# Upgrade button — MarginContainer provides top/bottom inset so the panel
+	# background remains visible above and below the button face.
+	var v_inset    := int(STAT_ROW_H * 0.20)
+	var btn_margin := MarginContainer.new()
+	btn_margin.custom_minimum_size = Vector2(inner_w * 0.285, 0.0)
+	btn_margin.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	btn_margin.add_theme_constant_override("margin_top",    v_inset)
+	btn_margin.add_theme_constant_override("margin_bottom", v_inset)
+	btn_margin.add_theme_constant_override("margin_left",   0)
+	btn_margin.add_theme_constant_override("margin_right",  0)
+	btn_margin.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(btn_margin)
+
 	var btn := Button.new()
-	btn.text       = ""
-	btn.position   = Vector2(btn_x, v_inset)
-	btn.size       = Vector2(btn_w, btn_h)
-	btn.focus_mode = Control.FOCUS_NONE
+	btn.text                  = ""
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	btn.focus_mode            = Control.FOCUS_NONE
 	_apply_button_style(btn, false)
-	row_ctrl.add_child(btn)
+	btn_margin.add_child(btn)
 
 	var btn_hbox := HBoxContainer.new()
 	btn_hbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	btn_hbox.offset_left  =  8.0
-	btn_hbox.offset_right = -8.0
+	btn_hbox.offset_left  =  7.0
+	btn_hbox.offset_right = -7.0
 	btn_hbox.alignment    = BoxContainer.ALIGNMENT_CENTER
 	btn.add_child(btn_hbox)
 
@@ -574,6 +618,18 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 	btn_hbox.add_child(lbl_cost)
 
 	_set_mouse_passthrough(btn_hbox)
+
+	# Stars — rightmost element, sizes to its text content (always 3 characters).
+	var lbl_stars := Label.new()
+	lbl_stars.vertical_alignment  = VERTICAL_ALIGNMENT_CENTER
+	lbl_stars.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	lbl_stars.add_theme_font_size_override("font_size", 52)
+	lbl_stars.add_theme_color_override("font_color", COLOR_STARS)
+	lbl_stars.add_theme_color_override("font_outline_color", Color(0.08, 0.08, 0.08, 1.0))
+	lbl_stars.add_theme_constant_override("outline_size", 4)
+	lbl_stars.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl_stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	hbox.add_child(lbl_stars)
 
 	return {
 		"row":   row_ctrl,
