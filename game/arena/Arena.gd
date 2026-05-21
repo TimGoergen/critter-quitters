@@ -792,7 +792,7 @@ func _spawn_sell_coin_burst(trap_node: Node3D) -> void:
 	var particles := CPUParticles2D.new()
 	particles.process_mode         = Node.PROCESS_MODE_ALWAYS
 	particles.position             = burst_pos
-	particles.amount               = 28
+	particles.amount               = 8
 	particles.lifetime             = 0.9
 	particles.one_shot             = true
 	particles.explosiveness        = 1.0
