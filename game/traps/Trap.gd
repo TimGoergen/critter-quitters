@@ -1825,44 +1825,27 @@ func _spawn_zapper_visual() -> void:
 	glow_mi.material_override  = glow_mat
 	_zapper_uv_light.add_child(glow_mi)
 
-	# Lightning bolt — large flat polygon on the XZ plane, always rendered on top
-	# of all other trap geometry via no_depth_test so it reads clearly from above.
-	var bolt_mi              := MeshInstance3D.new()
-	bolt_mi.mesh              = _build_bolt_mesh(fp * 0.42, Color(0.00, 0.50, 1.00))
-	var bolt_mat             := StandardMaterial3D.new()
-	bolt_mat.albedo_color     = Color.WHITE
-	bolt_mat.vertex_color_use_as_albedo = true
-	bolt_mat.shading_mode     = BaseMaterial3D.SHADING_MODE_UNSHADED
-	bolt_mat.cull_mode        = BaseMaterial3D.CULL_DISABLED
-	bolt_mat.no_depth_test    = true   # always draw on top of cage, ring, and floor
-	bolt_mi.material_override  = bolt_mat
-	_zapper_uv_light.add_child(bolt_mi)
+	# ⚡ emoji, billboard so it always faces the top-down camera.
+	# pixel_size maps font pixels to world units; font_size controls render quality.
+	# IMPORTANT: font must be a monochrome font (not a color emoji font like Segoe UI
+	# Emoji).  Color fonts bake yellow/white pixels into the glyph bitmap; modulate
+	# then multiplies against those fixed colors, which is why all prior attempts
+	# produced a dark muted result instead of neon.  UIFonts.symbols() returns a
+	# monochrome font where modulate has full effect.
+	var bolt_label              := Label3D.new()
+	bolt_label.text             = "⚡"
+	bolt_label.font             = UIFonts.symbols()
+	bolt_label.font_size        = 96
+	bolt_label.pixel_size       = fp * 0.0095
+	bolt_label.modulate         = Color(0.00, 0.80, 1.00)   # neon cyan-blue
+	# outline_modulate matches the fill so the outline inflates the glyph without
+	# drawing a visible ring — net effect is a thicker, bolder bolt shape.
+	bolt_label.outline_size     = 12
+	bolt_label.outline_modulate = Color(0.00, 0.80, 1.00)
+	bolt_label.no_depth_test    = true
+	bolt_label.billboard        = BaseMaterial3D.BILLBOARD_ENABLED
+	_zapper_uv_light.add_child(bolt_label)
 
-
-## Builds a flat lightning bolt polygon on the XZ plane using ImmediateMesh.
-## s is a scale factor — vertex coordinates range ±0.5*s in X and Z.
-## The polygon has 6 vertices with the top-half shifted right and the bottom-half
-## shifted left, creating a clear zigzag at the waist.
-## The fan triangulation from v0 is valid because the interior diagonals all
-## lie inside this particular concave hexagon.
-func _build_bolt_mesh(s: float, color: Color) -> ImmediateMesh:
-	var im  := ImmediateMesh.new()
-	var pts := [
-		Vector3(-0.10 * s, 0.0, -0.50 * s),  # v0 upper-left
-		Vector3( 0.50 * s, 0.0, -0.50 * s),  # v1 upper-right (wide top)
-		Vector3( 0.15 * s, 0.0,  0.00),       # v2 mid-right kink
-		Vector3( 0.10 * s, 0.0,  0.50 * s),  # v3 lower-right
-		Vector3(-0.50 * s, 0.0,  0.50 * s),  # v4 lower-left (wide bottom)
-		Vector3(-0.15 * s, 0.0,  0.00),       # v5 mid-left kink
-	]
-	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
-	# Fan triangulation from v0.
-	for tri in [[0,1,2], [0,2,3], [0,3,4], [0,4,5]]:
-		for vi: int in tri:
-			im.surface_set_color(color)
-			im.surface_add_vertex(pts[vi])
-	im.surface_end()
-	return im
 
 
 ## Plays the fire animation: the UV light node scales outward sharply then
