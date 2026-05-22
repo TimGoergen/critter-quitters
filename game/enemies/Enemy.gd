@@ -71,44 +71,64 @@ const RAT_FRAMES: Array[Texture2D] = [
 	preload("res://assets/rat_walk_3.svg"),
 	preload("res://assets/rat_walk_4.svg"),
 ]
+const MOSQUITO_FRAMES: Array[Texture2D] = [
+	preload("res://assets/mosquito_walk_1.svg"),
+	preload("res://assets/mosquito_walk_2.svg"),
+	preload("res://assets/mosquito_walk_3.svg"),
+	preload("res://assets/mosquito_walk_4.svg"),
+]
 
 
 # ---------------------------------------------------------------------------
 # Enemy type
 # ---------------------------------------------------------------------------
 
-enum EnemyType { ANT, GNAT, CRICKET, BEETLE, COCKROACH, RAT }
+enum EnemyType { ANT, GNAT, CRICKET, BEETLE, COCKROACH, RAT, MOSQUITO, COCKROACH_NYMPH, COCKROACH_MINI, MOUSE }
 
 ## Per-type stat table. All numeric values are placeholders — tuned via playtesting.
-##   hp            — starting (and maximum) hit points
-##   speed         — movement speed in cells per second
-##   infestation   — Infestation Level increase when this pest reaches the exit
-##   color         — used only for kill-burst particle color
+##   hp             — starting (and maximum) hit points
+##   speed          — movement speed in cells per second
+##   infestation    — Infestation Level increase when this pest reaches the exit
+##   color          — used only for kill-burst particle color
+##   is_flying      — optional; true = enemy flies straight to exit, ignores pathfinder
+##   bug_bucks_steal — optional; Bug Bucks removed from player when this pest exits
 const STATS := {
-	EnemyType.ANT:       { "hp": 10,  "speed": 2.5,  "infestation": 1.0, "bounty": 10, "color": Color(0.85, 0.35, 0.15) },
-	EnemyType.GNAT:      { "hp":  5,  "speed": 5.6,  "infestation": 0.5, "bounty": 5,  "color": Color(0.16, 0.14, 0.19) },
-	EnemyType.CRICKET:   { "hp": 12,  "speed": 3.2,  "infestation": 1.0, "bounty": 15, "color": Color(0.35, 0.55, 0.12) },
-	EnemyType.BEETLE:    { "hp": 25,  "speed": 1.5,  "infestation": 3.0, "bounty": 15, "color": Color(0.10, 0.22, 0.50) },
-	EnemyType.COCKROACH: { "hp": 80,  "speed": 1.0,  "infestation": 5.0, "bounty": 25, "color": Color(0.48, 0.21, 0.06) },
-	EnemyType.RAT:       { "hp": 200, "speed": 0.6,  "infestation": 10.0,"bounty": 50, "color": Color(0.42, 0.41, 0.40) },
+	EnemyType.ANT:            { "hp": 10,  "speed": 2.5, "infestation":  1.0, "bounty": 10, "color": Color(0.85, 0.35, 0.15) },
+	EnemyType.GNAT:           { "hp":  5,  "speed": 5.6, "infestation":  0.5, "bounty":  5, "color": Color(0.16, 0.14, 0.19) },
+	EnemyType.CRICKET:        { "hp": 12,  "speed": 3.2, "infestation":  1.0, "bounty": 15, "color": Color(0.35, 0.55, 0.12) },
+	EnemyType.BEETLE:         { "hp": 25,  "speed": 1.5, "infestation":  3.0, "bounty": 15, "color": Color(0.10, 0.22, 0.50) },
+	EnemyType.COCKROACH:      { "hp": 80,  "speed": 1.0, "infestation":  5.0, "bounty": 25, "color": Color(0.48, 0.21, 0.06) },
+	EnemyType.RAT:            { "hp": 200, "speed": 0.6, "infestation": 10.0, "bounty": 50, "color": Color(0.42, 0.41, 0.40) },
+	EnemyType.MOSQUITO:       { "hp": 15,  "speed": 5.5, "infestation":  3.0, "bounty":  8, "color": Color(0.35, 0.20, 0.30), "is_flying": true  },
+	EnemyType.COCKROACH_NYMPH:{ "hp": 80,  "speed": 1.5, "infestation":  8.0, "bounty": 25, "color": Color(0.55, 0.28, 0.10) },
+	EnemyType.COCKROACH_MINI: { "hp": 20,  "speed": 2.0, "infestation":  2.0, "bounty":  5, "color": Color(0.52, 0.26, 0.08) },
+	EnemyType.MOUSE:          { "hp": 35,  "speed": 2.5, "infestation":  5.0, "bounty": 15, "color": Color(0.62, 0.58, 0.55), "bug_bucks_steal": 20 },
 }
 
 # Visual quad size and shadow size vary by type so larger enemies read bigger on screen.
 const VISUAL_QUAD_SIZE: Dictionary = {
-	EnemyType.ANT:       2.0,
-	EnemyType.GNAT:      1.60,
-	EnemyType.CRICKET:   1.8,
-	EnemyType.BEETLE:    2.40,
-	EnemyType.COCKROACH: 2.60,
-	EnemyType.RAT:       3.20,
+	EnemyType.ANT:            2.00,
+	EnemyType.GNAT:           1.60,
+	EnemyType.CRICKET:        1.80,
+	EnemyType.BEETLE:         2.40,
+	EnemyType.COCKROACH:      2.60,
+	EnemyType.RAT:            3.20,
+	EnemyType.MOSQUITO:       1.80,
+	EnemyType.COCKROACH_NYMPH:2.70,
+	EnemyType.COCKROACH_MINI: 1.60,
+	EnemyType.MOUSE:          2.20,
 }
 const SHADOW_PLANE_SIZE: Dictionary = {
-	EnemyType.ANT:       2.72,
-	EnemyType.GNAT:      2.10,
-	EnemyType.CRICKET:   2.50,
-	EnemyType.BEETLE:    3.10,
-	EnemyType.COCKROACH: 3.40,
-	EnemyType.RAT:       4.20,
+	EnemyType.ANT:            2.72,
+	EnemyType.GNAT:           2.10,
+	EnemyType.CRICKET:        2.50,
+	EnemyType.BEETLE:         3.10,
+	EnemyType.COCKROACH:      3.40,
+	EnemyType.RAT:            4.20,
+	EnemyType.MOSQUITO:       2.50,
+	EnemyType.COCKROACH_NYMPH:3.50,
+	EnemyType.COCKROACH_MINI: 2.20,
+	EnemyType.MOUSE:          3.00,
 }
 
 
@@ -136,16 +156,33 @@ const ARRIVAL_THRESHOLD: float = 0.05
 const DEATH_FLASH_DURATION: float = 0.12
 
 ## Albedo multiplier applied to enemy sprites to lift them against a dark background.
-## Values above 1.0 boost saturation and brightness. The rat stays at 1.0 because its
-## identity is a muted gray — the boost would wash it to white.
+## Values above 1.0 boost saturation and brightness. Muted types (Rat, Mouse) stay at
+## 1.0 because boosting them would wash their defining gray tones to white.
 const SPRITE_BRIGHTNESS: Dictionary = {
-	EnemyType.ANT:       2.2,
-	EnemyType.GNAT:      2.2,
-	EnemyType.CRICKET:   2.2,
-	EnemyType.BEETLE:    2.2,
-	EnemyType.COCKROACH: 2.2,
-	EnemyType.RAT:       1.0,
+	EnemyType.ANT:            1.6,
+	EnemyType.GNAT:           1.6,
+	EnemyType.CRICKET:        1.6,
+	EnemyType.BEETLE:         1.6,
+	EnemyType.COCKROACH:      1.6,
+	EnemyType.RAT:            1.0,
+	EnemyType.MOSQUITO:       1.6,
+	EnemyType.COCKROACH_NYMPH:1.6,
+	EnemyType.COCKROACH_MINI: 1.6,
+	EnemyType.MOUSE:          1.0,
 }
+
+## Flash color applied to the enemy sprite when poison ticks deal damage.
+const POISON_FLASH_COLOR: Color = Color(0.20, 0.80, 0.20)
+
+## How long the electrified freeze lasts in seconds.
+const ELECTRIFIED_DURATION: float = 0.75
+## Shake offset amplitude in world units — enough to be readable without looking ridiculous.
+const ELECTRIFIED_SHAKE_AMPLITUDE: float = 0.10
+## Shake frequency in radians/second — fast enough to read as an electric convulsion.
+const ELECTRIFIED_SHAKE_FREQ: float = 28.0
+## Two colors alternated rapidly during electrification: neon blue and overdriven white.
+const ELECTRIFIED_COLOR_A: Color = Color(0.40, 0.80, 4.00, 1.0)
+const ELECTRIFIED_COLOR_B: Color = Color(4.00, 4.00, 4.00, 1.0)
 
 # HP bar — colors match the infestation level bar (COLOR_BAR_BG / COLOR_BAR_FILL in HUD.gd).
 const HP_BAR_BG_COLOR   := Color(0.28, 0.28, 0.28, 1.0)
@@ -229,6 +266,25 @@ var _slow_sources: Dictionary = {}   # Trap node → slow strength (0.0–1.0)
 # freed when the last one is removed.
 var _glue_splatter: Node3D = null
 
+# Flying movement — only active when _is_flying is true.
+# Flying enemies bypass A* and travel in a straight line to the exit.
+var _is_flying: bool = false
+var _fly_target_pos: Vector3 = Vector3.ZERO   # world position of the exit cell centre
+var _bug_bucks_steal: int = 0                  # deducted from player when this enemy exits
+
+# Poison status — applied by Bait Station; inflicts damage over time.
+var _is_poisoned: bool = false
+var _poison_damage_per_tick: float = 0.0
+var _poison_tick_rate: float = 0.5
+var _poison_remaining_duration: float = 0.0
+var _poison_tick_timer: float = 0.0
+
+# Electrified status — applied by the Zapper on a rare proc; freezes the enemy
+# in place and shakes the visual for ELECTRIFIED_DURATION seconds.
+var _is_electrified: bool = false
+var _electrified_timer: float = 0.0
+var _electrified_shake_time: float = 0.0
+
 # Yellow disc shown beneath the enemy while the camera is following it.
 var _selection_glow: MeshInstance3D = null
 
@@ -272,10 +328,12 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 	_base_move_speed   = _move_speed
 	_waddle_speed      = WADDLE_RADS_PER_CELL * _move_speed
 	_waddle_offset     = WADDLE_OFFSET_FRACTION * VISUAL_QUAD_SIZE[enemy_type] * Grid.CELL_SIZE
-	_max_hp            = wave * 1.02 + stats["hp"]
-	_current_hp        = _max_hp
+	_max_hp             = wave * 1.02 + stats["hp"]
+	_current_hp         = _max_hp
 	_infestation_damage = stats["infestation"]
-	_bounty            = stats["bounty"]
+	_bounty             = stats["bounty"]
+	_is_flying          = stats.get("is_flying", false)
+	_bug_bucks_steal    = stats.get("bug_bucks_steal", 0)
 
 	_path         = initial_path
 	_current_cell = _path[0]
@@ -284,6 +342,11 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 
 	global_position   = _cell_to_world(_current_cell)
 	global_position.y = 0.25
+
+	if _is_flying:
+		# Store the exit world position so _process_flying() can move directly toward it.
+		var exit_world  := _cell_to_world(initial_path.back())
+		_fly_target_pos  = Vector3(exit_world.x, 0.25, exit_world.z)
 
 	_base_color        = stats["color"]
 	_sprite_brightness = SPRITE_BRIGHTNESS[enemy_type]
@@ -396,9 +459,55 @@ func get_slow_factor() -> float:
 	return _slow_sources.values().max()
 
 
+## Returns true if the poison DoT is currently active on this enemy.
+func is_poisoned() -> bool:
+	return _is_poisoned
+
+
+## Returns the seconds of poison remaining (0.0 when not poisoned).
+func get_poison_remaining() -> float:
+	return _poison_remaining_duration if _is_poisoned else 0.0
+
+
 ## Returns the base color for this enemy type (used by kill-burst particles).
 func get_color() -> Color:
 	return _base_color
+
+
+## Returns true if this enemy flies in a straight line (ignores pathfinder).
+func get_is_flying() -> bool:
+	return _is_flying
+
+
+## Returns Bug Bucks stolen from the player when this enemy reaches the exit.
+## Zero for all enemy types except Mouse.
+func get_bug_bucks_steal() -> int:
+	return _bug_bucks_steal
+
+
+## Freezes the enemy and plays the electrocution shake for ELECTRIFIED_DURATION seconds.
+## Safe to call on an already-electrified enemy — the timer simply resets.
+func apply_electrify() -> void:
+	if _is_dead:
+		return
+	_is_electrified = true
+	_electrified_timer = ELECTRIFIED_DURATION
+	_electrified_shake_time = 0.0
+
+
+## Returns true if the electrified freeze is currently active.
+func is_electrified() -> bool:
+	return _is_electrified
+
+
+## Applies a poison DoT effect.  If already poisoned, the duration resets
+## (effects do not stack — the Bait Station refreshes rather than compounds).
+func apply_poison(damage_per_tick: float, duration: float, tick_rate: float) -> void:
+	_poison_damage_per_tick    = damage_per_tick
+	_poison_tick_rate          = tick_rate
+	_poison_tick_timer         = tick_rate   # first tick fires after one full interval
+	_poison_remaining_duration = duration
+	_is_poisoned               = true
 
 
 # ---------------------------------------------------------------------------
@@ -409,6 +518,8 @@ func get_color() -> Color:
 func update_path(new_path: Array[Vector2i]) -> void:
 	if _is_dead:
 		return
+	if _is_flying:
+		return  # flying enemies ignore the pathfinder — they fly straight to the exit
 	if new_path.size() < 2:
 		_path = new_path
 		return
@@ -442,7 +553,23 @@ func get_path_index() -> int:
 # ---------------------------------------------------------------------------
 
 func _process(delta: float) -> void:
-	if _is_dead or _path.is_empty() or _path_index >= _path.size():
+	if _is_dead:
+		return
+
+	_tick_poison(delta)
+
+	if _is_dead:   # poison may have killed the enemy this frame
+		return
+
+	if _is_electrified:
+		_tick_electrified(delta)
+		return   # movement is suspended for the duration of the effect
+
+	if _is_flying:
+		_process_flying(delta)
+		return
+
+	if _path.is_empty() or _path_index >= _path.size():
 		return
 
 	var target_world   := _cell_to_world(_target_cell)
@@ -487,6 +614,94 @@ func _process(delta: float) -> void:
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
+
+## Advances the poison clock and applies a damage tick when the interval fires.
+func _tick_poison(delta: float) -> void:
+	if not _is_poisoned:
+		return
+	_poison_remaining_duration -= delta
+	_poison_tick_timer -= delta
+	if _poison_tick_timer <= 0.0:
+		take_damage(_poison_damage_per_tick, POISON_FLASH_COLOR)
+		_poison_tick_timer += _poison_tick_rate   # add to avoid drift on slow frames
+	if _poison_remaining_duration <= 0.0:
+		_is_poisoned = false
+
+
+## Runs each frame while the enemy is electrified.
+## Advances the timer, applies a rapid position shake and a blue/white color flicker
+## to the visual sprite, then clears both when the duration expires.
+func _tick_electrified(delta: float) -> void:
+	_electrified_timer -= delta
+	_electrified_shake_time += delta
+
+	if _visual != null:
+		# Two-axis shake: primary on X, secondary offset on Z with a slightly different
+		# frequency so the motion feels erratic rather than rhythmically back-and-forth.
+		var shake_x := sin(_electrified_shake_time * ELECTRIFIED_SHAKE_FREQ) * ELECTRIFIED_SHAKE_AMPLITUDE
+		var shake_z := cos(_electrified_shake_time * ELECTRIFIED_SHAKE_FREQ * 1.4) * ELECTRIFIED_SHAKE_AMPLITUDE * 0.6
+		_visual.position.x = shake_x
+		_visual.position.z = shake_z
+
+		# Rapid flicker: a sin wave mapped to [0,1] blends between neon blue and white.
+		var t := (sin(_electrified_shake_time * ELECTRIFIED_SHAKE_FREQ * 0.9) + 1.0) * 0.5
+		_visual_material.albedo_color = ELECTRIFIED_COLOR_A.lerp(ELECTRIFIED_COLOR_B, t)
+
+	if _electrified_timer <= 0.0:
+		_is_electrified = false
+		# Restore the visual to its resting state before normal movement resumes.
+		if _visual != null:
+			_visual.position.x = 0.0
+			_visual.position.z = 0.0
+			_visual_material.albedo_color = Color(_sprite_brightness, _sprite_brightness, _sprite_brightness, 1.0)
+
+
+## Moves a flying enemy in a straight line toward the exit; called from _process().
+## Flying enemies skip A* entirely — they travel directly over any trap layout.
+func _process_flying(delta: float) -> void:
+	var offset   := _fly_target_pos - global_position
+	offset.y      = 0.0
+	var distance := offset.length()
+
+	if distance <= ARRIVAL_THRESHOLD:
+		reached_exit.emit()
+		AudioManager.unregister_enemy(self)
+		queue_free()
+		return
+
+	var move_amount := _move_speed * Grid.CELL_SIZE * delta
+	global_position += offset.normalized() * minf(move_amount, distance)
+
+	if _visual == null:
+		return
+	_waddle_time += delta
+	var world_dir := offset.normalized()
+	if _enemy_type == EnemyType.MOSQUITO:
+		# Hovering insects bob vertically rather than swaying side-to-side.
+		_visual.position.x = 0.0
+		_visual.position.z = 0.0
+		_visual.position.y = sin(_waddle_time * 4.0) * 0.096
+	else:
+		var sway := sin(_waddle_time * _waddle_speed) * _waddle_offset
+		if abs(world_dir.x) >= abs(world_dir.z):
+			_visual.position.x = 0.0
+			_visual.position.z = sway
+		else:
+			_visual.position.z = 0.0
+			_visual.position.x = sway
+	# Snap to the dominant axis — flying enemies travel at arbitrary angles but the
+	# sprite only has four orientations. Using raw sign() on both axes produces a
+	# 45° diagonal facing whenever x and z components are both non-zero.
+	var travel_dir: Vector2i
+	if abs(world_dir.x) >= abs(world_dir.z):
+		travel_dir = Vector2i(int(sign(world_dir.x)), 0)
+	else:
+		travel_dir = Vector2i(0, int(sign(world_dir.z)))
+	_visual.basis   = _facing_basis(travel_dir)
+	_walk_time     += delta
+	var _anim_rate := 6.0 if _enemy_type == EnemyType.MOSQUITO else 3.0
+	_visual_material.albedo_texture = _walk_frames[int(_walk_time * _move_speed * _anim_rate) % _walk_frames.size()]
+
 
 ## Kills the enemy: stops movement, emits died, plays a white flash, then frees.
 func _die() -> void:
@@ -659,14 +874,19 @@ func _build_glue_blob_mesh(base_r: float, color: Color) -> ImmediateMesh:
 
 
 ## Returns the walk-frame array for the given enemy type.
+## Remaining placeholders use the nearest visual match until dedicated art is created.
 func _frames_for_type(enemy_type: EnemyType) -> Array[Texture2D]:
 	match enemy_type:
-		EnemyType.ANT:       return ANT_FRAMES
-		EnemyType.GNAT:      return GNAT_FRAMES
-		EnemyType.CRICKET:   return CRICKET_FRAMES
-		EnemyType.BEETLE:    return BEETLE_FRAMES
-		EnemyType.COCKROACH: return COCKROACH_FRAMES
-		EnemyType.RAT:       return RAT_FRAMES
+		EnemyType.ANT:            return ANT_FRAMES
+		EnemyType.GNAT:           return GNAT_FRAMES
+		EnemyType.CRICKET:        return CRICKET_FRAMES
+		EnemyType.BEETLE:         return BEETLE_FRAMES
+		EnemyType.COCKROACH:      return COCKROACH_FRAMES
+		EnemyType.RAT:            return RAT_FRAMES
+		EnemyType.MOSQUITO:       return MOSQUITO_FRAMES
+		EnemyType.COCKROACH_NYMPH:return COCKROACH_FRAMES  # placeholder — cockroach variant
+		EnemyType.COCKROACH_MINI: return COCKROACH_FRAMES  # placeholder — smaller cockroach
+		EnemyType.MOUSE:          return RAT_FRAMES        # placeholder — rodent sibling
 	return ANT_FRAMES
 
 

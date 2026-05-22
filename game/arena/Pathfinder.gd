@@ -120,7 +120,12 @@ func recalculate() -> void:
 # Signal handlers
 # ---------------------------------------------------------------------------
 
-func _on_cell_changed(_cell: Vector2i, _new_state: Grid.CellState) -> void:
+func _on_cell_changed(_cell: Vector2i, new_state: Grid.CellState) -> void:
+	# Floor traps are passable — placing one never changes cell traversability,
+	# so rerouting enemies around them. Skipping here prevents A* tie-breaking
+	# from returning an alternate path that happens to avoid the trap cell.
+	if new_state == Grid.CellState.FLOOR_TRAP:
+		return
 	if not _recalc_pending:
 		_recalc_pending = true
 		call_deferred("_deferred_recalculate")

@@ -81,11 +81,14 @@ func _process(delta: float) -> void:
 		_apply_damage_tick()
 
 
-## Damages every valid enemy currently within the hazard radius.
+## Damages every valid non-flying enemy currently within the hazard radius.
 ## Called on a fixed interval for as long as the cloud is alive.
+## Flying enemies are excluded — fog stays at ground level.
 func _apply_damage_tick() -> void:
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
+			continue
+		if enemy.get_is_flying():
 			continue
 		if _xz_distance(enemy.global_position) > _aoe_range:
 			continue

@@ -29,9 +29,12 @@ const Enemy             = preload("res://enemies/Enemy.gd")
 const Trap              = preload("res://traps/Trap.gd")
 const Projectile        = preload("res://traps/Projectile.gd")
 const FogCloud          = preload("res://traps/FogCloud.gd")
+const FlyStripCloud     = preload("res://traps/FlyStripCloud.gd")
+const BoostUnit         = preload("res://boosts/BoostUnit.gd")
 const UIFonts           = preload("res://ui/UIFonts.gd")
 const HUD               = preload("res://ui/HUD.gd")
 const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
+const BoostUpgradePanel = preload("res://ui/BoostUpgradePanel.gd")
 const EnemyStatsPanel   = preload("res://ui/EnemyStatsPanel.gd")
 const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
 
@@ -75,6 +78,10 @@ var _trap_nodes: Dictionary = {}          # anchor Vector2i -> MeshInstance3D
 # Used to find and remove the whole trap when the player clicks any of its cells.
 var _trap_anchors: Dictionary = {}        # Vector2i -> anchor Vector2i
 
+# Boost units — parallel structure to traps; Boosts block pathfinding like traps.
+var _boost_nodes:   Dictionary = {}       # anchor Vector2i -> BoostUnit node
+var _boost_anchors: Dictionary = {}       # Vector2i -> anchor Vector2i
+
 # Pre-created path marker nodes. Repositioned and shown/hidden on each
 # path update rather than freed and re-created.
 const PATH_MARKER_POOL_SIZE: int = 128
@@ -103,8 +110,10 @@ var _seconds_remaining: int      = 0     # last value broadcast during the activ
 # in order instead of using normal wave composition. Toggled at startup via DebugStartDialog.
 const STATIC_GROUP_SIZE: int  = 3
 const STATIC_GROUP_GAP: float = 1.5   # seconds of pause between each enemy type group
-var _static_enemies_mode: bool                   = false
-var _static_spawn_queue:  Array[Enemy.EnemyType] = []
+var _static_enemies_mode:  bool                   = false
+var _static_spawn_queue:   Array[Enemy.EnemyType] = []
+## Enemy types allowed in static mode; set from DebugStartDialog. Empty = all types.
+var _static_allowed_types: Array                  = []
 
 # The path currently drawn as yellow markers. Updated on every grid change
 # and trimmed forward as the enemy advances through cells.
@@ -113,9 +122,11 @@ var _display_path: Array[Vector2i] = []
 # Gold perimeter drawn around the 2×2 footprint of the currently open upgrade panel.
 var _selected_trap_outline: MeshInstance3D = null
 
-# Per-placed-trap inset perimeter outlines. Redrawn when hover or selection state changes.
-var _trap_outlines: Dictionary = {}           # anchor Vector2i -> MeshInstance3D
+# Per-placed-unit inset perimeter outlines. Redrawn when hover or selection state changes.
+var _trap_outlines:  Dictionary = {}           # anchor Vector2i -> MeshInstance3D
+var _boost_outlines: Dictionary = {}           # anchor Vector2i -> MeshInstance3D
 var _hovered_trap_anchor:  Vector2i = Vector2i(-1, -1)
+# Shared between traps and boosts — only one unit panel is ever open at a time.
 var _selected_trap_anchor: Vector2i = Vector2i(-1, -1)
 
 # The currently open upgrade panel, or null if none is open.
@@ -155,14 +166,25 @@ const PINCH_THRESHOLD_PX: float = 40.0
 var _drag_place_preview: Node3D  = null
 var _drag_place_anchor:  Vector2i = Vector2i(-1, -1)
 
-# The placed trap whose range indicator is shown while the preview hovers over it.
-# Cleared when the preview moves away or is released.
-var _placement_hover_trap: Node = null
+# The placed trap or boost whose range indicator is shown while the preview hovers
+# over it. Cleared when the preview moves away or is released.
+var _placement_hover_trap:  Node = null
+var _placement_hover_boost: Node = null
 
 # True while the HUD is driving a drag-and-drop placement gesture.
 # When set, Arena's own pointer state machine stays idle and placement
 # is controlled entirely by HUD calling begin/update/commit_hud_drag().
-var _hud_drag_active: bool = false
+var _hud_drag_active:          bool                 = false
+var _hud_drag_is_boost:        bool                 = false
+var _hud_drag_boost_type:      BoostUnit.BoostType  = BoostUnit.BoostType.PHEROMONE_DISPENSER
+# Most-recent placement preview position supplied by HUD; used for edge-scroll.
+var _hud_drag_last_screen_pos: Vector2              = Vector2.ZERO
+
+# Edge-scroll: when dragging a trap and the ghost enters a band at any arena edge,
+# the camera pans toward that edge so the player can reach off-screen cells.
+# Only active when zoomed in; in overview the whole arena is already visible.
+const EDGE_SCROLL_ZONE_PX: float  = 80.0   # width of the trigger band in virtual pixels
+const EDGE_SCROLL_MAX_SPEED: float = 10.0  # world units per second at full penetration
 
 # Camera zoom — two discrete levels: overview (full-arena fit) and zoomed-in (2×).
 enum ZoomState { OVERVIEW, ZOOMED_IN }
@@ -342,7 +364,9 @@ func _unhandled_input(event: InputEvent) -> void:
 			else:
 				_on_pointer_released(event.position)
 		elif event.button_index == MOUSE_BUTTON_RIGHT and event.pressed:
-			_try_remove_trap(_screen_to_grid(event.position))
+			var cell := _screen_to_grid(event.position)
+			_try_remove_trap(cell)
+			_try_remove_boost(cell)
 		return
 
 	# InputEventMouseMotion carries no button state — guard with is_mouse_button_pressed.
@@ -422,19 +446,26 @@ func _update_drag_preview(screen_pos: Vector2) -> void:
 		and _all_cells_buildable(cells) \
 		and not _footprint_overlaps_enemy(cells) \
 		and _can_place_at(cells)
-	_drag_place_preview = _make_trap_preview(GameState.selected_trap_type, 0.5, valid)
+	if _hud_drag_is_boost:
+		_drag_place_preview = _make_boost_preview(_hud_drag_boost_type, 0.5, valid)
+	else:
+		_drag_place_preview = _make_trap_preview(GameState.selected_trap_type, 0.5, valid)
 	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
 	_drag_place_preview.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 
-	# When placement is invalid, suppress the preview's range circle.
-	# If the footprint covers an existing trap, surface that trap's range indicator
-	# so the player can see the conflict clearly.
+	# When placement is invalid, suppress the preview's range circle and surface
+	# the blocking trap or boost's range indicator so the player can see the conflict.
 	if not valid:
 		_drag_place_preview.hide_range_indicator()
 		var blocked_trap := _find_trap_at_cells(cells)
 		if blocked_trap != null:
-			blocked_trap.show_range_indicator()
+			# dimmed=true: gray tint distinguishes the existing unit's range from the placement preview's white circle
+			blocked_trap.show_range_indicator(true)
 			_placement_hover_trap = blocked_trap
+		var blocked_boost := _find_boost_at_cells(cells)
+		if blocked_boost != null:
+			blocked_boost.show_range_indicator(true)
+			_placement_hover_boost = blocked_boost
 
 
 ## Places a trap at the last previewed anchor and frees the preview.
@@ -466,8 +497,9 @@ func _clear_drag_preview() -> void:
 ## placement_screen_pos is the centre of the floating icon (cursor + offset),
 ## which is the cell the trap will be placed in — not the raw cursor position.
 func begin_hud_drag(_trap_type: int, placement_screen_pos: Vector2) -> void:
-	_hud_drag_active = true
-	_touch_state     = TouchState.IDLE   # keep Arena's own state machine inert
+	_hud_drag_active          = true
+	_hud_drag_last_screen_pos = placement_screen_pos
+	_touch_state              = TouchState.IDLE   # keep Arena's own state machine inert
 	# GameState.selected_trap_type is already set by HUD before this call.
 	_update_drag_preview(placement_screen_pos)
 
@@ -475,20 +507,49 @@ func begin_hud_drag(_trap_type: int, placement_screen_pos: Vector2) -> void:
 ## Called by HUD each frame as the floating icon moves.
 func update_hud_drag(placement_screen_pos: Vector2) -> void:
 	if _hud_drag_active:
+		_hud_drag_last_screen_pos = placement_screen_pos
 		_update_drag_preview(placement_screen_pos)
 
 
 ## Called by HUD when the user releases the drag.  Attempts placement.
 func commit_hud_drag() -> void:
 	if _hud_drag_active:
-		_commit_drag_place()
-		_hud_drag_active = false
+		if _hud_drag_is_boost:
+			_commit_boost_drag_place()
+		else:
+			_commit_drag_place()
+		_hud_drag_active   = false
+		_hud_drag_is_boost = false
 
 
 ## Called by HUD if the drag is cancelled without releasing (e.g. second finger).
 func cancel_hud_drag() -> void:
 	_clear_drag_preview()
-	_hud_drag_active = false
+	_hud_drag_active   = false
+	_hud_drag_is_boost = false
+
+
+## Called by HUD when the user begins dragging a boost icon.
+func begin_hud_drag_boost(boost_type: BoostUnit.BoostType, placement_screen_pos: Vector2) -> void:
+	_hud_drag_active          = true
+	_hud_drag_is_boost        = true
+	_hud_drag_boost_type      = boost_type
+	_hud_drag_last_screen_pos = placement_screen_pos
+	_touch_state              = TouchState.IDLE
+	_update_drag_preview(placement_screen_pos)
+
+
+## Places a boost at the last previewed anchor.
+func _commit_boost_drag_place() -> void:
+	var anchor := _drag_place_anchor
+	_clear_drag_preview()
+	if anchor == Vector2i(-1, -1):
+		return
+	if GameState.bug_bucks < BoostUnit.STATS[_hud_drag_boost_type]["cost"]:
+		return
+	var cells := _get_trap_cells(anchor)
+	if not cells.is_empty() and not _footprint_overlaps_enemy(cells):
+		_try_place_boost(anchor, _hud_drag_boost_type)
 
 
 # ---------------------------------------------------------------------------
@@ -499,7 +560,8 @@ func cancel_hud_drag() -> void:
 ## Cancels any in-progress single-finger operation and begins tracking span.
 func _begin_pinch() -> void:
 	_clear_drag_preview()
-	_hud_drag_active  = false   # cancel any active HUD drag when a pinch starts
+	_hud_drag_active   = false   # cancel any active HUD drag when a pinch starts
+	_hud_drag_is_boost = false
 	_touch_state      = TouchState.IDLE
 	_pinch_active     = true
 	_pinch_start_span = _pinch_finger0_pos.distance_to(_pinch_finger1_pos)
@@ -508,12 +570,15 @@ func _begin_pinch() -> void:
 ## Called when either finger lifts during a pinch.
 ## Compares final span to starting span and toggles zoom if the change is large enough.
 ## Spreading fingers (span grows) zooms in; pinching (span shrinks) zooms out.
+## On zoom-in the camera centres on the midpoint between the two fingers.
 func _end_pinch() -> void:
 	_pinch_active = false
 	_touch_state  = TouchState.IDLE
 	var delta := _pinch_finger0_pos.distance_to(_pinch_finger1_pos) - _pinch_start_span
 	if delta > PINCH_THRESHOLD_PX and _zoom_state == ZoomState.OVERVIEW:
-		_toggle_zoom()
+		var midpoint     := (_pinch_finger0_pos + _pinch_finger1_pos) * 0.5
+		var world_center := _screen_to_world_xz(midpoint)
+		_toggle_zoom(world_center)
 	elif delta < -PINCH_THRESHOLD_PX and _zoom_state == ZoomState.ZOOMED_IN:
 		_toggle_zoom()
 
@@ -543,6 +608,15 @@ func _handle_tap(screen_pos: Vector2) -> void:
 			var wp := _cell_to_world(_trap_anchors[cell])
 			_apply_pan(Vector2(wp.x, wp.z))
 		_open_upgrade_panel(_trap_anchors[cell])
+		return
+
+	# Tap on a placed boost → open the boost upgrade panel.
+	if _boost_anchors.has(cell):
+		if _zoom_state == ZoomState.ZOOMED_IN:
+			_set_followed_enemy(null)
+			var wp := _cell_to_world(_boost_anchors[cell])
+			_apply_pan(Vector2(wp.x, wp.z))
+		_open_boost_upgrade_panel(_boost_anchors[cell])
 		return
 
 	# Tapping an empty arena cell no longer places a trap.
@@ -639,12 +713,26 @@ func _find_trap_at_cells(cells: Array[Vector2i]) -> Node:
 	return null
 
 
-## Hides the range indicator on any trap that was shown during an invalid placement
-## hover, then clears the reference.
+## Returns the placed BoostUnit node whose footprint contains any of the given cells,
+## or null if no placed boost occupies those cells.
+func _find_boost_at_cells(cells: Array[Vector2i]) -> Node:
+	for cell in cells:
+		if _boost_anchors.has(cell):
+			var anchor: Vector2i = _boost_anchors[cell]
+			if _boost_nodes.has(anchor):
+				return _boost_nodes[anchor]
+	return null
+
+
+## Hides the range indicator on any trap or boost that was shown during an invalid
+## placement hover, then clears both references.
 func _release_placement_hover_trap() -> void:
 	if _placement_hover_trap != null and is_instance_valid(_placement_hover_trap):
 		_placement_hover_trap.hide_range_indicator()
 	_placement_hover_trap = null
+	if _placement_hover_boost != null and is_instance_valid(_placement_hover_boost):
+		_placement_hover_boost.hide_range_indicator()
+	_placement_hover_boost = null
 
 
 func _try_place_trap(anchor: Vector2i) -> bool:
@@ -660,8 +748,13 @@ func _try_place_trap(anchor: Vector2i) -> bool:
 	if not _can_place_at(cells):
 		return false
 
+	var is_bait_station := (GameState.selected_trap_type == Trap.TrapType.BAIT_STATION)
 	for cell in cells:
-		_grid.place_trap(cell)
+		# Bait Station uses FLOOR_TRAP so enemies walk over it; all other traps use TRAP.
+		if is_bait_station:
+			_grid.place_floor_trap(cell)
+		else:
+			_grid.place_trap(cell)
 		_trap_anchors[cell] = anchor
 
 	_spawn_trap(anchor)
@@ -679,6 +772,16 @@ func _try_remove_trap(cell: Vector2i) -> void:
 	_try_remove_trap_by_anchor(anchor)
 
 
+func _try_remove_boost(cell: Vector2i) -> void:
+	if not _boost_anchors.has(cell):
+		return
+	_close_upgrade_panel()
+	var anchor: Vector2i = _boost_anchors[cell]
+	if _boost_nodes.has(anchor):
+		_spawn_sell_coin_burst(_boost_nodes[anchor])
+	_try_remove_boost_by_anchor(anchor)
+
+
 ## Spawns gold coin particles at the trap's screen position, identical to the
 ## burst shown when selling via the upgrade panel.
 func _spawn_sell_coin_burst(trap_node: Node3D) -> void:
@@ -692,7 +795,7 @@ func _spawn_sell_coin_burst(trap_node: Node3D) -> void:
 	var particles := CPUParticles2D.new()
 	particles.process_mode         = Node.PROCESS_MODE_ALWAYS
 	particles.position             = burst_pos
-	particles.amount               = 28
+	particles.amount               = 8
 	particles.lifetime             = 0.9
 	particles.one_shot             = true
 	particles.explosiveness        = 1.0
@@ -746,6 +849,42 @@ func _on_sell_trap_requested(anchor: Vector2i) -> void:
 	_try_remove_trap_by_anchor(anchor)
 
 
+## Opens the boost upgrade panel for the boost at anchor.
+## Reuses the same _upgrade_panel slot and _close_upgrade_panel helper as traps
+## so only one panel is ever open at a time.
+func _open_boost_upgrade_panel(anchor: Vector2i) -> void:
+	_close_upgrade_panel()
+	if not _boost_nodes.has(anchor):
+		return
+
+	if _zoom_state == ZoomState.ZOOMED_IN:
+		_set_followed_enemy(null)
+		var wp := _cell_to_world(anchor)
+		_apply_pan(Vector2(wp.x, wp.z))
+
+	var panel := BoostUpgradePanel.new()
+	panel.closed.connect(_on_upgrade_panel_closed)
+	panel.sell_requested.connect(_on_sell_boost_requested.bind(anchor))
+	add_child(panel)
+	panel.initialize(_boost_nodes[anchor])
+	_upgrade_panel  = panel   # shared slot — _close_upgrade_panel frees it correctly
+	_selected_trap  = _boost_nodes[anchor]   # reuse _selected_trap so close logic hides the range circle
+	_selected_trap.show_range_indicator()
+	_show_selected_trap_outline(anchor)
+	_selected_trap_anchor = anchor
+	if _boost_outlines.has(anchor):
+		_draw_boost_outline(anchor)
+	if not get_tree().paused:
+		get_tree().paused = true
+		_panel_paused = true
+
+
+## Sells the boost at anchor (70% refund via _try_remove_boost_by_anchor) and closes the panel.
+func _on_sell_boost_requested(anchor: Vector2i) -> void:
+	_close_upgrade_panel()
+	_try_remove_boost_by_anchor(anchor)
+
+
 ## Removes the trap at anchor and refunds placement cost plus all upgrade costs at 70%.
 func _try_remove_trap_by_anchor(anchor: Vector2i) -> void:
 	if _trap_nodes.has(anchor):
@@ -761,7 +900,11 @@ func _try_remove_trap_by_anchor(anchor: Vector2i) -> void:
 	if _hovered_trap_anchor == anchor:
 		_hovered_trap_anchor = Vector2i(-1, -1)
 	for c in _get_trap_cells(anchor):
-		_grid.remove_trap(c)
+		# Bait Station occupies FLOOR_TRAP cells; all others use TRAP.
+		if _grid.get_cell(c) == Grid.CellState.FLOOR_TRAP:
+			_grid.remove_floor_trap(c)
+		else:
+			_grid.remove_trap(c)
 		_trap_anchors.erase(c)
 
 
@@ -778,6 +921,8 @@ func _close_upgrade_panel() -> void:
 	_selected_trap_anchor = Vector2i(-1, -1)
 	if _trap_outlines.has(prev_selected):
 		_draw_trap_outline(prev_selected)
+	elif _boost_outlines.has(prev_selected):
+		_draw_boost_outline(prev_selected)
 	if _panel_paused:
 		get_tree().paused = false
 		_panel_paused = false
@@ -793,6 +938,8 @@ func _on_upgrade_panel_closed() -> void:
 	_selected_trap_anchor = Vector2i(-1, -1)
 	if _trap_outlines.has(prev_selected):
 		_draw_trap_outline(prev_selected)
+	elif _boost_outlines.has(prev_selected):
+		_draw_boost_outline(prev_selected)
 	if _panel_paused:
 		get_tree().paused = false
 		_panel_paused = false
@@ -805,10 +952,18 @@ func _can_place_at(cells: Array[Vector2i]) -> bool:
 	var ent_x := GameState.entrance_cell.x
 	var ex_x  := GameState.exit_cell.x
 
+	# Bait Station uses FLOOR_TRAP — pests walk through it, so its cells are
+	# not blockers. Exclude them from neither the open-row lists nor the
+	# pathfinder's additional_blockers argument.
+	var is_floor_trap := (GameState.selected_trap_type == Trap.TrapType.BAIT_STATION)
+	var path_blockers: Array[Vector2i] = []
+	if not is_floor_trap:
+		path_blockers = cells
+
 	var open_ent: Array[Vector2i] = []
 	for row in _entrance_rows:
 		var c := Vector2i(ent_x, row)
-		if not (c in cells) and _grid.is_passable(c):
+		if (is_floor_trap or not (c in cells)) and _grid.is_passable(c):
 			open_ent.append(c)
 
 	if open_ent.is_empty():
@@ -818,7 +973,7 @@ func _can_place_at(cells: Array[Vector2i]) -> bool:
 	var open_ex: Array[Vector2i] = []
 	for row in ex_rows:
 		var c := Vector2i(ex_x, row)
-		if not (c in cells) and _grid.is_passable(c):
+		if (is_floor_trap or not (c in cells)) and _grid.is_passable(c):
 			open_ex.append(c)
 
 	if open_ex.is_empty():
@@ -826,7 +981,7 @@ func _can_place_at(cells: Array[Vector2i]) -> bool:
 
 	for ent in open_ent:
 		for ex in open_ex:
-			if _pathfinder.can_reach(ent, ex, cells):
+			if _pathfinder.can_reach(ent, ex, path_blockers):
 				return true
 	return false
 
@@ -934,6 +1089,18 @@ func _screen_to_grid(screen_pos: Vector2) -> Vector2i:
 	return Vector2i(col, row)
 
 
+## Projects a screen-space position to world XZ coordinates at y = 0 (the arena floor).
+## Returns Vector2.ZERO if the ray is nearly parallel to the floor.
+func _screen_to_world_xz(screen_pos: Vector2) -> Vector2:
+	var ray_origin := _camera.project_ray_origin(screen_pos)
+	var ray_dir    := _camera.project_ray_normal(screen_pos)
+	if abs(ray_dir.y) < 0.001:
+		return Vector2.ZERO
+	var t         := -ray_origin.y / ray_dir.y
+	var world_pos := ray_origin + ray_dir * t
+	return Vector2(world_pos.x, world_pos.z)
+
+
 ## Converts a grid coordinate to its world-space centre position at y = 0.
 func _cell_to_world(cell: Vector2i) -> Vector3:
 	var half_w := (Grid.GRID_SIZE * Grid.CELL_SIZE) / 2.0
@@ -978,6 +1145,8 @@ func _enemy_type_for_wave(wave: int) -> Enemy.EnemyType:
 		pool.append_array([Enemy.EnemyType.BEETLE, Enemy.EnemyType.BEETLE])
 	if wave >= 8:
 		pool.append_array([Enemy.EnemyType.COCKROACH, Enemy.EnemyType.COCKROACH, Enemy.EnemyType.COCKROACH])
+	if wave >= 3:
+		pool.append(Enemy.EnemyType.MOSQUITO)
 
 	return pool[randi() % pool.size()]
 
@@ -1000,8 +1169,27 @@ func _spawn_enemy(path: Array[Vector2i], enemy_type: Enemy.EnemyType) -> void:
 	enemy.initialize(path, enemy_type, GameState.current_wave)
 
 
+## Spawns a new enemy mid-arena starting from grid_pos.
+## Used for on-death effects (Cockroach Nymph splits, Mouse gnat swarm).
+## Finds a fresh path from the given cell; does nothing if no path exists.
+func spawn_enemy_at_grid_position(grid_pos: Vector2i, enemy_type: Enemy.EnemyType) -> void:
+	var path := _find_shortest_exit_path(grid_pos)
+	if path.is_empty():
+		return
+	_spawn_enemy(path, enemy_type)
+
+
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
-	GameState.add_infestation(enemy.get_infestation_damage())
+	# Air Freshener Boosts may absorb a fraction of the infestation — pass the full
+	# amount through each Boost in sequence, with each returning its unabsorbed remainder.
+	var infestation: float = enemy.get_infestation_damage()
+	for boost in _boost_nodes.values():
+		if is_instance_valid(boost):
+			infestation = boost.absorb_infestation(infestation, enemy.global_position)
+	GameState.add_infestation(infestation)
+	# Mouse steals Bug Bucks from the player in addition to adding infestation.
+	if enemy.get_enemy_type() == Enemy.EnemyType.MOUSE:
+		GameState.add_bug_bucks(-enemy.get_bug_bucks_steal())
 	_active_enemies.erase(enemy)
 	if enemy == _followed_enemy:
 		_set_followed_enemy(null)
@@ -1020,6 +1208,24 @@ func _on_enemy_died(enemy: Node3D) -> void:
 		_set_followed_enemy(null)
 	# enemy.queue_free() is called inside Enemy._die() after the flash tween.
 
+	# Notify all Boost units of the kill (Quarantine Marker + Cash Register use this).
+	for boost in _boost_nodes.values():
+		if is_instance_valid(boost):
+			boost.on_enemy_died_near(enemy.global_position)
+
+	# On-death spawn effects — trigger after erasing from _active_enemies so
+	# the spawned children don't cause an immediate false wave-end check.
+	var death_cell: Vector2i = enemy.get_current_cell()
+	match enemy.get_enemy_type():
+		Enemy.EnemyType.COCKROACH_NYMPH:
+			# Splits into two smaller cockroaches that continue toward the exit.
+			for _i in 2:
+				spawn_enemy_at_grid_position(death_cell, Enemy.EnemyType.COCKROACH_MINI)
+		Enemy.EnemyType.MOUSE:
+			# Releases a swarm of gnats from its position.
+			for _i in 3:
+				spawn_enemy_at_grid_position(death_cell, Enemy.EnemyType.GNAT)
+
 	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
 		_start_wave()
 
@@ -1027,6 +1233,10 @@ func _on_enemy_died(enemy: Node3D) -> void:
 ## Increments the wave counter and begins the between-wave countdown.
 func _start_wave() -> void:
 	GameState.current_wave += 1
+	# Notify Boost units of the new wave (Cash Register awards passive income here).
+	for boost in _boost_nodes.values():
+		if is_instance_valid(boost):
+			boost.on_wave_started()
 	_countdown_active    = true
 	_seconds_remaining   = WAVE_COUNTDOWN
 	GameState.set_countdown(WAVE_COUNTDOWN)
@@ -1051,10 +1261,11 @@ func _handle_key(_keycode: int) -> void:
 
 
 ## Receives the confirmed playtest values from DebugStartDialog and starts the run.
-func _on_debug_confirmed(bug_bucks: int, wave_size: int, static_enemies: bool) -> void:
-	_wave_size            = wave_size
-	_static_enemies_mode  = static_enemies
-	GameState.bug_bucks   = bug_bucks
+func _on_debug_confirmed(bug_bucks: int, wave_size: int, static_enemies: bool, allowed_types: Array) -> void:
+	_wave_size             = wave_size
+	_static_enemies_mode   = static_enemies
+	_static_allowed_types  = allowed_types
+	GameState.bug_bucks    = bug_bucks
 	GameState.bug_bucks_changed.emit(bug_bucks)
 	_start_wave()
 
@@ -1162,7 +1373,16 @@ func _launch_wave(additive: bool = false) -> void:
 			Enemy.EnemyType.BEETLE,
 			Enemy.EnemyType.COCKROACH,
 			Enemy.EnemyType.RAT,
+			Enemy.EnemyType.MOSQUITO,
 		]
+		# Restrict to the subset selected in the playtest dialog (empty = all types).
+		if not _static_allowed_types.is_empty():
+			var filtered: Array[Enemy.EnemyType] = []
+			for t: Enemy.EnemyType in types:
+				if _static_allowed_types.has(t):
+					filtered.append(t)
+			if not filtered.is_empty():
+				types = filtered
 		for t: Enemy.EnemyType in types:
 			for _i in STATIC_GROUP_SIZE:
 				_static_spawn_queue.append(t)
@@ -1371,6 +1591,9 @@ func _neon_color(base: Color) -> Color:
 ##   rectangles simulate ~2 px line width.
 func _draw_trap_outline(anchor: Vector2i) -> void:
 	var trap_type: int = _trap_nodes[anchor].get_type()
+	# Floor traps are intentionally hidden — no outline at any hover or select state.
+	if trap_type == Trap.TrapType.BAIT_STATION:
+		return
 	var base: Color    = Trap.STATS[trap_type]["color"]
 	var neon: Color    = _neon_color(base)
 
@@ -1449,6 +1672,85 @@ func _draw_trap_outline(anchor: Vector2i) -> void:
 		add_child(mi)
 		mi.mesh = im
 		_trap_outlines[anchor] = mi
+
+
+## Draws (or redraws) the inset outline + fill for a placed boost.
+## Identical logic to _draw_trap_outline but reads color from the BoostUnit node
+## and stores the mesh in _boost_outlines instead of _trap_outlines.
+func _draw_boost_outline(anchor: Vector2i) -> void:
+	if not _boost_nodes.has(anchor):
+		return
+	var base: Color = _boost_nodes[anchor].get_base_color()
+	var neon: Color = _neon_color(base)
+
+	var is_selected := anchor == _selected_trap_anchor
+
+	var outline_color: Color
+	if is_selected:
+		outline_color = base.lightened(0.70); outline_color.a = 1.0
+	else:
+		outline_color = base.darkened(0.2);   outline_color.a = 0.60
+
+	var fill_color := neon
+	fill_color.a   = 0.03
+
+	var hs := Grid.CELL_SIZE * 0.5
+	var cs := Grid.CELL_SIZE
+	var c  := _cell_to_world(anchor)
+
+	var min_x := c.x - hs;       var max_x := c.x + hs + cs
+	var min_z := c.z - hs;       var max_z := c.z + hs + cs
+	var cx    := (min_x + max_x) * 0.5
+	var cz    := (min_z + max_z) * 0.5
+
+	const CORNER_R:    float = 0.15
+	const CORNER_SEGS: int   = 5
+
+	var y_fill    := 0.03
+	var y_outline := 0.06
+
+	var im := ImmediateMesh.new()
+
+	var fill_pts := _rounded_rect_pts(min_x, max_x, min_z, max_z, y_fill, CORNER_R, CORNER_SEGS)
+	var center   := Vector3(cx, y_fill, cz)
+	var n        := fill_pts.size()
+	im.surface_begin(Mesh.PRIMITIVE_TRIANGLES)
+	for i in range(n):
+		var a: Vector3 = fill_pts[i]
+		var b: Vector3 = fill_pts[(i + 1) % n]
+		im.surface_set_color(fill_color); im.surface_add_vertex(center)
+		im.surface_set_color(fill_color); im.surface_add_vertex(a)
+		im.surface_set_color(fill_color); im.surface_add_vertex(b)
+	im.surface_end()
+
+	im.surface_begin(Mesh.PRIMITIVE_LINES)
+	for inset: float in [0.04, 0.08]:
+		var r: float = maxf(CORNER_R - inset, 0.0)
+		var pts := _rounded_rect_pts(
+			min_x + inset, max_x - inset,
+			min_z + inset, max_z - inset,
+			y_outline, r, CORNER_SEGS
+		)
+		for i in range(pts.size()):
+			var a: Vector3 = pts[i]
+			var b: Vector3 = pts[(i + 1) % pts.size()]
+			im.surface_set_color(outline_color); im.surface_add_vertex(a)
+			im.surface_set_color(outline_color); im.surface_add_vertex(b)
+	im.surface_end()
+
+	if _boost_outlines.has(anchor):
+		_boost_outlines[anchor].mesh = im
+	else:
+		var mi  := MeshInstance3D.new()
+		var mat := StandardMaterial3D.new()
+		mat.shading_mode               = BaseMaterial3D.SHADING_MODE_UNSHADED
+		mat.transparency               = BaseMaterial3D.TRANSPARENCY_ALPHA
+		mat.vertex_color_use_as_albedo = true
+		mat.cull_mode                  = BaseMaterial3D.CULL_DISABLED
+		mi.material_override           = mat
+		add_child(mi)
+		mi.mesh                  = im
+		_boost_outlines[anchor]  = mi
 
 
 ## Returns perimeter points for a rounded rectangle in the XZ plane, traversed
@@ -2058,6 +2360,7 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	trap.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 	trap.fired.connect(_on_trap_fired)
 	trap.aoe_fired.connect(_on_fogger_aoe_fired)
+	trap.fly_strip_fired.connect(_on_fly_strip_fired)
 	trap.initialize(GameState.selected_trap_type as Trap.TrapType, _active_enemies)
 	# Arena is PROCESS_MODE_ALWAYS; override so traps pause with the game.
 	trap.process_mode = Node.PROCESS_MODE_PAUSABLE
@@ -2080,6 +2383,63 @@ func _on_fogger_aoe_fired(from_pos: Vector3, aoe_range: float, damage: float, ac
 	# Arena is PROCESS_MODE_ALWAYS; override so fog clouds pause with the game.
 	cloud.process_mode = Node.PROCESS_MODE_PAUSABLE
 	add_child(cloud)
+
+
+func _on_fly_strip_fired(from_pos: Vector3, aoe_range: float, damage: float,
+		adhesion: float, cloud_duration: float, active_enemies: Array) -> void:
+	var cloud := FlyStripCloud.new()
+	cloud.initialize(from_pos, aoe_range, damage, adhesion, cloud_duration, active_enemies)
+	cloud.process_mode = Node.PROCESS_MODE_PAUSABLE
+	add_child(cloud)
+
+
+## Places a Boost unit at anchor. Boosts block pathfinding like traps.
+## Returns true if placement succeeded.
+func _try_place_boost(anchor: Vector2i, boost_type: BoostUnit.BoostType) -> bool:
+	anchor = _clamp_to_anchor(anchor)
+	var cells := _get_trap_cells(anchor)
+	if cells.is_empty():
+		return false
+
+	for cell in cells:
+		if not _grid.is_buildable(cell):
+			return false
+
+	if not _can_place_at(cells):
+		return false
+
+	for cell in cells:
+		_grid.place_trap(cell)
+		_boost_anchors[cell] = anchor
+
+	var boost := BoostUnit.new()
+	var center := _cell_to_world(anchor) + Vector3(Grid.CELL_SIZE * 0.5, 0.0, Grid.CELL_SIZE * 0.5)
+	boost.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
+	boost.process_mode = Node.PROCESS_MODE_PAUSABLE
+	boost.initialize(boost_type, _active_enemies, _trap_nodes)
+	boost.boost_depleted.connect(_try_remove_boost_by_anchor.bind(anchor))
+	add_child(boost)
+	_boost_nodes[anchor] = boost
+	_draw_boost_outline(anchor)
+	GameState.spend_bug_bucks(boost.get_cost())
+	# cell_changed from place_trap() above triggers Pathfinder recalculation automatically.
+	return true
+
+
+## Removes a Boost unit and refunds 70% of its cost.
+func _try_remove_boost_by_anchor(anchor: Vector2i) -> void:
+	if _boost_nodes.has(anchor):
+		var boost: Node3D = _boost_nodes[anchor]
+		GameState.add_bug_bucks(boost.get_sell_value())
+		boost.queue_free()
+		_boost_nodes.erase(anchor)
+	if _boost_outlines.has(anchor):
+		_boost_outlines[anchor].queue_free()
+		_boost_outlines.erase(anchor)
+	for c in _get_trap_cells(anchor):
+		_grid.remove_trap(c)
+		_boost_anchors.erase(c)
+	# cell_changed from remove_trap() triggers Pathfinder recalculation automatically.
 
 
 ## Returns the four cells of a 2x2 trap footprint given its top-left anchor.
@@ -2146,18 +2506,22 @@ func _process(delta: float) -> void:
 		var p := _followed_enemy.global_position
 		_apply_pan(Vector2(p.x, p.z))
 
+	# Pan toward whichever arena edge the drag ghost is approaching.
+	if _hud_drag_active and _zoom_state == ZoomState.ZOOMED_IN:
+		_apply_edge_scroll(delta)
+
 	# Hold-to-place from the arena is removed: placement now only initiates
 	# via drag from the HUD trap icon panel (see begin_hud_drag / update_hud_drag).
 
 
 ## Toggles between OVERVIEW and ZOOMED_IN camera levels.
 ## ZOOMED_IN is 2× magnification (half the overview camera.size), with panning enabled.
-func _toggle_zoom() -> void:
+## center_pos (world XZ) is where the camera centres when zooming in; defaults to arena centre.
+func _toggle_zoom(center_pos: Vector2 = Vector2.ZERO) -> void:
 	if _zoom_state == ZoomState.OVERVIEW:
-		_zoom_state     = ZoomState.ZOOMED_IN
-		_camera.size    = _overview_camera_size * 0.5
-		_pan_world_pos  = Vector2.ZERO
-		_apply_pan(_pan_world_pos)
+		_zoom_state  = ZoomState.ZOOMED_IN
+		_camera.size = _overview_camera_size * 0.5
+		_apply_pan(center_pos)
 	else:
 		_zoom_state      = ZoomState.OVERVIEW
 		_set_followed_enemy(null)
@@ -2181,6 +2545,40 @@ func _apply_pan(pos: Vector2) -> void:
 	_pan_world_pos   = Vector2(cx, cz)
 	_camera.h_offset = _camera_base_h_offset + cx
 	_camera.v_offset = -cz
+
+
+## Scrolls the camera based on how far the drag ghost has entered the edge bands.
+## Called every frame while a HUD drag is active and the camera is zoomed in.
+## Scroll speed ramps linearly from 0 at the inner edge of the band to
+## EDGE_SCROLL_MAX_SPEED at the outer edge; _apply_pan clamps to arena bounds.
+func _apply_edge_scroll(delta: float) -> void:
+	var vp          := get_viewport().get_visible_rect().size
+	var pos         := _hud_drag_last_screen_pos
+
+	# Arena zone boundaries — mirror the margins used in _fit_camera_to_grid.
+	var left_edge   := HUD.LEFT_PANEL_W + HUD.ARENA_MARGIN_PX
+	var right_edge  := vp.x - HUD.RIGHT_PANEL_W - HUD.ARENA_MARGIN_PX
+	var top_edge    := HUD.SCREEN_EDGE_MARGIN
+	var bottom_edge := vp.y - HUD.SCREEN_EDGE_MARGIN
+
+	# Signed scroll factors: negative = pan left/up, positive = pan right/down.
+	var scroll_x := 0.0
+	var scroll_z := 0.0
+
+	if pos.x < left_edge + EDGE_SCROLL_ZONE_PX:
+		scroll_x = -clampf((left_edge + EDGE_SCROLL_ZONE_PX - pos.x) / EDGE_SCROLL_ZONE_PX, 0.0, 1.0)
+	elif pos.x > right_edge - EDGE_SCROLL_ZONE_PX:
+		scroll_x =  clampf((pos.x - (right_edge - EDGE_SCROLL_ZONE_PX)) / EDGE_SCROLL_ZONE_PX, 0.0, 1.0)
+
+	if pos.y < top_edge + EDGE_SCROLL_ZONE_PX:
+		scroll_z = -clampf((top_edge + EDGE_SCROLL_ZONE_PX - pos.y) / EDGE_SCROLL_ZONE_PX, 0.0, 1.0)
+	elif pos.y > bottom_edge - EDGE_SCROLL_ZONE_PX:
+		scroll_z =  clampf((pos.y - (bottom_edge - EDGE_SCROLL_ZONE_PX)) / EDGE_SCROLL_ZONE_PX, 0.0, 1.0)
+
+	if scroll_x == 0.0 and scroll_z == 0.0:
+		return
+
+	_apply_pan(_pan_world_pos + Vector2(scroll_x, scroll_z) * EDGE_SCROLL_MAX_SPEED * delta)
 
 
 ## Resets camera to overview when a run ends.
@@ -2209,6 +2607,18 @@ func _make_trap_preview(trap_type: int, alpha: float, valid: bool = true) -> Nod
 	var preview := Trap.new()
 	preview.process_mode = Node.PROCESS_MODE_DISABLED
 	preview.initialize_preview(trap_type as Trap.TrapType)
+	_apply_ghost_transparency(preview, alpha, valid)
+	add_child(preview)
+	return preview
+
+
+## Builds a BoostUnit preview node: full mesh hierarchy, no aura or callback logic.
+## Mirrors _make_trap_preview but uses BoostUnit instead of Trap.
+func _make_boost_preview(boost_type: BoostUnit.BoostType, alpha: float, valid: bool = true) -> Node3D:
+	var preview := Node3D.new()
+	preview.set_script(BoostUnit)
+	preview.process_mode = Node.PROCESS_MODE_DISABLED
+	preview.initialize_preview(boost_type)
 	_apply_ghost_transparency(preview, alpha, valid)
 	add_child(preview)
 	return preview

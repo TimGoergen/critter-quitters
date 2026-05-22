@@ -19,6 +19,10 @@ const TRAVEL_SPEED: float = 20.0
 ## Zapper bolt travels faster — electricity should feel near-instant.
 const ZAPPER_TRAVEL_SPEED: float = 32.0
 
+## Probability (0.0–1.0) that a Zapper hit electrifies the target.
+## Tuning placeholder — adjust via playtesting.
+const ZAPPER_ELECTRIFY_CHANCE: float = 0.07
+
 ## Fallback colour for generic projectiles (non-snap-trap types).
 const COLOR_PROJECTILE := Color(1.0, 0.90, 0.25)   # bright yellow
 const COLOR_IMPACT     := Color(1.0, 0.80, 0.15)   # golden burst
@@ -35,11 +39,16 @@ const COLOR_SNAP_KILL := Color(0.90, 0.70, 0.38)   # warm tan — snap trap them
 const COLOR_GLUE_KILL := Color(0.88, 0.70, 0.18)   # amber — glue board theme
 # Zapper kill burst reuses COLOR_ZAPPER_SPARK; fogger kills via FogCloud, not Projectile.
 
+# Fly Strip Launcher projectile colours.
+const COLOR_FLY_STRIP      := Color(0.92, 0.30, 0.78)   # bright magenta — matches the cloud
+const COLOR_FLY_STRIP_TAPE := Color(0.98, 0.86, 0.56)   # pale gold-tan — the sticky paper face
+
 # Mirror Trap.TrapType int values. Avoid preloading Trap.gd here to prevent
 # a circular dependency — update these if the enum order ever changes.
-const _SNAP_TRAP_TYPE:  int = 0
-const _ZAPPER_TYPE:     int = 1
-const _GLUE_BOARD_TYPE: int = 3
+const _SNAP_TRAP_TYPE:    int = 0
+const _ZAPPER_TYPE:       int = 1
+const _GLUE_BOARD_TYPE:   int = 3
+const _FLY_STRIP_TYPE:    int = 4
 
 
 # ---------------------------------------------------------------------------
@@ -89,11 +98,15 @@ func _process(delta: float) -> void:
 		var enemy_color  := Color.WHITE
 		if is_instance_valid(_target):
 			enemy_color = _target.get_color()
-			# Glue Board deals no damage and we skip take_damage entirely — calling
-			# it with 0 would still trigger the white hit-flash, which is misleading.
-			if _trap_type != _GLUE_BOARD_TYPE:
+			# Glue Board and Fly Strip deal no direct projectile damage — skip take_damage
+			# to avoid a misleading white hit-flash. (Fly Strip damage is handled by the cloud.)
+			if _trap_type != _GLUE_BOARD_TYPE and _trap_type != _FLY_STRIP_TYPE:
 				_target.take_damage(_damage, _trap_flash_color(), _trap_type)
 				killed = _target.get_hp_fraction() == 0.0
+			# Zapper has a small chance to electrify a surviving target — freezes it
+			# in place and shakes it like it's being electrocuted for 0.75 seconds.
+			if _trap_type == _ZAPPER_TYPE and not killed and randf() < ZAPPER_ELECTRIFY_CHANCE:
+				_target.apply_electrify()
 		_spawn_impact_effect(killed, enemy_color)
 		queue_free()
 		return
@@ -114,6 +127,9 @@ func _spawn_visual() -> void:
 		return
 	if _trap_type == _GLUE_BOARD_TYPE:
 		_spawn_glue_visual()
+		return
+	if _trap_type == _FLY_STRIP_TYPE:
+		_spawn_fly_strip_visual()
 		return
 
 	var mi  := MeshInstance3D.new()
@@ -157,8 +173,8 @@ func _spawn_cheese_visual() -> void:
 	var hole_r  := Grid.CELL_SIZE * 0.054
 	var face_y  := bh * 0.5 - hole_r * 0.45   # sphere centre inset so cap pokes through face
 	var hole_xz := [Vector2(-bw * 0.20, -bd * 0.12),
-	                Vector2( bw * 0.18,  bd * 0.16),
-	                Vector2(-bw * 0.04, -bd * 0.26)]
+					Vector2( bw * 0.18,  bd * 0.16),
+					Vector2(-bw * 0.04, -bd * 0.26)]
 
 	for yf: float in [1.0, -1.0]:
 		for off: Vector2 in hole_xz:
@@ -237,6 +253,9 @@ func _spawn_impact_effect(killed: bool, enemy_color: Color) -> void:
 		return
 	if _trap_type == _GLUE_BOARD_TYPE:
 		_spawn_glue_impact(killed, enemy_color)
+		return
+	if _trap_type == _FLY_STRIP_TYPE:
+		_spawn_fly_strip_impact(killed, enemy_color)
 		return
 
 	_spawn_particles(8, 0.4, Grid.CELL_SIZE * 1.15, Grid.CELL_SIZE * 2.875, 0.4, 0.7,
@@ -410,6 +429,50 @@ func _spawn_glue_impact(killed: bool, enemy_color: Color) -> void:
 	if killed:
 		_spawn_particles(9, 0.33, Grid.CELL_SIZE * 5.6, Grid.CELL_SIZE * 16.8, 0.64, 1.68,
 				Grid.CELL_SIZE * 0.495, COLOR_GLUE_KILL, true)
+
+
+## Fly Strip impact: a sticky splat of magenta chunks and pale tape flecks.
+## No damage is dealt here — FlyStripCloud handles it while it lingers.
+func _spawn_fly_strip_impact(_killed: bool, _enemy_color: Color) -> void:
+	_spawn_particles(5, 0.32, Grid.CELL_SIZE * 0.7, Grid.CELL_SIZE * 2.0, 0.28, 0.55,
+			Grid.CELL_SIZE * 0.20, COLOR_FLY_STRIP)
+	_spawn_particles(4, 0.25, Grid.CELL_SIZE * 0.5, Grid.CELL_SIZE * 1.4, 0.18, 0.38,
+			Grid.CELL_SIZE * 0.10, COLOR_FLY_STRIP_TAPE)
+	# No kill burst — this projectile is cosmetic; the cloud accumulates damage over time.
+
+
+## Fly Strip projectile visual: a tumbling strip of sticky fly paper.
+## A flat pale-gold slab (the paper body) with a semi-transparent magenta face
+## (the sticky side). _visual is assigned so _process() tumbles it on X as it travels.
+func _spawn_fly_strip_visual() -> void:
+	var container := Node3D.new()
+	var cs := Grid.CELL_SIZE
+
+	var body_mi  := MeshInstance3D.new()
+	var body_box := BoxMesh.new()
+	body_box.size = Vector3(cs * 0.12, cs * 0.025, cs * 0.38)
+	var body_mat  := StandardMaterial3D.new()
+	body_mat.albedo_color = COLOR_FLY_STRIP_TAPE
+	body_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	body_mi.mesh             = body_box
+	body_mi.material_override = body_mat
+	container.add_child(body_mi)
+
+	# Sticky face — magenta tint, thinner, floats on top of the paper body.
+	var face_mi  := MeshInstance3D.new()
+	var face_box := BoxMesh.new()
+	face_box.size = Vector3(cs * 0.10, cs * 0.008, cs * 0.35)
+	var face_mat  := StandardMaterial3D.new()
+	face_mat.albedo_color = Color(COLOR_FLY_STRIP.r, COLOR_FLY_STRIP.g, COLOR_FLY_STRIP.b, 0.75)
+	face_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	face_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	face_mi.mesh             = face_box
+	face_mi.position.y       = cs * 0.017
+	face_mi.material_override = face_mat
+	container.add_child(face_mi)
+
+	_visual = container   # triggers the tumble-on-X in _process()
+	add_child(container)
 
 
 ## Scatters a few miniature Bug Bucks coin sprites on enemy death.

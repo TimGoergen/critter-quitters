@@ -1,74 +1,59 @@
-## TrapUpgradePanel.gd
-## Appears when the player taps a placed trap. Shows current stats and
-## lets the player upgrade each stat by tapping its row, or sell the trap.
+## BoostUpgradePanel.gd
+## Appears when the player taps a placed Boost. Shows the Boost's current stats
+## and lets the player upgrade each stat by tapping its row, or sell the Boost.
 ##
-## Each stat is a tappable row: stat name and star level on the left, the
-## current value (large) and a preview of the post-upgrade value (slightly
-## smaller, below) on the right, and the cost at the far right. Tapping the
-## row purchases that upgrade if the player can afford it.
+## Layout mirrors TrapUpgradePanel: a header row with the Boost name and sell/close
+## buttons, followed by up to three stat rows. Boost types with only two upgradeable
+## stats (Pheromone Dispenser, Compressor) hide the third row entirely.
 ##
-## Panel dimensions are derived from the viewport at build time so touch
-## targets scale appropriately across phone screen sizes.
+## Perishable Boosts (Air Freshener, Quarantine Marker) show a capacity bar below
+## the stat rows so the player can see how much life the Boost has left.
 ##
-## process_mode is ALWAYS so the panel stays interactive while the game
-## tree is paused (which Arena does while this panel is open).
+## process_mode is ALWAYS so the panel stays interactive while the game tree is
+## paused (which Arena does while this panel is open).
 
 extends CanvasLayer
 
 signal closed
-signal sell_requested   # Arena connects this to _on_sell_trap_requested(anchor)
+signal sell_requested   # Arena connects this to _on_sell_boost_requested(anchor)
 
-const HUD     = preload("res://ui/HUD.gd")
-const UIFonts = preload("res://ui/UIFonts.gd")
-const Trap    = preload("res://traps/Trap.gd")
+const HUD      = preload("res://ui/HUD.gd")
+const UIFonts  = preload("res://ui/UIFonts.gd")
+const BoostUnit = preload("res://boosts/BoostUnit.gd")
 
 const PADDING:    float = 9.0
 const BORDER_W:   float = 2.0
-# Stat rows double as upgrade buttons — 72px keeps all five rows within the 600px
-# virtual viewport height while still hitting the 48px minimum touch target (72 × 0.60).
-const STAT_ROW_H:          float = 72.0
-# Height reserved for the description label block between the header and stat rows.
-const DESC_H:              float = 47.0
-# Active-boost section at the panel bottom (shown only when boosts are in range).
-const BOOST_SECTION_LEAD:  float = 9.0    # gap + 1px divider before the first entry
-const BOOST_ENTRY_H:       float = 20.0   # height per boost entry row
+const STAT_ROW_H: float = 72.0
+const DESC_H:     float = 47.0
 
-# Size of the trap thumbnail in the header.
+# Size of the boost thumbnail in the header — mirrors TrapUpgradePanel.
 const HEADER_ICON_RENDER:  float = 81.0   # SubViewport pixel resolution
-const HEADER_ICON_DISPLAY: float = 58.0   # icon displayed as a 58×58 square (matches button height)
+const HEADER_ICON_DISPLAY: float = 58.0   # displayed as a 58×58 square
 
-# Theme colours — derived from the placed trap's identity colour at runtime.
-# Declared as vars so _apply_trap_theme() can assign them before _build_ui() runs
-# (GDScript const cannot be assigned after declaration).
-var COLOR_BG:                  Color  # panel background, semi-transparent dark tint
-var COLOR_OUTLINE:             Color  # panel border ring
-var COLOR_DIVIDER:             Color  # horizontal divider lines
-var COLOR_TEXT_DIM:            Color  # secondary text (stars label, affordability hint)
-var COLOR_BTN_NORMAL:          Color  # upgrade button resting state
-var COLOR_BTN_HOVER:           Color  # upgrade button hover
-var COLOR_BTN_PRESSED:         Color  # upgrade button press
-var COLOR_BTN_BORDER:          Color  # upgrade button outline (matches panel outline)
-var COLOR_BTN_MAX:             Color  # muted maxed-stat button background
-var COLOR_STAT_DISPLAY:        Color  # stat row background panel
-var COLOR_STAT_DISPLAY_BORDER: Color  # stat row panel border
+# Theme colors — derived from the boost's identity color at initialize time.
+var COLOR_BG:                  Color
+var COLOR_OUTLINE:             Color
+var COLOR_DIVIDER:             Color
+var COLOR_TEXT_DIM:            Color
+var COLOR_BTN_NORMAL:          Color
+var COLOR_BTN_HOVER:           Color
+var COLOR_BTN_PRESSED:         Color
+var COLOR_BTN_BORDER:          Color
+var COLOR_BTN_MAX:             Color
+var COLOR_STAT_DISPLAY:        Color
+var COLOR_STAT_DISPLAY_BORDER: Color
 
-# Neutral colours — do not vary with trap type.
+# Neutral colors — do not vary with boost type.
 const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_STARS       := Color(0.85, 0.72, 0.10, 1.0)
-# Max state border — always gray so it reads as permanently exhausted, not just unaffordable.
-const COLOR_BTN_MAX_BORDER := Color(0.55, 0.55, 0.55, 1.0)
-# Cost label — gold to match the Bug Bucks coin icon.
-const COLOR_GOLD := Color(1.00, 0.82, 0.10, 1.0)
-# Delta label — green when the player can buy, amber when they cannot.
-# Green signals opportunity; amber signals desire-but-blocked (cost risk).
+const COLOR_BTN_MAX_BORDER  := Color(0.55, 0.55, 0.55, 1.0)
+const COLOR_GOLD            := Color(1.00, 0.82, 0.10, 1.0)
 const COLOR_DELTA_AFFORDABLE   := Color(0.40, 0.90, 0.30, 1.0)
 const COLOR_DELTA_UNAFFORDABLE := Color(0.85, 0.50, 0.10, 1.0)
-# Neutral close button — gray, visually quiet.
 const COLOR_NEUTRAL_NORMAL  := Color(0.24, 0.24, 0.28, 1.0)
 const COLOR_NEUTRAL_HOVER   := Color(0.34, 0.34, 0.40, 1.0)
 const COLOR_NEUTRAL_PRESSED := Color(0.16, 0.16, 0.20, 1.0)
 const COLOR_NEUTRAL_BORDER  := Color(0.55, 0.55, 0.62, 1.0)
-# Sell button — red to signal a destructive action, distinct from the themed buttons.
 const COLOR_BTN_SELL         := Color(0.28, 0.10, 0.06, 1.0)
 const COLOR_BTN_SELL_HOVER   := Color(0.38, 0.14, 0.08, 1.0)
 const COLOR_BTN_SELL_PRESSED := Color(0.18, 0.06, 0.04, 1.0)
@@ -79,37 +64,38 @@ const COLOR_BTN_SELL_BORDER  := Color(0.75, 0.22, 0.12, 1.0)
 # State
 # ---------------------------------------------------------------------------
 
-var _trap:        Node   = null
-var _panel_rect:  Rect2  = Rect2()
+var _boost:       Node  = null
+var _panel_rect:  Rect2 = Rect2()
 
 var _border:     Panel     = null
 var _bg:         ColorRect = null
 var _lbl_title:  Label     = null
 
-# Each stat row is a Button containing child labels.
-# Dictionary keys: btn, name, stars, cur, after, cost.
-var _dmg_row:        Dictionary = {}
-var _rng_row:        Dictionary = {}
-var _rate_row:       Dictionary = {}
-var _crit_chance_row: Dictionary = {}
-var _crit_damage_row: Dictionary = {}
+# Each row is a Dictionary: {row, btn, name, stars, cur, after, cost}
+var _rng_row:  Dictionary = {}   # stat A: Range
+var _b_row:    Dictionary = {}   # stat B: primary bonus
+var _c_row:    Dictionary = {}   # stat C: secondary (hidden for 2-stat boosts)
 
 var _btn_sell:       Button = null
 var _lbl_sell_value: Label  = null
+
+# Capacity bar — only visible for perishable boost types.
+var _capacity_bar_bg:   ColorRect = null
+var _capacity_bar_fill: ColorRect = null
+var _lbl_capacity:      Label     = null
 
 
 # ---------------------------------------------------------------------------
 # Public interface
 # ---------------------------------------------------------------------------
 
-## Wires the panel to trap and builds the UI. Call immediately after instantiation.
-func initialize(trap: Node) -> void:
-	_trap = trap
-	_trap.stats_changed.connect(_refresh)
+## Wires the panel to a BoostUnit and builds the UI. Call immediately after instantiation.
+func initialize(boost: Node) -> void:
+	_boost = boost
+	_boost.stats_changed.connect(_refresh)
 	GameState.bug_bucks_changed.connect(_on_bug_bucks_changed)
-	# Stay interactive while Arena pauses the tree.
 	process_mode = Node.PROCESS_MODE_ALWAYS
-	_apply_trap_theme()
+	_apply_boost_theme()
 	_build_ui()
 	_refresh()
 
@@ -122,28 +108,23 @@ func _build_ui() -> void:
 	var vp      := get_viewport().get_visible_rect().size
 	var panel_w := maxf(360.0, vp.x * 0.50)
 
-	# Read active boost entries now so we know how much extra height they need.
-	# Boosts cannot enter or leave range while the panel is open (the game tree is
-	# paused while the upgrade panel is visible), so reading once at build time is safe.
-	var boosts:  Array = _trap.get_active_boost_display()
-	var boost_h: float = BOOST_SECTION_LEAD + BOOST_ENTRY_H * boosts.size() if not boosts.is_empty() else 0.0
+	# Height: header + description + 2 or 3 stat rows + optional capacity bar + bottom padding.
+	var row_count    := 3 if _boost.has_stat_c() else 2
+	var extra_h      := 36.0 if _is_perishable() else 0.0
+	# Height: each row occupies STAT_ROW_H + 8 px (row height plus gap).
+	# The trailing 8 px after the last row acts as top margin for the capacity bar
+	# (or merges into the bottom padding for non-perishable boosts).
+	var panel_h      := PADDING + 67.0 + DESC_H + 8.0 + row_count * (STAT_ROW_H + 8.0) + extra_h + PADDING
 
-	# Height: top padding + header + description block + five stat rows + active boosts + bottom padding.
-	var panel_h := PADDING + 67.0 + DESC_H + 7.0 + (STAT_ROW_H + 7.0) * 4.0 + STAT_ROW_H + boost_h + PADDING
-
-	# Centre the panel in the arena zone (the space between the two HUD panels).
 	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
 	var px       := arena_cx - panel_w * 0.5
 	var py       := (vp.y - panel_h) * 0.5
 
-	# Store the full panel rect (including border) for outside-tap detection.
 	_panel_rect = Rect2(
 		Vector2(px - BORDER_W, py - BORDER_W),
 		Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
 	)
 
-	# Panel with a transparent background so only the ring is drawn.
-	# A solid ColorRect here would block the 3D scene behind the semi-transparent _bg.
 	var border_style         := StyleBoxFlat.new()
 	border_style.bg_color     = Color(0.0, 0.0, 0.0, 0.0)
 	border_style.border_color = COLOR_OUTLINE
@@ -154,25 +135,23 @@ func _build_ui() -> void:
 	_border.add_theme_stylebox_override("panel", border_style)
 	add_child(_border)
 
-	_bg            = ColorRect.new()
-	_bg.color      = COLOR_BG
-	_bg.position   = Vector2(px, py)
-	_bg.size       = Vector2(panel_w, panel_h)
+	_bg          = ColorRect.new()
+	_bg.color    = COLOR_BG
+	_bg.position = Vector2(px, py)
+	_bg.size     = Vector2(panel_w, panel_h)
 	add_child(_bg)
 
 	var inner_w := panel_w - PADDING * 2.0
 	var y       := PADDING
 
-	# --- Header: icon | trap name | sell button | close button ---
+	# Header: boost icon | boost name | peek button | sell button | close button
 	var header := HBoxContainer.new()
 	header.position            = Vector2(PADDING, y)
 	header.custom_minimum_size = Vector2(inner_w, 58.0)
 	header.add_theme_constant_override("separation", 7)
 	_bg.add_child(header)
 
-	# Trap thumbnail — left-aligned so the player has an instant visual reference
-	# before reading the name.
-	header.add_child(_build_header_trap_icon())
+	header.add_child(_build_header_boost_icon())
 
 	_lbl_title = Label.new()
 	_lbl_title.size_flags_horizontal  = Control.SIZE_EXPAND_FILL
@@ -202,8 +181,6 @@ func _build_ui() -> void:
 	eye_icon.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	btn_peek.add_child(eye_icon)
 
-	# Sell button — red, in the header row next to the close button.
-	# Left side: trashcan icon. Right side: coin icon + refund amount.
 	_btn_sell = Button.new()
 	_btn_sell.text                = ""
 	_btn_sell.custom_minimum_size = Vector2(144.0, 58.0)
@@ -219,11 +196,11 @@ func _build_ui() -> void:
 	sell_hbox.add_theme_constant_override("separation", 5)
 	_btn_sell.add_child(sell_hbox)
 
-	var icon := TrashcanIcon.new()
-	icon.custom_minimum_size = Vector2(49.0, 0.0)
-	icon.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	sell_hbox.add_child(icon)
+	var trash := TrashcanIcon.new()
+	trash.custom_minimum_size = Vector2(49.0, 0.0)
+	trash.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	trash.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	sell_hbox.add_child(trash)
 
 	_lbl_sell_value = Label.new()
 	_lbl_sell_value.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
@@ -231,12 +208,8 @@ func _build_ui() -> void:
 	_lbl_sell_value.add_theme_color_override("font_color", COLOR_GOLD)
 	_lbl_sell_value.add_theme_font_override("font", UIFonts.primary_bold())
 	sell_hbox.add_child(_lbl_sell_value)
-
 	_set_mouse_passthrough(sell_hbox)
 
-	# Square close button — custom_minimum_size forces equal width and height;
-	# _apply_neutral_button_style uses equal margins on all four sides so the X
-	# sits at the visual centre of the square, not off-centre.
 	var btn_close := Button.new()
 	btn_close.text                = "X"
 	btn_close.custom_minimum_size = Vector2(58.0, 58.0)
@@ -257,36 +230,31 @@ func _build_ui() -> void:
 	lbl_desc.add_theme_font_size_override("font_size", 16)
 	lbl_desc.add_theme_color_override("font_color", COLOR_TEXT_DIM)
 	lbl_desc.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	lbl_desc.text          = _trap.get_description()
+	lbl_desc.text          = _boost.get_description()
 	_bg.add_child(lbl_desc)
 	y += DESC_H + 8.0
 
-	# --- Stat rows: each row IS the upgrade button for that stat ---
-	_dmg_row         = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
-	_rng_row         = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
-	_rate_row        = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
-	_crit_chance_row = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
-	_crit_damage_row = _build_stat_button_row(y, inner_w)
+	# Stat rows
+	_rng_row = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_b_row   = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_c_row   = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
 
-	_dmg_row["btn"].pressed.connect(_on_btn_a)
-	_rng_row["btn"].pressed.connect(_on_btn_b)
-	_rate_row["btn"].pressed.connect(_on_btn_c)
-	_crit_chance_row["btn"].pressed.connect(_on_btn_d)
-	_crit_damage_row["btn"].pressed.connect(_on_btn_e)
+	_rng_row["btn"].pressed.connect(_on_btn_range)
+	_b_row["btn"].pressed.connect(_on_btn_stat_b)
+	_c_row["btn"].pressed.connect(_on_btn_stat_c)
 
-	# --- Active boosts section ---
-	# Advance y past the last stat row, then draw one compact row per active boost.
-	y += STAT_ROW_H
-	if not boosts.is_empty():
-		_build_active_boosts_section(y, inner_w, boosts)
+	# Hide stat C row immediately for 2-stat boosts — it never becomes visible.
+	if not _boost.has_stat_c():
+		_c_row["row"].visible = false
+
+	# Capacity bar — shown only for perishable boosts.
+	if _is_perishable():
+		_build_capacity_bar(y, inner_w)
 
 
-## Derives the panel's colour palette from the placed trap's identity colour.
-## All hue-tinted colours share the trap's hue; saturation and value factors
-## are chosen so the panel reads as clearly tinted while text stays legible.
-## Must be called after _trap is set and before _build_ui() runs.
-func _apply_trap_theme() -> void:
-	var base: Color = _trap.get_base_color()
+## Derives the panel color palette from the boost's identity color.
+func _apply_boost_theme() -> void:
+	var base: Color = _boost.get_base_color()
 	var h    := base.h
 	var s    := base.s
 	var v    := base.v
@@ -304,14 +272,11 @@ func _apply_trap_theme() -> void:
 	COLOR_STAT_DISPLAY_BORDER = Color.from_hsv(h, s * 0.70, v * 0.42, 1.0)
 
 
-## Builds a small top-down SubViewport render of the trap for the header row.
-## Keeps decorators (coloured background plate, shadow) so the trap's identity
-## colour is immediately visible; hides only the range indicator circle.
-func _build_header_trap_icon() -> Control:
+## Builds a small top-down SubViewport render of the boost for the header row.
+## Mirrors TrapUpgradePanel._build_header_trap_icon so both panels look identical.
+func _build_header_boost_icon() -> Control:
 	var icon_ctrl := Control.new()
 	icon_ctrl.custom_minimum_size = Vector2(HEADER_ICON_DISPLAY, HEADER_ICON_DISPLAY)
-	# SIZE_FILL (default) lets the HBox stretch the icon to the full row height (64 px),
-	# matching the sell and close buttons.  SIZE_SHRINK_CENTER would cap it at min-height.
 	icon_ctrl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 
 	var svp := SubViewport.new()
@@ -322,28 +287,21 @@ func _build_header_trap_icon() -> Control:
 
 	var cam := Camera3D.new()
 	cam.projection = Camera3D.PROJECTION_ORTHOGONAL
-	# Background plate is 1.85 world units wide; cam.size = 1.9 makes it fill ~97%
-	# of the viewport so the coloured icon looks as tall as the adjacent buttons.
-	# (The HUD selector icons use 3.1 but those hide decorators and show only the
-	# small trap model, so the looser framing is appropriate there.)
 	cam.size       = 1.9
 	cam.position   = Vector3(0.0, 5.0, 0.0)
 	cam.rotation   = Vector3(-PI * 0.5, 0.0, 0.0)
 	svp.add_child(cam)
 
-	var trap_preview := Node3D.new()
-	trap_preview.set_script(Trap)
-	trap_preview.initialize_preview(_trap.get_type())
-	svp.add_child(trap_preview)
-	# Range indicator is spawned and shown in _ready() for preview instances;
-	# hide it deferred so the circle does not appear in the thumbnail.
-	trap_preview.call_deferred("hide_range_indicator")
+	var boost_preview := Node3D.new()
+	boost_preview.set_script(BoostUnit)
+	boost_preview.initialize_preview(_boost.get_type())
+	svp.add_child(boost_preview)
+	boost_preview.call_deferred("hide_range_indicator")
 
 	var svc := SubViewportContainer.new()
 	svc.set_anchors_preset(Control.PRESET_FULL_RECT)
 	svc.stretch      = true
 	svc.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# StyleBoxEmpty prevents SubViewportContainer from drawing its default background.
 	svc.add_theme_stylebox_override("panel", StyleBoxEmpty.new())
 	svc.add_child(svp)
 	icon_ctrl.add_child(svc)
@@ -351,93 +309,91 @@ func _build_header_trap_icon() -> Control:
 	return icon_ctrl
 
 
+## Builds the remaining-capacity bar shown below the stat rows for perishable boosts.
+func _build_capacity_bar(y: float, inner_w: float) -> void:
+	var bar_h   := 16.0
+	var lbl_h   := 18.0
+	var total_y := y
+
+	_lbl_capacity = Label.new()
+	_lbl_capacity.position = Vector2(PADDING, total_y)
+	_lbl_capacity.size     = Vector2(inner_w, lbl_h)
+	_lbl_capacity.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_lbl_capacity.add_theme_font_size_override("font_size", 16)
+	_lbl_capacity.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+	_lbl_capacity.add_theme_font_override("font", UIFonts.primary_bold())
+	_bg.add_child(_lbl_capacity)
+
+	total_y += lbl_h + 2.0
+
+	# Background track.
+	_capacity_bar_bg       = ColorRect.new()
+	_capacity_bar_bg.color = Color(0.12, 0.12, 0.14, 0.90)
+	_capacity_bar_bg.position = Vector2(PADDING, total_y)
+	_capacity_bar_bg.size     = Vector2(inner_w, bar_h)
+	_bg.add_child(_capacity_bar_bg)
+
+	# Colored fill — width updated each _refresh().
+	_capacity_bar_fill       = ColorRect.new()
+	_capacity_bar_fill.color = COLOR_OUTLINE
+	_capacity_bar_fill.position = Vector2(PADDING, total_y)
+	_capacity_bar_fill.size     = Vector2(inner_w, bar_h)
+	_bg.add_child(_capacity_bar_fill)
+
+
 # ---------------------------------------------------------------------------
 # Refresh
 # ---------------------------------------------------------------------------
 
-## Rebuilds all row labels and button states from the trap's current values.
+## Rebuilds all row labels and button states from the boost's current values.
 func _refresh() -> void:
-	if _trap == null or not is_instance_valid(_trap):
+	if _boost == null or not is_instance_valid(_boost):
 		_on_close()
 		return
 
-	_lbl_title.text = _trap.get_type_name()
+	_lbl_title.text = _boost.get_type_name()
 
-	var trap_type: int = _trap.get_type()
-
-	# Damage row — label and value format depend on trap type.
-	# after_text is always a delta ("+X") so the player sees the gain, not a second absolute value.
-	if trap_type == Trap.TrapType.GLUE_BOARD:
-		_refresh_stat_row(
-			_dmg_row, "Adhesion", _trap.get_damage_level(),
-			"%d%%" % int(_trap.get_adhesion_pct()),
-			"+%d%%" % int(_trap.get_adhesion_after_upgrade_pct() - _trap.get_adhesion_pct()),
-			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
-		)
-	elif trap_type == Trap.TrapType.FOGGER:
-		_refresh_stat_row(
-			_dmg_row, "Potency", _trap.get_damage_level(),
-			"%.1f" % _trap.get_effective_damage(),
-			"+%.1f" % (_trap.get_effective_damage_after_upgrade() - _trap.get_effective_damage()),
-			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
-		)
-	else:
-		_refresh_stat_row(
-			_dmg_row, "Damage", _trap.get_damage_level(),
-			"%.1f" % _trap.get_effective_damage(),
-			"+%.1f" % (_trap.get_effective_damage_after_upgrade() - _trap.get_effective_damage()),
-			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
-		)
-
-	# Range row — same label for all trap types.
+	# Range row.
 	_refresh_stat_row(
-		_rng_row, "Range", _trap.get_range_level(),
-		"%.1f" % _trap.get_range_radius(),
-		"+%.1f" % (_trap.get_range_after_upgrade() - _trap.get_range_radius()),
-		_trap.is_range_maxed(), _trap.get_range_upgrade_cost()
+		_rng_row, "Range", _boost.get_range_level(),
+		"%.1f" % _boost.get_range_radius(),
+		"+%.1f" % (_boost.get_range_after_upgrade() - _boost.get_range_radius()),
+		_boost.is_range_maxed(), _boost.get_range_upgrade_cost()
 	)
 
-	# Third stat row: Duration for Glue Board, Fire Rate for active traps.
-	if trap_type == Trap.TrapType.GLUE_BOARD:
-		_rate_row["row"].visible = true
-		_refresh_stat_row(
-			_rate_row, "Duration", _trap.get_duration_level(),
-			"%.1fs" % _trap.get_duration(),
-			"+%.1fs" % (_trap.get_duration_after_upgrade() - _trap.get_duration()),
-			_trap.is_duration_maxed(), _trap.get_duration_upgrade_cost()
-		)
-	elif _trap.is_passive():
-		_rate_row["row"].visible = false
-	else:
-		_rate_row["row"].visible = true
-		_refresh_stat_row(
-			_rate_row, "Fire Rate", _trap.get_rate_level(),
-			"%.2f /s" % _trap.get_effective_shots_per_sec(),
-			"+%.2f /s" % (_trap.get_effective_shots_per_sec_after_upgrade() - _trap.get_effective_shots_per_sec()),
-			_trap.is_rate_maxed(), _trap.get_rate_upgrade_cost()
-		)
-
-	# Crit rows — present on every trap type.
-	# "Crit Chance" shows the current hit probability as a percentage.
-	# "Crit Bonus" shows the extra damage multiplier applied on a successful crit.
+	# Stat B row.
+	var b_cur:   float = _boost.get_stat_b_value()
+	var b_after: float = _boost.get_stat_b_after_upgrade()
 	_refresh_stat_row(
-		_crit_chance_row, "Crit Chance", _trap.get_crit_chance_level(),
-		"%.0f%%" % (_trap.get_crit_chance() * 100.0),
-		"+%.0f%%" % ((_trap.get_crit_chance_after_upgrade() - _trap.get_crit_chance()) * 100.0),
-		_trap.is_crit_chance_maxed(), _trap.get_crit_chance_upgrade_cost()
-	)
-	_refresh_stat_row(
-		_crit_damage_row, "Crit Bonus", _trap.get_crit_damage_level(),
-		"%.0f%%" % (_trap.get_crit_damage_bonus() * 100.0),
-		"+%.0f%%" % ((_trap.get_crit_damage_after_upgrade() - _trap.get_crit_damage_bonus()) * 100.0),
-		_trap.is_crit_damage_maxed(), _trap.get_crit_damage_upgrade_cost()
+		_b_row, _boost.get_stat_b_name(), _boost.get_stat_b_level(),
+		_boost.format_stat_b(b_cur),
+		"+%s" % _boost.format_stat_b(b_after - b_cur),
+		_boost.is_stat_b_maxed(), _boost.get_stat_b_upgrade_cost()
 	)
 
-	# Sell button: keep the refund amount current as upgrades are purchased.
+	# Stat C row — only relevant for 3-stat boosts; row is hidden for others.
+	if _boost.has_stat_c():
+		var c_cur:   float = _boost.get_stat_c_value()
+		var c_after: float = _boost.get_stat_c_after_upgrade()
+		_refresh_stat_row(
+			_c_row, _boost.get_stat_c_name(), _boost.get_stat_c_level(),
+			_boost.format_stat_c(c_cur),
+			"+%s" % _boost.format_stat_c(c_after - c_cur),
+			_boost.is_stat_c_maxed(), _boost.get_stat_c_upgrade_cost()
+		)
+
+	# Sell value.
 	if _lbl_sell_value != null:
-		_lbl_sell_value.text = "🪙%d" % _trap.get_sell_value()
+		_lbl_sell_value.text = "🪙%d" % _boost.get_sell_value()
 
-## Updates one stat row's labels and interactive state.
+	# Capacity bar.
+	if _is_perishable() and _capacity_bar_fill != null:
+		var frac: float = _boost.get_capacity_fraction()
+		_capacity_bar_fill.size.x = _capacity_bar_bg.size.x * frac
+		_lbl_capacity.text        = "Capacity: %d%%" % int(frac * 100.0)
+
+
+## Updates one stat row's labels and button state.
 func _refresh_stat_row(
 	row: Dictionary,
 	name_text: String, level: int,
@@ -449,21 +405,20 @@ func _refresh_stat_row(
 	row["cur"].text   = cur_text
 
 	if maxed:
-		# Hide the delta label so "MAX" fills the full button width and can center itself.
 		row["after"].visible              = false
 		row["cost"].text                  = "MAX"
 		row["cost"].horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
-		row["btn"].disabled = true
+		row["btn"].disabled               = true
 		_apply_button_style(row["btn"], true)
 	else:
 		row["after"].visible              = true
-		row["after"].text                 = after_text  # already formatted as "+X.X" by _refresh
+		row["after"].text                 = after_text
 		row["cost"].horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
-		# Color the delta green when affordable (you can gain this now) or amber when not
-		# (you can see what you'd gain but can't yet pay — the cost risk is visible).
 		var can_afford := GameState.bug_bucks >= cost
-		var delta_color := COLOR_DELTA_AFFORDABLE if can_afford else COLOR_DELTA_UNAFFORDABLE
-		row["after"].add_theme_color_override("font_color", delta_color)
+		row["after"].add_theme_color_override(
+			"font_color",
+			COLOR_DELTA_AFFORDABLE if can_afford else COLOR_DELTA_UNAFFORDABLE
+		)
 		row["cost"].text    = "🪙%d" % cost
 		row["btn"].disabled = not can_afford
 		_apply_button_style(row["btn"], false)
@@ -473,71 +428,42 @@ func _refresh_stat_row(
 # Button handlers
 # ---------------------------------------------------------------------------
 
-## Closes the panel when the player taps outside it (on either mouse or touch).
 func _input(event: InputEvent) -> void:
 	var pos   := Vector2.ZERO
 	var fired := false
 	if event is InputEventMouseButton and event.pressed:
-		pos = event.position
-		fired = true
+		pos = event.position; fired = true
 	elif event is InputEventScreenTouch and event.pressed:
-		pos = event.position
-		fired = true
+		pos = event.position; fired = true
 	if fired and not _panel_rect.has_point(pos):
 		get_viewport().set_input_as_handled()
 		_on_close()
 
 
-func _on_btn_a() -> void:
-	if _trap.is_damage_maxed():
+func _on_btn_range() -> void:
+	if _boost.is_range_maxed():
 		return
-	if not GameState.spend_bug_bucks(_trap.get_damage_upgrade_cost()):
+	if not GameState.spend_bug_bucks(_boost.get_range_upgrade_cost()):
 		return
-	_trap.apply_damage_upgrade()
+	_boost.apply_range_upgrade()
 	AudioManager.play_ui("upgrade")
 
 
-func _on_btn_b() -> void:
-	if _trap.is_range_maxed():
+func _on_btn_stat_b() -> void:
+	if _boost.is_stat_b_maxed():
 		return
-	if not GameState.spend_bug_bucks(_trap.get_range_upgrade_cost()):
+	if not GameState.spend_bug_bucks(_boost.get_stat_b_upgrade_cost()):
 		return
-	_trap.apply_range_upgrade()
+	_boost.apply_stat_b_upgrade()
 	AudioManager.play_ui("upgrade")
 
 
-func _on_btn_c() -> void:
-	if _trap.get_type() == Trap.TrapType.GLUE_BOARD:
-		if _trap.is_duration_maxed():
-			return
-		if not GameState.spend_bug_bucks(_trap.get_duration_upgrade_cost()):
-			return
-		_trap.apply_duration_upgrade()
-		AudioManager.play_ui("upgrade")
-	else:
-		if _trap.is_rate_maxed() or _trap.is_passive():
-			return
-		if not GameState.spend_bug_bucks(_trap.get_rate_upgrade_cost()):
-			return
-		_trap.apply_fire_rate_upgrade()
-		AudioManager.play_ui("upgrade")
-
-
-func _on_btn_d() -> void:
-	if _trap.is_crit_chance_maxed():
+func _on_btn_stat_c() -> void:
+	if not _boost.has_stat_c() or _boost.is_stat_c_maxed():
 		return
-	if not GameState.spend_bug_bucks(_trap.get_crit_chance_upgrade_cost()):
+	if not GameState.spend_bug_bucks(_boost.get_stat_c_upgrade_cost()):
 		return
-	_trap.apply_crit_chance_upgrade()
-	AudioManager.play_ui("upgrade")
-
-
-func _on_btn_e() -> void:
-	if _trap.is_crit_damage_maxed():
-		return
-	if not GameState.spend_bug_bucks(_trap.get_crit_damage_upgrade_cost()):
-		return
-	_trap.apply_crit_damage_upgrade()
+	_boost.apply_stat_c_upgrade()
 	AudioManager.play_ui("upgrade")
 
 
@@ -553,18 +479,12 @@ func _on_peek_up() -> void:
 
 func _on_btn_sell() -> void:
 	_spawn_coin_burst()
-	# Signal Arena to refund the player and remove the trap from the grid.
-	# Arena handles both the Bug Bucks credit and the node cleanup.
 	sell_requested.emit()
-	# _on_close is not called here — Arena's handler calls queue_free() on us.
 
 
 func _spawn_coin_burst() -> void:
-	# Particles must outlive this panel, so they get their own CanvasLayer
-	# parented to root. PROCESS_MODE_ALWAYS because the tree is paused while
-	# the upgrade panel is open.
 	var camera    := get_viewport().get_camera_3d()
-	var burst_pos := camera.unproject_position(_trap.global_position)
+	var burst_pos := camera.unproject_position(_boost.global_position)
 
 	var host := CanvasLayer.new()
 	host.layer        = 10
@@ -577,7 +497,7 @@ func _spawn_coin_burst() -> void:
 	particles.amount               = 28
 	particles.lifetime             = 0.9
 	particles.one_shot             = true
-	particles.explosiveness        = 1.0   # all particles emit simultaneously
+	particles.explosiveness        = 1.0
 	particles.emitting             = true
 	particles.direction            = Vector2(0.0, -1.0)
 	particles.spread               = 180.0
@@ -586,10 +506,9 @@ func _spawn_coin_burst() -> void:
 	particles.gravity              = Vector2(0.0, 380.0)
 	particles.scale_amount_min     = 5.0
 	particles.scale_amount_max     = 10.0
-	particles.color                = Color(1.00, 0.82, 0.10, 1.0)  # gold
+	particles.color                = COLOR_GOLD
 	host.add_child(particles)
 
-	# process_always=true (default) keeps the timer ticking while tree is paused.
 	var timer := get_tree().create_timer(particles.lifetime + 0.2)
 	timer.timeout.connect(host.queue_free)
 
@@ -609,61 +528,6 @@ func _on_bug_bucks_changed(_amount: int) -> void:
 # UI helpers
 # ---------------------------------------------------------------------------
 
-## Draws a thin divider followed by one compact row per active boost entry.
-## Each row shows the boost name on the left and the stat effect on the right.
-func _build_active_boosts_section(y: float, inner_w: float, boosts: Array) -> void:
-	# Thin divider — uses the same color as the section dividers above the stat rows.
-	var divider        := ColorRect.new()
-	divider.color       = COLOR_DIVIDER
-	divider.position    = Vector2(PADDING, y + 7.0)
-	divider.size        = Vector2(inner_w, 1.0)
-	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_bg.add_child(divider)
-
-	var entry_y := y + BOOST_SECTION_LEAD
-	for entry: Dictionary in boosts:
-		var row_ctrl              := Control.new()
-		row_ctrl.position          = Vector2(PADDING, entry_y)
-		row_ctrl.size              = Vector2(inner_w, BOOST_ENTRY_H)
-		row_ctrl.mouse_filter      = Control.MOUSE_FILTER_IGNORE
-		_bg.add_child(row_ctrl)
-
-		var lbl_name := Label.new()
-		lbl_name.position             = Vector2(0.0, 0.0)
-		lbl_name.size                 = Vector2(inner_w * 0.65, BOOST_ENTRY_H)
-		lbl_name.text                 = "  • " + entry["name"]   # bullet character
-		lbl_name.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-		lbl_name.add_theme_font_override("font", UIFonts.primary())
-		lbl_name.add_theme_font_size_override("font_size", 14)
-		lbl_name.add_theme_color_override("font_color", COLOR_TEXT_DIM)
-		lbl_name.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-		row_ctrl.add_child(lbl_name)
-
-		var lbl_detail := Label.new()
-		lbl_detail.position              = Vector2(inner_w * 0.65, 0.0)
-		lbl_detail.size                  = Vector2(inner_w * 0.35, BOOST_ENTRY_H)
-		lbl_detail.text                  = entry["detail"]
-		lbl_detail.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
-		lbl_detail.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
-		lbl_detail.add_theme_font_override("font", UIFonts.primary_bold())
-		lbl_detail.add_theme_font_size_override("font_size", 14)
-		lbl_detail.add_theme_color_override("font_color", COLOR_DELTA_AFFORDABLE)
-		lbl_detail.mouse_filter          = Control.MOUSE_FILTER_IGNORE
-		row_ctrl.add_child(lbl_detail)
-
-		entry_y += BOOST_ENTRY_H
-
-
-## Builds one stat row: background panel with a single HBoxContainer row.
-##
-## Layout (left to right):
-##   lbl_name  — stat title, left-aligned, expands to fill available space
-##   lbl_cur   — current value, natural width, right-aligned text
-##   btn       — upgrade button, inset via MarginContainer (top/bottom padding)
-##   lbl_stars — star level indicator, rightmost, natural width
-##
-## "row" key controls visibility (e.g. Fire Rate on passive traps).
-## "btn" key is the clickable upgrade button.
 func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 	var row_ctrl := Control.new()
 	row_ctrl.position     = Vector2(PADDING, y)
@@ -783,8 +647,14 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 	}
 
 
-## Recursively marks every Control child as mouse-transparent so clicks
-## anywhere inside a stat row reach the Button rather than its children.
+## Returns true for perishable boost types that have a remaining-capacity bar.
+func _is_perishable() -> bool:
+	return _boost.get_type() in [
+		BoostUnit.BoostType.AIR_FRESHENER,
+		BoostUnit.BoostType.QUARANTINE_MARKER,
+	]
+
+
 func _set_mouse_passthrough(node: Control) -> void:
 	node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for child in node.get_children():
@@ -792,23 +662,10 @@ func _set_mouse_passthrough(node: Control) -> void:
 			_set_mouse_passthrough(child)
 
 
-## Returns filled/empty star characters for the given upgrade level out of 3.
 func _stars(level: int) -> String:
 	return "★".repeat(level) + "☆".repeat(3 - level)
 
 
-func _add_divider(y: float, inner_w: float) -> void:
-	var line     := ColorRect.new()
-	line.color    = COLOR_DIVIDER
-	line.position = Vector2(PADDING, y)
-	line.size     = Vector2(inner_w, 1.0)
-	_bg.add_child(line)
-
-
-## Upgrade button / stat row style. maxed=true shows a flat dark box that clearly
-## differs from an unaffordable button — maxed can never become available, unaffordable can.
-## The disabled state is also overridden so it stays green-dimmed rather than
-## falling back to Godot's default gray.
 func _apply_button_style(btn: Button, maxed: bool) -> void:
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
@@ -848,9 +705,6 @@ func _apply_button_style(btn: Button, maxed: bool) -> void:
 	btn.add_theme_color_override("font_disabled_color", COLOR_TEXT_DIM)
 
 
-## Utility button style — no brand color. Used for the close button.
-## All four content margins are equal so the label sits at the visual centre
-## of the button regardless of its width or height.
 func _apply_neutral_button_style(btn: Button) -> void:
 	for state: Array in [
 		["normal",  COLOR_NEUTRAL_NORMAL],
@@ -869,7 +723,6 @@ func _apply_neutral_button_style(btn: Button) -> void:
 	btn.focus_mode = Control.FOCUS_NONE
 
 
-## Sell button style — red-toned to signal a destructive action.
 func _apply_sell_button_style(btn: Button) -> void:
 	for state: Array in [
 		["normal",  COLOR_BTN_SELL],
@@ -892,18 +745,16 @@ func _apply_sell_button_style(btn: Button) -> void:
 
 
 # ---------------------------------------------------------------------------
-# Trashcan icon — drawn procedurally to represent an old-fashioned round
-# steel can: tapered body (narrower at base) with vertical panel lines,
-# flat lid, and a small knob handle on top. All black with bright gray edges.
+# Trashcan icon — identical to TrapUpgradePanel.TrashcanIcon.
 # ---------------------------------------------------------------------------
 class TrashcanIcon extends Control:
 	func _draw() -> void:
-		var s  := minf(size.x, size.y) * 1.02  # 50% larger than the original 0.68
+		var s  := minf(size.x, size.y) * 1.02
 		var cx := size.x * 0.5
 		var cy := size.y * 0.5
 
-		var body_w   := s * 0.56   # width at the top of the body
-		var base_w   := body_w * 0.72  # narrower at the bottom
+		var body_w   := s * 0.56
+		var base_w   := body_w * 0.72
 		var body_h   := s * 0.62
 		var lid_w    := body_w * 1.22
 		var lid_h    := s * 0.10
@@ -918,17 +769,14 @@ class TrashcanIcon extends Control:
 		var body_top := top_y + handle_h + lid_h
 		var body_bot := body_top + body_h
 
-		# Handle — small knob centered on top of the lid.
 		var handle_rect := Rect2(cx - handle_w * 0.5, top_y, handle_w, handle_h)
 		draw_rect(handle_rect, black)
 		draw_rect(handle_rect, edge, false, 2.0, true)
 
-		# Lid — flat rect, slightly wider than the body.
 		var lid_rect := Rect2(cx - lid_w * 0.5, top_y + handle_h, lid_w, lid_h)
 		draw_rect(lid_rect, black)
 		draw_rect(lid_rect, edge, false, 2.0, true)
 
-		# Body — tapered trapezoid: full width at top, narrower at base.
 		var body_poly := PackedVector2Array([
 			Vector2(cx - body_w * 0.5, body_top),
 			Vector2(cx + body_w * 0.5, body_top),
@@ -941,18 +789,15 @@ class TrashcanIcon extends Control:
 		])
 		draw_polyline(outline_pts, edge, 2.0, true)
 
-		# Vertical panel lines — stay within the safe inner width (base_w) so they
-		# don't clip outside the tapered shape at the bottom.
 		for i in 2:
 			var lx := cx - base_w * 0.5 + base_w * ((i + 1.0) / 3.0)
 			draw_line(Vector2(lx, body_top + 1.0), Vector2(lx, body_bot - 1.0), edge, 2.0, true)
 
 
 # ---------------------------------------------------------------------------
-# Eye icon — drawn procedurally for the peek button.
-# Two symmetric circular arcs form a lens outline; a filled circle is the pupil.
-# A diagonal slash crosses the whole icon — the universal "hidden" indicator,
-# matching what the button does: hold to hide the panel.
+# Eye icon — identical to TrapUpgradePanel.EyeIcon.
+# Two arcs form the lens outline; a filled circle is the pupil; a diagonal
+# slash marks the button as "hides the panel while held".
 # ---------------------------------------------------------------------------
 class EyeIcon extends Control:
 	func _draw() -> void:
@@ -964,21 +809,14 @@ class EyeIcon extends Control:
 		var blk := Color(0.0, 0.0, 0.0, 1.0)
 		var n   := 24
 
-		# Lens outline: two circular arcs sharing the left/right endpoints.
-		# R is the radius of each arc; d is the vertical offset of each arc centre.
 		var R   := (rx * rx + ry * ry) / (2.0 * ry)
 		var d   := R - ry
 		var ang := atan2(d, rx)
 		draw_arc(Vector2(cx, cy + d), R, -(PI - ang), -ang, n, blk, lw, true)
 		draw_arc(Vector2(cx, cy - d), R,  ang, PI - ang, n, blk, lw, true)
 
-		# Pupil
 		draw_circle(Vector2(cx, cy), ry * 0.52, blk)
 
-		# Diagonal slash drawn last so it sits on top of the lens and pupil.
-		# Extends from below-left to above-right, clearing the eye bounds by ~20%
-		# so the line visually cuts through the entire icon rather than stopping
-		# at the edge of the lens shape.
 		draw_line(
 			Vector2(cx - rx * 0.95, cy + ry * 1.20),
 			Vector2(cx + rx * 0.95, cy - ry * 1.20),
