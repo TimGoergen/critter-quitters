@@ -39,8 +39,10 @@ const VAN_REF_H := 1024.0
 const TAILPIPE_IMG_X := 875.0
 const TAILPIPE_IMG_Y := 450.0
 
-# Business card scales to 26% of viewport width (35% × 0.75). Upper-left placement.
-const CARD_WIDTH_FRAC := 0.2625
+# Business card scales to 40% of viewport width, measured against the content
+# rect (via get_used_rect) so transparent padding in the PNG doesn't throw off
+# the size or position calculation.
+const CARD_WIDTH_FRAC := 0.40
 
 var _van:       Sprite2D
 var _card:      Sprite2D
@@ -62,9 +64,10 @@ func _on_viewport_resized() -> void:
 	_van.position = Vector2(vp.x * 0.667, vp.y * 0.40)
 
 	if is_instance_valid(_card):
-		var card_scale := (vp.x * CARD_WIDTH_FRAC) / _card.texture.get_size().x
+		# region_rect.size is the content-only dimensions (padding excluded).
+		var card_scale := (vp.x * CARD_WIDTH_FRAC) / _card.region_rect.size.x
 		_card.scale    = Vector2(card_scale, card_scale)
-		_card.position = Vector2(vp.x * 0.22, vp.y * 0.55)
+		_card.position = Vector2(vp.x * 0.22, vp.y * 0.40)
 
 
 func _build_ui() -> void:
@@ -77,11 +80,28 @@ func _build_ui() -> void:
 	bg.color = COLOR_BG
 	add_child(bg)
 
-	# --- Van illustration ---
+	# --- Business card (added before van so it renders behind it) ---
+	# region_enabled clips to get_used_rect() so transparent padding in the PNG is
+	# excluded from the size calculation and the centered-origin placement.
+	# modulate dims the card so it reads as background decoration.
+	var card_tex: Texture2D = load("res://assets/BusinessCard.png")
+	var used_rect           := card_tex.get_image().get_used_rect()
+	_card                   = Sprite2D.new()
+	_card.texture           = card_tex
+	_card.region_enabled    = true
+	_card.region_rect       = Rect2(used_rect)
+	_card.centered          = true
+	_card.rotation_degrees  = -15.0
+	_card.modulate          = Color(0.80, 0.80, 0.80, 1.0)
+	var card_scale          := (vp.x * CARD_WIDTH_FRAC) / used_rect.size.x
+	_card.scale             = Vector2(card_scale, card_scale)
+	_card.position          = Vector2(vp.x * 0.22, vp.y * 0.40)
+	add_child(_card)
+
+	# --- Van illustration (added after card so it renders in front of it) ---
 	# "Contain" scale: largest size where the full image fits on screen.
 	# centered = true (Godot default) means the texture is drawn with its
-	# centre at `position`, so (vp/2, vp/2) puts the sprite exactly in the
-	# middle of the screen regardless of image dimensions or scale.
+	# centre at `position`, so the sprite anchors to its visual midpoint.
 	var van_tex: Texture2D = load("res://assets/van.png")
 	_van          = Sprite2D.new()
 	_van.texture  = van_tex
@@ -90,20 +110,6 @@ func _build_ui() -> void:
 	_van.scale    = Vector2(scale_f, scale_f)
 	_van.position = Vector2(vp.x * 0.667, vp.y * 0.40)
 	add_child(_van)
-
-	# --- Business card ---
-	# Tilted -15° so the left edge sits lower than the right (card rises left → right).
-	# Negative rotation is counter-clockwise; in Godot's y-down screen space that
-	# makes the right side higher — matching the requested "/" orientation.
-	var card_tex: Texture2D = load("res://assets/BusinessCard.png")
-	_card                  = Sprite2D.new()
-	_card.texture          = card_tex
-	_card.centered         = true
-	_card.rotation_degrees = -15.0
-	var card_scale         := (vp.x * CARD_WIDTH_FRAC) / card_tex.get_size().x
-	_card.scale            = Vector2(card_scale, card_scale)
-	_card.position         = Vector2(vp.x * 0.22, vp.y * 0.18)
-	add_child(_card)
 
 	# --- Buttons: side by side, equal width, centred ---
 	# Each button shows a house icon beside its label to mirror the in-game
