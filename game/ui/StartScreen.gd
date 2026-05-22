@@ -64,7 +64,7 @@ func _on_viewport_resized() -> void:
 	if is_instance_valid(_card):
 		var card_scale := (vp.x * CARD_WIDTH_FRAC) / _card.texture.get_size().x
 		_card.scale    = Vector2(card_scale, card_scale)
-		_card.position = Vector2(vp.x * 0.22, vp.y * 0.42)
+		_card.position = Vector2(vp.x * 0.22, vp.y * 0.55)
 
 
 func _build_ui() -> void:
