@@ -60,7 +60,7 @@ func _on_viewport_resized() -> void:
 		return
 	var vp      := get_viewport().get_visible_rect().size
 	var scale_f := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
-	_van.scale    = Vector2(scale_f * 1.25, scale_f * 1.25)
+	_van.scale    = Vector2(scale_f * 1.375, scale_f * 1.375)
 	_van.position = Vector2(vp.x * 0.667, vp.y * 0.40)
 
 	if is_instance_valid(_card):
@@ -107,7 +107,7 @@ func _build_ui() -> void:
 	_van.texture  = van_tex
 	_van.centered = true
 	var scale_f   := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
-	_van.scale    = Vector2(scale_f * 1.25, scale_f * 1.25)
+	_van.scale    = Vector2(scale_f * 1.375, scale_f * 1.375)
 	_van.position = Vector2(vp.x * 0.667, vp.y * 0.40)
 	add_child(_van)
 
