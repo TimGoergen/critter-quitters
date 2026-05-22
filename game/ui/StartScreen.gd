@@ -1,6 +1,7 @@
 ## StartScreen.gd
 ## The game's opening screen. Displays the Critter Quitters van illustration as the
-## title graphic, a company slogan, and two buttons: "Start Buggin'" and "Bug Out".
+## title graphic, a tilted business card in the lower-right, and two buttons:
+## "Start Buggin'" and "Bug Out".
 ##
 ## When the player taps "Start Buggin'", the van accelerates left off screen while
 ## exhaust puffs billow from its rear, then the scene transitions to Main.tscn.
@@ -13,7 +14,6 @@ extends CanvasLayer
 const UIFonts = preload("res://ui/UIFonts.gd")
 
 const COLOR_BG     := Color(0.06, 0.06, 0.10, 1.0)
-const COLOR_SLOGAN := Color(0.75, 0.75, 0.78, 1.0)
 const COLOR_TEXT   := Color(0.90, 0.90, 0.90, 1.0)
 
 const COLOR_GREEN_NORMAL  := Color(0.04, 0.25, 0.00, 1.0)
@@ -39,7 +39,12 @@ const VAN_REF_H := 1024.0
 const TAILPIPE_IMG_X := 875.0
 const TAILPIPE_IMG_Y := 450.0
 
+# Business card scales to 35% of viewport width. Centered at 78% x, 82% y so
+# it sits in the lower-right without covering the start button.
+const CARD_WIDTH_FRAC := 0.35
+
 var _van:       Sprite2D
+var _card:      Sprite2D
 var _start_btn: Button
 var _quit_btn:  Button
 
@@ -56,6 +61,11 @@ func _on_viewport_resized() -> void:
 	var scale_f := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
 	_van.scale    = Vector2(scale_f, scale_f)
 	_van.position = Vector2(vp.x * 0.5, vp.y * 0.40)
+
+	if is_instance_valid(_card):
+		var card_scale := (vp.x * CARD_WIDTH_FRAC) / _card.texture.get_size().x
+		_card.scale    = Vector2(card_scale, card_scale)
+		_card.position = Vector2(vp.x * 0.78, vp.y * 0.82)
 
 
 func _build_ui() -> void:
@@ -82,20 +92,19 @@ func _build_ui() -> void:
 	_van.position = Vector2(vp.x * 0.5, vp.y * 0.40)
 	add_child(_van)
 
-	# --- Slogan ---
-	var slogan := Label.new()
-	slogan.text                 = "\"Bugs don't have to go home but they can't stay here\""
-	slogan.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	slogan.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	slogan.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
-	slogan.anchor_left          = 0.10
-	slogan.anchor_right         = 0.90
-	slogan.anchor_top           = 0.72
-	slogan.anchor_bottom        = 0.80
-	slogan.add_theme_font_override("font", UIFonts.flavor_bold())
-	slogan.add_theme_font_size_override("font_size", 26)
-	slogan.add_theme_color_override("font_color", COLOR_SLOGAN)
-	add_child(slogan)
+	# --- Business card ---
+	# Tilted -15° so the left edge sits lower than the right (card rises left → right).
+	# Negative rotation is counter-clockwise; in Godot's y-down screen space that
+	# makes the right side higher — matching the requested "/" orientation.
+	var card_tex: Texture2D = load("res://assets/BusinessCard.png")
+	_card                  = Sprite2D.new()
+	_card.texture          = card_tex
+	_card.centered         = true
+	_card.rotation_degrees = -15.0
+	var card_scale         := (vp.x * CARD_WIDTH_FRAC) / card_tex.get_size().x
+	_card.scale            = Vector2(card_scale, card_scale)
+	_card.position         = Vector2(vp.x * 0.78, vp.y * 0.82)
+	add_child(_card)
 
 	# --- Buttons: side by side, equal width, centred ---
 	# Each button shows a house icon beside its label to mirror the in-game
