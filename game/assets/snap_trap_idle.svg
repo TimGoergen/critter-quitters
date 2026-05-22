@@ -1,12 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <defs>
+    <linearGradient id="woodGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#B87830"/>
+      <stop offset="50%" stop-color="#9E6628"/>
+      <stop offset="100%" stop-color="#7A4A18"/>
+    </linearGradient>
+  </defs>
+  <!-- Floor shadow -->
+  <ellipse cx="64" cy="114" rx="28" ry="5" fill="#000000" opacity="0.22"/>
   <!-- Dark perimeter border -->
   <rect x="34" y="11" width="60" height="106" rx="5" fill="#3D1A06"/>
   <!-- Wooden base -->
-  <rect x="38" y="15" width="52" height="98" rx="3" fill="#9E6628"/>
+  <rect x="38" y="15" width="52" height="98" rx="3" fill="url(#woodGrad)"/>
   <!-- Wood grain lines -->
   <line x1="47" y1="18" x2="47" y2="110" stroke="#6A3C10" stroke-width="2.5" stroke-linecap="round"/>
   <line x1="64" y1="18" x2="64" y2="110" stroke="#6A3C10" stroke-width="2.5" stroke-linecap="round"/>
   <line x1="81" y1="18" x2="81" y2="110" stroke="#6A3C10" stroke-width="2.5" stroke-linecap="round"/>
+  <!-- Top-edge sheen on wood -->
+  <rect x="38" y="15" width="52" height="4" rx="2" fill="white" opacity="0.12"/>
   <!-- Coil spring (top end — from above = concentric ellipses) -->
   <ellipse cx="64" cy="28" rx="13" ry="10" fill="#787880" stroke="#555560" stroke-width="1.5"/>
   <ellipse cx="64" cy="28" rx="8" ry="6.5" fill="#9A9AA4" stroke="#787880" stroke-width="1"/>

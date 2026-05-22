@@ -1113,7 +1113,7 @@ func _update_star_display() -> void:
 ## matching the star label setup.
 func _spawn_boost_indicator() -> void:
 	_boost_indicator                     = Label3D.new()
-	_boost_indicator.font                = UIFonts.primary_bold()
+	_boost_indicator.font                = UIFonts.symbols()   # Noto Sans Symbols 2 — has U+2726
 	_boost_indicator.font_size           = 72
 	_boost_indicator.pixel_size          = 0.009
 	_boost_indicator.modulate            = Color(1.0, 1.0, 1.0, 1.0)
@@ -1122,7 +1122,7 @@ func _spawn_boost_indicator() -> void:
 	_boost_indicator.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_boost_indicator.billboard           = BaseMaterial3D.BILLBOARD_ENABLED
 	_boost_indicator.no_depth_test       = true
-	_boost_indicator.text                = "âœ¦"   # U+2726 four-pointed star â€” concave sides
+	_boost_indicator.text                = “✦”   # U+2726 BLACK FOUR-POINTED STAR
 	_boost_indicator.position            = Vector3(0.75, 1.0, -0.75)
 	_boost_indicator.visible             = false
 	add_child(_boost_indicator)
