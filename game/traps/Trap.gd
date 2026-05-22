@@ -645,6 +645,21 @@ func get_active_boost_display() -> Array:
 	return result
 
 
+## Returns all BoostUnit nodes currently applying a buff to this trap.
+## Used by TrapUpgradePanel to show boost range circles during the peek gesture.
+## A single Boost can appear in both source dictionaries if it buffs both stats,
+## so duplicates are filtered before returning.
+func get_boost_source_nodes() -> Array:
+	var result: Array = []
+	for source in _damage_boost_sources:
+		if is_instance_valid(source) and not result.has(source):
+			result.append(source)
+	for source in _fire_rate_boost_sources:
+		if is_instance_valid(source) and not result.has(source):
+			result.append(source)
+	return result
+
+
 ## Returns the Bug Bucks cost to place this trap.
 func get_cost() -> int:
 	return _cost

@@ -97,6 +97,10 @@ var _crit_damage_row: Dictionary = {}
 var _btn_sell:       Button = null
 var _lbl_sell_value: Label  = null
 
+# Boost nodes whose range indicators were shown during the last peek gesture.
+# Cleared in _on_peek_up so every show_range_indicator call is paired with a hide.
+var _peek_boost_sources: Array = []
+
 
 # ---------------------------------------------------------------------------
 # Public interface
@@ -544,11 +548,21 @@ func _on_btn_e() -> void:
 func _on_peek_down() -> void:
 	_bg.modulate.a     = 0.18
 	_border.modulate.a = 0.18
+	# Show each buffing boost's range circle in gray so the player can see
+	# which boosts are contributing to this trap and how far they reach.
+	_peek_boost_sources = _trap.get_boost_source_nodes()
+	for boost in _peek_boost_sources:
+		if is_instance_valid(boost):
+			boost.show_range_indicator(true)   # true = dimmed/gray
 
 
 func _on_peek_up() -> void:
 	_bg.modulate.a     = 1.0
 	_border.modulate.a = 1.0
+	for boost in _peek_boost_sources:
+		if is_instance_valid(boost):
+			boost.hide_range_indicator()
+	_peek_boost_sources.clear()
 
 
 func _on_btn_sell() -> void:
