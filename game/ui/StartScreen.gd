@@ -59,7 +59,7 @@ func _on_viewport_resized() -> void:
 	var vp      := get_viewport().get_visible_rect().size
 	var scale_f := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
 	_van.scale    = Vector2(scale_f, scale_f)
-	_van.position = Vector2(vp.x * 0.50, vp.y * 0.40)
+	_van.position = Vector2(vp.x * 0.667, vp.y * 0.40)
 
 	if is_instance_valid(_card):
 		var card_scale := (vp.x * CARD_WIDTH_FRAC) / _card.texture.get_size().x
@@ -88,7 +88,7 @@ func _build_ui() -> void:
 	_van.centered = true
 	var scale_f   := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
 	_van.scale    = Vector2(scale_f, scale_f)
-	_van.position = Vector2(vp.x * 0.50, vp.y * 0.40)
+	_van.position = Vector2(vp.x * 0.667, vp.y * 0.40)
 	add_child(_van)
 
 	# --- Business card ---
