@@ -42,7 +42,7 @@ const TAILPIPE_IMG_Y := 450.0
 # Business card scales to 40% of viewport width, measured against the content
 # rect (via get_used_rect) so transparent padding in the PNG doesn't throw off
 # the size or position calculation.
-const CARD_WIDTH_FRAC := 0.32
+const CARD_WIDTH_FRAC := 0.24
 
 var _van:       Sprite2D
 var _card:      Sprite2D
@@ -92,10 +92,10 @@ func _build_ui() -> void:
 	_card.region_rect       = Rect2(used_rect)
 	_card.centered          = true
 	_card.rotation_degrees  = -15.0
-	_card.modulate          = Color(0.80, 0.80, 0.80, 1.0)
+	_card.modulate          = Color(0.60, 0.60, 0.60, 1.0)
 	var card_scale          := (vp.x * CARD_WIDTH_FRAC) / used_rect.size.x
 	_card.scale             = Vector2(card_scale, card_scale)
-	_card.position          = Vector2(vp.x * 0.22, vp.y * 0.40)
+	_card.position          = Vector2(vp.x * 0.22, vp.y * 0.32)
 	add_child(_card)
 
 	# --- Van illustration (added after card so it renders in front of it) ---
