@@ -1,6 +1,6 @@
 ## StartScreen.gd
 ## The game's opening screen. Displays the Critter Quitters van illustration as the
-## title graphic, a tilted business card in the lower-right, and two buttons:
+## title graphic, a scattered pile of business cards, and two buttons:
 ## "Start Buggin'" and "Bug Out".
 ##
 ## When the player taps "Start Buggin'", the van accelerates left off screen while
@@ -44,8 +44,19 @@ const TAILPIPE_IMG_Y := 450.0
 # the size or position calculation.
 const CARD_WIDTH_FRAC := 0.24
 
+# Four cards dropped in a pile. Each entry: [rotation_deg, x_offset_frac, y_offset_frac, brightness].
+# Drawn bottom-to-top (index 0 is furthest back). Offsets are fractions of viewport size
+# applied relative to the pile anchor point so the layout scales with the screen.
+const _CARD_PILE: Array = [
+	[  9.0, -0.08,  0.26, 0.20],
+	[  5.0, -0.09,  0.10, 0.27],
+	[ -7.0, -0.05,  0.14, 0.33],
+	[ 13.0, -0.02, -0.13, 0.40],
+	[-17.0,  0.03, -0.05, 0.80],
+]
+
 var _van:       Sprite2D
-var _card:      Sprite2D
+var _cards:     Array[Sprite2D] = []
 var _start_btn: Button
 var _quit_btn:  Button
 
@@ -61,13 +72,16 @@ func _on_viewport_resized() -> void:
 	var vp      := get_viewport().get_visible_rect().size
 	var scale_f := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
 	_van.scale    = Vector2(scale_f * 1.375, scale_f * 1.375)
-	_van.position = Vector2(vp.x * 0.50, vp.y * 0.40)
+	_van.position = Vector2(vp.x * 0.65, vp.y * 0.40)
 
-	if is_instance_valid(_card):
-		# region_rect.size is the content-only dimensions (padding excluded).
-		var card_scale := (vp.x * CARD_WIDTH_FRAC) / _card.region_rect.size.x
-		_card.scale    = Vector2(card_scale, card_scale)
-		_card.position = Vector2(vp.x * 0.22, vp.y * 0.32)
+	for i: int in _cards.size():
+		var entry: Array  = _CARD_PILE[i]
+		var card_scale    := (vp.x * CARD_WIDTH_FRAC) / _cards[i].region_rect.size.x
+		_cards[i].scale    = Vector2(card_scale, card_scale)
+		_cards[i].position = Vector2(
+			vp.x * 0.22 + vp.x * float(entry[1]),
+			vp.y * 0.32 + vp.y * float(entry[2])
+		)
 
 
 func _build_ui() -> void:
@@ -80,23 +94,28 @@ func _build_ui() -> void:
 	bg.color = COLOR_BG
 	add_child(bg)
 
-	# --- Business card (added before van so it renders behind it) ---
-	# region_enabled clips to get_used_rect() so transparent padding in the PNG is
-	# excluded from the size calculation and the centered-origin placement.
-	# modulate dims the card so it reads as background decoration.
-	var card_tex: Texture2D = load("res://assets/BusinessCard.png")
-	var used_rect           := card_tex.get_image().get_used_rect()
-	_card                   = Sprite2D.new()
-	_card.texture           = card_tex
-	_card.region_enabled    = true
-	_card.region_rect       = Rect2(used_rect)
-	_card.centered          = true
-	_card.rotation_degrees  = -15.0
-	_card.modulate          = Color(0.60, 0.60, 0.60, 1.0)
-	var card_scale          := (vp.x * CARD_WIDTH_FRAC) / used_rect.size.x
-	_card.scale             = Vector2(card_scale, card_scale)
-	_card.position          = Vector2(vp.x * 0.22, vp.y * 0.32)
-	add_child(_card)
+	# --- Business card pile (added before van so all cards render behind it) ---
+	# Four cards with varying rotations and small position offsets to simulate a
+	# dropped pile. region_enabled clips to get_used_rect() so transparent PNG
+	# padding is excluded from scale and position math.
+	var card_tex:  Texture2D = load("res://assets/BusinessCard.png")
+	var used_rect            := card_tex.get_image().get_used_rect()
+	var card_scale           := (vp.x * CARD_WIDTH_FRAC) / used_rect.size.x
+	var pile_x               := vp.x * 0.22
+	var pile_y               := vp.y * 0.32
+	for entry: Array in _CARD_PILE:
+		var c              := Sprite2D.new()
+		c.texture           = card_tex
+		c.region_enabled    = true
+		c.region_rect       = Rect2(used_rect)
+		c.centered          = true
+		c.rotation_degrees  = float(entry[0])
+		var b: float        = float(entry[3])
+		c.modulate          = Color(b, b, b, 1.0)
+		c.scale             = Vector2(card_scale, card_scale)
+		c.position          = Vector2(pile_x + vp.x * float(entry[1]), pile_y + vp.y * float(entry[2]))
+		_cards.append(c)
+		add_child(c)
 
 	# --- Van illustration (added after card so it renders in front of it) ---
 	# "Contain" scale: largest size where the full image fits on screen.
@@ -108,7 +127,7 @@ func _build_ui() -> void:
 	_van.centered = true
 	var scale_f   := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
 	_van.scale    = Vector2(scale_f * 1.375, scale_f * 1.375)
-	_van.position = Vector2(vp.x * 0.50, vp.y * 0.40)
+	_van.position = Vector2(vp.x * 0.65, vp.y * 0.40)
 	add_child(_van)
 
 	# --- Buttons: side by side, equal width, centred ---
@@ -117,16 +136,16 @@ func _build_ui() -> void:
 	_start_btn = _make_icon_button("Start Buggin'", "res://assets/uninfested.png", true)
 	_start_btn.anchor_left   = 0.25
 	_start_btn.anchor_right  = 0.48
-	_start_btn.anchor_top    = 0.74
-	_start_btn.anchor_bottom = 0.84
+	_start_btn.anchor_top    = 0.80
+	_start_btn.anchor_bottom = 0.90
 	_start_btn.pressed.connect(_on_start_pressed)
 	add_child(_start_btn)
 
 	_quit_btn = _make_icon_button("Bug Out", "res://assets/infestation_level.png", false)
 	_quit_btn.anchor_left   = 0.52
 	_quit_btn.anchor_right  = 0.75
-	_quit_btn.anchor_top    = 0.74
-	_quit_btn.anchor_bottom = 0.84
+	_quit_btn.anchor_top    = 0.80
+	_quit_btn.anchor_bottom = 0.90
 	_quit_btn.pressed.connect(_on_quit_pressed)
 	add_child(_quit_btn)
 

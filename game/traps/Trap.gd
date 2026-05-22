@@ -1451,7 +1451,6 @@ func _spawn_svg_trap_visual(frames: Array[Texture2D]) -> void:
 	var quad := QuadMesh.new()
 	quad.size = Vector2(Grid.CELL_SIZE * 1.7, Grid.CELL_SIZE * 1.7)
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(2.0, 2.0, 2.0, 1.0)   # HDR boost matches Enemy.gd brightness
 	mat.albedo_texture = frames[0]
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
