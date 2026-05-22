@@ -39,9 +39,8 @@ const VAN_REF_H := 1024.0
 const TAILPIPE_IMG_X := 875.0
 const TAILPIPE_IMG_Y := 450.0
 
-# Business card scales to 35% of viewport width. Centered at 78% x, 82% y so
-# it sits in the lower-right without covering the start button.
-const CARD_WIDTH_FRAC := 0.35
+# Business card scales to 26% of viewport width (35% × 0.75). Upper-left placement.
+const CARD_WIDTH_FRAC := 0.2625
 
 var _van:       Sprite2D
 var _card:      Sprite2D
@@ -60,12 +59,12 @@ func _on_viewport_resized() -> void:
 	var vp      := get_viewport().get_visible_rect().size
 	var scale_f := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
 	_van.scale    = Vector2(scale_f, scale_f)
-	_van.position = Vector2(vp.x * 0.5, vp.y * 0.40)
+	_van.position = Vector2(vp.x * 0.75, vp.y * 0.40)
 
 	if is_instance_valid(_card):
 		var card_scale := (vp.x * CARD_WIDTH_FRAC) / _card.texture.get_size().x
 		_card.scale    = Vector2(card_scale, card_scale)
-		_card.position = Vector2(vp.x * 0.78, vp.y * 0.82)
+		_card.position = Vector2(vp.x * 0.22, vp.y * 0.18)
 
 
 func _build_ui() -> void:
@@ -89,7 +88,7 @@ func _build_ui() -> void:
 	_van.centered = true
 	var scale_f   := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
 	_van.scale    = Vector2(scale_f, scale_f)
-	_van.position = Vector2(vp.x * 0.5, vp.y * 0.40)
+	_van.position = Vector2(vp.x * 0.75, vp.y * 0.40)
 	add_child(_van)
 
 	# --- Business card ---
@@ -103,7 +102,7 @@ func _build_ui() -> void:
 	_card.rotation_degrees = -15.0
 	var card_scale         := (vp.x * CARD_WIDTH_FRAC) / card_tex.get_size().x
 	_card.scale            = Vector2(card_scale, card_scale)
-	_card.position         = Vector2(vp.x * 0.78, vp.y * 0.82)
+	_card.position         = Vector2(vp.x * 0.22, vp.y * 0.18)
 	add_child(_card)
 
 	# --- Buttons: side by side, equal width, centred ---
