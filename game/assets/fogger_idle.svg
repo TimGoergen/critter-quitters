@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- From above: aerosol fogger = concentric rings + nozzle arm -->
+  <!-- Outer body ring — dark green border -->
+  <circle cx="64" cy="64" r="46" fill="#1E6010"/>
+  <!-- Body — vivid green -->
+  <circle cx="64" cy="64" r="42" fill="#4ACC1E"/>
+  <!-- Yellow label band (ring) -->
+  <circle cx="64" cy="64" r="32" fill="#D4D400"/>
+  <!-- Gray shoulder dome -->
+  <circle cx="64" cy="64" r="22" fill="#707078"/>
+  <!-- Silver nozzle cap -->
+  <circle cx="64" cy="64" r="13" fill="#B8B8C0"/>
+  <!-- Nozzle center (valve) -->
+  <circle cx="64" cy="64" r="5" fill="#888890"/>
+  <!-- Nozzle arm extending from housing -->
+  <rect x="62" y="14" width="8" height="22" rx="4" fill="#888890"/>
+  <!-- Nozzle tip — orange spray tip -->
+  <circle cx="66" cy="16" r="7" fill="#FF7020"/>
+  <circle cx="66" cy="16" r="3.5" fill="#FF9040"/>
+  <!-- Label text band highlights (horizontal stripes) -->
+  <line x1="34" y1="58" x2="94" y2="58" stroke="#A0A000" stroke-width="2" stroke-linecap="round" opacity="0.60"/>
+  <line x1="34" y1="64" x2="94" y2="64" stroke="#A0A000" stroke-width="2" stroke-linecap="round" opacity="0.60"/>
+  <line x1="34" y1="70" x2="94" y2="70" stroke="#A0A000" stroke-width="2" stroke-linecap="round" opacity="0.60"/>
+  <!-- Body specular -->
+  <ellipse cx="50" cy="38" rx="9" ry="6" fill="white" opacity="0.22"/>
+  <!-- Dome specular -->
+  <ellipse cx="60" cy="57" rx="5" ry="3.5" fill="white" opacity="0.30"/>
+</svg>

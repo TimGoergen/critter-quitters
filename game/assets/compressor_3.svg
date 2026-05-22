@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Compressor — frame 3 (needle far right) -->
+  <ellipse cx="64" cy="66" rx="50" ry="42" fill="#0A4460"/>
+  <ellipse cx="64" cy="66" rx="46" ry="38" fill="#1090C0"/>
+  <rect x="10" y="60" width="10" height="12" rx="3" fill="#0868A0"/>
+  <rect x="108" y="60" width="10" height="12" rx="3" fill="#0868A0"/>
+  <circle cx="64" cy="62" r="28" fill="#0A5080"/>
+  <circle cx="64" cy="62" r="24" fill="#D4D8DC"/>
+  <circle cx="64" cy="62" r="20" fill="none" stroke="#888888" stroke-width="1.5" stroke-dasharray="2,3"/>
+  <g stroke="#555555" stroke-width="2" stroke-linecap="round">
+    <line x1="64" y1="42" x2="64" y2="47"/>
+    <line x1="54" y1="44.3" x2="56.5" y2="48.6"/>
+    <line x1="46.3" y1="52" x2="50.6" y2="54.5"/>
+    <line x1="44" y1="62" x2="49" y2="62"/>
+    <line x1="46.3" y1="72" x2="50.6" y2="69.5"/>
+    <line x1="74" y1="44.3" x2="71.5" y2="48.6"/>
+    <line x1="81.7" y1="52" x2="77.4" y2="54.5"/>
+    <line x1="84" y1="62" x2="79" y2="62"/>
+    <line x1="81.7" y1="72" x2="77.4" y2="69.5"/>
+  </g>
+  <!-- Needle — frame 3: rotated +50° (far right) -->
+  <g transform="rotate(50, 64, 62)">
+    <line x1="64" y1="62" x2="64" y2="44" stroke="#CC2020" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="64" cy="44" r="2.5" fill="#CC2020"/>
+  </g>
+  <circle cx="64" cy="62" r="4" fill="#444444"/>
+  <ellipse cx="56" cy="54" rx="7" ry="4" fill="white" opacity="0.35"/>
+  <ellipse cx="44" cy="46" rx="10" ry="6" fill="white" opacity="0.18"/>
+</svg>

@@ -1369,6 +1369,30 @@ func _spawn_background(color: Color) -> StandardMaterial3D:
 	return mat
 
 
+## Spawns the radial glow plane that sits beneath the Bait Station grate.
+## The plane fills the trap's full range diameter at scale 1.0 and is held at
+## BAIT_GLOW_REST_SCALE at rest; _play_bait_animation() expands it to full on each pulse.
+## The shader's "opacity" parameter drives brightness so the radial gradient shape
+## stays intact while only the intensity changes.
+func _spawn_bait_glow_plane() -> void:
+	var plane  := PlaneMesh.new()
+	plane.size  = Vector2(_range * 2.0, _range * 2.0)
+	var mi     := MeshInstance3D.new()
+	mi.mesh     = plane
+	# Same floor height as the shadow plane (world y=0.05); local offset from trap root at y=0.25.
+	mi.position.y = 0.05 - 0.25
+	mi.scale      = Vector3(BAIT_GLOW_REST_SCALE, 1.0, BAIT_GLOW_REST_SCALE)
+
+	var mat    := ShaderMaterial.new()
+	mat.shader  = BAIT_GLOW_SHADER
+	mat.set_shader_parameter("opacity", BAIT_GLOW_REST_OPACITY)
+	mi.material_override = mat
+
+	_bait_glow_mat = mat
+	_bait_glow_mi  = mi
+	add_child(mi)
+
+
 ## Creates the trap's placeholder visual. All four trap types get multi-part
 ## procedural meshes matched to their real-world appearance.
 func _spawn_visual(_color: Color) -> void:

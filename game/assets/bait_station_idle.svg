@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Bait Station grate — transparent background so the glow plane shows through the gaps -->
+  <!-- Only the metal bars are drawn; the spaces between are transparent -->
+
+  <!-- Clipping mask to keep bars inside the grate area -->
+  <defs>
+    <clipPath id="grate_area">
+      <rect x="16" y="16" width="96" height="96" rx="4"/>
+    </clipPath>
+  </defs>
+
+  <!-- Diagonal bars at +45° -->
+  <g clip-path="url(#grate_area)" stroke="#302C26" stroke-width="5" stroke-linecap="square">
+    <line x1="20" y1="42" x2="42" y2="20"/>
+    <line x1="20" y1="64" x2="64" y2="20"/>
+    <line x1="20" y1="86" x2="86" y2="20"/>
+    <line x1="20" y1="108" x2="108" y2="20"/>
+    <line x1="42" y1="108" x2="108" y2="42"/>
+    <line x1="64" y1="108" x2="108" y2="64"/>
+    <line x1="86" y1="108" x2="108" y2="86"/>
+  </g>
+  <!-- Diagonal bars at -45° -->
+  <g clip-path="url(#grate_area)" stroke="#302C26" stroke-width="5" stroke-linecap="square">
+    <line x1="86" y1="20" x2="108" y2="42"/>
+    <line x1="64" y1="20" x2="108" y2="64"/>
+    <line x1="42" y1="20" x2="108" y2="86"/>
+    <line x1="20" y1="20" x2="108" y2="108"/>
+    <line x1="20" y1="42" x2="86" y2="108"/>
+    <line x1="20" y1="64" x2="64" y2="108"/>
+    <line x1="20" y1="86" x2="42" y2="108"/>
+  </g>
+
+  <!-- Outer frame bars (opaque — drawn last so they cover bar ends cleanly) -->
+  <rect x="16" y="16" width="96" height="8"  rx="3" fill="#282420"/>
+  <rect x="16" y="104" width="96" height="8" rx="3" fill="#282420"/>
+  <rect x="16" y="16" width="8"  height="96" rx="3" fill="#282420"/>
+  <rect x="104" y="16" width="8" height="96" rx="3" fill="#282420"/>
+
+  <!-- Frame corner bolts -->
+  <circle cx="22"  cy="22"  r="3" fill="#484038"/>
+  <circle cx="106" cy="22"  r="3" fill="#484038"/>
+  <circle cx="22"  cy="106" r="3" fill="#484038"/>
+  <circle cx="106" cy="106" r="3" fill="#484038"/>
+
+  <!-- Subtle frame specular -->
+  <ellipse cx="34" cy="20" rx="10" ry="3" fill="white" opacity="0.10"/>
+</svg>

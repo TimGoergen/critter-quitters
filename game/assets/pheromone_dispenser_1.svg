@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Pheromone Dispenser — sprinkler from above, frame 1 (arms at N/E/S/W) -->
+  <!-- Static base plate -->
+  <circle cx="64" cy="64" r="46" fill="#7A3000"/>
+  <circle cx="64" cy="64" r="42" fill="#C84E00"/>
+  <!-- Rotating assembly — 0° -->
+  <g transform="rotate(0, 64, 64)">
+    <!-- North arm -->
+    <rect x="60" y="26" width="8" height="22" rx="4" fill="#E86010"/>
+    <circle cx="64" cy="22" r="7" fill="#FF9030"/>
+    <!-- East arm -->
+    <rect x="80" y="60" width="22" height="8" rx="4" fill="#E86010"/>
+    <circle cx="106" cy="64" r="7" fill="#FF9030"/>
+    <!-- South arm -->
+    <rect x="60" y="80" width="8" height="22" rx="4" fill="#E86010"/>
+    <circle cx="64" cy="106" r="7" fill="#FF9030"/>
+    <!-- West arm -->
+    <rect x="26" y="60" width="22" height="8" rx="4" fill="#E86010"/>
+    <circle cx="22" cy="64" r="7" fill="#FF9030"/>
+    <!-- Hub -->
+    <circle cx="64" cy="64" r="16" fill="#F07018"/>
+    <circle cx="64" cy="64" r="8" fill="#FFA040"/>
+    <!-- Marker dot on N arm to show rotation -->
+    <circle cx="64" cy="20" r="3" fill="#FFEE88"/>
+  </g>
+  <!-- Hub specular -->
+  <ellipse cx="60" cy="60" rx="5" ry="3.5" fill="white" opacity="0.30"/>
+</svg>

@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Air Freshener — frame 4 (nozzle retracting, residual mist) -->
+  <!-- Fading mist remnant -->
+  <circle cx="64" cy="6" r="6" fill="#D8EEFF" opacity="0.40"/>
+  <circle cx="56" cy="8" r="4" fill="#D8EEFF" opacity="0.30"/>
+  <circle cx="72" cy="8" r="4" fill="#D8EEFF" opacity="0.30"/>
+  <!-- Can body (same) -->
+  <ellipse cx="64" cy="68" rx="38" ry="46" fill="#7080A0"/>
+  <ellipse cx="64" cy="68" rx="34" ry="42" fill="#C8DCF4"/>
+  <ellipse cx="64" cy="68" rx="34" ry="28" fill="#A8C4E8"/>
+  <ellipse cx="64" cy="68" rx="30" ry="6" fill="#8AAED8" opacity="0.70"/>
+  <ellipse cx="64" cy="60" rx="28" ry="12" fill="#E8F4FF" opacity="0.60"/>
+  <ellipse cx="64" cy="28" rx="16" ry="12" fill="#8898B8"/>
+  <ellipse cx="64" cy="28" rx="12" ry="8" fill="#9AAAC8"/>
+  <circle cx="64" cy="24" r="6" fill="#C8D8F0"/>
+  <!-- Nozzle tip — returning to rest, slightly extended -->
+  <ellipse cx="64" cy="12" rx="5" ry="7" fill="#707888"/>
+  <ellipse cx="52" cy="38" rx="8" ry="12" fill="white" opacity="0.30"/>
+  <ellipse cx="58" cy="24" rx="4" ry="2.5" fill="white" opacity="0.40"/>
+</svg>
