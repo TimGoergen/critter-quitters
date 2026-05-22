@@ -42,7 +42,7 @@ const TAILPIPE_IMG_Y := 450.0
 # Business card scales to 40% of viewport width, measured against the content
 # rect (via get_used_rect) so transparent padding in the PNG doesn't throw off
 # the size or position calculation.
-const CARD_WIDTH_FRAC := 0.40
+const CARD_WIDTH_FRAC := 0.32
 
 var _van:       Sprite2D
 var _card:      Sprite2D
