@@ -60,14 +60,14 @@ func _on_viewport_resized() -> void:
 		return
 	var vp      := get_viewport().get_visible_rect().size
 	var scale_f := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
-	_van.scale    = Vector2(scale_f, scale_f)
+	_van.scale    = Vector2(scale_f * 1.25, scale_f * 1.25)
 	_van.position = Vector2(vp.x * 0.667, vp.y * 0.40)
 
 	if is_instance_valid(_card):
 		# region_rect.size is the content-only dimensions (padding excluded).
 		var card_scale := (vp.x * CARD_WIDTH_FRAC) / _card.region_rect.size.x
 		_card.scale    = Vector2(card_scale, card_scale)
-		_card.position = Vector2(vp.x * 0.22, vp.y * 0.40)
+		_card.position = Vector2(vp.x * 0.22, vp.y * 0.32)
 
 
 func _build_ui() -> void:
@@ -107,7 +107,7 @@ func _build_ui() -> void:
 	_van.texture  = van_tex
 	_van.centered = true
 	var scale_f   := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
-	_van.scale    = Vector2(scale_f, scale_f)
+	_van.scale    = Vector2(scale_f * 1.25, scale_f * 1.25)
 	_van.position = Vector2(vp.x * 0.667, vp.y * 0.40)
 	add_child(_van)
 
@@ -117,16 +117,16 @@ func _build_ui() -> void:
 	_start_btn = _make_icon_button("Start Buggin'", "res://assets/uninfested.png", true)
 	_start_btn.anchor_left   = 0.25
 	_start_btn.anchor_right  = 0.48
-	_start_btn.anchor_top    = 0.82
-	_start_btn.anchor_bottom = 0.92
+	_start_btn.anchor_top    = 0.74
+	_start_btn.anchor_bottom = 0.84
 	_start_btn.pressed.connect(_on_start_pressed)
 	add_child(_start_btn)
 
 	_quit_btn = _make_icon_button("Bug Out", "res://assets/infestation_level.png", false)
 	_quit_btn.anchor_left   = 0.52
 	_quit_btn.anchor_right  = 0.75
-	_quit_btn.anchor_top    = 0.82
-	_quit_btn.anchor_bottom = 0.92
+	_quit_btn.anchor_top    = 0.74
+	_quit_btn.anchor_bottom = 0.84
 	_quit_btn.pressed.connect(_on_quit_pressed)
 	add_child(_quit_btn)
 
