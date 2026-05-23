@@ -113,10 +113,14 @@ const BAIT_POISON_DURATION_LEVELS: Array[float] = [3.0, 4.5, 6.0, 8.0]
 
 ## Bait Station glow plane appearance at rest (between pulses).
 ## The plane is always visible at this subdued level so the trap reads as dangerous.
-## On each pulse it expands to full scale (1.0) and full opacity (1.0), then
-## returns here.
+## On each pulse it expands to BAIT_GLOW_FIRE_SCALE and full opacity, then returns here.
+##
+## Scale math: glow plane mesh = _range * 2.0 = 7.0 units. Trap footprint ≈ 1.9 units.
+##   Rest  → match footprint:      1.9 / 7.0 ≈ 0.27
+##   Fire  → 150% of footprint:  2.85 / 7.0 ≈ 0.41
 const BAIT_GLOW_REST_OPACITY: float = 0.25   # dim persistent glow at zero stars
-const BAIT_GLOW_REST_SCALE:   float = 0.50   # roughly footprint-sized at rest
+const BAIT_GLOW_REST_SCALE:   float = 0.27   # matches trap footprint at rest
+const BAIT_GLOW_FIRE_SCALE:   float = 0.41   # ~50% larger than footprint on pulse
 
 ## Resting glow opacity indexed by number of maxed stats (0â€“3).
 ## As the player upgrades the Bait Station, the persistent red glow brightens to
@@ -1431,8 +1435,8 @@ func _spawn_background(color: Color) -> StandardMaterial3D:
 
 
 ## Spawns the radial glow plane that sits beneath the Bait Station grate.
-## The plane fills the trap's full range diameter at scale 1.0 and is held at
-## BAIT_GLOW_REST_SCALE at rest; _play_bait_animation() expands it to full on each pulse.
+## The plane mesh is sized to the full range diameter; it is held at BAIT_GLOW_REST_SCALE
+## (≈ footprint size) at rest and expands to BAIT_GLOW_FIRE_SCALE (≈ 150% footprint) on each pulse.
 ## The shader's "opacity" parameter drives brightness so the radial gradient shape
 ## stays intact while only the intensity changes.
 func _spawn_bait_glow_plane() -> void:
@@ -1610,13 +1614,13 @@ func _play_bait_animation() -> void:
 	if _visual_material != null:
 		_visual_material.albedo_texture = _trap_frames[1]
 
-	# Expand from resting scale to full range coverage and brighten simultaneously.
+	# Expand from resting scale to fire scale and brighten simultaneously.
 	# set_parallel(true) lets both tweens run at the same time on the same Tween object.
 	var expand := create_tween().set_parallel(true)
 	expand.tween_property(_bait_glow_mat, "shader_parameter/opacity",
 		1.0, 0.12).set_ease(Tween.EASE_OUT)
 	expand.tween_property(_bait_glow_mi, "scale",
-		Vector3.ONE, 0.12).set_ease(Tween.EASE_OUT)
+		Vector3(BAIT_GLOW_FIRE_SCALE, 1.0, BAIT_GLOW_FIRE_SCALE), 0.12).set_ease(Tween.EASE_OUT)
 	await expand.finished
 
 	if not is_inside_tree():
