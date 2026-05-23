@@ -1,18 +1,123 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="128"
+   height="128"
+   viewBox="0 0 128 128"
+   version="1.1"
+   id="svg10"
+   sodipodi:docname="cash_register_4.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs10" />
+  <sodipodi:namedview
+     id="namedview10"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="6.3046875"
+     inkscape:cx="64"
+     inkscape:cy="63.920694"
+     inkscape:window-width="958"
+     inkscape:window-height="1000"
+     inkscape:window-x="2873"
+     inkscape:window-y="0"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg10" />
   <!-- Cash Register — frame 4 (B rotated 270°) -->
-  <circle cx="64" cy="66" r="48" fill="#186028"/>
-  <circle cx="64" cy="66" r="44" fill="#28A040"/>
-  <circle cx="64" cy="64" r="36" fill="#229038"/>
-  <circle cx="64" cy="64" r="32" fill="#30B048"/>
-  <circle cx="64" cy="62" r="26" fill="#1A7830"/>
-  <circle cx="64" cy="62" r="22" fill="#40C060"/>
-  <circle cx="64" cy="62" r="25" fill="none" stroke="#188030" stroke-width="2" stroke-dasharray="4,3"/>
-  <g transform="rotate(270, 64, 62)">
-    <circle cx="64" cy="62" r="14" fill="#228840" opacity="0.80"/>
-    <text x="64" y="67" text-anchor="middle" font-family="Arial Black, sans-serif" font-weight="900"
-          font-size="16" fill="#106020">B</text>
-    <circle cx="64" cy="50" r="3" fill="#FFEE20"/>
+  <circle
+     cx="64"
+     cy="66"
+     r="48"
+     fill="#186028"
+     id="circle1" />
+  <circle
+     cx="64"
+     cy="66"
+     r="44"
+     fill="#28A040"
+     id="circle2" />
+  <circle
+     cx="64"
+     cy="64"
+     r="36"
+     fill="#229038"
+     id="circle3"
+     style="fill:#bfc62a;fill-opacity:1" />
+  <circle
+     cx="64"
+     cy="64"
+     r="32"
+     fill="#30B048"
+     id="circle4" />
+  <circle
+     cx="64"
+     cy="62"
+     r="26"
+     fill="#1A7830"
+     id="circle5" />
+  <circle
+     cx="64"
+     cy="62"
+     r="22"
+     fill="#40C060"
+     id="circle6" />
+  <circle
+     cx="64"
+     cy="62"
+     r="25"
+     fill="none"
+     stroke="#188030"
+     stroke-width="2"
+     stroke-dasharray="4,3"
+     id="circle7" />
+  <g
+     transform="rotate(270, 64, 62)"
+     id="g9">
+    <circle
+       cx="64"
+       cy="62"
+       r="14"
+       fill="#228840"
+       opacity="0.80"
+       id="circle8" />
+    <text
+       x="64"
+       y="67"
+       text-anchor="middle"
+       font-family="Arial Black, sans-serif"
+       font-weight="900"
+       font-size="16"
+       fill="#106020"
+       id="text8">B</text>
+    <circle
+       cx="64"
+       cy="50"
+       r="3"
+       fill="#FFEE20"
+       id="circle9" />
   </g>
-  <ellipse cx="50" cy="48" rx="8" ry="5" fill="white" opacity="0.22"/>
-  <ellipse cx="56" cy="54" rx="6" ry="3.5" fill="white" opacity="0.35"/>
+  <ellipse
+     cx="50"
+     cy="48"
+     rx="8"
+     ry="5"
+     fill="white"
+     opacity="0.22"
+     id="ellipse9" />
+  <ellipse
+     cx="56"
+     cy="54"
+     rx="6"
+     ry="3.5"
+     fill="white"
+     opacity="0.35"
+     id="ellipse10" />
 </svg>

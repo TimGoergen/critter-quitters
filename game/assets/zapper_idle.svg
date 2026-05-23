@@ -9,10 +9,33 @@
    inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns:xlink="http://www.w3.org/1999/xlink"
    xmlns="http://www.w3.org/2000/svg"
    xmlns:svg="http://www.w3.org/2000/svg">
   <defs
-     id="defs16" />
+     id="defs16">
+    <linearGradient
+       id="linearGradient1"
+       inkscape:collect="always">
+      <stop
+         style="stop-color:#1a5acc;stop-opacity:1;"
+         offset="0"
+         id="stop1" />
+      <stop
+         style="stop-color:#1a5acc;stop-opacity:0;"
+         offset="1"
+         id="stop2" />
+    </linearGradient>
+    <linearGradient
+       inkscape:collect="always"
+       xlink:href="#linearGradient1"
+       id="linearGradient2"
+       x1="63.999992"
+       y1="53.39999"
+       x2="63.999992"
+       y2="74.599998"
+       gradientUnits="userSpaceOnUse" />
+  </defs>
   <sodipodi:namedview
      id="namedview16"
      pagecolor="#ffffff"
@@ -194,7 +217,7 @@
      ry="14"
      fill="#C0D8FF"
      id="ellipse14"
-     style="fill:#1a5acc;fill-opacity:1;stroke:#fafcff;stroke-opacity:1;stroke-width:0.6;stroke-dasharray:none" />
+     style="fill:url(#linearGradient2);fill-opacity:1;stroke:#fafcff;stroke-opacity:1;stroke-width:1.2;stroke-dasharray:none" />
   <!-- UV tube highlight -->
   <ellipse
      cx="61"
