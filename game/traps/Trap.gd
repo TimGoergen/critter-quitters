@@ -62,10 +62,10 @@ enum TrapType { SNAP_TRAP, ZAPPER, FOGGER, GLUE_BOARD, FLY_STRIP_LAUNCHER, BAIT_
 ##   pulse_interval   â€” BAIT_STATION only: seconds between damage pulses
 ##   poison_*         â€” BAIT_STATION only: poison DoT applied after each pulse
 const STATS := {
-	TrapType.SNAP_TRAP:  { "damage": 5.0,  "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.52, 0.27, 0.08) },
+	TrapType.SNAP_TRAP:  { "damage": 5.0,  "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.78, 0.52, 0.22) },
 	TrapType.ZAPPER:     { "damage": 30.0, "range": 9.6, "cooldown": 2.5, "cost": 75, "color": Color(0.10, 0.50, 1.00) },
 	TrapType.FOGGER:     { "damage": 3.0,  "range": 4.0, "cooldown": 2.2, "cost": 60, "color": Color(0.35, 0.88, 0.18) },
-	TrapType.GLUE_BOARD: { "damage": 0.20, "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(0.92, 0.89, 0.78) },
+	TrapType.GLUE_BOARD: { "damage": 0.20, "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(1.00, 0.58, 0.14) },
 	TrapType.FLY_STRIP_LAUNCHER: {
 		"damage": 2.0, "range": 5.0, "cooldown": 5.0, "cost": 65, "color": Color(0.85, 0.20, 0.65),
 		"cloud_duration": 3.0, "adhesion": 0.30,
@@ -212,6 +212,7 @@ var _is_hovered:      bool              = false
 var _range_indicator: Node3D           = null
 var _range_fill_mat:  StandardMaterial3D = null   # stored so color can be updated without rebuild
 var _range_ring_mat:  StandardMaterial3D = null
+var _range_ring_mi:   MeshInstance3D     = null   # stored so the mesh can be swapped for peek mode
 var _hover_area:      Area3D = null
 # When true, the indicator stays visible regardless of hover state (upgrade panel open).
 var _indicator_pinned: bool  = false
@@ -1036,7 +1037,7 @@ func _spawn_star_display() -> void:
 	var sizes := [88, 66, 66]   # [center, left, right] font sizes
 	for sz: int in sizes:
 		var lbl                  := Label3D.new()
-		lbl.font                  = UIFonts.primary_bold()
+		lbl.font                  = UIFonts.symbols()
 		lbl.font_size             = sz
 		lbl.pixel_size            = 0.009
 		lbl.modulate              = Color(1.0, 0.92, 0.30, 1.0)
@@ -1155,6 +1156,50 @@ func hide_range_indicator() -> void:
 	_set_range_indicator_dimmed(false)   # restore white for next time it appears
 
 
+## Shows the range indicator in peek mode: brighter fill/ring and a thicker ring border.
+## Called from TrapUpgradePanel._on_peek_down() for the selected trap and its active boosts.
+func show_range_indicator_peek() -> void:
+	_indicator_pinned = true
+	if _range_indicator != null:
+		_range_indicator.visible = true
+	_set_range_indicator_dimmed(false)
+	_set_range_indicator_peek(true)
+
+
+## Reverts the selected trap's indicator from peek mode back to normal pinned appearance.
+## Does not hide the indicator — the panel keeps it visible until it closes.
+func hide_range_indicator_peek() -> void:
+	_set_range_indicator_peek(false)
+
+
+## Sets the footprint outline bars to white for the peek-gesture highlight.
+func show_peek_outline() -> void:
+	for mat: StandardMaterial3D in _outline_mats:
+		mat.albedo_color = Color.WHITE
+
+
+## Restores the footprint outline bars to their normal upgrade-level tint.
+func hide_peek_outline() -> void:
+	_update_star_display()
+
+
+## Applies or removes peek-mode style: brighter alpha and a thicker ring border.
+## The white/gray tint is managed separately by _set_range_indicator_dimmed.
+func _set_range_indicator_peek(peeking: bool) -> void:
+	if _range_fill_mat == null or _range_ring_mat == null:
+		return
+	if peeking:
+		_range_fill_mat.albedo_color.a = 0.07
+		_range_ring_mat.albedo_color.a = 1.00
+		if _range_ring_mi != null:
+			_range_ring_mi.mesh = _make_ring_mesh(_range, 0.22)
+	else:
+		_range_fill_mat.albedo_color.a = 0.025
+		_range_ring_mat.albedo_color.a = 0.55
+		if _range_ring_mi != null:
+			_range_ring_mi.mesh = _make_ring_mesh(_range, 0.10)
+
+
 ## Applies or removes the gray tint on the range indicator's materials.
 func _set_range_indicator_dimmed(dimmed: bool) -> void:
 	if _range_fill_mat == null or _range_ring_mat == null:
@@ -1224,6 +1269,7 @@ func _spawn_range_indicator() -> void:
 	_range_ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_range_ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	ring_mi.material_override = _range_ring_mat
+	_range_ring_mi = ring_mi
 	_range_indicator.add_child(ring_mi)
 
 	add_child(_range_indicator)
@@ -1408,18 +1454,18 @@ func _spawn_bait_glow_plane() -> void:
 	add_child(mi)
 
 
-## Creates the trap's placeholder visual. All four trap types get multi-part
-## procedural meshes matched to their real-world appearance.
+## Sets _base_color from the per-type identity colour, then builds the background
+## plate, drop-shadow, and footprint outline that frame the SVG sprite quad.
 func _spawn_visual(_color: Color) -> void:
 	# Resolve the canonical per-type color so shadow, background, and outline stay in sync.
 	var c: Color
 	match _trap_type:
-		TrapType.SNAP_TRAP:          c = Color(0.90, 0.70, 0.38)
-		TrapType.ZAPPER:             c = Color(0.28, 0.62, 0.96)
-		TrapType.FOGGER:             c = Color(0.46, 0.96, 0.38)
-		TrapType.GLUE_BOARD:         c = Color(0.96, 0.82, 0.34)
-		TrapType.FLY_STRIP_LAUNCHER: c = Color(0.92, 0.30, 0.78)
-		TrapType.BAIT_STATION:       c = Color(0.52, 0.30, 0.65)
+		TrapType.SNAP_TRAP:          c = Color(0.78, 0.52, 0.22)   # warm wood brown (#9E6628 family)
+		TrapType.ZAPPER:             c = Color(0.28, 0.62, 0.96)   # electric blue (#1A5ACC elevated)
+		TrapType.FOGGER:             c = Color(0.46, 0.96, 0.38)   # vivid green (#4ACC1E elevated)
+		TrapType.GLUE_BOARD:         c = Color(1.00, 0.58, 0.14)   # orange-amber (#ff7a13 family)
+		TrapType.FLY_STRIP_LAUNCHER: c = Color(0.92, 0.30, 0.78)   # bright magenta (#E040C0 family)
+		TrapType.BAIT_STATION:       c = Color(0.52, 0.30, 0.65)   # purple glow (shows through transparent grate)
 		_:                           c = Color(0.80, 0.80, 0.80)
 	_base_color = c
 

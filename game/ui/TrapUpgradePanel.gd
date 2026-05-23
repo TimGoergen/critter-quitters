@@ -548,20 +548,27 @@ func _on_btn_e() -> void:
 func _on_peek_down() -> void:
 	_bg.modulate.a     = 0.18
 	_border.modulate.a = 0.18
-	# Show each buffing boost's range circle in gray so the player can see
-	# which boosts are contributing to this trap and how far they reach.
+	# Highlight the selected trap — brighter range circle and white footprint outline.
+	_trap.show_range_indicator_peek()
+	_trap.show_peek_outline()
+	# Show each buffing boost with a subdued range circle and white footprint outline.
 	_peek_boost_sources = _trap.get_boost_source_nodes()
 	for boost in _peek_boost_sources:
 		if is_instance_valid(boost):
-			boost.show_range_indicator(true)   # true = dimmed/gray
+			boost.show_range_indicator_peek_dim()
+			boost.show_peek_outline()
 
 
 func _on_peek_up() -> void:
 	_bg.modulate.a     = 1.0
 	_border.modulate.a = 1.0
+	# Restore the selected trap's range circle and outline to normal pinned state.
+	_trap.hide_range_indicator_peek()
+	_trap.hide_peek_outline()
 	for boost in _peek_boost_sources:
 		if is_instance_valid(boost):
 			boost.hide_range_indicator()
+			boost.hide_peek_outline()
 	_peek_boost_sources.clear()
 
 

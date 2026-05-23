@@ -94,7 +94,7 @@ func _build_ui() -> void:
 	bg.color = COLOR_BG
 	add_child(bg)
 
-	# --- Business card pile (added before van so all cards render behind it) ---
+	# --- Business card pile ---
 	# Four cards with varying rotations and small position offsets to simulate a
 	# dropped pile. region_enabled clips to get_used_rect() so transparent PNG
 	# padding is excluded from scale and position math.
@@ -117,14 +117,15 @@ func _build_ui() -> void:
 		_cards.append(c)
 		add_child(c)
 
-	# --- Van illustration (added after card so it renders in front of it) ---
-	# "Contain" scale: largest size where the full image fits on screen.
-	# centered = true (Godot default) means the texture is drawn with its
-	# centre at `position`, so the sprite anchors to its visual midpoint.
+	# --- Van illustration ---
+	# z_index = 1 guarantees the van renders above all z_index = 0 nodes
+	# (cards, exhaust puffs) regardless of scene-tree position, including
+	# while it drives left over the card pile during the exit animation.
 	var van_tex: Texture2D = load("res://assets/van.png")
 	_van          = Sprite2D.new()
 	_van.texture  = van_tex
 	_van.centered = true
+	_van.z_index  = 1
 	var scale_f   := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
 	_van.scale    = Vector2(scale_f * 1.375, scale_f * 1.375)
 	_van.position = Vector2(vp.x * 0.65, vp.y * 0.40)
@@ -253,7 +254,6 @@ func _spawn_exhaust_puffs() -> void:
 		)
 		puff.max_radius = randf_range(76.5, 103.5)   # base 90, ±15%
 		add_child(puff)
-		move_child(puff, _van.get_index())
 
 
 func _on_van_exited() -> void:

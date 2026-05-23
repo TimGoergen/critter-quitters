@@ -172,6 +172,7 @@ var _indicator_pinned: bool              = false
 var _range_indicator:  Node3D           = null
 var _range_fill_mat:   StandardMaterial3D = null
 var _range_ring_mat:   StandardMaterial3D = null
+var _range_ring_mi:    MeshInstance3D     = null   # stored so the mesh can be swapped for peek mode
 
 # Star display — one Label3D per possible star (max 3), mirrors Trap._star_labels.
 var _star_labels:  Array[Label3D]            = []
@@ -597,6 +598,59 @@ func hide_decorators() -> void:
 		node.hide()
 
 
+## Shows the range indicator in peek mode: brighter fill/ring and a thicker ring border.
+## Called from TrapUpgradePanel._on_peek_down() for each boost that is buffing the selected trap.
+func show_range_indicator_peek() -> void:
+	_indicator_pinned = true
+	if _range_indicator != null:
+		_range_indicator.visible = true
+	_set_range_indicator_dimmed(false)
+	_set_range_indicator_peek(true)
+
+
+## Shows the range indicator in a subdued peek style — gray tint, moderate alpha,
+## slightly thicker ring. Used when a trap's upgrade panel peek is active so the
+## boost circles are clearly subordinate to the selected trap's highlighted circle.
+func show_range_indicator_peek_dim() -> void:
+	_indicator_pinned = true
+	if _range_indicator != null:
+		_range_indicator.visible = true
+	if _range_fill_mat == null or _range_ring_mat == null:
+		return
+	_range_fill_mat.albedo_color = Color(0.62, 0.62, 0.62, 0.04)
+	_range_ring_mat.albedo_color = Color(0.62, 0.62, 0.62, 0.65)
+	if _range_ring_mi != null:
+		_range_ring_mi.mesh = _make_ring_mesh(_range, 0.15)
+
+
+## Applies or removes peek-mode style: brighter alpha and a thicker ring border.
+## The white/gray tint is managed separately by _set_range_indicator_dimmed.
+func _set_range_indicator_peek(peeking: bool) -> void:
+	if _range_fill_mat == null or _range_ring_mat == null:
+		return
+	if peeking:
+		_range_fill_mat.albedo_color.a = 0.07
+		_range_ring_mat.albedo_color.a = 1.00
+		if _range_ring_mi != null:
+			_range_ring_mi.mesh = _make_ring_mesh(_range, 0.22)
+	else:
+		_range_fill_mat.albedo_color.a = 0.025
+		_range_ring_mat.albedo_color.a = 0.55
+		if _range_ring_mi != null:
+			_range_ring_mi.mesh = _make_ring_mesh(_range, 0.10)
+
+
+## Sets the footprint outline bars to white for the peek-gesture highlight.
+func show_peek_outline() -> void:
+	for mat: StandardMaterial3D in _outline_mats:
+		mat.albedo_color = Color.WHITE
+
+
+## Restores the footprint outline bars to their normal upgrade-level tint.
+func hide_peek_outline() -> void:
+	_update_star_display()
+
+
 ## Applies or removes the gray tint on the range indicator materials.
 func _set_range_indicator_dimmed(dimmed: bool) -> void:
 	if _range_fill_mat == null or _range_ring_mat == null:
@@ -652,6 +706,7 @@ func _spawn_range_indicator() -> void:
 	_range_ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	_range_ring_mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
 	ring_mi.material_override = _range_ring_mat
+	_range_ring_mi = ring_mi
 	_range_indicator.add_child(ring_mi)
 
 	add_child(_range_indicator)
@@ -951,7 +1006,7 @@ func _spawn_svg_boost_visual(frames: Array[Texture2D]) -> void:
 	var quad := QuadMesh.new()
 	quad.size = Vector2(fp, fp)
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color(2.0, 2.0, 2.0, 1.0)   # HDR boost matches Enemy.gd and Trap.gd
+	mat.albedo_color = Color.WHITE
 	mat.albedo_texture = frames[0]
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA

@@ -54,7 +54,7 @@ const TRAP_BRAND: Array = [
 	{"normal": Color(0.52, 0.20, 0.07), "hover": Color(0.64, 0.26, 0.09), "sel": Color(0.68, 0.28, 0.10), "badge": "PRO GRADE"},
 	{"normal": Color(0.07, 0.25, 0.60), "hover": Color(0.10, 0.33, 0.76), "sel": Color(0.09, 0.30, 0.68), "badge": "+-1000V"},
 	{"normal": Color(0.09, 0.38, 0.18), "hover": Color(0.12, 0.48, 0.24), "sel": Color(0.11, 0.44, 0.20), "badge": "SAFE*"},
-	{"normal": Color(0.50, 0.34, 0.05), "hover": Color(0.62, 0.43, 0.07), "sel": Color(0.57, 0.38, 0.06), "badge": "STICKY"},
+	{"normal": Color(0.56, 0.27, 0.03), "hover": Color(0.70, 0.34, 0.04), "sel": Color(0.63, 0.30, 0.04), "badge": "STICKY"},
 	{"normal": Color(0.52, 0.10, 0.38), "hover": Color(0.66, 0.14, 0.48), "sel": Color(0.60, 0.12, 0.44), "badge": "FLYAWAY"},
 	{"normal": Color(0.25, 0.12, 0.32), "hover": Color(0.32, 0.16, 0.40), "sel": Color(0.29, 0.14, 0.37), "badge": "TOXIC"},
 ]
@@ -1609,16 +1609,6 @@ func _refresh_trap_selector() -> void:
 	for i in range(_boost_icon_controls.size()):
 		_boost_icon_controls[i].modulate = Color(1, 1, 1, 1) if _can_afford_boost(i) else COLOR_UNAFFORDABLE_MODULATE
 
-
-## Returns the path where a trap's button image should live.
-## The file may not exist yet — callers check ResourceLoader.exists() first.
-func _trap_image_path(type: int) -> String:
-	match type:
-		0: return "res://assets/traps/snap_trap.png"
-		1: return "res://assets/traps/zapper.png"
-		2: return "res://assets/traps/fogger.png"
-		3: return "res://assets/traps/glue_board.png"
-	return ""
 
 
 ## Builds a full-width trap row: brand-colored panel spanning the entire left-panel

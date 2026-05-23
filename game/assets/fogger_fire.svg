@@ -1,36 +1,207 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="128"
+   height="128"
+   viewBox="0 0 128 128"
+   version="1.1"
+   id="svg19"
+   sodipodi:docname="fogger_fire.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs19" />
+  <sodipodi:namedview
+     id="namedview19"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="6.3046875"
+     inkscape:cx="64.079306"
+     inkscape:cy="27.519207"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg19" />
   <!-- Spray cloud puffs emanating from nozzle (drawn first, behind body) -->
-  <circle cx="60" cy="10" r="10" fill="#EEFDE0" opacity="0.72"/>
-  <circle cx="72" cy="7" r="8.5" fill="#F4FEF0" opacity="0.68"/>
-  <circle cx="48" cy="13" r="8" fill="#EEFDE0" opacity="0.62"/>
-  <circle cx="82" cy="12" r="8" fill="#F4FEF0" opacity="0.62"/>
-  <circle cx="54" cy="3" r="6" fill="#F8FFF4" opacity="0.58"/>
-  <circle cx="68" cy="2" r="5.5" fill="#F8FFF4" opacity="0.52"/>
-  <circle cx="38" cy="18" r="6" fill="#EEFDE0" opacity="0.50"/>
-  <circle cx="90" cy="17" r="6" fill="#EEFDE0" opacity="0.50"/>
+  <circle
+     cx="60"
+     cy="10"
+     r="10"
+     fill="#EEFDE0"
+     opacity="0.72"
+     id="circle1"
+     style="fill:#b3dc66;fill-opacity:1" />
+  <circle
+     cx="72"
+     cy="7"
+     r="8.5"
+     fill="#F4FEF0"
+     opacity="0.68"
+     id="circle2"
+     style="fill:#b3c460;fill-opacity:1" />
+  <circle
+     cx="48"
+     cy="13"
+     r="8"
+     fill="#EEFDE0"
+     opacity="0.62"
+     id="circle3"
+     style="fill:#b3c460;fill-opacity:1" />
+  <circle
+     cx="82"
+     cy="12"
+     r="8"
+     fill="#F4FEF0"
+     opacity="0.62"
+     id="circle4"
+     style="fill:#b3c460;fill-opacity:1" />
+  <circle
+     cx="54"
+     cy="3"
+     r="6"
+     fill="#F8FFF4"
+     opacity="0.58"
+     id="circle5"
+     style="fill:#b3c460;fill-opacity:1" />
+  <circle
+     cx="68"
+     cy="2"
+     r="5.5"
+     fill="#F8FFF4"
+     opacity="0.52"
+     id="circle6"
+     style="fill:#b3dc66;fill-opacity:1" />
+  <circle
+     cx="38"
+     cy="18"
+     r="6"
+     fill="#EEFDE0"
+     opacity="0.50"
+     id="circle7"
+     style="fill:#aae078;fill-opacity:1" />
+  <circle
+     cx="90"
+     cy="17"
+     r="6"
+     fill="#EEFDE0"
+     opacity="0.50"
+     id="circle8"
+     style="fill:#76a032;fill-opacity:1" />
   <!-- Outer body ring — dark green border -->
-  <circle cx="64" cy="64" r="46" fill="#1E6010"/>
+  <circle
+     cx="64"
+     cy="64"
+     r="46"
+     fill="#1E6010"
+     id="circle9" />
   <!-- Body — slightly squished/recoil effect, slightly wider green -->
-  <circle cx="64" cy="64" r="42" fill="#4ACC1E"/>
+  <circle
+     cx="64"
+     cy="64"
+     r="42"
+     fill="#4ACC1E"
+     id="circle10"
+     style="fill:#3cf100;fill-opacity:1" />
   <!-- Amber label band -->
-  <circle cx="64" cy="64" r="32" fill="#E8B800"/>
+  <circle
+     cx="64"
+     cy="64"
+     r="32"
+     fill="#E8B800"
+     id="circle11"
+     style="fill:#e8cf00;fill-opacity:1" />
   <!-- Gray shoulder dome -->
-  <circle cx="64" cy="64" r="22" fill="#707078"/>
+  <circle
+     cx="64"
+     cy="64"
+     r="22"
+     fill="#707078"
+     id="circle12" />
   <!-- Silver nozzle cap -->
-  <circle cx="64" cy="64" r="13" fill="#B8B8C0"/>
+  <circle
+     cx="64"
+     cy="64"
+     r="13"
+     fill="#B8B8C0"
+     id="circle13"
+     style="fill:#39a53a;fill-opacity:1" />
   <!-- Nozzle center -->
-  <circle cx="64" cy="64" r="5" fill="#888890"/>
+  <circle
+     cx="64"
+     cy="64"
+     r="5"
+     fill="#888890"
+     id="circle14"
+     style="fill:#e6e6e6;fill-opacity:1" />
   <!-- Nozzle arm — slightly longer on fire (extended) -->
-  <rect x="62" y="12" width="8" height="24" rx="4" fill="#888890"/>
+  <rect
+     x="62"
+     y="12"
+     width="8"
+     height="24"
+     rx="4"
+     fill="#888890"
+     id="rect14" />
   <!-- Nozzle tip active — brighter orange -->
-  <circle cx="66" cy="14" r="7" fill="#FF8830"/>
-  <circle cx="66" cy="14" r="3.5" fill="#FFAA50"/>
+  <circle
+     cx="66"
+     cy="14"
+     r="7"
+     fill="#FF8830"
+     id="circle15"
+     style="fill:#ff5e30;fill-opacity:1" />
+  <circle
+     cx="66"
+     cy="14"
+     r="3.5"
+     fill="#FFAA50"
+     id="circle16"
+     style="fill:#ffd950;fill-opacity:1" />
   <!-- Inner spray burst from tip -->
-  <circle cx="66" cy="8" r="5" fill="#E0FFD0" opacity="0.80"/>
+  <circle
+     cx="66"
+     cy="8"
+     r="5"
+     fill="#E0FFD0"
+     opacity="0.80"
+     id="circle17"
+     style="fill:#a0dd6c;fill-opacity:1" />
   <!-- Body specular -->
-  <ellipse cx="50" cy="38" rx="9" ry="6" fill="white" opacity="0.22"/>
+  <ellipse
+     cx="50"
+     cy="38"
+     rx="9"
+     ry="6"
+     fill="white"
+     opacity="0.22"
+     id="ellipse17"
+     style="opacity:0.4" />
   <!-- Dome specular -->
-  <ellipse cx="60" cy="57" rx="5" ry="3.5" fill="white" opacity="0.30"/>
+  <ellipse
+     cx="60"
+     cy="57"
+     rx="5"
+     ry="3.5"
+     fill="white"
+     opacity="0.30"
+     id="ellipse18"
+     style="opacity:0.55" />
   <!-- Floor shadow -->
-  <ellipse cx="64" cy="112" rx="30" ry="5" fill="#000000" opacity="0.20"/>
+  <ellipse
+     cx="64"
+     cy="112"
+     rx="30"
+     ry="5"
+     fill="#000000"
+     opacity="0.20"
+     id="ellipse19" />
 </svg>
