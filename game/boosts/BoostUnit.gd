@@ -861,7 +861,7 @@ func _spawn_star_display() -> void:
 	var sizes := [88, 66, 66]   # [center, left, right] font sizes
 	for sz: int in sizes:
 		var lbl                  := Label3D.new()
-		lbl.font                  = UIFonts.primary_bold()
+		lbl.font                  = UIFonts.symbols()   # primary_bold has no ★ glyph
 		lbl.font_size             = sz
 		lbl.pixel_size            = 0.009
 		lbl.modulate              = Color(1.0, 0.92, 0.30, 1.0)
