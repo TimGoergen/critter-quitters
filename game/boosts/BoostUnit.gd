@@ -622,7 +622,7 @@ func show_range_indicator_peek_dim() -> void:
 		_range_indicator.visible = true
 	if _range_fill_mat == null or _range_ring_mat == null:
 		return
-	_range_fill_mat.albedo_color = Color(_base_color.r, _base_color.g, _base_color.b, 0.058)
+	_range_fill_mat.albedo_color = Color(_base_color.r, _base_color.g, _base_color.b, 0.25)
 	_range_ring_mat.albedo_color = Color(_base_color.r, _base_color.g, _base_color.b, 0.94)
 	if _range_ring_mi != null:
 		_range_ring_mi.mesh = _make_ring_mesh(_range, 0.15)
@@ -634,7 +634,7 @@ func _set_range_indicator_peek(peeking: bool) -> void:
 	if _range_fill_mat == null or _range_ring_mat == null:
 		return
 	if peeking:
-		_range_fill_mat.albedo_color.a = 0.07
+		_range_fill_mat.albedo_color.a = 0.25
 		_range_ring_mat.albedo_color.a = 1.00
 		if _range_ring_mi != null:
 			_range_ring_mi.mesh = _make_ring_mesh(_range, 0.22)

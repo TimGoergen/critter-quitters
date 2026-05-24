@@ -1193,7 +1193,7 @@ func _set_range_indicator_peek(peeking: bool) -> void:
 	if _range_fill_mat == null or _range_ring_mat == null:
 		return
 	if peeking:
-		_range_fill_mat.albedo_color.a = 0.084
+		_range_fill_mat.albedo_color.a = 0.25
 		_range_ring_mat.albedo_color.a = 1.00
 		if _range_ring_mi != null:
 			_range_ring_mi.mesh = _make_ring_mesh(_range, 0.22)
