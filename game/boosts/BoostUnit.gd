@@ -588,6 +588,10 @@ func hide_range_indicator() -> void:
 	if _range_indicator != null:
 		_range_indicator.visible = false
 	_set_range_indicator_dimmed(false)
+	# Reset ring thickness in case it was widened by a peek gesture — so the
+	# normal thickness is restored if the indicator is shown again later.
+	if _range_ring_mi != null:
+		_range_ring_mi.mesh = _make_ring_mesh(_range, 0.10)
 
 
 ## Hides the background plate, shadow halo, and footprint outline bars.
@@ -608,17 +612,18 @@ func show_range_indicator_peek() -> void:
 	_set_range_indicator_peek(true)
 
 
-## Shows the range indicator in a subdued peek style — gray tint, moderate alpha,
-## slightly thicker ring. Used when a trap's upgrade panel peek is active so the
-## boost circles are clearly subordinate to the selected trap's highlighted circle.
+## Shows the range indicator in peek style using this boost's identity color.
+## Called from TrapUpgradePanel._on_peek_down() so the player can see which boosts
+## are active and distinguish them by color. Alphas are 20% higher than the previous
+## gray-tinted values (fill 0.048→0.058, ring 0.78→0.94) for better readability.
 func show_range_indicator_peek_dim() -> void:
 	_indicator_pinned = true
 	if _range_indicator != null:
 		_range_indicator.visible = true
 	if _range_fill_mat == null or _range_ring_mat == null:
 		return
-	_range_fill_mat.albedo_color = Color(0.62, 0.62, 0.62, 0.048)
-	_range_ring_mat.albedo_color = Color(0.62, 0.62, 0.62, 0.78)
+	_range_fill_mat.albedo_color = Color(_base_color.r, _base_color.g, _base_color.b, 0.058)
+	_range_ring_mat.albedo_color = Color(_base_color.r, _base_color.g, _base_color.b, 0.94)
 	if _range_ring_mi != null:
 		_range_ring_mi.mesh = _make_ring_mesh(_range, 0.15)
 
