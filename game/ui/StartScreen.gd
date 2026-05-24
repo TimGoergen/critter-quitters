@@ -42,7 +42,10 @@ const TAILPIPE_IMG_Y := 450.0
 # Business card scales to 40% of viewport width, measured against the content
 # rect (via get_used_rect) so transparent padding in the PNG doesn't throw off
 # the size or position calculation.
-const CARD_WIDTH_FRAC := 0.24
+const CARD_WIDTH_FRAC    := 0.24
+# The top card (last drawn, highest z-order) is scaled up so it reads as the
+# "featured" card sitting on top of the pile.
+const TOP_CARD_SCALE_MULT := 1.25
 
 # Four cards dropped in a pile. Each entry: [rotation_deg, x_offset_frac, y_offset_frac, brightness].
 # Drawn bottom-to-top (index 0 is furthest back). Offsets are fractions of viewport size
@@ -77,7 +80,8 @@ func _on_viewport_resized() -> void:
 	for i: int in _cards.size():
 		var entry: Array  = _CARD_PILE[i]
 		var card_scale    := (vp.x * CARD_WIDTH_FRAC) / _cards[i].region_rect.size.x
-		_cards[i].scale    = Vector2(card_scale, card_scale)
+		var scale_mult    := TOP_CARD_SCALE_MULT if i == _cards.size() - 1 else 1.0
+		_cards[i].scale    = Vector2(card_scale * scale_mult, card_scale * scale_mult)
 		_cards[i].position = Vector2(
 			vp.x * 0.22 + vp.x * float(entry[1]),
 			vp.y * 0.32 + vp.y * float(entry[2])
@@ -103,7 +107,9 @@ func _build_ui() -> void:
 	var card_scale           := (vp.x * CARD_WIDTH_FRAC) / used_rect.size.x
 	var pile_x               := vp.x * 0.22
 	var pile_y               := vp.y * 0.32
-	for entry: Array in _CARD_PILE:
+	for i: int in _CARD_PILE.size():
+		var entry: Array   = _CARD_PILE[i]
+		var scale_mult     := TOP_CARD_SCALE_MULT if i == _CARD_PILE.size() - 1 else 1.0
 		var c              := Sprite2D.new()
 		c.texture           = card_tex
 		c.region_enabled    = true
@@ -112,7 +118,7 @@ func _build_ui() -> void:
 		c.rotation_degrees  = float(entry[0])
 		var b: float        = float(entry[3])
 		c.modulate          = Color(b, b, b, 1.0)
-		c.scale             = Vector2(card_scale, card_scale)
+		c.scale             = Vector2(card_scale * scale_mult, card_scale * scale_mult)
 		c.position          = Vector2(pile_x + vp.x * float(entry[1]), pile_y + vp.y * float(entry[2]))
 		_cards.append(c)
 		add_child(c)
