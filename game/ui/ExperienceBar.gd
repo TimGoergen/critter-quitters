@@ -23,11 +23,13 @@ const UIFonts = preload("res://ui/UIFonts.gd")
 ## Total height of the control, including the silver border.
 const PANEL_H: float = 30.0
 
-## Silver border thickness on all four sides. "Very thick" per design intent.
-const RECT_BRD: float = 6.0
+## Silver border thickness on all four sides.
+const RECT_BRD: float = 8.0
 
-## Bright neon blue — XP fill colour.
-const COLOR_FILL    := Color(0.05, 0.50, 1.00, 1.0)
+## Warm amber-gold fill — matches the Bug Bucks / upgrade-reward palette so the
+## bar visually signals "progress toward a reward you can act on" rather than
+## neutral information.
+const COLOR_FILL    := Color(0.96, 0.74, 0.08, 1.0)
 
 ## Very dark navy — empty-track colour.
 const COLOR_EMPTY   := Color(0.03, 0.05, 0.12, 1.0)
