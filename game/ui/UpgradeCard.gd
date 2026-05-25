@@ -85,9 +85,9 @@ func setup(upgrade: Dictionary) -> void:
 
 
 func _build_card() -> void:
-	var tier: int       = _upgrade_data.get("tier", Tier.COMMON)
-	var tier_color      := TIER_COLORS[tier]
-	var is_equipment    := _upgrade_data.get("category", "") == "equipment"
+	var tier: int        = _upgrade_data.get("tier", Tier.COMMON)
+	var tier_color: Color = TIER_COLORS[tier]
+	var is_equipment: bool = _upgrade_data.get("category", "") == "equipment"
 	var px              := 10.0   # horizontal padding used throughout
 
 	# --- Background ---
