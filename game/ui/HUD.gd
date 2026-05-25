@@ -1081,35 +1081,36 @@ func _build_pause_banner() -> void:
 	_pause_banner.add_child(label)
 
 
-## Builds the experience bar and positions it at the top of the arena zone.
-##
-## The bar spans between the two side panels, at y = SCREEN_EDGE_MARGIN so it
-## aligns with the top inset that both panels already observe. It overlays the
-## 3D arena slightly — this is intentional and consistent with other HUD elements.
+## Builds the experience bar and pins it flush to the top of the arena zone,
+## just inside the silver top border.
 func _build_experience_bar() -> void:
 	var bar := ExperienceBar.new()
-	# Anchor to the top of the viewport; stretch horizontally across the arena zone.
 	bar.anchor_left   = 0.0
 	bar.anchor_right  = 1.0
 	bar.anchor_top    = 0.0
 	bar.anchor_bottom = 0.0
 	bar.offset_left   = LEFT_PANEL_W
 	bar.offset_right  = -RIGHT_PANEL_W
-	bar.offset_top    = SCREEN_EDGE_MARGIN
-	bar.offset_bottom = SCREEN_EDGE_MARGIN + ExperienceBar.BAR_H
+	# Sit flush against the inner edge of the top silver border.
+	bar.offset_top    = SILVER_BORDER_W
+	bar.offset_bottom = SILVER_BORDER_W + ExperienceBar.PANEL_H
 	add_child(bar)
 
 
 ## Animates the pause banner into or out of view.
 ## Pass true to slide it down (paused), false to slide it back up (unpaused).
+## When visible the banner sits immediately below the experience bar, not at
+## the very top of the screen, so the XP bar remains readable while paused.
 func _show_pause_banner(visible_state: bool) -> void:
 	if _pause_banner_tween:
 		_pause_banner_tween.kill()
 	_pause_banner_tween = create_tween()
 	_pause_banner_tween.set_ease(Tween.EASE_OUT)
 	_pause_banner_tween.set_trans(Tween.TRANS_CUBIC)
-	var target_top:    float = 0.0              if visible_state else -PAUSE_BANNER_H
-	var target_bottom: float = PAUSE_BANNER_H   if visible_state else 0.0
+	# Visible position: top edge = bottom edge of the experience bar.
+	var exp_bar_bottom: float = SILVER_BORDER_W + ExperienceBar.PANEL_H
+	var target_top:    float = exp_bar_bottom                       if visible_state else -PAUSE_BANNER_H
+	var target_bottom: float = exp_bar_bottom + PAUSE_BANNER_H     if visible_state else 0.0
 	_pause_banner_tween.tween_property(_pause_banner, "offset_top",    target_top,    0.22)
 	_pause_banner_tween.parallel().tween_property(_pause_banner, "offset_bottom", target_bottom, 0.22)
 
