@@ -91,14 +91,18 @@ func _build_card() -> void:
 	var px              := 10.0   # horizontal padding used throughout
 
 	# --- Background ---
+	# MOUSE_FILTER_IGNORE on all decorative children so mouse events pass through
+	# to the card itself, which handles the tap via _gui_input().
 	var bg := ColorRect.new()
-	bg.color = Color(0.12, 0.12, 0.16, 0.96)
+	bg.color        = Color(0.12, 0.12, 0.16, 0.96)
+	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg)
 
 	# --- Tier colour strip — 6 px left border ---
 	_tier_strip = ColorRect.new()
 	_tier_strip.color         = tier_color
+	_tier_strip.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	_tier_strip.anchor_right  = 0.0
 	_tier_strip.anchor_bottom = 1.0
 	_tier_strip.offset_right  = 6.0
@@ -107,6 +111,7 @@ func _build_card() -> void:
 	# --- Tier name ("RARE" etc.) — top-left in tier colour ---
 	_tier_lbl = Label.new()
 	_tier_lbl.text                 = TIER_NAMES[tier]
+	_tier_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_tier_lbl.add_theme_color_override("font_color", tier_color)
 	_tier_lbl.add_theme_font_override("font", UIFonts.primary_bold())
@@ -116,6 +121,7 @@ func _build_card() -> void:
 	# --- Category label — top-right, dim ---
 	_category_lbl = Label.new()
 	_category_lbl.text                 = "FREE UPGRADE" if is_equipment else "CAMPAIGN BUFF"
+	_category_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_category_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_category_lbl.add_theme_color_override("font_color", Color(0.55, 0.55, 0.60, 1.0))
 	_category_lbl.add_theme_font_size_override("font_size", 10)
@@ -124,6 +130,7 @@ func _build_card() -> void:
 	# --- Title — main name, large and prominent ---
 	_title_lbl = Label.new()
 	_title_lbl.text                 = _upgrade_data.get("title", "")
+	_title_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_title_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_title_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
 	_title_lbl.add_theme_color_override("font_color", Color(0.95, 0.95, 0.98, 1.0))
@@ -134,6 +141,7 @@ func _build_card() -> void:
 	# --- Stat name (equipment only) or spacer ---
 	_stat_lbl = Label.new()
 	_stat_lbl.text                 = _upgrade_data.get("stat_name", "")
+	_stat_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_stat_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_stat_lbl.add_theme_color_override("font_color", tier_color)
 	_stat_lbl.add_theme_font_override("font", UIFonts.primary_bold())
@@ -153,6 +161,7 @@ func _build_card() -> void:
 
 	_impact_lbl = Label.new()
 	_impact_lbl.text                 = impact_text
+	_impact_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_impact_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_impact_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
 	_impact_lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.20, 1.0))
@@ -163,6 +172,7 @@ func _build_card() -> void:
 	# --- Plain-text description — what this upgrade does in plain English ---
 	_plain_lbl = Label.new()
 	_plain_lbl.text                 = _upgrade_data.get("plain_text", "")
+	_plain_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_plain_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_plain_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
 	_plain_lbl.add_theme_color_override("font_color", Color(0.68, 0.68, 0.72, 1.0))
@@ -200,8 +210,9 @@ func _on_resized() -> void:
 	var div: ColorRect = get_node_or_null("Divider")
 	if div == null:
 		div = ColorRect.new()
-		div.name  = "Divider"
-		div.color = Color(0.30, 0.30, 0.35, 1.0)
+		div.name         = "Divider"
+		div.color        = Color(0.30, 0.30, 0.35, 1.0)
+		div.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(div)
 	div.position = Vector2(px, 26.0)
 	div.size     = Vector2(w - px * 2.0, 1.0)
@@ -235,10 +246,13 @@ func _on_resized() -> void:
 # Input
 # ---------------------------------------------------------------------------
 
-func _input(event: InputEvent) -> void:
+## _gui_input() is called by Godot only when the pointer is already inside this
+## Control's rect, so no manual hit-test is needed. All decorative child nodes
+## have MOUSE_FILTER_IGNORE so they do not consume the event before it reaches
+## here. Works correctly while the game tree is paused (PROCESS_MODE_ALWAYS is
+## set on this node by LevelUpScreen before add_child).
+func _gui_input(event: InputEvent) -> void:
 	if _selected:
-		return
-	if not (event is InputEventScreenTouch or event is InputEventMouseButton):
 		return
 
 	var is_press := false
@@ -247,19 +261,9 @@ func _input(event: InputEvent) -> void:
 	elif event is InputEventMouseButton:
 		is_press = event.pressed and event.button_index == MOUSE_BUTTON_LEFT
 
-	if not is_press:
-		return
-
-	# get_global_rect() is in the same canvas coordinate space as touch/mouse events.
-	var event_pos: Vector2
-	if event is InputEventScreenTouch:
-		event_pos = event.position
-	else:
-		event_pos = event.global_position
-
-	if get_global_rect().has_point(event_pos):
+	if is_press:
 		_select()
-		get_viewport().set_input_as_handled()
+		accept_event()
 
 
 func _select() -> void:

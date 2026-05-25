@@ -403,7 +403,8 @@ func _on_card_selected(upgrade: Dictionary) -> void:
 	upgrade_chosen.emit(upgrade)
 
 	# Short delay so the player sees the card dim before it disappears.
-	await get_tree().create_timer(0.20, false).timeout
+	# process_always=true so the timer keeps running while the tree is paused.
+	await get_tree().create_timer(0.20, true).timeout
 
 	get_tree().paused = false
 	queue_free()
