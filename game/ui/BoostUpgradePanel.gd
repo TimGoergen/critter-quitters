@@ -632,7 +632,7 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 	lbl_stars.add_theme_color_override("font_color", COLOR_STARS)
 	lbl_stars.add_theme_color_override("font_outline_color", Color(0.08, 0.08, 0.08, 1.0))
 	lbl_stars.add_theme_constant_override("outline_size", 4)
-	lbl_stars.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl_stars.add_theme_font_override("font", UIFonts.symbols())
 	lbl_stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(lbl_stars)
 
