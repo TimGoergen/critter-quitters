@@ -15,9 +15,16 @@
 ##   │                          │      │                          │
 ##   │  Every trap fires more   │      │  Reduces the cooldown    │
 ##   │  often. Stacks with ...  │      │  between shots, ...      │
+##   │                          │      │                          │
+##   │  ┌──────────────────┐    │      │  ┌──────────────────┐   │
+##   │  │     SELECT       │    │      │  │     SELECT       │   │
+##   │  └──────────────────┘    │      │  └──────────────────┘   │
 ##   └──────────────────────────┘      └──────────────────────────┘
 ##
 ## Tier colors: Common=green  Professional=blue  Rare=purple
+##
+## The SELECT button is the only interactive element — clicking anywhere
+## else on the card does nothing. This prevents accidental selections.
 
 extends Control
 
@@ -37,13 +44,18 @@ const TIER_COLORS: Array = [
 	Color(0.65, 0.18, 0.90, 1.0),   # Rare         — purple
 ]
 
+## Height of the SELECT button in virtual pixels.
+const BTN_H:      float = 36.0
+## Bottom margin below the SELECT button.
+const BTN_MARGIN: float = 8.0
+
 
 # ---------------------------------------------------------------------------
 # Signal
 # ---------------------------------------------------------------------------
 
-## Emitted when the player taps this card. upgrade is the Dictionary that was
-## passed to setup() — Arena uses it to apply the correct upgrade.
+## Emitted when the player presses SELECT on this card. upgrade is the
+## Dictionary that was passed to setup() — Arena uses it to apply the upgrade.
 signal card_selected(upgrade: Dictionary)
 
 
@@ -58,6 +70,7 @@ var _title_lbl:     Label     = null   # buff name or trap name
 var _stat_lbl:      Label     = null   # stat name (equipment only)
 var _impact_lbl:    Label     = null   # "+10% fire rate" or "0.83/s → 0.90/s"
 var _plain_lbl:     Label     = null   # plain-English explanation
+var _select_btn:    Button    = null   # the SELECT button at the bottom
 
 var _upgrade_data: Dictionary = {}
 var _selected:     bool       = false
@@ -85,14 +98,14 @@ func setup(upgrade: Dictionary) -> void:
 
 
 func _build_card() -> void:
-	var tier: int        = _upgrade_data.get("tier", Tier.COMMON)
-	var tier_color: Color = TIER_COLORS[tier]
+	var tier: int          = _upgrade_data.get("tier", Tier.COMMON)
+	var tier_color: Color  = TIER_COLORS[tier]
 	var is_equipment: bool = _upgrade_data.get("category", "") == "equipment"
-	var px              := 10.0   # horizontal padding used throughout
+	var px                := 10.0   # horizontal padding used throughout
 
 	# --- Background ---
-	# MOUSE_FILTER_IGNORE on all decorative children so mouse events pass through
-	# to the card itself, which handles the tap via _gui_input().
+	# All decorative children use MOUSE_FILTER_IGNORE so they do not swallow
+	# click events. The SELECT button is the only node that should receive input.
 	var bg := ColorRect.new()
 	bg.color        = Color(0.12, 0.12, 0.16, 0.96)
 	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
@@ -179,8 +192,38 @@ func _build_card() -> void:
 	_plain_lbl.add_theme_font_size_override("font_size", 11)
 	add_child(_plain_lbl)
 
+	# --- SELECT button — the only interactive element on the card ---
+	# Styled with the tier color so the button identity visually belongs to the
+	# card's tier. Normal state is darkened; hover brightens to full tier color;
+	# pressed darkens further to give clear tactile feedback.
+	_select_btn = Button.new()
+	_select_btn.text = "SELECT"
+	_select_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_select_btn.add_theme_font_size_override("font_size", 14)
+	_select_btn.add_theme_color_override("font_color",         Color(1.0, 1.0, 1.0, 1.0))
+	_select_btn.add_theme_color_override("font_hover_color",   Color(1.0, 1.0, 1.0, 1.0))
+	_select_btn.add_theme_color_override("font_pressed_color", Color(1.0, 1.0, 1.0, 1.0))
+	_select_btn.add_theme_stylebox_override("normal",   _make_btn_style(tier_color.darkened(0.25)))
+	_select_btn.add_theme_stylebox_override("hover",    _make_btn_style(tier_color))
+	_select_btn.add_theme_stylebox_override("pressed",  _make_btn_style(tier_color.darkened(0.45)))
+	_select_btn.add_theme_stylebox_override("focus",    _make_btn_style(tier_color.darkened(0.25)))
+	_select_btn.pressed.connect(_on_select_pressed)
+	add_child(_select_btn)
+
 	resized.connect(_on_resized)
 	call_deferred("_on_resized")
+
+
+## Returns a flat rounded StyleBoxFlat with the given background color.
+## Used to style the SELECT button's normal / hover / pressed states.
+func _make_btn_style(color: Color) -> StyleBoxFlat:
+	var sb := StyleBoxFlat.new()
+	sb.bg_color                  = color
+	sb.corner_radius_top_left    = 4
+	sb.corner_radius_top_right   = 4
+	sb.corner_radius_bottom_left = 4
+	sb.corner_radius_bottom_right = 4
+	return sb
 
 
 # ---------------------------------------------------------------------------
@@ -235,38 +278,30 @@ func _on_resized() -> void:
 		_impact_lbl.position = Vector2(px, y)
 		_impact_lbl.size     = Vector2(w - px * 2.0, 44.0)
 
-	# Row 5: Plain-text description — fills remaining space above the bottom margin.
+	# Row 5: Plain-text description — fills space above the SELECT button.
+	# Bottom boundary is (button top) - 8 px gap = h - BTN_MARGIN - BTN_H - 8.
 	y = 152.0
+	var btn_top := h - BTN_MARGIN - BTN_H
 	if _plain_lbl:
 		_plain_lbl.position = Vector2(px, y)
-		_plain_lbl.size     = Vector2(w - px * 2.0, h - y - 8.0)
+		_plain_lbl.size     = Vector2(w - px * 2.0, btn_top - y - 8.0)
+
+	# Row 6: SELECT button — pinned to the bottom of the card.
+	if _select_btn:
+		_select_btn.position = Vector2(px, btn_top)
+		_select_btn.size     = Vector2(w - px * 2.0, BTN_H)
 
 
 # ---------------------------------------------------------------------------
-# Input
+# Selection
 # ---------------------------------------------------------------------------
 
-## _gui_input() is called by Godot only when the pointer is already inside this
-## Control's rect, so no manual hit-test is needed. All decorative child nodes
-## have MOUSE_FILTER_IGNORE so they do not consume the event before it reaches
-## here. Works correctly while the game tree is paused (PROCESS_MODE_ALWAYS is
-## set on this node by LevelUpScreen before add_child).
-func _gui_input(event: InputEvent) -> void:
+func _on_select_pressed() -> void:
 	if _selected:
 		return
-
-	var is_press := false
-	if event is InputEventScreenTouch:
-		is_press = event.pressed
-	elif event is InputEventMouseButton:
-		is_press = event.pressed and event.button_index == MOUSE_BUTTON_LEFT
-
-	if is_press:
-		_select()
-		accept_event()
-
-
-func _select() -> void:
 	_selected = true
+	# Disable the button immediately so a second tap before the screen dismisses
+	# cannot trigger a double-selection.
+	_select_btn.disabled = true
 	modulate = Color(0.6, 0.6, 0.6, 1.0)
 	card_selected.emit(_upgrade_data)
