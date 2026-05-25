@@ -337,7 +337,7 @@ func is_range_maxed() -> bool:
 func get_range_upgrade_cost() -> int:
 	if is_range_maxed():
 		return 0
-	return UPGRADE_COSTS[_boost_type][_range_level]
+	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_boost_type][_range_level])
 
 func get_range_after_upgrade() -> float:
 	return _range + _base_range * 0.10
@@ -372,7 +372,7 @@ func is_stat_b_maxed() -> bool:
 func get_stat_b_upgrade_cost() -> int:
 	if is_stat_b_maxed():
 		return 0
-	return UPGRADE_COSTS[_boost_type][_stat_b_level]
+	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_boost_type][_stat_b_level])
 
 ## Returns the raw current value of stat B.
 func get_stat_b_value() -> float:
@@ -440,7 +440,7 @@ func is_stat_c_maxed() -> bool:
 func get_stat_c_upgrade_cost() -> int:
 	if is_stat_c_maxed():
 		return 0
-	return UPGRADE_COSTS[_boost_type][_stat_c_level]
+	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_boost_type][_stat_c_level])
 
 ## Returns the raw current value of stat C.
 func get_stat_c_value() -> float:

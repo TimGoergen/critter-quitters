@@ -37,6 +37,7 @@ const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
 const BoostUpgradePanel = preload("res://ui/BoostUpgradePanel.gd")
 const EnemyStatsPanel   = preload("res://ui/EnemyStatsPanel.gd")
 const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
+const LevelUpScreen     = preload("res://ui/LevelUpScreen.gd")
 
 
 # ---------------------------------------------------------------------------
@@ -289,6 +290,7 @@ func _ready() -> void:
 	GameState.wave_skip_multi_requested.connect(_on_wave_skip_multi_requested)
 	GameState.run_ended.connect(_close_upgrade_panel)
 	GameState.run_ended.connect(_on_run_ended_camera)
+	GameState.level_up.connect(_on_level_up)
 	GameState.trap_type_selected.connect(_on_trap_type_changed)
 	GameState.zoom_toggle_requested.connect(_toggle_zoom)
 	# Release enemy follow when a new wave launches (countdown expires).
@@ -1200,9 +1202,20 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 
 
 func _on_enemy_died(enemy: Node3D) -> void:
-	var bounty: int = enemy.get_bounty()
+	# Apply the global Bug Bucks bonus from campaign buffs (Invoice Padding).
+	# roundi() so the result stays an integer; small bonuses accumulate over time.
+	var bounty: int = roundi(float(enemy.get_bounty()) * (1.0 + GameState.global_bucks_bonus))
 	GameState.add_bug_bucks(bounty)
 	_spawn_earn_label(_camera.unproject_position(enemy.global_position), bounty)
+
+	# Award XP proportional to how dangerous this enemy is (its infestation value).
+	# ceili() means even weak enemies (Gnat: 0.5) always award at least 1 XP.
+	GameState.add_experience(ceili(enemy.get_infestation_damage()))
+
+	# If the Hazmat Protocol campaign buff is active, kills reduce infestation.
+	if GameState.infestation_heal_per_kill > 0.0:
+		GameState.heal_infestation(GameState.infestation_heal_per_kill)
+
 	_active_enemies.erase(enemy)
 	if enemy == _followed_enemy:
 		_set_followed_enemy(null)
@@ -2584,6 +2597,56 @@ func _on_run_ended_camera() -> void:
 	_set_followed_enemy(null)
 	if _zoom_state == ZoomState.ZOOMED_IN:
 		_toggle_zoom()
+
+
+## Called when the player accumulates enough XP to advance a level.
+## Spawns the LevelUpScreen overlay, which pauses the game and presents
+## three upgrade cards for the player to choose from.
+func _on_level_up(new_level: int) -> void:
+	# Do not show the level-up screen if the run is already over.
+	if GameState.current_phase == GameState.Phase.RUN_OVER:
+		return
+	var screen := LevelUpScreen.new()
+	# Pass placed trap nodes so the screen can generate equipment cards.
+	screen.setup(new_level, _trap_nodes.values())
+	screen.upgrade_chosen.connect(_on_level_up_upgrade_chosen)
+	add_child(screen)
+
+
+## Applies the upgrade chosen on the LevelUpScreen.
+## For campaign buffs, updates GameState then refreshes all placed traps so
+## the fire-rate (and range indicator) changes take effect immediately.
+## For equipment upgrades, calls the free-upgrade method directly on the trap.
+func _on_level_up_upgrade_chosen(upgrade: Dictionary) -> void:
+	if upgrade.get("category") == "campaign":
+		GameState.apply_campaign_buff(upgrade["id"], upgrade["magnitude"])
+		# Fire-rate and range indicator changes require each trap to recalculate.
+		_refresh_global_trap_multipliers()
+	else:
+		# Equipment upgrade: free stat boost on a specific placed trap.
+		var trap: Node3D = upgrade.get("trap_node")
+		if is_instance_valid(trap):
+			_apply_equipment_upgrade(trap, upgrade.get("stat", ""))
+
+
+## Iterates all placed traps and tells each one to recompute its multipliers.
+## Called after any campaign buff that affects fire rate or range is applied.
+func _refresh_global_trap_multipliers() -> void:
+	for trap in _trap_nodes.values():
+		if is_instance_valid(trap):
+			trap.refresh_global_multipliers()
+
+
+## Applies a free stat upgrade to a trap node (no Bug Bucks cost).
+## stat must match one of the upgrade method names listed in Trap.gd.
+func _apply_equipment_upgrade(trap: Node3D, stat: String) -> void:
+	match stat:
+		"damage":    trap.apply_damage_upgrade()
+		"range":     trap.apply_range_upgrade()
+		"fire_rate": trap.apply_fire_rate_upgrade()
+		"duration":  trap.apply_duration_upgrade()
+		"crit_chance": trap.apply_crit_chance_upgrade()
+		"crit_dmg":    trap.apply_crit_damage_upgrade()
 
 
 ## Plays phase-transition audio cues.

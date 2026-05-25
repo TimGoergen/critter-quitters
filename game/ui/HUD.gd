@@ -12,9 +12,10 @@
 
 extends CanvasLayer
 
-const Trap      = preload("res://traps/Trap.gd")
-const BoostUnit = preload("res://boosts/BoostUnit.gd")
-const UIFonts   = preload("res://ui/UIFonts.gd")
+const Trap           = preload("res://traps/Trap.gd")
+const BoostUnit      = preload("res://boosts/BoostUnit.gd")
+const UIFonts        = preload("res://ui/UIFonts.gd")
+const ExperienceBar  = preload("res://ui/ExperienceBar.gd")
 
 const GEAR_OUTLINE_SHADER = preload("res://assets/gear_outline.gdshader")
 
@@ -243,6 +244,7 @@ func _build_ui() -> void:
 	_build_run_over_overlay()
 	_build_panel_borders()     # drawn last so borders appear on top of all panel content
 	_build_pause_banner()      # drawn after borders so it slides over the top edge
+	_build_experience_bar()    # overlaid on the arena zone, above all panel content
 
 
 # ---------------------------------------------------------------------------
@@ -1077,6 +1079,25 @@ func _build_pause_banner() -> void:
 	label.add_theme_color_override("font_color", COLOR_TEXT)
 	label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_pause_banner.add_child(label)
+
+
+## Builds the experience bar and positions it at the top of the arena zone.
+##
+## The bar spans between the two side panels, at y = SCREEN_EDGE_MARGIN so it
+## aligns with the top inset that both panels already observe. It overlays the
+## 3D arena slightly — this is intentional and consistent with other HUD elements.
+func _build_experience_bar() -> void:
+	var bar := ExperienceBar.new()
+	# Anchor to the top of the viewport; stretch horizontally across the arena zone.
+	bar.anchor_left   = 0.0
+	bar.anchor_right  = 1.0
+	bar.anchor_top    = 0.0
+	bar.anchor_bottom = 0.0
+	bar.offset_left   = LEFT_PANEL_W
+	bar.offset_right  = -RIGHT_PANEL_W
+	bar.offset_top    = SCREEN_EDGE_MARGIN
+	bar.offset_bottom = SCREEN_EDGE_MARGIN + ExperienceBar.BAR_H
+	add_child(bar)
 
 
 ## Animates the pause banner into or out of view.

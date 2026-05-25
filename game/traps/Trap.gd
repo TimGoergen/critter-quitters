@@ -360,35 +360,37 @@ func _ready() -> void:
 # ---------------------------------------------------------------------------
 
 ## Bug Bucks cost for the next upgrade to each stat. Returns 0 when already maxed.
+## All costs pass through GameState.apply_upgrade_discount() so any active
+## "Bulk Procurement" campaign buff is reflected in both the UI and the spend.
 func get_damage_upgrade_cost() -> int:
 	if _damage_level >= MAX_UPGRADE_LEVEL:
 		return 0
-	return UPGRADE_COSTS[_trap_type][_damage_level]
+	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_trap_type][_damage_level])
 
 func get_range_upgrade_cost() -> int:
 	if _range_level >= MAX_UPGRADE_LEVEL:
 		return 0
-	return UPGRADE_COSTS[_trap_type][_range_level]
+	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_trap_type][_range_level])
 
 func get_rate_upgrade_cost() -> int:
 	if _rate_level >= MAX_UPGRADE_LEVEL or _base_cooldown == 0.0:
 		return 0
-	return UPGRADE_COSTS[_trap_type][_rate_level]
+	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_trap_type][_rate_level])
 
 func get_duration_upgrade_cost() -> int:
 	if _duration_level >= MAX_UPGRADE_LEVEL:
 		return 0
-	return UPGRADE_COSTS[_trap_type][_duration_level]
+	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_trap_type][_duration_level])
 
 func get_crit_chance_upgrade_cost() -> int:
 	if _crit_chance_level >= MAX_UPGRADE_LEVEL:
 		return 0
-	return UPGRADE_COSTS[_trap_type][_crit_chance_level]
+	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_trap_type][_crit_chance_level])
 
 func get_crit_damage_upgrade_cost() -> int:
 	if _crit_damage_level >= MAX_UPGRADE_LEVEL:
 		return 0
-	return UPGRADE_COSTS[_trap_type][_crit_damage_level]
+	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_trap_type][_crit_damage_level])
 
 
 # ---------------------------------------------------------------------------
@@ -583,7 +585,9 @@ func get_damage() -> float:
 	return _damage
 
 func get_range_radius() -> float:
-	return _range
+	# Returns effective range including any global campaign buff so the upgrade
+	# panel displays the actual active radius, not the base stored value.
+	return _effective_range()
 
 func get_cooldown() -> float:
 	return _cooldown
@@ -745,7 +749,7 @@ func _process(delta: float) -> void:
 		did_fire = _fire_fogger()
 		if did_fire:
 			# One crit roll per burst covers all pests caught in the cloud.
-			aoe_fired.emit(global_position, _range, _roll_damage(_damage * _damage_multiplier), _active_enemies)
+			aoe_fired.emit(global_position, _effective_range(), _roll_damage(_damage * _damage_multiplier), _active_enemies)
 			_play_fogger_animation()
 			_active_fog_batches += 1
 			var expire := FogCloud.PARTICLE_LIFETIME * 2.0 + 0.20
@@ -759,7 +763,7 @@ func _process(delta: float) -> void:
 			# Cosmetic projectile toward the nearest flying enemy; cloud handles all damage.
 			# One crit roll per cloud launch so the entire cloud benefits or doesn't.
 			fired.emit(global_position, fly_target.global_position, fly_target, 0.0, _trap_type)
-			fly_strip_fired.emit(global_position, _range, _roll_damage(_damage * _damage_multiplier),
+			fly_strip_fired.emit(global_position, _effective_range(), _roll_damage(_damage * _damage_multiplier),
 				_fly_strip_adhesion, _fly_strip_cloud_duration, _active_enemies)
 			_play_fly_strip_animation()
 			_active_fly_strip_batches += 1
@@ -816,7 +820,7 @@ func _fire_fogger() -> bool:
 			continue
 		if enemy.get_is_flying():
 			continue
-		if _xz_distance(enemy.global_position) <= _range:
+		if _xz_distance(enemy.global_position) <= _effective_range():
 			return true
 	return false
 
@@ -831,12 +835,12 @@ func _update_glue_aoe(delta: float) -> void:
 		if not is_instance_valid(enemy):
 			to_release.append(enemy)
 			continue
-		if _xz_distance(enemy.global_position) <= _range:
-			_glue_slowed_enemies[enemy] = -1.0   # still in range â€” reset to "no countdown"
+		if _xz_distance(enemy.global_position) <= _effective_range():
+			_glue_slowed_enemies[enemy] = -1.0   # still in range — reset to “no countdown”
 		else:
 			var remaining: float = _glue_slowed_enemies[enemy]
 			if remaining < 0.0:
-				_glue_slowed_enemies[enemy] = _slow_duration  # just left range â€” start countdown
+				_glue_slowed_enemies[enemy] = _slow_duration  # just left range — start countdown
 			else:
 				remaining -= delta
 				if remaining <= 0.0:
@@ -857,7 +861,7 @@ func _update_glue_aoe(delta: float) -> void:
 			continue
 		if enemy.get_is_flying():
 			continue
-		if _xz_distance(enemy.global_position) <= _range and not _glue_slowed_enemies.has(enemy):
+		if _xz_distance(enemy.global_position) <= _effective_range() and not _glue_slowed_enemies.has(enemy):
 			enemy.add_slow_source(self, _damage)
 			_glue_slowed_enemies[enemy] = -1.0
 			fired.emit(global_position, enemy.global_position, enemy, 0.0, _trap_type)
@@ -885,7 +889,7 @@ func _fire_fly_strip() -> Node3D:
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
 			continue
-		if enemy.get_is_flying() and _xz_distance(enemy.global_position) <= _range:
+		if enemy.get_is_flying() and _xz_distance(enemy.global_position) <= _effective_range():
 			return enemy
 	return null
 
@@ -903,7 +907,7 @@ func _update_bait_station(delta: float) -> void:
 			continue
 		if enemy.get_is_flying():
 			continue   # Bait Station only affects ground pests
-		if _xz_distance(enemy.global_position) > _range:
+		if _xz_distance(enemy.global_position) > _effective_range():
 			continue
 		# Crit roll applies to the burst damage only; poison tick rate is unaffected.
 		enemy.take_damage(_roll_damage(_damage * _damage_multiplier), Color(0.72, 0.42, 0.08))
@@ -949,18 +953,29 @@ func remove_fire_rate_boost(source: Node3D) -> void:
 
 
 ## Recomputes multipliers from the current boost source dictionaries.
+## Also incorporates the global fire-rate campaign buff from GameState so that
+## "Hair Trigger" stacks correctly with Compressor Boost auras.
 func _recalculate_multipliers() -> void:
 	var damage_bonus: float = 0.0
 	for factor: float in _damage_boost_sources.values():
 		damage_bonus += factor
 	_damage_multiplier = 1.0 + damage_bonus
 
-	var fire_rate_bonus: float = 0.0
+	# Start with the global campaign bonus, then add per-Boost aura contributions.
+	var fire_rate_bonus: float = GameState.global_fire_rate_bonus
 	for factor: float in _fire_rate_boost_sources.values():
 		fire_rate_bonus += factor
 	_fire_rate_multiplier = 1.0 + fire_rate_bonus
 
 	_update_boost_indicator()
+
+
+## Public wrapper called by Arena after a global fire-rate campaign buff is
+## applied so that existing placed traps pick up the new value immediately.
+## Also rebuilds the range indicator so the ring reflects the updated range.
+func refresh_global_multipliers() -> void:
+	_recalculate_multipliers()
+	_rebuild_range_indicator()
 
 
 ## Returns the enemy in range closest to this trap (used by Snap Trap).
@@ -971,7 +986,7 @@ func _nearest_in_range() -> Node3D:
 		if not is_instance_valid(enemy):
 			continue
 		var dist := _xz_distance(enemy.global_position)
-		if dist <= _range and dist < best_dist:
+		if dist <= _effective_range() and dist < best_dist:
 			best_dist = dist
 			best      = enemy
 	return best
@@ -988,7 +1003,7 @@ func _farthest_in_range() -> Node3D:
 			continue
 		if enemy.get_is_flying():
 			continue
-		if _xz_distance(enemy.global_position) <= _range:
+		if _xz_distance(enemy.global_position) <= _effective_range():
 			var idx: int = enemy.get_path_index()
 			if idx > best_index:
 				best_index = idx
@@ -1003,17 +1018,31 @@ func _xz_distance(world_pos: Vector3) -> float:
 	return sqrt(dx * dx + dz * dz)
 
 
+## Returns the trap's effective targeting range, including any global range
+## campaign buff from GameState ("Extended Reach"). Used in all runtime
+## distance comparisons so that the buff immediately affects all placed traps.
+## The stored _range value is NOT modified — this is a read-only calculation.
+func _effective_range() -> float:
+	return _range * (1.0 + GameState.global_range_bonus)
+
+
 # ---------------------------------------------------------------------------
 # Private helpers
 # ---------------------------------------------------------------------------
 
-## Rolls a critical hit check and returns the appropriately scaled damage.
-## Returns base_damage Ã— (1 + crit_damage_bonus) on a successful roll, or
-## base_damage unchanged if the roll fails or crit chance is zero.
+## Rolls a critical hit check and returns the appropriately scaled damage,
+## including any active campaign buff bonuses from GameState.
+##
+## Crit chance and crit damage both combine the per-trap upgrade values with
+## any global campaign bonus. The final result is multiplied by the global
+## damage bonus so "Extermination Formula" affects every trap and damage type.
 func _roll_damage(base_damage: float) -> float:
-	if _crit_chance > 0.0 and randf() < _crit_chance:
-		return base_damage * (1.0 + _crit_damage_bonus)
-	return base_damage
+	var effective_crit_chance := _crit_chance + GameState.global_crit_chance_bonus
+	var effective_crit_bonus  := _crit_damage_bonus + GameState.global_crit_dmg_bonus
+	var result := base_damage
+	if effective_crit_chance > 0.0 and randf() < effective_crit_chance:
+		result = base_damage * (1.0 + effective_crit_bonus)
+	return result * (1.0 + GameState.global_damage_bonus)
 
 
 ## Called after each upgrade. If all stats are now maxed and the bonus has not
@@ -1196,12 +1225,12 @@ func _set_range_indicator_peek(peeking: bool) -> void:
 		_range_fill_mat.albedo_color.a = 0.25
 		_range_ring_mat.albedo_color.a = 1.00
 		if _range_ring_mi != null:
-			_range_ring_mi.mesh = _make_ring_mesh(_range, 0.22)
+			_range_ring_mi.mesh = _make_ring_mesh(_effective_range(), 0.22)
 	else:
 		_range_fill_mat.albedo_color.a = 0.025
 		_range_ring_mat.albedo_color.a = 0.55
 		if _range_ring_mi != null:
-			_range_ring_mi.mesh = _make_ring_mesh(_range, 0.10)
+			_range_ring_mi.mesh = _make_ring_mesh(_effective_range(), 0.10)
 
 
 ## Applies or removes the gray tint on the range indicator's materials.
@@ -1250,11 +1279,15 @@ func _spawn_range_indicator() -> void:
 	var fill_alpha := 0.12 if _is_preview else 0.025
 	var ring_alpha := 0.90 if _is_preview else 0.55
 
+	# Use the effective range (including campaign buff) so the visual ring
+	# matches the actual targeting range when "Extended Reach" is active.
+	var eff_range := _effective_range()
+
 	# Filled disc
 	var fill_mi              := MeshInstance3D.new()
 	var fill_mesh            := CylinderMesh.new()
-	fill_mesh.top_radius      = _range
-	fill_mesh.bottom_radius   = _range
+	fill_mesh.top_radius      = eff_range
+	fill_mesh.bottom_radius   = eff_range
 	fill_mesh.height          = 0.001
 	fill_mesh.radial_segments = 64
 	_range_fill_mat             = StandardMaterial3D.new()
@@ -1267,7 +1300,7 @@ func _spawn_range_indicator() -> void:
 
 	# Outline ring
 	var ring_mi              := MeshInstance3D.new()
-	ring_mi.mesh              = _make_ring_mesh(_range, 0.10)
+	ring_mi.mesh              = _make_ring_mesh(eff_range, 0.10)
 	_range_ring_mat             = StandardMaterial3D.new()
 	_range_ring_mat.albedo_color = Color(1.0, 1.0, 1.0, ring_alpha)
 	_range_ring_mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
