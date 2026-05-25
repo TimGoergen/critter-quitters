@@ -30,7 +30,7 @@ signal upgrade_chosen(upgrade: Dictionary)
 ## buffs in the future, append another entry here — no other changes required.
 # ---------------------------------------------------------------------------
 
-const CAMPAIGN_BUFFS: Array[Dictionary] = [
+const CAMPAIGN_BUFFS: Array = [
 	{
 		"id": "dmg_all",
 		"title": "Extermination Formula",

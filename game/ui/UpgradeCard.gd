@@ -32,8 +32,8 @@ const UIFonts = preload("res://ui/UIFonts.gd")
 
 enum Tier { COMMON = 0, PROFESSIONAL = 1, RARE = 2 }
 
-const TIER_NAMES: Array[String] = ["COMMON", "PROFESSIONAL", "RARE"]
-const TIER_COLORS: Array[Color] = [
+const TIER_NAMES: Array = ["COMMON", "PROFESSIONAL", "RARE"]
+const TIER_COLORS: Array = [
 	Color(0.18, 0.68, 0.30, 1.0),   # Common  — green
 	Color(0.18, 0.48, 0.90, 1.0),   # Pro     — blue
 	Color(0.65, 0.18, 0.90, 1.0),   # Rare    — purple
