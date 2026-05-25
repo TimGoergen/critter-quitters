@@ -29,6 +29,7 @@
 extends Node3D
 
 const Grid                  = preload("res://arena/Grid.gd")
+const Trap                  = preload("res://traps/Trap.gd")
 const SHADOW_OUTLINE_SHADER = preload("res://assets/shadow_outline.gdshader")
 const UIFonts               = preload("res://ui/UIFonts.gd")
 
