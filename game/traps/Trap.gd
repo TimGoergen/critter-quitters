@@ -221,9 +221,9 @@ var _hover_area:      Area3D = null
 # When true, the indicator stays visible regardless of hover state (upgrade panel open).
 var _indicator_pinned: bool  = false
 
-# Star display â€” one Label3D per possible star (max 3).
-# All three labels are pre-spawned; _update_star_display() shows/hides and repositions them.
-var _star_labels: Array[Label3D] = []
+# Star display — one MeshInstance3D polygon star per possible star (max 3).
+# All three meshes are pre-spawned; _update_star_display() shows/hides and repositions them.
+var _star_meshes: Array[MeshInstance3D] = []
 
 # Boost indicator â€” small diamond shown in the trap's top-right corner whenever at
 # least one boost aura is currently active on this trap.
@@ -1058,50 +1058,80 @@ func _check_full_upgrade_bonus() -> void:
 	_bonus_applied = true
 
 
-## Spawns the star label and glow disc that reflect how many stats are maxed.
-## Called once from initialize() â€” not spawned for preview instances.
-## Spawns three Label3D nodes in fixed slots:
-##   [0] = center (large)   always shown for the first maxed stat
-##   [1] = left   (small)   shown for the second maxed stat
-##   [2] = right  (small)   shown for the third maxed stat
+## Spawns three MeshInstance3D polygon stars to reflect how many stats are maxed.
+## Called once from initialize() — not spawned for preview instances.
+## Slot layout:
+##   [0] = center (larger)   shown for the first maxed stat
+##   [1] = left   (smaller)  shown for the second maxed stat
+##   [2] = right  (smaller)  shown for the third maxed stat
 func _spawn_star_display() -> void:
 	# Center star is larger; side stars are smaller to signal hierarchy.
-	# pixel_size=0.009 throughout so world-unit sizes scale directly with font_size.
-	var sizes := [88, 66, 66]   # [center, left, right] font sizes
-	for sz: int in sizes:
-		var lbl                  := Label3D.new()
-		lbl.font                  = UIFonts.symbols()
-		lbl.font_size             = sz
-		lbl.pixel_size            = 0.009
-		lbl.modulate              = Color(1.0, 0.92, 0.30, 1.0)
-		lbl.outline_size          = 8
-		lbl.outline_modulate      = Color(0.0, 0.0, 0.0, 0.90)
-		lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
-		lbl.billboard             = BaseMaterial3D.BILLBOARD_ENABLED
-		lbl.no_depth_test         = true
-		lbl.text                  = "â˜…"
-		lbl.visible               = false
-		add_child(lbl)
-		_star_labels.append(lbl)
+	# Outer radius in world units; inner notch = outer × 0.42 (balanced proportion).
+	var radii: Array[float] = [0.17, 0.12, 0.12]   # [center, left, right]
+	var gold := Color(1.0, 0.92, 0.30, 1.0)
+	for r: float in radii:
+		var mi := _make_star_mesh(r, gold)
+		mi.visible = false
+		add_child(mi)
+		_star_meshes.append(mi)
 
 
-## Refreshes star labels, tints the footprint outline toward gold, and brightens the
-## drop shadow as stats are maxed.  The background plate keeps its base color throughout â€”
-## only the border and shadow shift, so the trap's identity color is always visible.
+## Builds a flat five-pointed star as an ArrayMesh and returns it inside a
+## MeshInstance3D. The star lies in the XY plane; BILLBOARD_ENABLED rotates
+## it to face the camera at runtime. No fonts or textures required.
+static func _make_star_mesh(outer_r: float, color: Color) -> MeshInstance3D:
+	var inner_r := outer_r * 0.42
+	var verts   := PackedVector3Array()
+
+	# Fan triangulation: 10 triangles from origin to each adjacent boundary pair.
+	# Angles start at PI/2 (top) and step clockwise by 36° each iteration.
+	for i in 10:
+		var a0 := PI / 2.0 - i * PI / 5.0
+		var a1 := PI / 2.0 - (i + 1) * PI / 5.0
+		var r0 := outer_r if (i % 2 == 0) else inner_r
+		var r1 := outer_r if ((i + 1) % 2 == 0) else inner_r
+		verts.append(Vector3.ZERO)
+		verts.append(Vector3(cos(a0) * r0, sin(a0) * r0, 0.0))
+		verts.append(Vector3(cos(a1) * r1, sin(a1) * r1, 0.0))
+
+	var arrays := []
+	arrays.resize(Mesh.ARRAY_MAX)
+	arrays[Mesh.ARRAY_VERTEX] = verts
+
+	var mesh                  := ArrayMesh.new()
+	mesh.add_surface_from_arrays(Mesh.PRIMITIVE_TRIANGLES, arrays)
+
+	var mat                    := StandardMaterial3D.new()
+	mat.albedo_color            = color
+	mat.shading_mode            = BaseMaterial3D.SHADING_MODE_UNSHADED
+	mat.billboard_mode          = BaseMaterial3D.BILLBOARD_ENABLED
+	mat.no_depth_test           = true
+	mat.transparency            = BaseMaterial3D.TRANSPARENCY_ALPHA
+	# CULL_DISABLED: winding order is irrelevant for a billboard polygon.
+	mat.cull_mode               = BaseMaterial3D.CULL_DISABLED
+	mesh.surface_set_material(0, mat)
+
+	var mi   := MeshInstance3D.new()
+	mi.mesh   = mesh
+	return mi
+
+
+## Refreshes star meshes, tints the footprint outline toward gold, and brightens the
+## drop shadow as stats are maxed.  The background plate keeps its base color throughout —
+## only the border and shadow shift, so the trap’s identity color is always visible.
 func _update_star_display() -> void:
-	if _star_labels.is_empty():
+	if _star_meshes.is_empty():
 		return
 	var maxed: int = get_maxed_stat_count()
 
 	# --- Stars ---
 	# Layout: [left-small]  [center-large]  [right-small]
-	# center â˜… is 88pt  â†’ ~0.79 world units wide (half = 0.395)
-	# side   â˜… is 54pt  â†’ ~0.49 world units wide (half = 0.243)
-	# STAR_Z chosen so the center star's bottom edge (~z+0.395) clears the inner
-	# edge of the outline bar (~z=0.874): 0.45 + 0.395 = 0.845, just inside the line.
+	# Stars are polygon meshes; sizes set by outer_r in _spawn_star_display().
+	# STAR_Z/STAR_Y: position the stars just above the trap’s footprint outline.
+	# SIDE_OFFSET: spacing chosen so side stars don’t overlap the center star.
 	const STAR_Z:       float = 0.45
 	const STAR_Y:       float = 0.65
-	const SIDE_OFFSET:  float = 0.24
+	const SIDE_OFFSET:  float = 0.30   # slightly wider than before to avoid mesh overlap
 
 	# Slot 0 = center, 1 = left, 2 = right
 	var positions := [
@@ -1109,9 +1139,9 @@ func _update_star_display() -> void:
 		Vector3(-SIDE_OFFSET, STAR_Y, STAR_Z),
 		Vector3( SIDE_OFFSET, STAR_Y, STAR_Z),
 	]
-	for i in range(_star_labels.size()):
-		_star_labels[i].visible  = i < maxed
-		_star_labels[i].position = positions[i]
+	for i in range(_star_meshes.size()):
+		_star_meshes[i].visible  = i < maxed
+		_star_meshes[i].position = positions[i]
 
 	const GOLD: Color = Color(1.0, 0.82, 0.18)
 	var frac := float(maxed) / float(get_total_upgradeable_stats())

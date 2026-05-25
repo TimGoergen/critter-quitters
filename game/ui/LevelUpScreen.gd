@@ -34,61 +34,79 @@ const CAMPAIGN_BUFFS: Array = [
 	{
 		"id": "dmg_all",
 		"title": "Extermination Formula",
-		"desc_template": "+%s%% damage to all traps",
+		"impact_template": "+%s%% damage to all traps",
+		"plain_text": "Every trap deals more damage per shot. Stacks with trap upgrades and Pheromone Dispenser boosts.",
 		"magnitudes": [0.05, 0.10, 0.20],
 	},
 	{
 		"id": "range_all",
 		"title": "Extended Reach",
-		"desc_template": "+%s%% range for all traps",
+		"impact_template": "+%s%% range for all traps",
+		"plain_text": "Every trap covers a wider area. Enemies spend more time inside each trap's kill zone.",
 		"magnitudes": [0.05, 0.10, 0.20],
 	},
 	{
 		"id": "firerate_all",
 		"title": "Hair Trigger",
-		"desc_template": "+%s%% fire rate for all traps",
+		"impact_template": "+%s%% fire rate for all traps",
+		"plain_text": "Every trap fires more often. Stacks with fire rate upgrades and Compressor boosts.",
 		"magnitudes": [0.05, 0.10, 0.20],
 	},
 	{
 		"id": "crit_chance_all",
 		"title": "Sharpened Instincts",
-		"desc_template": "+%s%% crit chance for all traps",
+		"impact_template": "+%s%% crit chance for all traps",
+		"plain_text": "Every trap has a higher chance to deal bonus damage on each shot. Has no effect until a trap's own Crit Chance is upgraded above 0%.",
 		"magnitudes": [0.02, 0.04, 0.08],
 	},
 	{
 		"id": "crit_dmg_all",
 		"title": "Lethal Potency",
-		"desc_template": "+%s%% crit damage for all traps",
+		"impact_template": "+%s%% crit damage bonus",
+		"plain_text": "Critical hits from every trap hit harder. Combines with per-trap Crit Damage upgrades.",
 		"magnitudes": [0.10, 0.20, 0.40],
 	},
 	{
 		"id": "bucks_all",
 		"title": "Invoice Padding",
-		"desc_template": "+%s%% Bug Bucks from all kills",
+		"impact_template": "+%s%% Bug Bucks per kill",
+		"plain_text": "Every kill pays out more. Applies to all enemy types including boss splits and spawned units.",
 		"magnitudes": [0.10, 0.20, 0.40],
 	},
 	{
 		"id": "infestation_heal",
 		"title": "Hazmat Protocol",
-		"desc_template": "Each kill reduces Infestation by %s",
+		"impact_template": "-%s infestation per kill",
+		"plain_text": "Killing pests slowly cleans up the infestation. High kill density in a wave can recover meaningful ground.",
 		"magnitudes": [0.002, 0.004, 0.008],
 	},
 	{
 		"id": "upgrade_discount",
 		"title": "Bulk Procurement",
-		"desc_template": "-%s%% cost on all trap upgrades",
+		"impact_template": "-%s%% upgrade costs",
+		"plain_text": "All Bug Bucks upgrade costs for traps and boosts are reduced. Applies immediately to all future upgrades this run.",
 		"magnitudes": [0.05, 0.10, 0.20],
 	},
 ]
 
-## Human-readable names for the trap stats used in equipment card sub-labels.
+## Human-readable display names for each upgradeable trap stat.
 const STAT_NAMES: Dictionary = {
-	"damage":     "Damage",
-	"range":      "Range",
-	"fire_rate":  "Fire Rate",
-	"duration":   "Duration",
-	"crit_chance":"Crit Chance",
-	"crit_dmg":   "Crit Damage",
+	"damage":      "Damage",
+	"range":       "Range",
+	"fire_rate":   "Fire Rate",
+	"duration":    "Duration",
+	"crit_chance": "Crit Chance",
+	"crit_dmg":    "Crit Damage",
+}
+
+## Plain-text explanation of what each stat upgrade actually does.
+const STAT_PLAIN_TEXT: Dictionary = {
+	"damage":      "Increases the damage this trap deals per shot.",
+	"range":       "Increases the radius of this trap's targeting area.",
+	"fire_rate":   "Reduces the cooldown between shots, firing more often.",
+	"duration":    "Extends how long the slow or poison effect lasts.",
+	"crit_chance": "Adds a chance for each shot to deal bonus critical damage.",
+	"crit_dmg":    "Increases the damage multiplier when a critical hit occurs.",
 }
 
 
@@ -268,18 +286,24 @@ func _build_equipment_card(tier: int, used_ids: Array) -> Dictionary:
 
 	var trap_name: String  = trap.get_type_name()
 	var stat_name: String  = STAT_NAMES.get(stat, stat)
-	var tier_label: String = UpgradeCard.TIER_NAMES[tier]
+	var plain_text: String = STAT_PLAIN_TEXT.get(stat, "")
+
+	# Compute current and after values so the card can show the exact impact.
+	var current_val: String = _format_stat_current(trap, stat)
+	var after_val: String   = _format_stat_after(trap, stat)
 
 	return {
-		"id":          unique_id,
-		"category":    "equipment",
-		"tier":        tier,
-		"title":       "Free Upgrade",
-		"description": "%s — %s" % [trap_name, stat_name],
-		"sub_label":   "%s quality" % tier_label,
-		"magnitude":   0.0,       # not used for equipment cards
-		"trap_node":   trap,
-		"stat":        stat,
+		"id":            unique_id,
+		"category":      "equipment",
+		"tier":          tier,
+		"title":         trap_name,
+		"stat_name":     stat_name,
+		"plain_text":    plain_text,
+		"current_val":   current_val,
+		"after_val":     after_val,
+		"magnitude":     0.0,   # not used for equipment cards
+		"trap_node":     trap,
+		"stat":          stat,
 	}
 
 
@@ -314,9 +338,9 @@ func _build_campaign_card(tier: int, used_ids: Array) -> Dictionary:
 			continue
 		var magnitude: float = buff["magnitudes"][tier]
 
-		# Format the description.
-		# Magnitudes expressed as percentages are multiplied by 100 for display.
-		# The Hazmat Protocol buff is a raw float (e.g. 0.002), shown as-is.
+		# Format the impact line.
+		# Most magnitudes are percentages — multiply by 100 for display.
+		# Hazmat Protocol is a raw float (e.g. 0.002) and is shown as-is.
 		var display_val: String
 		if buff["id"] == "infestation_heal":
 			display_val = "%.3f" % magnitude
@@ -328,8 +352,11 @@ func _build_campaign_card(tier: int, used_ids: Array) -> Dictionary:
 			"category":    "campaign",
 			"tier":        tier,
 			"title":       buff["title"],
-			"description": buff["desc_template"] % display_val,
-			"sub_label":   "",
+			"impact_line": buff["impact_template"] % display_val,
+			"plain_text":  buff["plain_text"],
+			"current_val": "",
+			"after_val":   "",
+			"stat_name":   "",
 			"magnitude":   magnitude,
 			"trap_node":   null,
 			"stat":        "",
@@ -338,8 +365,11 @@ func _build_campaign_card(tier: int, used_ids: Array) -> Dictionary:
 	# Safety fallback — should never reach here if the pool has ≥ 3 entries.
 	return {
 		"id": "dmg_all", "category": "campaign", "tier": tier,
-		"title": "Extermination Formula", "description": "+5% damage to all traps",
-		"sub_label": "", "magnitude": 0.05, "trap_node": null, "stat": "",
+		"title": "Extermination Formula",
+		"impact_line": "+5% damage to all traps",
+		"plain_text": "Every trap deals more damage per shot.",
+		"current_val": "", "after_val": "", "stat_name": "",
+		"magnitude": 0.05, "trap_node": null, "stat": "",
 	}
 
 
@@ -377,3 +407,31 @@ func _on_card_selected(upgrade: Dictionary) -> void:
 
 	get_tree().paused = false
 	queue_free()
+
+
+# ---------------------------------------------------------------------------
+# Stat value formatters
+# ---------------------------------------------------------------------------
+
+## Returns a formatted string for the current value of the given stat on trap.
+func _format_stat_current(trap: Node3D, stat: String) -> String:
+	match stat:
+		"damage":      return "%.1f" % trap.get_effective_damage()
+		"range":       return "%.1f" % trap.get_range_radius()
+		"fire_rate":   return "%.2f/s" % trap.get_effective_shots_per_sec()
+		"duration":    return "%.1fs" % trap.get_duration()
+		"crit_chance": return "%d%%" % roundi(trap.get_crit_chance() * 100.0)
+		"crit_dmg":    return "%d%%" % roundi(trap.get_crit_damage_bonus() * 100.0)
+	return ""
+
+
+## Returns a formatted string for the value after one upgrade of stat on trap.
+func _format_stat_after(trap: Node3D, stat: String) -> String:
+	match stat:
+		"damage":      return "%.1f" % trap.get_effective_damage_after_upgrade()
+		"range":       return "%.1f" % trap.get_range_after_upgrade()
+		"fire_rate":   return "%.2f/s" % trap.get_effective_shots_per_sec_after_upgrade()
+		"duration":    return "%.1fs" % trap.get_duration_after_upgrade()
+		"crit_chance": return "%d%%" % roundi(trap.get_crit_chance_after_upgrade() * 100.0)
+		"crit_dmg":    return "%d%%" % roundi(trap.get_crit_damage_after_upgrade() * 100.0)
+	return ""

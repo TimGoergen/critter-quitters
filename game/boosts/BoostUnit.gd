@@ -174,8 +174,8 @@ var _range_fill_mat:   StandardMaterial3D = null
 var _range_ring_mat:   StandardMaterial3D = null
 var _range_ring_mi:    MeshInstance3D     = null   # stored so the mesh can be swapped for peek mode
 
-# Star display — one Label3D per possible star (max 3), mirrors Trap._star_labels.
-var _star_labels:  Array[Label3D]            = []
+# Star display — one MeshInstance3D polygon star per possible star (max 3).
+var _star_meshes:  Array[MeshInstance3D]     = []
 
 # Upgrade tint — kept so _update_star_display() can lerp outline and shadow toward gold.
 var _outline_mats: Array[StandardMaterial3D] = []
@@ -855,46 +855,37 @@ func _mi(mesh: Mesh, mat: StandardMaterial3D) -> MeshInstance3D:
 # Star display — mirrors Trap._spawn_star_display / _update_star_display
 # ---------------------------------------------------------------------------
 
-## Spawns three Label3D star slots. Called from initialize() only — preview
-## instances skip this so the HUD icon SubViewport stays clean.
+## Spawns three MeshInstance3D polygon stars. Called from initialize() only —
+## preview instances skip this so the HUD icon SubViewport stays clean.
 func _spawn_star_display() -> void:
-	var sizes := [88, 66, 66]   # [center, left, right] font sizes
-	for sz: int in sizes:
-		var lbl                  := Label3D.new()
-		lbl.font                  = UIFonts.symbols()   # primary_bold has no ★ glyph
-		lbl.font_size             = sz
-		lbl.pixel_size            = 0.009
-		lbl.modulate              = Color(1.0, 0.92, 0.30, 1.0)
-		lbl.outline_size          = 8
-		lbl.outline_modulate      = Color(0.0, 0.0, 0.0, 0.90)
-		lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_CENTER
-		lbl.billboard             = BaseMaterial3D.BILLBOARD_ENABLED
-		lbl.no_depth_test         = true
-		lbl.text                  = "★"
-		lbl.visible               = false
-		add_child(lbl)
-		_star_labels.append(lbl)
+	var radii: Array[float] = [0.17, 0.12, 0.12]   # [center, left, right] outer radius
+	var gold := Color(1.0, 0.92, 0.30, 1.0)
+	for r: float in radii:
+		var mi := Trap._make_star_mesh(r, gold)
+		mi.visible = false
+		add_child(mi)
+		_star_meshes.append(mi)
 
 
 ## Refreshes star labels, tints the footprint outline toward gold, and brightens
 ## the drop shadow as stats are maxed. Connected to stats_changed in initialize().
 func _update_star_display() -> void:
-	if _star_labels.is_empty():
+	if _star_meshes.is_empty():
 		return
 	var maxed: int = get_maxed_stat_count()
 
 	const STAR_Z:      float = 0.45
 	const STAR_Y:      float = 0.65
-	const SIDE_OFFSET: float = 0.24
+	const SIDE_OFFSET: float = 0.30  # matches Trap.gd
 
 	var positions := [
 		Vector3(0.0,          STAR_Y, STAR_Z),
 		Vector3(-SIDE_OFFSET, STAR_Y, STAR_Z),
 		Vector3( SIDE_OFFSET, STAR_Y, STAR_Z),
 	]
-	for i in range(_star_labels.size()):
-		_star_labels[i].visible  = i < maxed
-		_star_labels[i].position = positions[i]
+	for i in range(_star_meshes.size()):
+		_star_meshes[i].visible  = i < maxed
+		_star_meshes[i].position = positions[i]
 
 	const GOLD: Color = Color(1.0, 0.82, 0.18)
 	var frac := float(maxed) / float(get_total_upgradeable_stats())

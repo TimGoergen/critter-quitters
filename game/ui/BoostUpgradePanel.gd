@@ -20,6 +20,7 @@ signal sell_requested   # Arena connects this to _on_sell_boost_requested(anchor
 const HUD      = preload("res://ui/HUD.gd")
 const UIFonts  = preload("res://ui/UIFonts.gd")
 const BoostUnit = preload("res://boosts/BoostUnit.gd")
+const StarBar  = preload("res://ui/StarBar.gd")
 
 const PADDING:    float = 9.0
 const BORDER_W:   float = 2.0
@@ -400,9 +401,9 @@ func _refresh_stat_row(
 	cur_text: String, after_text: String,
 	maxed: bool, cost: int
 ) -> void:
-	row["name"].text  = name_text
-	row["stars"].text = _stars(level)
-	row["cur"].text   = cur_text
+	row["name"].text    = name_text
+	row["stars"].set_level(level)
+	row["cur"].text     = cur_text
 
 	if maxed:
 		row["after"].visible              = false
@@ -624,16 +625,9 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 
 	_set_mouse_passthrough(btn_hbox)
 
-	# Stars — rightmost element, sizes to its text content (always 3 characters).
-	var lbl_stars := Label.new()
-	lbl_stars.vertical_alignment  = VERTICAL_ALIGNMENT_CENTER
+	# Stars — rightmost element. StarBar draws polygon stars — no font dependency.
+	var lbl_stars := StarBar.new()
 	lbl_stars.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	lbl_stars.add_theme_font_size_override("font_size", 52)
-	lbl_stars.add_theme_color_override("font_color", COLOR_STARS)
-	lbl_stars.add_theme_color_override("font_outline_color", Color(0.08, 0.08, 0.08, 1.0))
-	lbl_stars.add_theme_constant_override("outline_size", 4)
-	lbl_stars.add_theme_font_override("font", UIFonts.symbols())
-	lbl_stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(lbl_stars)
 
 	return {
@@ -662,8 +656,7 @@ func _set_mouse_passthrough(node: Control) -> void:
 			_set_mouse_passthrough(child)
 
 
-func _stars(level: int) -> String:
-	return "★".repeat(level) + "☆".repeat(3 - level)
+## (Removed — star display is now handled by StarBar.gd using draw_polygon().)
 
 
 func _apply_button_style(btn: Button, maxed: bool) -> void:

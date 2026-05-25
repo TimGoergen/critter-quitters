@@ -184,9 +184,9 @@ const EARLY_SEND_PER_ENEMY: int = 3
 ## How much XP the player has accumulated toward the next level this run.
 var current_xp: int = 0
 
-## The player's current level within this run. Starts at 1; increments each
-## time the XP bar fills and the player chooses an upgrade card.
-var current_player_level: int = 1
+## The player's current level within this run. Starts at 0; the first
+## level-up advances it to 1, the second to 2, and so on.
+var current_player_level: int = 0
 
 
 # ---------------------------------------------------------------------------
@@ -242,7 +242,7 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 	early_wave_bonus_rate = 2
 	# Reset experience and all campaign buffs so each run starts clean.
 	current_xp = 0
-	current_player_level = 1
+	current_player_level = 0
 	global_damage_bonus = 0.0
 	global_range_bonus = 0.0
 	global_fire_rate_bonus = 0.0
@@ -314,10 +314,10 @@ func heal_infestation(amount: float) -> void:
 # ---------------------------------------------------------------------------
 
 ## Returns the XP required to advance from the current level to the next.
-## Level 1 → 2 costs 12 XP. Each subsequent level costs 3% more (geometric
+## Level 0 → 1 costs 12 XP. Each subsequent level costs 3% more (geometric
 ## curve), so the bar fills at a pace that scales smoothly with wave progress.
 func exp_for_next_level() -> int:
-	return ceili(12.0 * pow(1.03, float(current_player_level - 1)))
+	return ceili(12.0 * pow(1.03, float(current_player_level)))
 
 
 ## Awards XP for a kill. Emits xp_changed each time; emits level_up whenever
