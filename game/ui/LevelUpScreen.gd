@@ -180,7 +180,7 @@ func _build_screen(new_level: int) -> void:
 	add_child(sub)
 
 	# Generate three upgrade cards and lay them out.
-	var cards: Array[Dictionary] = _generate_cards()
+	var cards: Array = _generate_cards()
 	_spawn_cards(cards)
 
 
@@ -191,10 +191,10 @@ func _build_screen(new_level: int) -> void:
 ## Generates 3 unique upgrade card data Dictionaries.
 ## Tiers are rolled independently per card. Category (equipment vs campaign)
 ## is chosen randomly, with a fallback to campaign if no eligible traps exist.
-func _generate_cards() -> Array[Dictionary]:
-	var result: Array[Dictionary] = []
+func _generate_cards() -> Array:
+	var result: Array = []
 	# Track which upgrade IDs have already been offered to avoid duplicates.
-	var used_ids: Array[String] = []
+	var used_ids: Array = []
 
 	for _i in 3:
 		var tier   := _roll_tier()
@@ -218,11 +218,11 @@ func _roll_tier() -> int:
 ## Builds a card Dictionary for the given tier.
 ## Tries equipment first (50/50 split), falling back to campaign if no traps
 ## are eligible or the chosen upgrade ID is already in used_ids.
-func _build_card(tier: int, used_ids: Array[String]) -> Dictionary:
+func _build_card(tier: int, used_ids: Array) -> Dictionary:
 	# Try equipment first with a 50% probability.
 	if randf() < 0.50:
 		var equip_card := _build_equipment_card(tier, used_ids)
-		if equip_card != null:
+		if not equip_card.is_empty():
 			return equip_card
 
 	# Fall back to (or always choose) a campaign card.
@@ -231,7 +231,7 @@ func _build_card(tier: int, used_ids: Array[String]) -> Dictionary:
 
 ## Tries to find an eligible placed trap and a non-maxed stat for an equipment card.
 ## Returns null if no eligible trap/stat combination exists.
-func _build_equipment_card(tier: int, used_ids: Array[String]) -> Dictionary:
+func _build_equipment_card(tier: int, used_ids: Array) -> Dictionary:
 	# Collect all placed traps that have at least one stat that can still be upgraded.
 	var eligible: Array = []
 	for trap in _trap_nodes:
@@ -253,14 +253,17 @@ func _build_equipment_card(tier: int, used_ids: Array[String]) -> Dictionary:
 	# Build a unique ID for this card so duplicate-prevention works.
 	var unique_id := "equip_%s_%s" % [trap.get_instance_id(), stat]
 	if unique_id in used_ids:
-		# Already offered this exact upgrade — try a different stat.
+		# Already offered this exact upgrade — try a different stat on this trap.
+		# GDScript has no for…else, so use a flag to detect whether we found one.
+		var found := false
 		for s in stats.slice(1):
 			var alt_id := "equip_%s_%s" % [trap.get_instance_id(), s]
 			if alt_id not in used_ids:
 				stat = s
 				unique_id = alt_id
+				found = true
 				break
-		else:
+		if not found:
 			return {}   # no unique option found on this trap
 
 	var trap_name: String  = trap.get_type_name()
@@ -281,8 +284,8 @@ func _build_equipment_card(tier: int, used_ids: Array[String]) -> Dictionary:
 
 
 ## Returns a list of stat strings that are not yet maxed on this trap.
-func _get_upgradeable_stats(trap: Node3D) -> Array[String]:
-	var result: Array[String] = []
+func _get_upgradeable_stats(trap: Node3D) -> Array:
+	var result: Array = []
 	if not trap.is_damage_maxed():
 		result.append("damage")
 	if not trap.is_range_maxed():
@@ -301,12 +304,12 @@ func _get_upgradeable_stats(trap: Node3D) -> Array[String]:
 
 ## Picks a campaign buff that has not already been offered this level-up.
 ## Returns a fully populated card Dictionary.
-func _build_campaign_card(tier: int, used_ids: Array[String]) -> Dictionary:
+func _build_campaign_card(tier: int, used_ids: Array) -> Dictionary:
 	# Shuffle a copy of the buff list and find the first one not already used.
 	var pool := CAMPAIGN_BUFFS.duplicate()
 	pool.shuffle()
 
-	for buff: Dictionary in pool:
+	for buff in pool:
 		if buff["id"] in used_ids:
 			continue
 		var magnitude: float = buff["magnitudes"][tier]
@@ -346,7 +349,7 @@ func _build_campaign_card(tier: int, used_ids: Array[String]) -> Dictionary:
 
 ## Instantiates three UpgradeCard controls, connects their signals, and lays
 ## them out horizontally centred in the virtual viewport (1280×600).
-func _spawn_cards(cards: Array[Dictionary]) -> void:
+func _spawn_cards(cards: Array) -> void:
 	var total_w := CARD_W * 3.0 + CARD_GAP * 2.0
 	var start_x := (1280.0 - total_w) * 0.5   # centred in 1280px virtual width
 	var card_y  := (600.0  - CARD_H)  * 0.5 + 20.0   # slightly above centre
