@@ -209,14 +209,16 @@ func _input(event: InputEvent) -> void:
 	if not is_press:
 		return
 
-	# Check if the tap falls within this card's rect.
-	var local_pos: Vector2
+	# Check if the tap falls within this card's screen rect.
+	# get_global_rect() returns the card's rect in canvas/viewport coordinates,
+	# which is the same space that touch and mouse events report positions in.
+	var event_pos: Vector2
 	if event is InputEventScreenTouch:
-		local_pos = to_local(event.position)
+		event_pos = event.position
 	else:
-		local_pos = to_local(event.global_position)
+		event_pos = event.global_position
 
-	if Rect2(Vector2.ZERO, size).has_point(local_pos):
+	if get_global_rect().has_point(event_pos):
 		_select()
 		get_viewport().set_input_as_handled()
 
