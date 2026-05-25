@@ -65,7 +65,6 @@ signal card_selected(upgrade: Dictionary)
 
 var _category_lbl:  Label     = null   # "CAMPAIGN BUFF" / "FREE UPGRADE"
 var _tier_lbl:      Label     = null   # "COMMON" / "PROFESSIONAL" / "RARE"
-var _tier_strip:    ColorRect = null   # colored left border
 var _title_lbl:     Label     = null   # buff name or trap name
 var _stat_lbl:      Label     = null   # stat name (equipment only)
 var _impact_lbl:    Label     = null   # "+10% fire rate" or "0.83/s → 0.90/s"
@@ -103,23 +102,32 @@ func _build_card() -> void:
 	var is_equipment: bool = _upgrade_data.get("category", "") == "equipment"
 	var px                := 10.0   # horizontal padding used throughout
 
-	# --- Background ---
+	# --- Full tier-colour border + dark background ---
 	# All decorative children use MOUSE_FILTER_IGNORE so they do not swallow
 	# click events. The SELECT button is the only node that should receive input.
-	var bg := ColorRect.new()
-	bg.color        = Color(0.12, 0.12, 0.16, 0.96)
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(bg)
+	#
+	# Layering: tier-color rect fills the entire card, then the dark background
+	# sits inset by BORDER_W pixels on all four sides, leaving a uniform outline.
+	const BORDER_W := 2.0
 
-	# --- Tier colour strip — 6 px left border ---
-	_tier_strip = ColorRect.new()
-	_tier_strip.color         = tier_color
-	_tier_strip.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	_tier_strip.anchor_right  = 0.0
-	_tier_strip.anchor_bottom = 1.0
-	_tier_strip.offset_right  = 6.0
-	add_child(_tier_strip)
+	var border := ColorRect.new()
+	border.color        = tier_color
+	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	border.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(border)
+
+	var bg := ColorRect.new()
+	bg.color         = Color(0.12, 0.12, 0.16, 0.96)
+	bg.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	bg.anchor_left   = 0.0
+	bg.anchor_top    = 0.0
+	bg.anchor_right  = 1.0
+	bg.anchor_bottom = 1.0
+	bg.offset_left   = BORDER_W
+	bg.offset_top    = BORDER_W
+	bg.offset_right  = -BORDER_W
+	bg.offset_bottom = -BORDER_W
+	add_child(bg)
 
 	# --- Tier name ("RARE" etc.) — top-left in tier colour ---
 	_tier_lbl = Label.new()
