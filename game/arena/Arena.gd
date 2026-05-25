@@ -2607,10 +2607,12 @@ func _on_level_up(new_level: int) -> void:
 	if GameState.current_phase == GameState.Phase.RUN_OVER:
 		return
 	var screen := LevelUpScreen.new()
-	# Pass placed trap nodes so the screen can generate equipment cards.
-	screen.setup(new_level, _trap_nodes.values())
 	screen.upgrade_chosen.connect(_on_level_up_upgrade_chosen)
+	# add_child first so the node is in the scene tree before setup() runs.
+	# setup() calls get_tree().paused — that returns null if the node isn't
+	# in the tree yet.
 	add_child(screen)
+	screen.setup(new_level, _trap_nodes.values())
 
 
 ## Applies the upgrade chosen on the LevelUpScreen.
