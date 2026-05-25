@@ -1170,7 +1170,7 @@ func _spawn_enemy(path: Array[Vector2i], enemy_type: Enemy.EnemyType) -> void:
 
 
 ## Spawns a new enemy mid-arena starting from grid_pos.
-## Used for on-death effects (Cockroach Nymph splits, Mouse gnat swarm).
+## Used for on-death effects (e.g. Rat King splitting into Rats).
 ## Finds a fresh path from the given cell; does nothing if no path exists.
 func spawn_enemy_at_grid_position(grid_pos: Vector2i, enemy_type: Enemy.EnemyType) -> void:
 	var path := _find_shortest_exit_path(grid_pos)
@@ -1217,14 +1217,10 @@ func _on_enemy_died(enemy: Node3D) -> void:
 	# the spawned children don't cause an immediate false wave-end check.
 	var death_cell: Vector2i = enemy.get_current_cell()
 	match enemy.get_enemy_type():
-		Enemy.EnemyType.COCKROACH_NYMPH:
-			# Splits into two smaller cockroaches that continue toward the exit.
-			for _i in 2:
-				spawn_enemy_at_grid_position(death_cell, Enemy.EnemyType.COCKROACH_MINI)
-		Enemy.EnemyType.MOUSE:
-			# Releases a swarm of gnats from its position.
+		Enemy.EnemyType.RAT_KING:
+			# Splits into three Rats that inherit the path from the kill point.
 			for _i in 3:
-				spawn_enemy_at_grid_position(death_cell, Enemy.EnemyType.GNAT)
+				spawn_enemy_at_grid_position(death_cell, Enemy.EnemyType.RAT)
 
 	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
 		_start_wave()
@@ -1372,8 +1368,10 @@ func _launch_wave(additive: bool = false) -> void:
 			Enemy.EnemyType.CRICKET,
 			Enemy.EnemyType.BEETLE,
 			Enemy.EnemyType.COCKROACH,
-			Enemy.EnemyType.RAT,
+			Enemy.EnemyType.MOUSE,
 			Enemy.EnemyType.MOSQUITO,
+			Enemy.EnemyType.RAT_KING,
+			Enemy.EnemyType.RAT,
 		]
 		# Restrict to the subset selected in the playtest dialog (empty = all types).
 		if not _static_allowed_types.is_empty():

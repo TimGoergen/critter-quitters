@@ -259,5 +259,7 @@ func _type_name(type: int) -> String:
 		Enemy.EnemyType.CRICKET:   return "CRICKET"
 		Enemy.EnemyType.BEETLE:    return "BEETLE"
 		Enemy.EnemyType.COCKROACH: return "COCKROACH"
+		Enemy.EnemyType.MOUSE:     return "MOUSE"
+		Enemy.EnemyType.RAT_KING:  return "RAT KING"
 		Enemy.EnemyType.RAT:       return "RAT"
 	return "UNKNOWN"

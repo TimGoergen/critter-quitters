@@ -68,8 +68,10 @@ const STATIC_ENEMY_TYPES: Array = [
 	Enemy.EnemyType.CRICKET,
 	Enemy.EnemyType.BEETLE,
 	Enemy.EnemyType.COCKROACH,
-	Enemy.EnemyType.RAT,
+	Enemy.EnemyType.MOUSE,
 	Enemy.EnemyType.MOSQUITO,
+	Enemy.EnemyType.RAT_KING,
+	Enemy.EnemyType.RAT,
 ]
 
 const ENEMY_TYPE_NAMES: Dictionary = {
@@ -78,8 +80,10 @@ const ENEMY_TYPE_NAMES: Dictionary = {
 	Enemy.EnemyType.CRICKET:   "Cricket",
 	Enemy.EnemyType.BEETLE:    "Beetle",
 	Enemy.EnemyType.COCKROACH: "Cockroach",
-	Enemy.EnemyType.RAT:       "Rat",
+	Enemy.EnemyType.MOUSE:     "Mouse",
 	Enemy.EnemyType.MOSQUITO:  "Mosquito",
+	Enemy.EnemyType.RAT_KING:  "Rat King",
+	Enemy.EnemyType.RAT:       "Rat",
 }
 
 var _field_bucks:  LineEdit = null
