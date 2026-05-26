@@ -68,8 +68,8 @@ const COLOR_BTN_SELL_BORDER  := Color(0.75, 0.22, 0.12, 1.0)
 var _boost:       Node  = null
 var _panel_rect:  Rect2 = Rect2()
 
-var _border:     Panel     = null
-var _bg:         ColorRect = null
+var _visual:     Control   = null   # _PanelVisual — draws border + background via _draw()
+var _bg:         Control   = null   # transparent container for all UI children
 var _lbl_title:  Label     = null
 
 # Each row is a Dictionary: {row, btn, name, stars, cur, after, cost}
@@ -126,27 +126,24 @@ func _build_ui() -> void:
 		Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
 	)
 
-	# Outer Panel = the visible border ring.
-	# Solid bg_color (COLOR_OUTLINE) instead of transparent bg + border_color because
-	# StyleBoxFlat corner_radius doesn't reliably clip a border stroke with transparent
-	# bg in Godot 4 CanvasLayer children.
-	var border_style                         := StyleBoxFlat.new()
-	border_style.bg_color                   = COLOR_OUTLINE
-	border_style.corner_radius_top_left     = 10 + int(BORDER_W)
-	border_style.corner_radius_top_right    = 10 + int(BORDER_W)
-	border_style.corner_radius_bottom_left  = 0
-	border_style.corner_radius_bottom_right = 0
-	_border          = Panel.new()
-	_border.position = Vector2(px - BORDER_W, py - BORDER_W)
-	_border.size     = Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
-	_border.add_theme_stylebox_override("panel", border_style)
-	add_child(_border)
+	# _PanelVisual draws the border ring and background directly in _draw() using
+	# draw_style_box() — this guarantees rounded corners render correctly regardless
+	# of the project's theme configuration. Panel.add_theme_stylebox_override() does
+	# not reliably apply StyleBoxFlat corner_radius when the node is a direct child
+	# of a CanvasLayer in this project (the project theme overrides the per-node override).
+	var vis := _PanelVisual.new()
+	vis.position = Vector2(px - BORDER_W, py - BORDER_W)
+	vis.size     = Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
+	vis.setup(COLOR_OUTLINE, COLOR_BG, BORDER_W, 10 + int(BORDER_W))
+	_visual = vis
+	add_child(_visual)
 
-	# ColorRect for background — renders reliably as a direct child of a CanvasLayer.
-	_bg          = ColorRect.new()
-	_bg.color    = COLOR_BG
-	_bg.position = Vector2(px, py)
-	_bg.size     = Vector2(panel_w, panel_h)
+	# Plain transparent Control — no visual of its own; acts as a positioned
+	# container so all UI child nodes sit in the correct panel-local coordinate space.
+	_bg              = Control.new()
+	_bg.position     = Vector2(px, py)
+	_bg.size         = Vector2(panel_w, panel_h)
+	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_bg)
 
 	var inner_w := panel_w - PADDING * 2.0
@@ -478,13 +475,13 @@ func _on_btn_stat_c() -> void:
 
 
 func _on_peek_down() -> void:
+	_visual.modulate.a = 0.18
 	_bg.modulate.a     = 0.18
-	_border.modulate.a = 0.18
 
 
 func _on_peek_up() -> void:
+	_visual.modulate.a = 1.0
 	_bg.modulate.a     = 1.0
-	_border.modulate.a = 1.0
 
 
 func _on_btn_sell() -> void:
@@ -744,6 +741,40 @@ func _apply_sell_button_style(btn: Button) -> void:
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
 	btn.focus_mode = Control.FOCUS_NONE
+
+
+# ---------------------------------------------------------------------------
+# Panel visual — draws the border ring and solid background via _draw() so
+# that rounded corners work regardless of the project's theme configuration.
+# See TrapUpgradePanel._PanelVisual for the full explanation.
+# ---------------------------------------------------------------------------
+class _PanelVisual extends Control:
+	var _style    := StyleBoxFlat.new()
+	var _bg_color  := Color.BLACK
+	var _border_w: float = 2.0
+
+	func setup(border_color: Color, bg_color: Color, border_w: float, corner_top: int) -> void:
+		_bg_color  = bg_color
+		_border_w  = border_w
+		_style.bg_color                   = border_color
+		_style.corner_radius_top_left     = corner_top
+		_style.corner_radius_top_right    = corner_top
+		_style.corner_radius_bottom_left  = 0
+		_style.corner_radius_bottom_right = 0
+		queue_redraw()
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	func _draw() -> void:
+		if size.x <= 0.0 or size.y <= 0.0:
+			return
+		draw_style_box(_style, Rect2(Vector2.ZERO, size))
+		draw_rect(
+			Rect2(_border_w, _border_w, size.x - _border_w * 2.0, size.y - _border_w * 2.0),
+			_bg_color
+		)
 
 
 # ---------------------------------------------------------------------------

@@ -120,10 +120,10 @@ func _ready() -> void:
 	_level_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	_level_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	_level_lbl.add_theme_font_size_override("font_size", 22)   # large enough to visually fill the 44px panel
-	_level_lbl.add_theme_color_override("font_color", Color(0.92, 0.92, 0.96, 1.0))
-	_level_lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
-	_level_lbl.add_theme_constant_override("shadow_offset_x", 1)
-	_level_lbl.add_theme_constant_override("shadow_offset_y", 1)
+	# Black text — legible against the silver panel background.
+	# No drop shadow needed; the high contrast between black and silver makes the
+	# label stand out without it, and the shadow made it look embossed/cluttered.
+	_level_lbl.add_theme_color_override("font_color", Color(0.0, 0.0, 0.0, 1.0))
 	_level_lbl.anchor_left   = 0.86
 	_level_lbl.anchor_right  = 1.0
 	_level_lbl.anchor_top    = 0.0
