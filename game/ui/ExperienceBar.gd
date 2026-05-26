@@ -34,22 +34,32 @@ const PANEL_H: float = 44.0
 const RECT_BRD: float = 4.0
 
 ## Radius of the left-end bulb circle.
-## Inner height = PANEL_H - RECT_BRD*2 = 36; BULB_R = 18 fills the full inner height.
-const BULB_R: float = 18.0
+## Inner half-height = (PANEL_H - RECT_BRD*2) / 2 = 18. BULB_R = 14 leaves a 4 px
+## gap on all sides between the drawn circle and the inner panel edges.
+const BULB_R: float = 14.0
 
 ## Height of the thin bar track that extends to the right of the bulb.
 const BAR_H: float = 14.0
 
+## How many pixels the bar track overlaps the right edge of the bulb.
+## A small overlap creates a seamless join without hiding the bulb.
+const BAR_BULB_OVERLAP: float = 4.0
+
+## The bar track ends at this fraction of the total panel width.
+## The right remainder is reserved for the LVL N label.
+const BAR_WIDTH_FRACTION: float = 0.80
+
 ## Bright saturated blue — chosen to contrast clearly with the gold/amber palette
 ## elsewhere in the HUD, signalling "progress toward upgrade" at a glance.
-const COLOR_FILL    := Color(0.18, 0.55, 1.0, 1.0)
+const COLOR_FILL        := Color(0.18, 0.55, 1.0, 1.0)
 
-## Very dark navy — empty track and bar background.
-const COLOR_EMPTY   := Color(0.03, 0.05, 0.12, 1.0)
+## Silver — interior panel background and border colour.
+## Matches HUD.COLOR_SILVER_BORDER so control border and arena outline merge.
+const COLOR_OUTLINE     := Color(0.72, 0.72, 0.80, 1.0)
 
-## Silver — border colour.  Matches HUD.COLOR_SILVER_BORDER exactly so the
-## control border and the arena outline appear as a single continuous line.
-const COLOR_OUTLINE := Color(0.72, 0.72, 0.80, 1.0)
+## Slightly darker silver — the unfilled portion of the bar track.
+## Must contrast enough against COLOR_OUTLINE to read as a distinct inset trough.
+const COLOR_TRACK_EMPTY := Color(0.44, 0.44, 0.50, 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -101,7 +111,7 @@ func _ready() -> void:
 	_level_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 	_level_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	_level_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_level_lbl.add_theme_font_size_override("font_size", 12)
+	_level_lbl.add_theme_font_size_override("font_size", 22)   # large enough to visually fill the 44px panel
 	_level_lbl.add_theme_color_override("font_color", Color(0.92, 0.92, 0.96, 1.0))
 	_level_lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
 	_level_lbl.add_theme_constant_override("shadow_offset_x", 1)
@@ -135,32 +145,31 @@ func _draw() -> void:
 
 	var brd := RECT_BRD
 
-	# ── 1. Silver border rectangle (full control) ─────────────────────────────
-	draw_rect(Rect2(0.0, 0.0, w, h), COLOR_OUTLINE)
+	# ── 1. Silver border + silver interior — full panel reads as a silver strip ─
+	# Border and interior use the same colour so they merge into one band.
+	# The bulb and bar track are drawn on top of this silver field.
+	draw_rect(Rect2(0.0, 0.0, w, h), COLOR_OUTLINE)   # border + background in one pass
 
-	# ── 2. Dark interior ──────────────────────────────────────────────────────
+	# ── 2. Bulb — always filled blue, acts as the permanent particle landing target ──
+	# Centre sits BULB_R pixels right of the inner left edge, vertically centred.
+	# BULB_R = 14 leaves a 4 px margin between the drawn circle and the panel edges
+	# (inner half-height = 18, drawn radius = 14 → 4 px gap top and bottom).
 	var inner_x := brd
-	var inner_y := brd
-	var inner_w := w - brd * 2.0
-	var inner_h := h - brd * 2.0
-	draw_rect(Rect2(inner_x, inner_y, inner_w, inner_h), COLOR_EMPTY)
-
-	# ── 3. Bulb — always filled blue, acts as the permanent landing target ─────
-	# Centred at (inner_x + BULB_R, h/2). Radius = BULB_R fills the full inner height.
 	var bulb_cx := inner_x + BULB_R
 	var bulb_cy := h * 0.5
 	draw_circle(Vector2(bulb_cx, bulb_cy), BULB_R, COLOR_FILL)
 
-	# ── 4. Thin bar track background (dark) ───────────────────────────────────
-	# Starts at the bulb's centre X and runs to the right inner edge so the
-	# filled circle overlaps the left half of the track, creating a seamless join.
-	var track_x  := bulb_cx
-	var track_w  := (inner_x + inner_w) - track_x
-	var track_y  := bulb_cy - BAR_H * 0.5
-	draw_rect(Rect2(track_x, track_y, track_w, BAR_H), COLOR_EMPTY)
+	# ── 3. Bar track — runs from just before the bulb's right edge to 80% of w ─
+	# BAR_BULB_OVERLAP keeps a small junction so the bar and bulb read as connected,
+	# while leaving the majority of the bulb clearly visible on the silver background.
+	var track_x := inner_x + BULB_R * 2.0 - BAR_BULB_OVERLAP
+	var track_y := bulb_cy - BAR_H * 0.5
+	var track_w := w * BAR_WIDTH_FRACTION - track_x
+	if track_w > 0.0:
+		draw_rect(Rect2(track_x, track_y, track_w, BAR_H), COLOR_TRACK_EMPTY)
 
-	# ── 5. Blue fill — sweeps left-to-right across the bar track ─────────────
-	if _current_fill_pct > 0.0:
+	# ── 4. Blue fill — sweeps left-to-right across the bar track ─────────────
+	if _current_fill_pct > 0.0 and track_w > 0.0:
 		var fill_w := _current_fill_pct * track_w
 		draw_rect(Rect2(track_x, track_y, fill_w, BAR_H), COLOR_FILL)
 
