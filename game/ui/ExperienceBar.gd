@@ -6,7 +6,7 @@
 ##   ┌──────────────────────────────────────────────────────────────────┐
 ##   │ ●● ═══════════════════════════════════════░░░░░░░░░░   LVL 4   │
 ##   └──────────────────────────────────────────────────────────────────┘
-##   ^bulb (always filled blue)
+##   ^bulb (always filled blue, with pulsing inner glow)
 ##       ^thin bar track (fills proportionally left-to-right)
 ##
 ## The silver border (RECT_BRD = 4px) is positioned flush with the arena's own
@@ -15,6 +15,14 @@
 ## The bulb is a filled circle on the left end, always drawn in the XP fill
 ## colour so it acts as a permanent visual landmark — and a landing target for
 ## the blue XP particles that fly from enemy deaths.
+##
+## Visual effects applied to the filled portion:
+##   Sheen:     A bright diagonal highlight sweeps left-to-right continuously,
+##              giving the bar a glass-gem or polished crystal look.
+##   Sparkles:  Small bright flecks randomly appear and fade within the fill,
+##              reinforcing a "charged energy" feel.
+##   Bulb glow: A pulsing inner ring on the bulb breathes in sync with the
+##              bar's animated atmosphere, without needing a shader.
 
 extends Control
 
@@ -54,9 +62,9 @@ const BAR_BULB_OVERLAP: float = 4.0
 ## The right remainder is reserved for the LVL N label.
 const BAR_WIDTH_FRACTION: float = 0.86
 
-## Bright saturated blue — chosen to contrast clearly with the gold/amber palette
-## elsewhere in the HUD, signalling "progress toward upgrade" at a glance.
-const COLOR_FILL        := Color(0.18, 0.55, 1.0, 1.0)
+## Pure electric blue — saturated, minimal green component, reads as "absolute" blue
+## rather than the previous periwinkle-leaning tint (which was Color(0.18, 0.55, 1.0)).
+const COLOR_FILL        := Color(0.05, 0.25, 1.0, 1.0)
 
 ## Silver — interior panel background and border colour.
 ## Matches HUD.COLOR_SILVER_BORDER so control border and arena outline merge.
@@ -65,6 +73,58 @@ const COLOR_OUTLINE     := Color(0.72, 0.72, 0.80, 1.0)
 ## Slightly darker silver — the unfilled portion of the bar track.
 ## Must contrast enough against COLOR_OUTLINE to read as a distinct inset trough.
 const COLOR_TRACK_EMPTY := Color(0.44, 0.44, 0.50, 1.0)
+
+
+# ---------------------------------------------------------------------------
+# Sheen animation constants
+# ---------------------------------------------------------------------------
+
+## Seconds for one full sheen sweep from the left edge to the right edge of the fill.
+const SHEEN_PERIOD  : float = 2.0
+
+## Half-width of the sheen column in pixels; controls how wide the glow band is.
+const SHEEN_HALF_W  : float = 20.0
+
+## Number of vertical strip samples used to build the soft-edged sheen gradient.
+## More steps = smoother appearance; 14 is a good balance for this bar height.
+const SHEEN_STEPS   : int   = 14
+
+## Peak colour of the sheen at its centre: bright ice-blue at 55% opacity.
+const COLOR_SHEEN   := Color(0.65, 0.88, 1.0, 0.55)
+
+
+# ---------------------------------------------------------------------------
+# Sparkle animation constants
+# ---------------------------------------------------------------------------
+
+## Maximum number of sparkle flecks alive at the same time.
+const SPARKLE_MAX        : int   = 8
+
+## Min/max lifetime of a single sparkle in seconds.
+const SPARKLE_LIFE_MIN   : float = 0.35
+const SPARKLE_LIFE_MAX   : float = 1.0
+
+## Min/max radius of a single sparkle circle in pixels.
+const SPARKLE_R_MIN      : float = 1.5
+const SPARKLE_R_MAX      : float = 4.0
+
+## Approximate number of new sparkles spawned per second while the bar has fill.
+const SPARKLE_SPAWN_RATE : float = 6.0
+
+## Peak colour of a sparkle — white-blue at full alpha; alpha is modulated per-sparkle.
+const COLOR_SPARKLE      := Color(0.85, 0.95, 1.0, 1.0)
+
+
+# ---------------------------------------------------------------------------
+# Bulb glow constants
+# ---------------------------------------------------------------------------
+
+## Seconds for one full pulse cycle of the bulb's inner glow ring.
+const GLOW_PERIOD     : float = 1.4
+
+## Colour of the bulb's inner glow ring at full brightness.
+## A lighter blue that reads as a highlight rather than a second fill.
+const COLOR_BULB_GLOW := Color(0.45, 0.75, 1.0, 0.50)
 
 
 # ---------------------------------------------------------------------------
@@ -98,6 +158,23 @@ var _current_fill_pct: float = 0.0
 var _tween:            Tween = null
 var _level:            int   = 0
 
+## Phase angle (0.0–1.0) for the sweeping sheen. Advances continuously in _process().
+var _sheen_pct: float = 0.0
+
+## Phase angle (0.0–1.0) for the bulb glow pulse. Advances continuously in _process().
+var _glow_pct: float = 0.0
+
+## Active sparkle flecks. Each is a Dictionary:
+##   pct      : float — position 0–1 across the fill width
+##   y_offset : float — pixels above/below the bar centreline
+##   age      : float — elapsed lifetime in seconds
+##   max_life : float — total lifetime in seconds
+##   radius   : float — drawn circle radius
+var _sparkles: Array = []
+
+## Fractional accumulator for spawning sparkles smoothly between frames.
+var _spawn_accum: float = 0.0
+
 
 # ---------------------------------------------------------------------------
 # Lifecycle
@@ -106,7 +183,7 @@ var _level:            int   = 0
 func _ready() -> void:
 	custom_minimum_size = Vector2(0.0, PANEL_H)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
-	# PROCESS_MODE_ALWAYS so Tweens created here run even while the LevelUpScreen
+	# PROCESS_MODE_ALWAYS so Tweens and animations run even while the LevelUpScreen
 	# has the tree paused — otherwise the post-level-up bar reset never plays.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
@@ -141,6 +218,44 @@ func _ready() -> void:
 	queue_redraw()
 
 
+func _process(delta: float) -> void:
+	# Advance the sheen sweep; wraps 0→1 each SHEEN_PERIOD seconds.
+	_sheen_pct = fmod(_sheen_pct + delta / SHEEN_PERIOD, 1.0)
+
+	# Advance the bulb glow pulse; wraps 0→1 each GLOW_PERIOD seconds.
+	_glow_pct = fmod(_glow_pct + delta / GLOW_PERIOD, 1.0)
+
+	# Age existing sparkles; remove any that have exceeded their lifetime.
+	for i in range(_sparkles.size() - 1, -1, -1):
+		_sparkles[i]["age"] += delta
+		if _sparkles[i]["age"] >= _sparkles[i]["max_life"]:
+			_sparkles.remove_at(i)
+
+	# Spawn new sparkles into the filled region.
+	# _spawn_accum accumulates fractional spawns so the rate stays consistent
+	# regardless of frame duration.
+	if _current_fill_pct > 0.01 and _sparkles.size() < SPARKLE_MAX:
+		_spawn_accum += delta * SPARKLE_SPAWN_RATE
+		while _spawn_accum >= 1.0 and _sparkles.size() < SPARKLE_MAX:
+			_spawn_accum -= 1.0
+			_spawn_sparkle()
+
+	queue_redraw()
+
+
+func _spawn_sparkle() -> void:
+	# y_offset is measured from the bar centreline. Clamping to half_bar keeps
+	# sparkles fully inside the bar track's vertical extent.
+	var half_bar := BAR_H * 0.5 - 2.0
+	_sparkles.append({
+		"pct":      randf(),
+		"y_offset": randf_range(-half_bar, half_bar),
+		"age":      0.0,
+		"max_life": randf_range(SPARKLE_LIFE_MIN, SPARKLE_LIFE_MAX),
+		"radius":   randf_range(SPARKLE_R_MIN, SPARKLE_R_MAX),
+	})
+
+
 # ---------------------------------------------------------------------------
 # Drawing
 # ---------------------------------------------------------------------------
@@ -151,34 +266,91 @@ func _draw() -> void:
 	if w <= 0.0 or h <= 0.0:
 		return
 
-	var brd := RECT_BRD
-
-	# ── 1. Silver border + silver interior — full panel reads as a silver strip ─
-	# Border and interior use the same colour so they merge into one band.
-	# The bulb and bar track are drawn on top of this silver field.
-	draw_rect(Rect2(0.0, 0.0, w, h), COLOR_OUTLINE)   # border + background in one pass
-
-	# ── 2. Bulb — always filled blue, acts as the permanent particle landing target ──
-	# Centre is BULB_LEFT_MARGIN pixels from the inner left edge (more than BULB_R alone,
-	# so there is visible space between the bulb and the left silver border).
+	var brd     := RECT_BRD
 	var inner_x := brd
 	var bulb_cx := inner_x + BULB_LEFT_MARGIN
 	var bulb_cy := h * 0.5
+
+	# ── 1. Silver border + silver interior ───────────────────────────────────
+	# Border and interior share the same colour so they merge into one band.
+	draw_rect(Rect2(0.0, 0.0, w, h), COLOR_OUTLINE)
+
+	# ── 2. Bulb — always filled blue ─────────────────────────────────────────
 	draw_circle(Vector2(bulb_cx, bulb_cy), BULB_R, COLOR_FILL)
 
-	# ── 3. Bar track — runs from just past the bulb's right edge to 86% of w ─────
-	# BAR_BULB_OVERLAP keeps a small junction so bar and bulb read as connected,
-	# while leaving the majority of the bulb clearly visible on the silver background.
+	# Pulsing inner glow ring: a smaller, lighter circle that breathes.
+	# sin() on glow_pct produces a smooth 0→1→0 alpha cycle.
+	var glow_alpha := 0.5 + 0.5 * sin(_glow_pct * TAU)   # maps to 0.0–1.0
+	var glow_col   := Color(COLOR_BULB_GLOW.r, COLOR_BULB_GLOW.g, COLOR_BULB_GLOW.b,
+			COLOR_BULB_GLOW.a * glow_alpha)
+	draw_circle(Vector2(bulb_cx, bulb_cy), BULB_R * 0.60, glow_col)
+
+	# ── 3. Bar track ──────────────────────────────────────────────────────────
 	var track_x := bulb_cx + BULB_R - BAR_BULB_OVERLAP
 	var track_y := bulb_cy - BAR_H * 0.5
 	var track_w := w * BAR_WIDTH_FRACTION - track_x
-	if track_w > 0.0:
-		draw_rect(Rect2(track_x, track_y, track_w, BAR_H), COLOR_TRACK_EMPTY)
+	if track_w <= 0.0:
+		return
+	draw_rect(Rect2(track_x, track_y, track_w, BAR_H), COLOR_TRACK_EMPTY)
 
-	# ── 4. Blue fill — sweeps left-to-right across the bar track ─────────────
-	if _current_fill_pct > 0.0 and track_w > 0.0:
-		var fill_w := _current_fill_pct * track_w
-		draw_rect(Rect2(track_x, track_y, fill_w, BAR_H), COLOR_FILL)
+	# Nothing more to draw if the bar is empty.
+	if _current_fill_pct <= 0.0:
+		return
+
+	var fill_w := _current_fill_pct * track_w
+
+	# ── 4. Blue fill ──────────────────────────────────────────────────────────
+	draw_rect(Rect2(track_x, track_y, fill_w, BAR_H), COLOR_FILL)
+
+	# ── 5. Top-edge highlight ─────────────────────────────────────────────────
+	# A thin permanent bright stripe along the top of the fill gives the bar a
+	# "glass tube" depth even when the sheen is elsewhere in its sweep.
+	draw_rect(Rect2(track_x, track_y, fill_w, 3.0), Color(0.55, 0.80, 1.0, 0.35))
+
+	# ── 6. Animated sheen sweep ───────────────────────────────────────────────
+	# A soft bright column sweeps from left to right across the fill. It is built
+	# from SHEEN_STEPS thin vertical strips whose alpha follows a bell curve
+	# peaked at the column's centre. This approximates a Gaussian glow without
+	# needing a shader or gradient texture.
+	var sheen_cx := track_x + _sheen_pct * fill_w
+	var strip_w  := (SHEEN_HALF_W * 2.0) / float(SHEEN_STEPS)
+	for step in range(SHEEN_STEPS):
+		var t      := (float(step) + 0.5) / float(SHEEN_STEPS)   # 0…1 across the band
+		var offset := (t - 0.5) * (SHEEN_HALF_W * 2.0)           # pixels from centre
+		var sx     := sheen_cx + offset
+		# Skip strips that fall entirely outside the filled region.
+		if sx + strip_w * 0.5 < track_x or sx - strip_w * 0.5 > track_x + fill_w:
+			continue
+		# Bell-curve alpha: 1.0 at centre, 0.0 at the band's edges.
+		# norm_d is -1…+1; squaring it gives a smooth parabolic falloff.
+		var norm_d := offset / SHEEN_HALF_W
+		var bell   := maxf(0.0, 1.0 - norm_d * norm_d)
+		var col    := Color(COLOR_SHEEN.r, COLOR_SHEEN.g, COLOR_SHEEN.b,
+				COLOR_SHEEN.a * bell)
+		draw_rect(Rect2(sx - strip_w * 0.5, track_y, strip_w, BAR_H), col)
+
+	# ── 7. Sparkle flecks ────────────────────────────────────────────────────
+	# Small bright circles that randomly appear and fade within the filled region.
+	# Alpha follows a three-phase ramp: fade-in (0–30% of life), hold (30–70%), fade-out (70–100%).
+	for sp in _sparkles:
+		# Explicit float types required — sp is a Dictionary value (Variant),
+		# so := cannot infer the type from sp.key lookups.
+		var sp_x  : float = track_x + float(sp["pct"]) * fill_w
+		# Discard sparkles whose stored position now falls beyond the current fill edge
+		# (can happen if fill shrinks after a level-up reset).
+		if sp_x > track_x + fill_w:
+			continue
+		var sp_y   : float = bulb_cy + float(sp["y_offset"])
+		var life_t : float = float(sp["age"]) / float(sp["max_life"])
+		var alpha  : float = 0.0
+		if life_t < 0.3:
+			alpha = life_t / 0.3          # fade in
+		elif life_t > 0.7:
+			alpha = (1.0 - life_t) / 0.3 # fade out
+		else:
+			alpha = 1.0                    # hold at peak
+		var sp_col := Color(COLOR_SPARKLE.r, COLOR_SPARKLE.g, COLOR_SPARKLE.b, alpha)
+		draw_circle(Vector2(sp_x, sp_y), float(sp["radius"]), sp_col)
 
 
 # ---------------------------------------------------------------------------

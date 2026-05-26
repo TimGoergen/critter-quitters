@@ -21,6 +21,11 @@
 ##
 ## The entire card surface is clickable — tapping anywhere on the card
 ## selects it. Hover brightens the card slightly for visual feedback.
+##
+## Visual note: the card frame uses _CardFrame (a draw_polygon-based inner
+## class) rather than StyleBoxFlat. The gl_compatibility renderer does not
+## support StyleBoxFlat corner_radius rendering; draw_polygon() works in
+## every renderer. The approach mirrors _PanelFrame in TrapUpgradePanel.gd.
 
 extends Control
 
@@ -39,6 +44,13 @@ const TIER_COLORS: Array = [
 	Color(0.18, 0.48, 0.90, 1.0),   # Professional — blue
 	Color(0.65, 0.18, 0.90, 1.0),   # Rare         — purple
 ]
+
+## Border thickness in pixels — matches TrapUpgradePanel.BORDER_W.
+const BORDER_W: float = 6.0
+
+## Corner radius for all four card corners — matches TrapUpgradePanel's cr.
+## Gives the card the same visual weight as the trap upgrade panel.
+const CORNER_R: float = 16.0
 
 
 # ---------------------------------------------------------------------------
@@ -91,32 +103,22 @@ func _build_card() -> void:
 	mouse_filter               = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
-	# --- Full tier-colour border + dark background ---
-	# All decorative children use MOUSE_FILTER_IGNORE so input passes through
-	# to the root Control, which handles the click.
-	#
-	# Layering: tier-color rect fills the entire card, then the dark background
-	# sits inset by BORDER_W pixels on all four sides, leaving a uniform outline.
-	const BORDER_W := 2.0
+	# --- _CardFrame: rounded border ring + tinted dark background ---
+	# Derives the background colour from the tier hue, mirroring how TrapUpgradePanel
+	# derives its background from the trap identity colour. This gives each tier a
+	# subtly different atmosphere (greenish dark / bluish dark / purplish dark)
+	# rather than a flat neutral. The same HSV approach as TrapUpgradePanel is used:
+	# high saturation preserved, value pulled down to ~22% for a very dark result.
+	var bg_color := Color.from_hsv(tier_color.h, tier_color.s * 0.70, tier_color.v * 0.22, 0.95)
 
-	var border := ColorRect.new()
-	border.color        = tier_color
-	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	border.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(border)
-
-	var bg := ColorRect.new()
-	bg.color         = Color(0.12, 0.12, 0.16, 0.96)
-	bg.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	bg.anchor_left   = 0.0
-	bg.anchor_top    = 0.0
-	bg.anchor_right  = 1.0
-	bg.anchor_bottom = 1.0
-	bg.offset_left   = BORDER_W
-	bg.offset_top    = BORDER_W
-	bg.offset_right  = -BORDER_W
-	bg.offset_bottom = -BORDER_W
-	add_child(bg)
+	var frame := _CardFrame.new()
+	frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	frame.outline_color = tier_color
+	frame.bg_color      = bg_color
+	frame.bw            = BORDER_W
+	frame.cr            = CORNER_R
+	frame.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	add_child(frame)
 
 	# --- Tier name ("RARE" etc.) — top-left in tier colour ---
 	_tier_lbl = Label.new()
@@ -272,3 +274,76 @@ func _on_select_pressed() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	modulate = Color(0.6, 0.6, 0.6, 1.0)
 	card_selected.emit(_upgrade_data)
+
+
+# ---------------------------------------------------------------------------
+# Card frame — draws the tier-coloured border ring and tinted dark background
+# via canvas primitives rather than StyleBoxFlat.
+#
+# Root cause of all previous approaches using StyleBoxFlat:
+# Godot's gl_compatibility renderer does not support StyleBoxFlat corner_radius
+# rendering — that feature requires a shader not available in gl_compat.
+# draw_polygon() is a fundamental canvas call that works in every renderer.
+#
+# Shape: full rect with all four corners rounded (unlike TrapUpgradePanel's
+# top-only rounding, because cards float freely rather than anchoring to an edge).
+# The outer polygon is drawn in the tier colour; the inset rect fills with the
+# dark background. The visible gap between them forms the border ring.
+# ---------------------------------------------------------------------------
+class _CardFrame extends Control:
+	var outline_color: Color = Color.WHITE
+	var bg_color:      Color = Color.BLACK
+	var bw:            float = 6.0    # border width in pixels
+	var cr:            float = 16.0   # corner radius for all four corners
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		if w <= 0.0 or h <= 0.0:
+			return
+
+		# Outer shape: fully-rounded rectangle in the tier/outline colour.
+		var outer := _rounded_rect_poly(0.0, 0.0, w, h, cr, 10)
+		var oc    := PackedColorArray()
+		oc.resize(outer.size())
+		oc.fill(outline_color)
+		draw_polygon(outer, oc)
+
+		# Inner rect: background colour, inset by border width on all sides.
+		# Square inner corners are fine — the outer rounded shape determines
+		# the visible card outline; the inner rect never reaches the corners.
+		draw_rect(Rect2(bw, bw, w - bw * 2.0, h - bw * 2.0), bg_color)
+
+	## Builds a closed polygon approximating a rectangle with all four corners
+	## rounded by radius r. All coordinates are in local (Control-relative) space.
+	static func _rounded_rect_poly(
+		x: float, y: float, w: float, h: float, r: float, segs: int
+	) -> PackedVector2Array:
+		var pts  := PackedVector2Array()
+		var step := (PI * 0.5) / float(segs)
+
+		# Top-left arc: centre (x+r, y+r), sweeping 180°→270°
+		for i in segs + 1:
+			var a := PI + step * float(i)
+			pts.append(Vector2(x + r + cos(a) * r, y + r + sin(a) * r))
+
+		# Top-right arc: centre (x+w-r, y+r), sweeping 270°→360°
+		for i in segs + 1:
+			var a := PI * 1.5 + step * float(i)
+			pts.append(Vector2(x + w - r + cos(a) * r, y + r + sin(a) * r))
+
+		# Bottom-right arc: centre (x+w-r, y+h-r), sweeping 0°→90°
+		for i in segs + 1:
+			var a := step * float(i)
+			pts.append(Vector2(x + w - r + cos(a) * r, y + h - r + sin(a) * r))
+
+		# Bottom-left arc: centre (x+r, y+h-r), sweeping 90°→180°
+		for i in segs + 1:
+			var a := PI * 0.5 + step * float(i)
+			pts.append(Vector2(x + r + cos(a) * r, y + h - r + sin(a) * r))
+
+		return pts
