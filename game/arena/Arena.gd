@@ -38,6 +38,7 @@ const BoostUpgradePanel = preload("res://ui/BoostUpgradePanel.gd")
 const EnemyStatsPanel   = preload("res://ui/EnemyStatsPanel.gd")
 const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
 const LevelUpScreen     = preload("res://ui/LevelUpScreen.gd")
+const ExperienceBar     = preload("res://ui/ExperienceBar.gd")
 
 
 # ---------------------------------------------------------------------------
@@ -1211,6 +1212,8 @@ func _on_enemy_died(enemy: Node3D) -> void:
 	# Award XP proportional to how dangerous this enemy is (its infestation value).
 	# ceili() means even weak enemies (Gnat: 0.5) always award at least 1 XP.
 	GameState.add_experience(ceili(enemy.get_infestation_damage()))
+	# Launch small blue dots from the death position to the XP bar bulb.
+	_spawn_xp_particles(enemy.global_position)
 
 	# If the Hazmat Protocol campaign buff is active, kills reduce infestation.
 	if GameState.infestation_heal_per_kill > 0.0:
@@ -2373,6 +2376,14 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	trap.aoe_fired.connect(_on_fogger_aoe_fired)
 	trap.fly_strip_fired.connect(_on_fly_strip_fired)
 	trap.initialize(GameState.selected_trap_type as Trap.TrapType, _active_enemies)
+
+	# Apply any type-wide free upgrades that were earned from previous level-ups.
+	# This ensures a newly placed trap is immediately as strong as existing traps of the same type.
+	var tq: Dictionary = GameState.type_upgrade_queue.get(trap.get_type(), {})
+	for stat: String in tq.keys():
+		for _i in int(tq[stat]):
+			_apply_free_equipment_upgrade(trap, stat)
+
 	# Arena is PROCESS_MODE_ALWAYS; override so traps pause with the game.
 	trap.process_mode = Node.PROCESS_MODE_PAUSABLE
 	_trap_container.add_child(trap)
@@ -2625,10 +2636,12 @@ func _on_level_up_upgrade_chosen(upgrade: Dictionary) -> void:
 		# Fire-rate and range indicator changes require each trap to recalculate.
 		_refresh_global_trap_multipliers()
 	else:
-		# Equipment upgrade: free stat boost on a specific placed trap.
-		var trap: Node3D = upgrade.get("trap_node")
-		if is_instance_valid(trap):
-			_apply_equipment_upgrade(trap, upgrade.get("stat", ""))
+		# Equipment upgrade: free stat boost applied to every placed trap of this type
+		# AND recorded so new placements of the same type inherit the upgrade immediately.
+		_apply_free_equipment_upgrade_by_type(
+			upgrade.get("trap_type", -1),
+			upgrade.get("stat", "")
+		)
 
 
 ## Iterates all placed traps and tells each one to recompute its multipliers.
@@ -2639,16 +2652,33 @@ func _refresh_global_trap_multipliers() -> void:
 			trap.refresh_global_multipliers()
 
 
-## Applies a free stat upgrade to a trap node (no Bug Bucks cost).
-## stat must match one of the upgrade method names listed in Trap.gd.
-func _apply_equipment_upgrade(trap: Node3D, stat: String) -> void:
+## Applies a free upgrade to every placed trap of trap_type, then records it in
+## GameState so future placements of that type receive the same upgrade at spawn time.
+func _apply_free_equipment_upgrade_by_type(trap_type: int, stat: String) -> void:
+	if trap_type < 0 or stat.is_empty():
+		return
+	# Apply to all currently placed instances of this type.
+	for trap in _trap_nodes.values():
+		if is_instance_valid(trap) and trap.get_type() == trap_type:
+			_apply_free_equipment_upgrade(trap, stat)
+	# Record in GameState so any trap placed later inherits this upgrade immediately.
+	if not GameState.type_upgrade_queue.has(trap_type):
+		GameState.type_upgrade_queue[trap_type] = {}
+	var tq: Dictionary = GameState.type_upgrade_queue[trap_type]
+	tq[stat] = tq.get(stat, 0) + 1
+
+
+## Applies one free (level-up) upgrade of stat to a specific trap node.
+## Calls the free-upgrade methods on Trap.gd, which have their own 0–3 cap
+## independent of the Bug Bucks paid-upgrade pool.
+func _apply_free_equipment_upgrade(trap: Node3D, stat: String) -> void:
 	match stat:
-		"damage":    trap.apply_damage_upgrade()
-		"range":     trap.apply_range_upgrade()
-		"fire_rate": trap.apply_fire_rate_upgrade()
-		"duration":  trap.apply_duration_upgrade()
-		"crit_chance": trap.apply_crit_chance_upgrade()
-		"crit_dmg":    trap.apply_crit_damage_upgrade()
+		"damage":      trap.apply_free_damage_upgrade()
+		"range":       trap.apply_free_range_upgrade()
+		"fire_rate":   trap.apply_free_rate_upgrade()
+		"duration":    trap.apply_free_duration_upgrade()
+		"crit_chance": trap.apply_free_crit_chance_upgrade()
+		"crit_dmg":    trap.apply_free_crit_dmg_upgrade()
 
 
 ## Plays phase-transition audio cues.
@@ -2795,6 +2825,58 @@ func _spawn_earn_label(screen_pos: Vector2, amount: int) -> void:
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 
 	get_tree().create_timer(1.6).timeout.connect(host.queue_free)
+
+
+## Spawns 3 small blue dots that fly from world_pos to the XP bar bulb.
+## Three particles per kill gives satisfying feedback without cluttering the screen.
+## Staggered 70 ms apart so each dot arrives as a distinct visual beat.
+func _spawn_xp_particles(world_pos: Vector3) -> void:
+	var screen_pos := _camera.unproject_position(world_pos)
+	var target     := Vector2(ExperienceBar.bulb_screen_x(), ExperienceBar.bulb_screen_y())
+
+	var host := CanvasLayer.new()
+	host.layer        = 5
+	host.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(host)
+
+	const PARTICLE_SIZE:   float = 12.0
+	const FLIGHT_DURATION: float = 0.55
+
+	for i in 3:
+		# Stagger particle launches by 70 ms so they arrive as three distinct beats
+		# rather than all at once.
+		var delay := i * 0.07
+
+		var dot_style := StyleBoxFlat.new()
+		dot_style.bg_color                  = ExperienceBar.COLOR_FILL
+		dot_style.corner_radius_top_left    = 6
+		dot_style.corner_radius_top_right   = 6
+		dot_style.corner_radius_bottom_left = 6
+		dot_style.corner_radius_bottom_right = 6
+
+		var dot := Panel.new()
+		dot.add_theme_stylebox_override("panel", dot_style)
+		dot.size     = Vector2(PARTICLE_SIZE, PARTICLE_SIZE)
+		# Small random scatter so the three dots don't stack on top of each other.
+		dot.position = screen_pos + Vector2(
+			randf_range(-8.0, 8.0),
+			randf_range(-8.0, 8.0)
+		) - Vector2(PARTICLE_SIZE, PARTICLE_SIZE) * 0.5
+		host.add_child(dot)
+
+		# Fly to bulb centre (TRANS_CIRC EASE_IN accelerates through the flight —
+		# starts leisurely, snaps home fast), and shrink slightly on arrival.
+		var tween := host.create_tween().set_parallel(true)
+		tween.tween_property(dot, "position",
+			target - Vector2(PARTICLE_SIZE, PARTICLE_SIZE) * 0.5,
+			FLIGHT_DURATION
+		).set_delay(delay).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CIRC)
+		tween.tween_property(dot, "scale",
+			Vector2(0.5, 0.5), FLIGHT_DURATION * 0.3
+		).set_delay(delay + FLIGHT_DURATION * 0.7).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+	# One second is comfortably past the last particle landing at 0 + 2*0.07 + 0.55 = 0.69 s.
+	get_tree().create_timer(1.0).timeout.connect(host.queue_free)
 
 
 ## Draws a coin icon followed by a gold number, both without any outline.

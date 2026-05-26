@@ -1081,8 +1081,9 @@ func _build_pause_banner() -> void:
 	_pause_banner.add_child(label)
 
 
-## Builds the experience bar and pins it flush to the top of the arena zone,
-## just inside the silver top border.
+## Builds the experience bar and pins it to the very top of the arena zone.
+## offset_top = 0 so the bar's own 4px silver border shares pixels with the
+## arena's top silver border — they are the same colour and merge visually.
 func _build_experience_bar() -> void:
 	var bar := ExperienceBar.new()
 	bar.anchor_left   = 0.0
@@ -1091,9 +1092,8 @@ func _build_experience_bar() -> void:
 	bar.anchor_bottom = 0.0
 	bar.offset_left   = LEFT_PANEL_W
 	bar.offset_right  = -RIGHT_PANEL_W
-	# Sit flush against the inner edge of the top silver border.
-	bar.offset_top    = SILVER_BORDER_W
-	bar.offset_bottom = SILVER_BORDER_W + ExperienceBar.PANEL_H
+	bar.offset_top    = 0.0                    # was SILVER_BORDER_W — now overlaps the top outline
+	bar.offset_bottom = ExperienceBar.PANEL_H  # was SILVER_BORDER_W + PANEL_H
 	add_child(bar)
 
 
@@ -1108,7 +1108,8 @@ func _show_pause_banner(visible_state: bool) -> void:
 	_pause_banner_tween.set_ease(Tween.EASE_OUT)
 	_pause_banner_tween.set_trans(Tween.TRANS_CUBIC)
 	# Visible position: top edge = bottom edge of the experience bar.
-	var exp_bar_bottom: float = SILVER_BORDER_W + ExperienceBar.PANEL_H
+	# The bar now starts at offset_top=0, so its bottom is simply PANEL_H.
+	var exp_bar_bottom: float = ExperienceBar.PANEL_H
 	var target_top:    float = exp_bar_bottom                       if visible_state else -PAUSE_BANNER_H
 	var target_bottom: float = exp_bar_bottom + PAUSE_BANNER_H     if visible_state else 0.0
 	_pause_banner_tween.tween_property(_pause_banner, "offset_top",    target_top,    0.22)

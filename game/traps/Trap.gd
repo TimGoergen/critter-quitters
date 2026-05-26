@@ -80,6 +80,12 @@ const STATS := {
 ## Each stat can be upgraded this many times independently.
 const MAX_UPGRADE_LEVEL: int = 3
 
+## Free upgrades (awarded by type-wide level-up cards) use a separate pool
+## so each can be upgraded up to FREE_MAX_LEVEL times independently of Bug Bucks
+## upgrades. A fully paid + fully free trap has noticeably higher stats than
+## one upgraded through only one pool.
+const FREE_MAX_LEVEL: int = 3
+
 ## Stat increment per upgrade level, as a fraction of the base value.
 const UPGRADE_DAMAGE_FACTOR:    float = 0.20  # +20% of base damage per level
 const UPGRADE_RANGE_FACTOR:     float = 0.10  # +10% of base range per level
@@ -183,6 +189,15 @@ var _crit_chance:       float = 0.0
 var _crit_damage_bonus: float = 0.25
 var _crit_chance_level: int   = 0
 var _crit_damage_level: int   = 0
+
+# Free-upgrade counters — track level-up rewards separately from paid upgrades.
+# Each pool caps at FREE_MAX_LEVEL (3) so the two pools are fully independent.
+var _free_damage_level:      int = 0
+var _free_range_level:       int = 0
+var _free_rate_level:        int = 0
+var _free_duration_level:    int = 0
+var _free_crit_chance_level: int = 0
+var _free_crit_dmg_level:    int = 0
 
 # Set to true once the full-upgrade bonus has been applied, so it only fires once.
 var _bonus_applied: bool = false
@@ -519,7 +534,83 @@ func apply_crit_damage_upgrade() -> void:
 
 
 # ---------------------------------------------------------------------------
-# Upgrade â€” accessors
+# Free upgrades (type-wide, from level-up rewards)
+#
+# These use the same stat formulas as the paid upgrades but draw from a
+# separate pool (_free_*_level caps at FREE_MAX_LEVEL = 3). Because they
+# modify the same underlying stats (_damage, _range, _cooldown, etc.) the
+# TrapUpgradePanel's “current value” display automatically reflects both
+# paid and free contributions, and combat math picks them up with no extra
+# code in the fire loops.
+# ---------------------------------------------------------------------------
+
+## Applies one free damage upgrade. Uses the same +20%-of-base formula as paid damage.
+## For Glue Board this also adds the same fractional increment rather than the table
+## lookup used by paid upgrades, so the two pools compose cleanly.
+func apply_free_damage_upgrade() -> void:
+	if _free_damage_level >= FREE_MAX_LEVEL:
+		return
+	_damage += _base_damage * UPGRADE_DAMAGE_FACTOR
+	if _trap_type == TrapType.BAIT_STATION:
+		_bait_poison_damage_per_tick += _bait_base_poison_damage * UPGRADE_DAMAGE_FACTOR
+	_free_damage_level += 1
+	stats_changed.emit()
+
+
+## Applies one free range upgrade. Uses the same +10%-of-base formula as paid range.
+func apply_free_range_upgrade() -> void:
+	if _free_range_level >= FREE_MAX_LEVEL:
+		return
+	_range += _base_range * UPGRADE_RANGE_FACTOR
+	_free_range_level += 1
+	stats_changed.emit()
+
+
+## Applies one free fire-rate upgrade. Reduces cooldown by 8% of base — same as paid rate.
+## Passive traps (no cooldown) are skipped. Fly Strip Launcher's paid rate upgrade normally
+## advances adhesion levels; free upgrades use the simpler cooldown reduction instead.
+func apply_free_rate_upgrade() -> void:
+	if _free_rate_level >= FREE_MAX_LEVEL or _base_cooldown == 0.0:
+		return
+	_cooldown = maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
+	_free_rate_level += 1
+	stats_changed.emit()
+
+
+## Applies one free duration upgrade. Adds 1.5 seconds to the slow/poison duration,
+## matching the first paid-level increment in the duration tables.
+## Only meaningful for Glue Board and Bait Station (other types have no duration stat).
+func apply_free_duration_upgrade() -> void:
+	if _free_duration_level >= FREE_MAX_LEVEL:
+		return
+	if _trap_type == TrapType.BAIT_STATION:
+		_bait_poison_duration += BAIT_POISON_DURATION_LEVELS[1] - BAIT_POISON_DURATION_LEVELS[0]
+	else:
+		_slow_duration += GLUE_DURATION_LEVELS[1] - GLUE_DURATION_LEVELS[0]
+	_free_duration_level += 1
+	stats_changed.emit()
+
+
+## Applies one free crit-chance upgrade. Same +2% per level as paid crit chance.
+func apply_free_crit_chance_upgrade() -> void:
+	if _free_crit_chance_level >= FREE_MAX_LEVEL:
+		return
+	_crit_chance += UPGRADE_CRIT_CHANCE_PER_LEVEL
+	_free_crit_chance_level += 1
+	stats_changed.emit()
+
+
+## Applies one free crit-damage upgrade. Same +25% per level as paid crit damage.
+func apply_free_crit_dmg_upgrade() -> void:
+	if _free_crit_dmg_level >= FREE_MAX_LEVEL:
+		return
+	_crit_damage_bonus += UPGRADE_CRIT_DAMAGE_PER_LEVEL
+	_free_crit_dmg_level += 1
+	stats_changed.emit()
+
+
+# ---------------------------------------------------------------------------
+# Upgrade — accessors
 # ---------------------------------------------------------------------------
 
 func get_damage_level() -> int:

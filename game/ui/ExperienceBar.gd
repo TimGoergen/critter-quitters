@@ -1,41 +1,70 @@
 ## ExperienceBar.gd
 ## XP progress bar pinned to the top of the arena zone.
 ##
-## A simple blue fill bar inside a panel with a thick silver border:
+## Layout:
 ##
-##   ┌────────────────────────────────────────────────────────────────┐
-##   │ █████████████████████░░░░░░░░░░░░░░░░░░░░░░░░░░░░░   LVL 4   │
-##   └────────────────────────────────────────────────────────────────┘
+##   ┌──────────────────────────────────────────────────────────────────┐
+##   │ ●● ═══════════════════════════════════════░░░░░░░░░░   LVL 4   │
+##   └──────────────────────────────────────────────────────────────────┘
+##   ^bulb (always filled blue)
+##       ^thin bar track (fills proportionally left-to-right)
 ##
-## The silver rectangle is the full control rect. The dark interior fills
-## everything inside the border. The blue fill sweeps left-to-right inside
-## the dark area. No circles, no caps, no special shapes.
+## The silver border (RECT_BRD = 4px) is positioned flush with the arena's own
+## top silver outline so they share pixels and read as one continuous band.
+##
+## The bulb is a filled circle on the left end, always drawn in the XP fill
+## colour so it acts as a permanent visual landmark — and a landing target for
+## the blue XP particles that fly from enemy deaths.
 
 extends Control
 
 const UIFonts = preload("res://ui/UIFonts.gd")
+const HUD     = preload("res://ui/HUD.gd")
 
 
 # ---------------------------------------------------------------------------
-# Visual constants — PANEL_H is referenced by HUD.gd for layout sizing
+# Visual constants — PANEL_H and BULB_R are read externally (HUD, Arena)
 # ---------------------------------------------------------------------------
 
 ## Total height of the control, including the silver border.
-const PANEL_H: float = 30.0
+const PANEL_H: float = 44.0
 
 ## Silver border thickness on all four sides.
-const RECT_BRD: float = 8.0
+## Matches SILVER_BORDER_W in HUD.gd so the two outlines merge when offset_top = 0.
+const RECT_BRD: float = 4.0
 
-## Warm amber-gold fill — matches the Bug Bucks / upgrade-reward palette so the
-## bar visually signals "progress toward a reward you can act on" rather than
-## neutral information.
-const COLOR_FILL    := Color(0.96, 0.74, 0.08, 1.0)
+## Radius of the left-end bulb circle.
+## Inner height = PANEL_H - RECT_BRD*2 = 36; BULB_R = 18 fills the full inner height.
+const BULB_R: float = 18.0
 
-## Very dark navy — empty-track colour.
+## Height of the thin bar track that extends to the right of the bulb.
+const BAR_H: float = 14.0
+
+## Bright saturated blue — chosen to contrast clearly with the gold/amber palette
+## elsewhere in the HUD, signalling "progress toward upgrade" at a glance.
+const COLOR_FILL    := Color(0.18, 0.55, 1.0, 1.0)
+
+## Very dark navy — empty track and bar background.
 const COLOR_EMPTY   := Color(0.03, 0.05, 0.12, 1.0)
 
-## Silver — border colour.
+## Silver — border colour.  Matches HUD.COLOR_SILVER_BORDER exactly so the
+## control border and the arena outline appear as a single continuous line.
 const COLOR_OUTLINE := Color(0.72, 0.72, 0.80, 1.0)
+
+
+# ---------------------------------------------------------------------------
+# Bulb-centre helpers
+# Used by Arena.gd to aim XP particles at the bulb's screen position.
+# ---------------------------------------------------------------------------
+
+## Screen-space X coordinate of the bulb centre.
+## Assumes HUD.gd positions the bar with offset_left = HUD.LEFT_PANEL_W.
+static func bulb_screen_x() -> float:
+	return HUD.LEFT_PANEL_W + RECT_BRD + BULB_R
+
+## Screen-space Y coordinate of the bulb centre.
+static func bulb_screen_y() -> float:
+	return PANEL_H * 0.5
 
 
 # ---------------------------------------------------------------------------
@@ -49,7 +78,7 @@ var _level_lbl: Label = null
 # State
 # ---------------------------------------------------------------------------
 
-## Current fill fraction, 0.0–1.0. Animated by Tween on every XP change.
+## Current fill fraction for the bar track, 0.0–1.0. Animated by Tween.
 var _current_fill_pct: float = 0.0
 var _tween:            Tween = null
 var _level:            int   = 0
@@ -106,7 +135,7 @@ func _draw() -> void:
 
 	var brd := RECT_BRD
 
-	# ── 1. Silver border rectangle ────────────────────────────────────────────
+	# ── 1. Silver border rectangle (full control) ─────────────────────────────
 	draw_rect(Rect2(0.0, 0.0, w, h), COLOR_OUTLINE)
 
 	# ── 2. Dark interior ──────────────────────────────────────────────────────
@@ -116,10 +145,24 @@ func _draw() -> void:
 	var inner_h := h - brd * 2.0
 	draw_rect(Rect2(inner_x, inner_y, inner_w, inner_h), COLOR_EMPTY)
 
-	# ── 3. Blue fill — left-aligned rect sized to the fill fraction ───────────
+	# ── 3. Bulb — always filled blue, acts as the permanent landing target ─────
+	# Centred at (inner_x + BULB_R, h/2). Radius = BULB_R fills the full inner height.
+	var bulb_cx := inner_x + BULB_R
+	var bulb_cy := h * 0.5
+	draw_circle(Vector2(bulb_cx, bulb_cy), BULB_R, COLOR_FILL)
+
+	# ── 4. Thin bar track background (dark) ───────────────────────────────────
+	# Starts at the bulb's centre X and runs to the right inner edge so the
+	# filled circle overlaps the left half of the track, creating a seamless join.
+	var track_x  := bulb_cx
+	var track_w  := (inner_x + inner_w) - track_x
+	var track_y  := bulb_cy - BAR_H * 0.5
+	draw_rect(Rect2(track_x, track_y, track_w, BAR_H), COLOR_EMPTY)
+
+	# ── 5. Blue fill — sweeps left-to-right across the bar track ─────────────
 	if _current_fill_pct > 0.0:
-		var fill_w := _current_fill_pct * inner_w
-		draw_rect(Rect2(inner_x, inner_y, fill_w, inner_h), COLOR_FILL)
+		var fill_w := _current_fill_pct * track_w
+		draw_rect(Rect2(track_x, track_y, fill_w, BAR_H), COLOR_FILL)
 
 
 # ---------------------------------------------------------------------------
@@ -134,7 +177,7 @@ func _on_xp_changed(new_xp: int, xp_needed: int) -> void:
 func _on_level_up(new_level: int) -> void:
 	_level = new_level
 	_level_lbl.text = "LVL %d" % _level
-	# Briefly flash full; the subsequent xp_changed resets to the new partial fill.
+	# Briefly flash full bar; the subsequent xp_changed resets to the new partial fill.
 	_animate_to(1.0)
 
 

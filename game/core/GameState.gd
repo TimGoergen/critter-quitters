@@ -222,6 +222,12 @@ var infestation_heal_per_kill: float = 0.0
 ## e.g. 0.10 means upgrades cost 10% less; 0.80 means they cost at most 80% less.
 var upgrade_cost_discount: float = 0.0
 
+## Tracks type-wide free upgrades awarded by level-up equipment cards.
+## Structure: { trap_type_int: { stat_string: upgrade_count_int } }
+## Arena applies these to all current and future traps of each type.
+## Separate from Bug Bucks paid upgrades — each pool is capped at Trap.FREE_MAX_LEVEL.
+var type_upgrade_queue: Dictionary = {}
+
 
 # ---------------------------------------------------------------------------
 # Public methods
@@ -251,6 +257,7 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 	global_bucks_bonus = 0.0
 	infestation_heal_per_kill = 0.0
 	upgrade_cost_discount = 0.0
+	type_upgrade_queue = {}
 	current_phase = Phase.PLACING
 	run_started.emit()
 	bug_bucks_changed.emit(bug_bucks)

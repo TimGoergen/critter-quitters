@@ -23,7 +23,7 @@ const BoostUnit = preload("res://boosts/BoostUnit.gd")
 const StarBar  = preload("res://ui/StarBar.gd")
 
 const PADDING:    float = 9.0
-const BORDER_W:   float = 2.0
+const BORDER_W:   float = 6.0
 const STAT_ROW_H: float = 72.0
 const DESC_H:     float = 47.0
 
@@ -68,8 +68,8 @@ const COLOR_BTN_SELL_BORDER  := Color(0.75, 0.22, 0.12, 1.0)
 var _boost:       Node  = null
 var _panel_rect:  Rect2 = Rect2()
 
-var _border:     Panel     = null
-var _bg:         ColorRect = null
+var _border:     Panel = null
+var _bg:         Panel = null
 var _lbl_title:  Label     = null
 
 # Each row is a Dictionary: {row, btn, name, stars, cur, after, cost}
@@ -126,18 +126,30 @@ func _build_ui() -> void:
 		Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
 	)
 
-	var border_style         := StyleBoxFlat.new()
-	border_style.bg_color     = Color(0.0, 0.0, 0.0, 0.0)
-	border_style.border_color = COLOR_OUTLINE
+	var border_style                         := StyleBoxFlat.new()
+	border_style.bg_color                   = Color(0.0, 0.0, 0.0, 0.0)
+	border_style.border_color               = COLOR_OUTLINE
 	border_style.set_border_width_all(int(BORDER_W))
+	# Rounded top corners match the background Panel; bottom corners are square so
+	# the panel sits flush with the arena floor without a distracting visual gap.
+	border_style.corner_radius_top_left     = 10
+	border_style.corner_radius_top_right    = 10
+	border_style.corner_radius_bottom_left  = 0
+	border_style.corner_radius_bottom_right = 0
 	_border          = Panel.new()
 	_border.position = Vector2(px - BORDER_W, py - BORDER_W)
 	_border.size     = Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
 	_border.add_theme_stylebox_override("panel", border_style)
 	add_child(_border)
 
-	_bg          = ColorRect.new()
-	_bg.color    = COLOR_BG
+	var bg_style                          := StyleBoxFlat.new()
+	bg_style.bg_color                    = COLOR_BG
+	bg_style.corner_radius_top_left      = 10
+	bg_style.corner_radius_top_right     = 10
+	bg_style.corner_radius_bottom_left   = 0
+	bg_style.corner_radius_bottom_right  = 0
+	_bg          = Panel.new()
+	_bg.add_theme_stylebox_override("panel", bg_style)
 	_bg.position = Vector2(px, py)
 	_bg.size     = Vector2(panel_w, panel_h)
 	add_child(_bg)
@@ -260,7 +272,9 @@ func _apply_boost_theme() -> void:
 	var s    := base.s
 	var v    := base.v
 
-	COLOR_BG                  = Color.from_hsv(h, s * 0.75, v * 0.15, 0.80)
+	# Background derives from the same hue/saturation as the outline so the panel
+	# reads as a unified themed block — just much darker (0.62 * 0.35 ≈ 22% of outline brightness).
+	COLOR_BG                  = Color.from_hsv(h, s * 0.85, v * 0.62 * 0.35, 0.88)
 	COLOR_OUTLINE             = Color.from_hsv(h, s * 0.85, v * 0.62, 1.0)
 	COLOR_DIVIDER             = Color.from_hsv(h, s * 0.75, v * 0.22, 1.0)
 	COLOR_TEXT_DIM            = Color.from_hsv(h, s * 0.35, v * 0.78, 1.0)
