@@ -176,19 +176,19 @@ func _build_screen(new_level: int) -> void:
 	add_child(dim)
 
 	# "LEVEL N" header label, centred near the top.
-	# Font size doubled (32 → 64) so it commands the screen when levelling up.
+	# Font size 128 so the level announcement dominates the screen.
 	var header := Label.new()
 	header.text                 = "LEVEL %d" % new_level
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	header.add_theme_font_override("font", UIFonts.primary_bold())
-	header.add_theme_font_size_override("font_size", 64)
+	header.add_theme_font_size_override("font_size", 128)
 	header.add_theme_color_override("font_color", Color(1.0, 0.88, 0.20, 1.0))
 	header.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
 	header.add_theme_constant_override("shadow_offset_x", 2)
 	header.add_theme_constant_override("shadow_offset_y", 2)
 	header.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	header.offset_top    = 30.0
-	header.offset_bottom = 120.0   # taller to accommodate 64pt font
+	header.offset_top    = 5.0
+	header.offset_bottom = 160.0   # 155px for 128pt font
 	header.process_mode  = Node.PROCESS_MODE_ALWAYS
 	add_child(header)
 
@@ -200,8 +200,8 @@ func _build_screen(new_level: int) -> void:
 	sub.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	sub.add_theme_font_size_override("font_size", 32)
 	sub.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	sub.offset_top    = 125.0
-	sub.offset_bottom = 168.0   # 43px for 32pt font
+	sub.offset_top    = 163.0
+	sub.offset_bottom = 205.0   # 42px for 32pt font
 	sub.process_mode  = Node.PROCESS_MODE_ALWAYS
 	add_child(sub)
 
@@ -418,8 +418,8 @@ func _build_campaign_card(tier: int, used_ids: Array) -> Dictionary:
 func _spawn_cards(cards: Array) -> void:
 	var total_w := CARD_W * 3.0 + CARD_GAP * 2.0
 	var start_x := (1280.0 - total_w) * 0.5   # centred in 1280px virtual width
-	# Pushed down from the old (600-CARD_H)*0.5+20 = 165 to clear the taller headers.
-	var card_y  := 180.0
+	# Pushed down to clear the taller 128pt header + 32pt sub-header.
+	var card_y  := 213.0
 
 	for i in 3:
 		var card_ctrl := UpgradeCard.new()

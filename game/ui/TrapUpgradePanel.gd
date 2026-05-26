@@ -83,8 +83,8 @@ const COLOR_BTN_SELL_BORDER  := Color(0.75, 0.22, 0.12, 1.0)
 var _trap:        Node   = null
 var _panel_rect:  Rect2  = Rect2()
 
-var _border:     Panel = null
-var _bg:         Panel = null
+var _border:     Panel     = null
+var _bg:         ColorRect = null
 var _lbl_title:  Label     = null
 
 # Each stat row is a Button containing child labels.
@@ -147,16 +147,17 @@ func _build_ui() -> void:
 		Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
 	)
 
-	# Panel with a transparent background so only the ring is drawn.
-	# A solid ColorRect here would block the 3D scene behind the semi-transparent _bg.
+	# Outer Panel = the visible border ring.
+	# Using a solid bg_color (COLOR_OUTLINE) rather than a transparent bg + border_color
+	# because StyleBoxFlat corner_radius does not reliably clip a border stroke when
+	# bg_color is transparent in Godot 4 CanvasLayer children.
+	# The inner ColorRect sits on top, shrunk by BORDER_W on all sides, creating the ring.
+	# Outer corner radius = inner (10) + BORDER_W so the ring has uniform visual width
+	# all the way into the curve.
 	var border_style                         := StyleBoxFlat.new()
-	border_style.bg_color                   = Color(0.0, 0.0, 0.0, 0.0)
-	border_style.border_color               = COLOR_OUTLINE
-	border_style.set_border_width_all(int(BORDER_W))
-	# Rounded top corners match the background Panel; bottom corners are square so
-	# the panel sits flush with the arena floor without a distracting visual gap.
-	border_style.corner_radius_top_left     = 10
-	border_style.corner_radius_top_right    = 10
+	border_style.bg_color                   = COLOR_OUTLINE
+	border_style.corner_radius_top_left     = 10 + int(BORDER_W)
+	border_style.corner_radius_top_right    = 10 + int(BORDER_W)
 	border_style.corner_radius_bottom_left  = 0
 	border_style.corner_radius_bottom_right = 0
 	_border          = Panel.new()
@@ -165,14 +166,10 @@ func _build_ui() -> void:
 	_border.add_theme_stylebox_override("panel", border_style)
 	add_child(_border)
 
-	var bg_style                          := StyleBoxFlat.new()
-	bg_style.bg_color                    = COLOR_BG
-	bg_style.corner_radius_top_left      = 10
-	bg_style.corner_radius_top_right     = 10
-	bg_style.corner_radius_bottom_left   = 0
-	bg_style.corner_radius_bottom_right  = 0
-	_bg          = Panel.new()
-	_bg.add_theme_stylebox_override("panel", bg_style)
+	# ColorRect is used for the background because it renders reliably as a direct child
+	# of a CanvasLayer — Panel StyleBoxFlat overrides can be unreliable in that context.
+	_bg          = ColorRect.new()
+	_bg.color    = COLOR_BG
 	_bg.position = Vector2(px, py)
 	_bg.size     = Vector2(panel_w, panel_h)
 	add_child(_bg)

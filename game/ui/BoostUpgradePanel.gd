@@ -68,8 +68,8 @@ const COLOR_BTN_SELL_BORDER  := Color(0.75, 0.22, 0.12, 1.0)
 var _boost:       Node  = null
 var _panel_rect:  Rect2 = Rect2()
 
-var _border:     Panel = null
-var _bg:         Panel = null
+var _border:     Panel     = null
+var _bg:         ColorRect = null
 var _lbl_title:  Label     = null
 
 # Each row is a Dictionary: {row, btn, name, stars, cur, after, cost}
@@ -126,14 +126,14 @@ func _build_ui() -> void:
 		Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
 	)
 
+	# Outer Panel = the visible border ring.
+	# Solid bg_color (COLOR_OUTLINE) instead of transparent bg + border_color because
+	# StyleBoxFlat corner_radius doesn't reliably clip a border stroke with transparent
+	# bg in Godot 4 CanvasLayer children.
 	var border_style                         := StyleBoxFlat.new()
-	border_style.bg_color                   = Color(0.0, 0.0, 0.0, 0.0)
-	border_style.border_color               = COLOR_OUTLINE
-	border_style.set_border_width_all(int(BORDER_W))
-	# Rounded top corners match the background Panel; bottom corners are square so
-	# the panel sits flush with the arena floor without a distracting visual gap.
-	border_style.corner_radius_top_left     = 10
-	border_style.corner_radius_top_right    = 10
+	border_style.bg_color                   = COLOR_OUTLINE
+	border_style.corner_radius_top_left     = 10 + int(BORDER_W)
+	border_style.corner_radius_top_right    = 10 + int(BORDER_W)
 	border_style.corner_radius_bottom_left  = 0
 	border_style.corner_radius_bottom_right = 0
 	_border          = Panel.new()
@@ -142,14 +142,9 @@ func _build_ui() -> void:
 	_border.add_theme_stylebox_override("panel", border_style)
 	add_child(_border)
 
-	var bg_style                          := StyleBoxFlat.new()
-	bg_style.bg_color                    = COLOR_BG
-	bg_style.corner_radius_top_left      = 10
-	bg_style.corner_radius_top_right     = 10
-	bg_style.corner_radius_bottom_left   = 0
-	bg_style.corner_radius_bottom_right  = 0
-	_bg          = Panel.new()
-	_bg.add_theme_stylebox_override("panel", bg_style)
+	# ColorRect for background — renders reliably as a direct child of a CanvasLayer.
+	_bg          = ColorRect.new()
+	_bg.color    = COLOR_BG
 	_bg.position = Vector2(px, py)
 	_bg.size     = Vector2(panel_w, panel_h)
 	add_child(_bg)

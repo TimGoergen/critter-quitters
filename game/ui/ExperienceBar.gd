@@ -41,13 +41,18 @@ const BULB_R: float = 14.0
 ## Height of the thin bar track that extends to the right of the bulb.
 const BAR_H: float = 14.0
 
+## Left margin between the inner panel edge and the bulb centre.
+## Larger than BULB_R alone — gives breathing room so the bulb doesn't sit flush
+## against the left silver border.
+const BULB_LEFT_MARGIN: float = 22.0   # bulb centre is this far from inner_x
+
 ## How many pixels the bar track overlaps the right edge of the bulb.
 ## A small overlap creates a seamless join without hiding the bulb.
 const BAR_BULB_OVERLAP: float = 4.0
 
 ## The bar track ends at this fraction of the total panel width.
 ## The right remainder is reserved for the LVL N label.
-const BAR_WIDTH_FRACTION: float = 0.80
+const BAR_WIDTH_FRACTION: float = 0.86
 
 ## Bright saturated blue — chosen to contrast clearly with the gold/amber palette
 ## elsewhere in the HUD, signalling "progress toward upgrade" at a glance.
@@ -70,7 +75,7 @@ const COLOR_TRACK_EMPTY := Color(0.44, 0.44, 0.50, 1.0)
 ## Screen-space X coordinate of the bulb centre.
 ## Assumes HUD.gd positions the bar with offset_left = HUD.LEFT_PANEL_W.
 static func bulb_screen_x() -> float:
-	return HUD.LEFT_PANEL_W + RECT_BRD + BULB_R
+	return HUD.LEFT_PANEL_W + RECT_BRD + BULB_LEFT_MARGIN
 
 ## Screen-space Y coordinate of the bulb centre.
 static func bulb_screen_y() -> float:
@@ -116,7 +121,7 @@ func _ready() -> void:
 	_level_lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
 	_level_lbl.add_theme_constant_override("shadow_offset_x", 1)
 	_level_lbl.add_theme_constant_override("shadow_offset_y", 1)
-	_level_lbl.anchor_left   = 0.80
+	_level_lbl.anchor_left   = 0.86
 	_level_lbl.anchor_right  = 1.0
 	_level_lbl.anchor_top    = 0.0
 	_level_lbl.anchor_bottom = 1.0
@@ -151,18 +156,17 @@ func _draw() -> void:
 	draw_rect(Rect2(0.0, 0.0, w, h), COLOR_OUTLINE)   # border + background in one pass
 
 	# ── 2. Bulb — always filled blue, acts as the permanent particle landing target ──
-	# Centre sits BULB_R pixels right of the inner left edge, vertically centred.
-	# BULB_R = 14 leaves a 4 px margin between the drawn circle and the panel edges
-	# (inner half-height = 18, drawn radius = 14 → 4 px gap top and bottom).
+	# Centre is BULB_LEFT_MARGIN pixels from the inner left edge (more than BULB_R alone,
+	# so there is visible space between the bulb and the left silver border).
 	var inner_x := brd
-	var bulb_cx := inner_x + BULB_R
+	var bulb_cx := inner_x + BULB_LEFT_MARGIN
 	var bulb_cy := h * 0.5
 	draw_circle(Vector2(bulb_cx, bulb_cy), BULB_R, COLOR_FILL)
 
-	# ── 3. Bar track — runs from just before the bulb's right edge to 80% of w ─
-	# BAR_BULB_OVERLAP keeps a small junction so the bar and bulb read as connected,
+	# ── 3. Bar track — runs from just past the bulb's right edge to 86% of w ─────
+	# BAR_BULB_OVERLAP keeps a small junction so bar and bulb read as connected,
 	# while leaving the majority of the bulb clearly visible on the silver background.
-	var track_x := inner_x + BULB_R * 2.0 - BAR_BULB_OVERLAP
+	var track_x := bulb_cx + BULB_R - BAR_BULB_OVERLAP
 	var track_y := bulb_cy - BAR_H * 0.5
 	var track_w := w * BAR_WIDTH_FRACTION - track_x
 	if track_w > 0.0:
