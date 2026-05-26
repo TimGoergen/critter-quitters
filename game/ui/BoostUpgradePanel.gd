@@ -126,36 +126,24 @@ func _build_ui() -> void:
 		Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
 	)
 
-	# _visual is a plain transparent Control that serves as the only direct CanvasLayer
-	# child for these panel visuals. Panel.add_theme_stylebox_override() is silently
-	# blocked by the project theme when Panel is a direct CanvasLayer child. Nesting the
-	# Panel one level inside a Control subtree bypasses this — the override takes effect
-	# there and rounded corners, border color, and width all render as configured.
-	_visual              = Control.new()
-	_visual.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# _PanelFrame draws the border ring and background via draw_polygon() + draw_rect().
+	# gl_compatibility does not support StyleBoxFlat corner_radius — see _PanelFrame class.
+	var frame          := _PanelFrame.new()
+	frame.position      = Vector2(px - BORDER_W, py - BORDER_W)
+	frame.size          = Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
+	frame.outline_color = COLOR_OUTLINE
+	frame.bg_color      = COLOR_BG
+	frame.bw            = BORDER_W
+	frame.cr            = float(10 + int(BORDER_W))
+	_visual             = frame
 	add_child(_visual)
 
-	# Border Panel — child of _visual (not a direct CanvasLayer child), so StyleBoxFlat
-	# overrides apply correctly.
-	var border_style                         := StyleBoxFlat.new()
-	border_style.bg_color                   = COLOR_OUTLINE
-	border_style.corner_radius_top_left     = 10 + int(BORDER_W)
-	border_style.corner_radius_top_right    = 10 + int(BORDER_W)
-	border_style.corner_radius_bottom_left  = 0
-	border_style.corner_radius_bottom_right = 0
-	var border_panel          := Panel.new()
-	border_panel.position      = Vector2(px - BORDER_W, py - BORDER_W)
-	border_panel.size          = Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
-	border_panel.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	border_panel.add_theme_stylebox_override("panel", border_style)
-	_visual.add_child(border_panel)
-
-	# Background ColorRect — inside _visual, covering the inner content area.
-	var bg_rect     := ColorRect.new()
-	bg_rect.color    = COLOR_BG
-	bg_rect.position = Vector2(px, py)
-	bg_rect.size     = Vector2(panel_w, panel_h)
-	_bg              = bg_rect
+	# UI container inside _visual so peek dims everything in one modulate call.
+	# Position is offset by BORDER_W so screen pos = (px-BORDER_W+BORDER_W, py-BORDER_W+BORDER_W) = (px, py).
+	_bg              = Control.new()
+	_bg.position     = Vector2(BORDER_W, BORDER_W)
+	_bg.size         = Vector2(panel_w, panel_h)
+	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_visual.add_child(_bg)
 
 	var inner_w := panel_w - PADDING * 2.0
@@ -751,6 +739,49 @@ func _apply_sell_button_style(btn: Button) -> void:
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
 	btn.focus_mode = Control.FOCUS_NONE
+
+
+# ---------------------------------------------------------------------------
+# Panel frame — see TrapUpgradePanel._PanelFrame for the full explanation.
+# Draws the coloured border ring and background via draw_polygon() + draw_rect()
+# because gl_compatibility does not support StyleBoxFlat corner_radius rendering.
+# ---------------------------------------------------------------------------
+class _PanelFrame extends Control:
+	var outline_color: Color = Color.WHITE
+	var bg_color:      Color = Color.BLACK
+	var bw:            float = 6.0
+	var cr:            float = 16.0
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		if w <= 0.0 or h <= 0.0:
+			return
+		var outer := _rounded_top_poly(0.0, 0.0, w, h, cr, 12)
+		var oc    := PackedColorArray()
+		oc.resize(outer.size())
+		oc.fill(outline_color)
+		draw_polygon(outer, oc)
+		draw_rect(Rect2(bw, bw, w - bw * 2.0, h - bw * 2.0), bg_color)
+
+	static func _rounded_top_poly(
+		x: float, y: float, w: float, h: float, r: float, segs: int
+	) -> PackedVector2Array:
+		var pts  := PackedVector2Array()
+		var step := (PI * 0.5) / float(segs)
+		for i in segs + 1:
+			var a := PI + step * float(i)
+			pts.append(Vector2(x + r + cos(a) * r, y + r + sin(a) * r))
+		for i in segs + 1:
+			var a := PI * 1.5 + step * float(i)
+			pts.append(Vector2(x + w - r + cos(a) * r, y + r + sin(a) * r))
+		pts.append(Vector2(x + w, y + h))
+		pts.append(Vector2(x, y + h))
+		return pts
 
 
 # ---------------------------------------------------------------------------
