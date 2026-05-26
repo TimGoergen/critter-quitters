@@ -106,6 +106,9 @@ var _level:            int   = 0
 func _ready() -> void:
 	custom_minimum_size = Vector2(0.0, PANEL_H)
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	# PROCESS_MODE_ALWAYS so Tweens created here run even while the LevelUpScreen
+	# has the tree paused — otherwise the post-level-up bar reset never plays.
+	process_mode = Node.PROCESS_MODE_ALWAYS
 
 	resized.connect(queue_redraw)
 
@@ -184,14 +187,24 @@ func _draw() -> void:
 
 func _on_xp_changed(new_xp: int, xp_needed: int) -> void:
 	var target := float(new_xp) / float(xp_needed) if xp_needed > 0 else 0.0
-	_animate_to(target)
+
+	if _current_fill_pct >= 1.0:
+		# The bar is full because a level-up just fired in the same frame.
+		# Delay the reset animation so the full bar stays visible while the level-up
+		# screen is appearing. The timer is process_always=true (Godot 4 default) so
+		# it fires even after the tree is paused by the LevelUpScreen.
+		get_tree().create_timer(0.6).timeout.connect(func(): _animate_to(target))
+	else:
+		_animate_to(target)
 
 
 func _on_level_up(new_level: int) -> void:
 	_level = new_level
 	_level_lbl.text = "LVL %d" % _level
-	# Briefly flash full bar; the subsequent xp_changed resets to the new partial fill.
-	_animate_to(1.0)
+	# Set the bar to full INSTANTLY (bypass the tween) so the fill is visible in the
+	# current frame. Using _animate_to(1.0) here would create a tween that gets
+	# immediately cancelled by the xp_changed signal that follows in the same frame.
+	_set_fill(1.0)
 
 
 # ---------------------------------------------------------------------------

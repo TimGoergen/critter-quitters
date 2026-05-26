@@ -2611,17 +2611,27 @@ func _on_run_ended_camera() -> void:
 
 
 ## Called when the player accumulates enough XP to advance a level.
-## Spawns the LevelUpScreen overlay, which pauses the game and presents
-## three upgrade cards for the player to choose from.
+## Waits 0.5 s so the XP bar can display 100% fill before the overlay appears,
+## then spawns the LevelUpScreen which pauses the game and presents upgrade cards.
 func _on_level_up(new_level: int) -> void:
-	# Do not show the level-up screen if the run is already over.
+	if GameState.current_phase == GameState.Phase.RUN_OVER:
+		return
+	# process_always=false: if for any reason the tree is already paused, don't
+	# fire the timer — we'll wait until conditions are normal.
+	get_tree().create_timer(0.5, false).timeout.connect(
+		func(): _show_level_up_screen(new_level)
+	)
+
+
+## Creates and shows the LevelUpScreen overlay.
+## Called by _on_level_up after a short delay to let the XP bar animation complete.
+func _show_level_up_screen(new_level: int) -> void:
 	if GameState.current_phase == GameState.Phase.RUN_OVER:
 		return
 	var screen := LevelUpScreen.new()
 	screen.upgrade_chosen.connect(_on_level_up_upgrade_chosen)
-	# add_child first so the node is in the scene tree before setup() runs.
-	# setup() calls get_tree().paused — that returns null if the node isn't
-	# in the tree yet.
+	# add_child before setup() so the node is in the tree when setup() calls
+	# get_tree().paused — that returns null if the node isn't in the tree yet.
 	add_child(screen)
 	screen.setup(new_level, _trap_nodes.values())
 
