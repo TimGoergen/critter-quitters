@@ -651,7 +651,9 @@ func _update_peek_tooltip(screen_pos: Vector2) -> void:
 	# Pin the tooltip's top-left to the unit's bottom-right corner in screen space.
 	# In the top-down view, +X is screen-right and +Z is screen-down, so the
 	# bottom-right corner of the 2×2 footprint is at global_position + (1, 0, 1).
-	var corner_world  := hit_unit.global_position + Vector3(1.0, 0.0, 1.0)
+	# hit_unit is typed as Node (its static type), so := can't infer Vector3 here.
+	# Explicit type annotation tells the parser what the expression produces.
+	var corner_world: Vector3 = hit_unit.global_position + Vector3(1.0, 0.0, 1.0)
 	var corner_screen := camera.unproject_position(corner_world)
 	_peek_tooltip.show_for(hit_unit.get_type_name())
 	_peek_tooltip.position = corner_screen
