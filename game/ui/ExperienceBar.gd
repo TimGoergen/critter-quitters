@@ -12,17 +12,18 @@
 ## The silver border (RECT_BRD = 4px) is positioned flush with the arena's own
 ## top silver outline so they share pixels and read as one continuous band.
 ##
-## The bulb is a filled circle on the left end, always drawn in the XP fill
-## colour so it acts as a permanent visual landmark — and a landing target for
-## the blue XP particles that fly from enemy deaths.
+## The bulb is a filled ellipse (2:1 width-to-height) on the left end, always
+## drawn in the XP fill colour so it acts as a permanent visual landmark — and
+## a landing target for the blue XP particles that fly from enemy deaths.
 ##
 ## Visual effects applied to the filled portion:
-##   Sheen:     A bright diagonal highlight sweeps left-to-right continuously,
-##              giving the bar a glass-gem or polished crystal look.
-##   Sparkles:  Small bright flecks randomly appear and fade within the fill,
+##   Sheen:     A soft highlight panel sweeps left-to-right continuously,
+##              giving the bar a glass-gem look (intentionally muted).
+##   Sparkles:  Small bright flecks swirl within the fill (half-size, muted),
 ##              reinforcing a "charged energy" feel.
-##   Bulb glow: A pulsing inner ring on the bulb breathes in sync with the
-##              bar's animated atmosphere, without needing a shader.
+##   Bulb glow: A pulsing inner glow breathes on the elliptical bulb; rendered
+##              as a radial gradient (opaque centre → transparent edge) via
+##              concentric circles — no shader needed.
 
 extends Control
 
@@ -50,9 +51,9 @@ const BULB_R: float = 14.0
 const BAR_H: float = 14.0
 
 ## Left margin between the inner panel edge and the bulb centre.
-## Larger than BULB_R alone — gives breathing room so the bulb doesn't sit flush
-## against the left silver border.
-const BULB_LEFT_MARGIN: float = 22.0   # bulb centre is this far from inner_x
+## The ellipse's left edge sits at (inner_x + BULB_LEFT_MARGIN − BULB_R*2).
+## With BULB_R=14 the h-radius is 28; using 36 gives an 8 px gap from the border.
+const BULB_LEFT_MARGIN: float = 36.0   # bulb centre is this far from inner_x
 
 ## How many pixels the bar track overlaps the right edge of the bulb.
 ## A small overlap creates a seamless join without hiding the bulb.
@@ -83,36 +84,37 @@ const COLOR_TRACK_EMPTY := Color(0.44, 0.44, 0.50, 1.0)
 const SHEEN_PERIOD  : float = 2.0
 
 ## Half-width of the sheen column in pixels; controls how wide the glow band is.
-const SHEEN_HALF_W  : float = 20.0
+const SHEEN_HALF_W  : float = 35.0
 
 ## Number of vertical strip samples used to build the soft-edged sheen gradient.
 ## More steps = smoother appearance; 14 is a good balance for this bar height.
 const SHEEN_STEPS   : int   = 14
 
-## Peak colour of the sheen at its centre: bright ice-blue at 55% opacity.
-const COLOR_SHEEN   := Color(0.65, 0.88, 1.0, 0.55)
+## Peak colour of the sheen at its centre: bright ice-blue at 25% opacity (intentionally muted).
+const COLOR_SHEEN   := Color(0.65, 0.88, 1.0, 0.25)
 
 
 # ---------------------------------------------------------------------------
 # Sparkle animation constants
 # ---------------------------------------------------------------------------
 
-## Maximum number of sparkle flecks alive at the same time.
-const SPARKLE_MAX        : int   = 8
+## Maximum number of sparkle flecks alive at the same time (reduced for muted look).
+const SPARKLE_MAX        : int   = 5
 
 ## Min/max lifetime of a single sparkle in seconds.
 const SPARKLE_LIFE_MIN   : float = 0.35
 const SPARKLE_LIFE_MAX   : float = 1.0
 
-## Min/max radius of a single sparkle circle in pixels.
-const SPARKLE_R_MIN      : float = 1.5
-const SPARKLE_R_MAX      : float = 4.0
+## Min/max radius of a single sparkle circle in pixels (half original size).
+const SPARKLE_R_MIN      : float = 0.75
+const SPARKLE_R_MAX      : float = 2.0
 
 ## Approximate number of new sparkles spawned per second while the bar has fill.
-const SPARKLE_SPAWN_RATE : float = 6.0
+const SPARKLE_SPAWN_RATE : float = 4.0
 
-## Peak colour of a sparkle — white-blue at full alpha; alpha is modulated per-sparkle.
-const COLOR_SPARKLE      := Color(0.85, 0.95, 1.0, 1.0)
+## Peak colour of a sparkle — white-blue at 55% opacity (intentionally muted).
+## The lifecycle alpha ramp (0→1→0) is multiplied by this constant's alpha component.
+const COLOR_SPARKLE      := Color(0.85, 0.95, 1.0, 0.55)
 
 
 # ---------------------------------------------------------------------------
@@ -122,9 +124,14 @@ const COLOR_SPARKLE      := Color(0.85, 0.95, 1.0, 1.0)
 ## Seconds for one full pulse cycle of the bulb's inner glow ring.
 const GLOW_PERIOD     : float = 1.4
 
-## Colour of the bulb's inner glow ring at full brightness.
-## A lighter blue that reads as a highlight rather than a second fill.
-const COLOR_BULB_GLOW := Color(0.45, 0.75, 1.0, 0.50)
+## Colour of the bulb's inner glow at peak brightness (muted to 25% alpha).
+## The radial gradient further modulates alpha, so the effective centre alpha
+## at peak pulse is COLOR_BULB_GLOW.a * glow_alpha ≈ 0.25.
+const COLOR_BULB_GLOW := Color(0.45, 0.75, 1.0, 0.25)
+
+## Steps used to render the radial gradient on the bulb's inner glow.
+## More steps = smoother falloff; 10 is sufficient for this circle size.
+const GLOW_GRAD_STEPS : int   = 10
 
 
 # ---------------------------------------------------------------------------
@@ -165,11 +172,14 @@ var _sheen_pct: float = 0.0
 var _glow_pct: float = 0.0
 
 ## Active sparkle flecks. Each is a Dictionary:
-##   pct      : float — position 0–1 across the fill width
-##   y_offset : float — pixels above/below the bar centreline
-##   age      : float — elapsed lifetime in seconds
-##   max_life : float — total lifetime in seconds
-##   radius   : float — drawn circle radius
+##   pct         : float — base x position 0–1 across the fill width
+##   drift       : float — slow x drift per second (fraction of fill width)
+##   orbit_r     : float — y orbit amplitude in pixels (swirl radius)
+##   angle       : float — initial swirl phase in radians
+##   angular_vel : float — swirl rotation speed in radians per second
+##   age         : float — elapsed lifetime in seconds
+##   max_life    : float — total lifetime in seconds
+##   radius      : float — drawn circle radius
 var _sparkles: Array = []
 
 ## Fractional accumulator for spawning sparkles smoothly between frames.
@@ -244,15 +254,18 @@ func _process(delta: float) -> void:
 
 
 func _spawn_sparkle() -> void:
-	# y_offset is measured from the bar centreline. Clamping to half_bar keeps
-	# sparkles fully inside the bar track's vertical extent.
+	# orbit_r is the amplitude of the y oscillation; capping at half_bar keeps
+	# sparkles within the bar track's vertical extent.
 	var half_bar := BAR_H * 0.5 - 2.0
 	_sparkles.append({
-		"pct":      randf(),
-		"y_offset": randf_range(-half_bar, half_bar),
-		"age":      0.0,
-		"max_life": randf_range(SPARKLE_LIFE_MIN, SPARKLE_LIFE_MAX),
-		"radius":   randf_range(SPARKLE_R_MIN, SPARKLE_R_MAX),
+		"pct":         randf(),                              # base x position (0–1 across fill)
+		"drift":       randf_range(-0.04, 0.04),             # slow x drift per second
+		"orbit_r":     randf_range(0.0, half_bar),           # y orbit amplitude in pixels
+		"angle":       randf_range(0.0, TAU),                # initial swirl phase
+		"angular_vel": randf_range(-TAU * 0.9, TAU * 0.9),  # swirl speed (rad/s)
+		"age":         0.0,
+		"max_life":    randf_range(SPARKLE_LIFE_MIN, SPARKLE_LIFE_MAX),
+		"radius":      randf_range(SPARKLE_R_MIN, SPARKLE_R_MAX),
 	})
 
 
@@ -275,18 +288,32 @@ func _draw() -> void:
 	# Border and interior share the same colour so they merge into one band.
 	draw_rect(Rect2(0.0, 0.0, w, h), COLOR_OUTLINE)
 
-	# ── 2. Bulb — always filled blue ─────────────────────────────────────────
-	draw_circle(Vector2(bulb_cx, bulb_cy), BULB_R, COLOR_FILL)
+	# ── 2. Bulb — always filled blue (elliptical, 2:1 width-to-height) ─────────
+	# Stretching x by 2.0 around the bulb centre makes draw_circle render as an ellipse.
+	draw_set_transform(Vector2(bulb_cx, bulb_cy), 0.0, Vector2(2.0, 1.0))
+	draw_circle(Vector2.ZERO, BULB_R, COLOR_FILL)
 
-	# Pulsing inner glow ring: a smaller, lighter circle that breathes.
-	# sin() on glow_pct produces a smooth 0→1→0 alpha cycle.
-	var glow_alpha := 0.5 + 0.5 * sin(_glow_pct * TAU)   # maps to 0.0–1.0
-	var glow_col   := Color(COLOR_BULB_GLOW.r, COLOR_BULB_GLOW.g, COLOR_BULB_GLOW.b,
-			COLOR_BULB_GLOW.a * glow_alpha)
-	draw_circle(Vector2(bulb_cx, bulb_cy), BULB_R * 0.60, glow_col)
+	# Pulsing inner glow: radial gradient, opaque at centre fading to transparent
+	# at the edge.  Drawn outer-to-inner so each ring overwrites the centre of
+	# the one before it, creating a smooth gradient without a shader.
+	var glow_alpha  := 0.5 + 0.5 * sin(_glow_pct * TAU)   # 0.0–1.0 pulse cycle
+	var glow_r_size := BULB_R * 0.65
+	for step in range(GLOW_GRAD_STEPS, 0, -1):
+		var t          := float(step) / float(GLOW_GRAD_STEPS)  # 1.0 = outermost ring
+		var ring_r     := glow_r_size * t
+		# Quadratic falloff: outer edge (t=1) is fully transparent;
+		# centre (t→0) reaches peak brightness of COLOR_BULB_GLOW.a * glow_alpha.
+		var ring_alpha := COLOR_BULB_GLOW.a * glow_alpha * (1.0 - t * t)
+		var glow_step_c := Color(COLOR_BULB_GLOW.r, COLOR_BULB_GLOW.g, COLOR_BULB_GLOW.b,
+				ring_alpha)
+		draw_circle(Vector2.ZERO, ring_r, glow_step_c)
+
+	# Reset the extra transform before drawing the track and all subsequent elements.
+	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
 	# ── 3. Bar track ──────────────────────────────────────────────────────────
-	var track_x := bulb_cx + BULB_R - BAR_BULB_OVERLAP
+	# The ellipse's right edge is BULB_R*2 from the centre (x-scale = 2.0).
+	var track_x := bulb_cx + BULB_R * 2.0 - BAR_BULB_OVERLAP
 	var track_y := bulb_cy - BAR_H * 0.5
 	var track_w := w * BAR_WIDTH_FRACTION - track_x
 	if track_w <= 0.0:
@@ -330,26 +357,33 @@ func _draw() -> void:
 		draw_rect(Rect2(sx - strip_w * 0.5, track_y, strip_w, BAR_H), col)
 
 	# ── 7. Sparkle flecks ────────────────────────────────────────────────────
-	# Small bright circles that randomly appear and fade within the filled region.
-	# Alpha follows a three-phase ramp: fade-in (0–30% of life), hold (30–70%), fade-out (70–100%).
+	# Small bright circles that swirl within the filled region.
+	# x drifts slowly; y oscillates via the orbit angle to produce a swirling path.
+	# Alpha follows a three-phase ramp: fade-in (0–30%), hold (30–70%), fade-out (70–100%).
+	# Peak alpha is multiplied by COLOR_SPARKLE.a so the constant governs overall brightness.
 	for sp in _sparkles:
 		# Explicit float types required — sp is a Dictionary value (Variant),
 		# so := cannot infer the type from sp.key lookups.
-		var sp_x  : float = track_x + float(sp["pct"]) * fill_w
-		# Discard sparkles whose stored position now falls beyond the current fill edge
+		var sp_x_pct : float = clampf(
+				float(sp["pct"]) + float(sp["drift"]) * float(sp["age"]), 0.0, 1.0)
+		var sp_x     : float = track_x + sp_x_pct * fill_w
+		# Discard sparkles whose position now falls beyond the current fill edge
 		# (can happen if fill shrinks after a level-up reset).
 		if sp_x > track_x + fill_w:
 			continue
-		var sp_y   : float = bulb_cy + float(sp["y_offset"])
-		var life_t : float = float(sp["age"]) / float(sp["max_life"])
-		var alpha  : float = 0.0
+		# Swirl: y oscillates around the bar centreline using orbit radius and phase.
+		var sp_angle : float = float(sp["angle"]) + float(sp["angular_vel"]) * float(sp["age"])
+		var sp_y     : float = bulb_cy + float(sp["orbit_r"]) * sin(sp_angle)
+		var life_t   : float = float(sp["age"]) / float(sp["max_life"])
+		var alpha    : float = 0.0
 		if life_t < 0.3:
 			alpha = life_t / 0.3          # fade in
 		elif life_t > 0.7:
 			alpha = (1.0 - life_t) / 0.3 # fade out
 		else:
 			alpha = 1.0                    # hold at peak
-		var sp_col := Color(COLOR_SPARKLE.r, COLOR_SPARKLE.g, COLOR_SPARKLE.b, alpha)
+		var sp_col := Color(COLOR_SPARKLE.r, COLOR_SPARKLE.g, COLOR_SPARKLE.b,
+				alpha * COLOR_SPARKLE.a)
 		draw_circle(Vector2(sp_x, sp_y), float(sp["radius"]), sp_col)
 
 
