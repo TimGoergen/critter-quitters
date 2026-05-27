@@ -241,12 +241,17 @@ func _on_resized() -> void:
 # ---------------------------------------------------------------------------
 
 func _gui_input(event: InputEvent) -> void:
-	if event is InputEventMouseButton:
-		if event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+	# accept_event() marks the event as handled so it does not propagate to
+	# _unhandled_input on any node — specifically Arena._unhandled_input(),
+	# which would interpret the same click as a trap-select or enemy-follow tap.
+	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
+		if event.pressed:
 			_on_select_pressed()
+		accept_event()   # consume both press and release
 	elif event is InputEventScreenTouch:
 		if event.pressed:
 			_on_select_pressed()
+		accept_event()   # consume both press and release
 
 
 ## Brighten card on hover; restore on exit.
@@ -313,10 +318,15 @@ class _CardFrame extends Control:
 		oc.fill(outline_color)
 		draw_polygon(outer, oc)
 
-		# Inner rect: background colour, inset by border width on all sides.
-		# Square inner corners are fine — the outer rounded shape determines
-		# the visible card outline; the inner rect never reaches the corners.
-		draw_rect(Rect2(bw, bw, w - bw * 2.0, h - bw * 2.0), bg_color)
+		# Inner shape: background colour, inset by border width on all sides.
+		# Rounded corners (radius = cr - bw) keep the border ring uniform thickness
+		# all the way into the corners; a plain draw_rect() would cut straight across
+		# the curve and make the inner edge look square where the outer edge rounds.
+		var inner := _rounded_rect_poly(bw, bw, w - bw * 2.0, h - bw * 2.0, cr - bw, 10)
+		var ic    := PackedColorArray()
+		ic.resize(inner.size())
+		ic.fill(bg_color)
+		draw_polygon(inner, ic)
 
 	## Builds a closed polygon approximating a rectangle with all four corners
 	## rounded by radius r. All coordinates are in local (Control-relative) space.

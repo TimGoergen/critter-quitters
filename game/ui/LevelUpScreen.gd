@@ -33,60 +33,74 @@ signal upgrade_chosen(upgrade: Dictionary)
 
 const CAMPAIGN_BUFFS: Array = [
 	{
-		"id": "dmg_all",
-		"title": "Extermination Formula",
-		"impact_template": "+%s%% damage to all traps",
-		"plain_text": "Every trap deals more damage per shot. Stacks with trap upgrades and Pheromone Dispenser boosts.",
-		"magnitudes": [0.05, 0.10, 0.20],
+		"id":              "dmg_all",
+		"title":           "Extermination Formula",
+		"stat_name":       "Damage",
+		"impact_template": "+%s%% Damage to all traps",
+		"plain_text":      "Every trap deals more damage per shot. Stacks with trap upgrades and Pheromone Dispenser boosts.",
+		"magnitudes":      [0.05, 0.10, 0.20],
 	},
 	{
-		"id": "range_all",
-		"title": "Extended Reach",
-		"impact_template": "+%s%% range for all traps",
-		"plain_text": "Every trap covers a wider area. Enemies spend more time inside each trap's kill zone.",
-		"magnitudes": [0.05, 0.10, 0.20],
+		"id":              "range_all",
+		"title":           "Extended Reach",
+		"stat_name":       "Range",
+		"impact_template": "+%s%% Range for all traps",
+		"plain_text":      "Every trap covers a wider area. Enemies spend more time inside each trap's kill zone.",
+		"magnitudes":      [0.05, 0.10, 0.20],
 	},
 	{
-		"id": "firerate_all",
-		"title": "Hair Trigger",
-		"impact_template": "+%s%% fire rate for all traps",
-		"plain_text": "Every trap fires more often. Stacks with fire rate upgrades and Compressor boosts.",
-		"magnitudes": [0.05, 0.10, 0.20],
+		"id":              "firerate_all",
+		"title":           "Hair Trigger",
+		"stat_name":       "Fire Rate",
+		"impact_template": "+%s%% Fire Rate for all traps",
+		"plain_text":      "Every trap fires more often. Stacks with fire rate upgrades and Compressor boosts.",
+		"magnitudes":      [0.05, 0.10, 0.20],
 	},
 	{
-		"id": "crit_chance_all",
-		"title": "Sharpened Instincts",
-		"impact_template": "+%s%% crit chance for all traps",
-		"plain_text": "Every trap has a higher chance to deal bonus damage on each shot. Has no effect until a trap's own Crit Chance is upgraded above 0%.",
-		"magnitudes": [0.02, 0.04, 0.08],
+		"id":              "crit_chance_all",
+		"title":           "Sharpened Instincts",
+		"stat_name":       "Crit Chance",
+		"impact_template": "+%s%% Crit Chance for all traps",
+		"plain_text":      "Every trap has a higher chance to deal bonus damage on each shot. Has no effect until a trap's own Crit Chance is upgraded above 0%.",
+		"magnitudes":      [0.02, 0.04, 0.08],
 	},
 	{
-		"id": "crit_dmg_all",
-		"title": "Lethal Potency",
-		"impact_template": "+%s%% crit damage bonus",
-		"plain_text": "Critical hits from every trap hit harder. Combines with per-trap Crit Damage upgrades.",
-		"magnitudes": [0.10, 0.20, 0.40],
+		"id":              "crit_dmg_all",
+		"title":           "Lethal Potency",
+		"stat_name":       "Crit Damage",
+		"impact_template": "+%s%% Crit Damage bonus",
+		"plain_text":      "Critical hits from every trap hit harder. Combines with per-trap Crit Damage upgrades.",
+		"magnitudes":      [0.10, 0.20, 0.40],
 	},
 	{
-		"id": "bucks_all",
-		"title": "Invoice Padding",
+		"id":              "bucks_all",
+		"title":           "Invoice Padding",
+		"stat_name":       "Bug Bucks",
 		"impact_template": "+%s%% Bug Bucks per kill",
-		"plain_text": "Every kill pays out more. Applies to all enemy types including boss splits and spawned units.",
-		"magnitudes": [0.10, 0.20, 0.40],
+		"plain_text":      "Every kill pays out more. Applies to all enemy types including boss splits and spawned units.",
+		"magnitudes":      [0.10, 0.20, 0.40],
 	},
 	{
-		"id": "infestation_heal",
-		"title": "Hazmat Protocol",
-		"impact_template": "-%s infestation per kill",
-		"plain_text": "Killing pests slowly cleans up the infestation. High kill density in a wave can recover meaningful ground.",
-		"magnitudes": [0.002, 0.004, 0.008],
+		"id":              "infestation_heal",
+		"title":           "Hazmat Protocol",
+		"stat_name":       "Infestation",
+		# Displayed as a percentage of the 0–100% infestation bar, not a raw fraction.
+		# See the format block in _build_campaign_card() — the raw magnitude is multiplied
+		# by 100 so "0.002" becomes "0.2", shown as "−0.2% bar per kill".
+		"impact_template": "-%s%% bar per kill",
+		# Plain text gives the player a concrete anchor: an escaped Ant fills the bar
+		# by exactly 5% (1.0 infestation / INFESTATION_MAX 20 = 0.05 = 5%).
+		# That lets them calculate roughly how many kills offset one escape.
+		"plain_text":      "Each kill quietly trims the infestation bar. An escaped Ant fills it by 5% — this upgrade claws back a share of that with every kill.",
+		"magnitudes":      [0.002, 0.004, 0.008],
 	},
 	{
-		"id": "upgrade_discount",
-		"title": "Bulk Procurement",
-		"impact_template": "-%s%% upgrade costs",
-		"plain_text": "All Bug Bucks upgrade costs for traps and boosts are reduced. Applies immediately to all future upgrades this run.",
-		"magnitudes": [0.05, 0.10, 0.20],
+		"id":              "upgrade_discount",
+		"title":           "Bulk Procurement",
+		"stat_name":       "Upgrade Costs",
+		"impact_template": "-%s%% Upgrade Costs",
+		"plain_text":      "All Bug Bucks upgrade costs for traps and boosts are reduced. Applies immediately to all future upgrades this run.",
+		"magnitudes":      [0.05, 0.10, 0.20],
 	},
 ]
 
@@ -375,11 +389,15 @@ func _build_campaign_card(tier: int, used_ids: Array) -> Dictionary:
 		var magnitude: float = buff["magnitudes"][tier]
 
 		# Format the impact line.
-		# Most magnitudes are percentages — multiply by 100 for display.
-		# Hazmat Protocol is a raw float (e.g. 0.002) and is shown as-is.
+		# All magnitudes are expressed as a percentage for display (×100).
+		# Hazmat Protocol magnitudes (0.002/0.004/0.008) are fractions of the
+		# 0.0–1.0 infestation bar; ×100 converts them to bar-percentage per kill
+		# (0.2/0.4/0.8), which players can compare to the visible 0–100% bar.
+		# One decimal place keeps the small values readable ("0.2%" not "0%").
+		# All other buffs are round integers after ×100, so %d is sufficient.
 		var display_val: String
 		if buff["id"] == "infestation_heal":
-			display_val = "%.3f" % magnitude
+			display_val = "%.1f" % (magnitude * 100.0)
 		else:
 			display_val = "%d" % roundi(magnitude * 100.0)
 
@@ -388,11 +406,11 @@ func _build_campaign_card(tier: int, used_ids: Array) -> Dictionary:
 			"category":    "campaign",
 			"tier":        tier,
 			"title":       buff["title"],
+			"stat_name":   buff["stat_name"],
 			"impact_line": buff["impact_template"] % display_val,
 			"plain_text":  buff["plain_text"],
 			"current_val": "",
 			"after_val":   "",
-			"stat_name":   "",
 			"magnitude":   magnitude,
 			"trap_node":   null,
 			"stat":        "",
@@ -402,9 +420,10 @@ func _build_campaign_card(tier: int, used_ids: Array) -> Dictionary:
 	return {
 		"id": "dmg_all", "category": "campaign", "tier": tier,
 		"title": "Extermination Formula",
-		"impact_line": "+5% damage to all traps",
+		"stat_name": "Damage",
+		"impact_line": "+5% Damage to all traps",
 		"plain_text": "Every trap deals more damage per shot.",
-		"current_val": "", "after_val": "", "stat_name": "",
+		"current_val": "", "after_val": "",
 		"magnitude": 0.05, "trap_node": null, "stat": "",
 	}
 
@@ -429,6 +448,31 @@ func _spawn_cards(cards: Array) -> void:
 		card_ctrl.process_mode = Node.PROCESS_MODE_ALWAYS
 		card_ctrl.card_selected.connect(_on_card_selected)
 		add_child(card_ctrl)
+
+
+# ---------------------------------------------------------------------------
+# Input blocking
+# ---------------------------------------------------------------------------
+
+## Swallows every pointer event that was not already consumed by a card's
+## _gui_input() or by the dim overlay's MOUSE_FILTER_STOP.
+##
+## Why this is necessary:
+##   Screen-touch events (InputEventScreenTouch / InputEventScreenDrag) bypass
+##   the GUI mouse-filter system on mobile and reach _unhandled_input directly.
+##   Mouse motion / mouse button events outside the card area also need a
+##   fallback catch.  Arena._unhandled_input() would otherwise interpret the
+##   same event as a trap-select or enemy-follow tap on the arena behind us.
+##
+## Order guarantee: LevelUpScreen is a child of Arena (see Arena._show_level_up_screen),
+## so Godot's depth-first _unhandled_input traversal calls this method BEFORE
+## Arena._unhandled_input() — the event is marked handled and Arena never sees it.
+func _unhandled_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch \
+			or event is InputEventMouseButton \
+			or event is InputEventScreenDrag \
+			or event is InputEventMouseMotion:
+		get_viewport().set_input_as_handled()
 
 
 # ---------------------------------------------------------------------------

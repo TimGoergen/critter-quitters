@@ -279,97 +279,126 @@ func _draw() -> void:
 	if w <= 0.0 or h <= 0.0:
 		return
 
+	# ── Geometry ──────────────────────────────────────────────────────────────
+	# All layout values are resolved up front so every section can read them.
 	var brd     := RECT_BRD
 	var inner_x := brd
 	var bulb_cx := inner_x + BULB_LEFT_MARGIN
 	var bulb_cy := h * 0.5
+	# Ellipse spans BULB_R*2 horizontally in each direction (x-scale = 2.0).
+	var ell_left  := bulb_cx - BULB_R * 2.0
+	var ell_right := bulb_cx + BULB_R * 2.0
+	# Track begins BAR_BULB_OVERLAP pixels inside the ellipse's right edge,
+	# creating a seamless visual join between bulb and bar.
+	var track_x := ell_right - BAR_BULB_OVERLAP
+	var track_y := bulb_cy - BAR_H * 0.5
+	var track_w := w * BAR_WIDTH_FRACTION - track_x
+	if track_w <= 0.0:
+		return
+
+	# The bulb and track together form one continuous fill region.
+	# fill_right_px is the x-pixel of the fill's leading edge.  It starts at
+	# ell_left, crosses the bulb first, then enters the track — so the bulb
+	# always fills before any part of the track becomes visible.
+	var fill_total_w  := (track_x + track_w) - ell_left
+	var fill_right_px := ell_left + _current_fill_pct * fill_total_w
+	# Track fill width is zero while the leading edge is still inside the bulb.
+	var fill_w := maxf(0.0, fill_right_px - track_x)
 
 	# ── 1. Silver border + silver interior ───────────────────────────────────
 	# Border and interior share the same colour so they merge into one band.
 	draw_rect(Rect2(0.0, 0.0, w, h), COLOR_OUTLINE)
 
-	# ── 2. Bulb — always filled blue (elliptical, 2:1 width-to-height) ─────────
-	# Stretching x by 2.0 around the bulb centre makes draw_circle render as an ellipse.
+	# ── 2. Bulb ───────────────────────────────────────────────────────────────
+	# Always draw the empty bulb base (dark silver, matching the empty track).
 	draw_set_transform(Vector2(bulb_cx, bulb_cy), 0.0, Vector2(2.0, 1.0))
-	draw_circle(Vector2.ZERO, BULB_R, COLOR_FILL)
-
-	# Pulsing inner glow: radial gradient, opaque at centre fading to transparent
-	# at the edge.  Drawn outer-to-inner so each ring overwrites the centre of
-	# the one before it, creating a smooth gradient without a shader.
-	var glow_alpha  := 0.5 + 0.5 * sin(_glow_pct * TAU)   # 0.0–1.0 pulse cycle
-	var glow_r_size := BULB_R * 0.65
-	for step in range(GLOW_GRAD_STEPS, 0, -1):
-		var t          := float(step) / float(GLOW_GRAD_STEPS)  # 1.0 = outermost ring
-		var ring_r     := glow_r_size * t
-		# Quadratic falloff: outer edge (t=1) is fully transparent;
-		# centre (t→0) reaches peak brightness of COLOR_BULB_GLOW.a * glow_alpha.
-		var ring_alpha := COLOR_BULB_GLOW.a * glow_alpha * (1.0 - t * t)
-		var glow_step_c := Color(COLOR_BULB_GLOW.r, COLOR_BULB_GLOW.g, COLOR_BULB_GLOW.b,
-				ring_alpha)
-		draw_circle(Vector2.ZERO, ring_r, glow_step_c)
-
-	# Reset the extra transform before drawing the track and all subsequent elements.
+	draw_circle(Vector2.ZERO, BULB_R, COLOR_TRACK_EMPTY)
 	draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
 
+	# Fill the bulb left-to-right using 1-pixel column strips shaped by the
+	# ellipse equation.  Once fill_right_px passes ell_right the bulb is
+	# permanently full and only the track continues advancing.
+	if _current_fill_pct > 0.0:
+		var ell_w           := ell_right - ell_left
+		var bulb_fill_right := minf(fill_right_px, ell_right)
+		var num_strips      := int(ell_w) + 1
+		var bulb_strip_w    := ell_w / float(num_strips) + 1.0   # +1 closes sub-pixel gaps
+		for col in range(num_strips):
+			var x := ell_left + (float(col) / float(num_strips)) * ell_w
+			if x >= bulb_fill_right:
+				break
+			# Ellipse chord height at this x: (dx/h_rad)² + (y/v_rad)² = 1.
+			var dx         := (x - bulb_cx) / (BULB_R * 2.0)
+			var chord_half := BULB_R * sqrt(maxf(0.0, 1.0 - dx * dx))
+			if chord_half < 0.5:
+				continue
+			draw_rect(Rect2(x, bulb_cy - chord_half, bulb_strip_w, chord_half * 2.0), COLOR_FILL)
+
+		# Pulsing inner glow: radial gradient, opaque centre → transparent edge.
+		# glow_alpha scales with how much of the bulb is filled (0 = empty, 1 = full)
+		# so the glow ramps in as the bulb fills and stays bright once complete.
+		var bulb_fill_frac  := clampf((fill_right_px - ell_left) / ell_w, 0.0, 1.0)
+		var glow_alpha      := bulb_fill_frac * (0.5 + 0.5 * sin(_glow_pct * TAU))
+		var glow_r_size     := BULB_R * 0.65
+		draw_set_transform(Vector2(bulb_cx, bulb_cy), 0.0, Vector2(2.0, 1.0))
+		for step in range(GLOW_GRAD_STEPS, 0, -1):
+			var t           := float(step) / float(GLOW_GRAD_STEPS)
+			var ring_r      := glow_r_size * t
+			var ring_alpha  := COLOR_BULB_GLOW.a * glow_alpha * (1.0 - t * t)
+			var glow_step_c := Color(COLOR_BULB_GLOW.r, COLOR_BULB_GLOW.g, COLOR_BULB_GLOW.b,
+					ring_alpha)
+			draw_circle(Vector2.ZERO, ring_r, glow_step_c)
+		draw_set_transform(Vector2.ZERO, 0.0, Vector2.ONE)
+
 	# ── 3. Bar track ──────────────────────────────────────────────────────────
-	# The ellipse's right edge is BULB_R*2 from the centre (x-scale = 2.0).
-	var track_x := bulb_cx + BULB_R * 2.0 - BAR_BULB_OVERLAP
-	var track_y := bulb_cy - BAR_H * 0.5
-	var track_w := w * BAR_WIDTH_FRACTION - track_x
-	if track_w <= 0.0:
-		return
 	draw_rect(Rect2(track_x, track_y, track_w, BAR_H), COLOR_TRACK_EMPTY)
 
-	# Nothing more to draw if the bar is empty.
+	# Nothing more to draw if the bar is entirely empty.
 	if _current_fill_pct <= 0.0:
 		return
 
-	var fill_w := _current_fill_pct * track_w
-
 	# ── 4. Blue fill ──────────────────────────────────────────────────────────
-	draw_rect(Rect2(track_x, track_y, fill_w, BAR_H), COLOR_FILL)
+	# fill_w is zero while fill_right_px is still advancing through the bulb.
+	if fill_w > 0.0:
+		draw_rect(Rect2(track_x, track_y, fill_w, BAR_H), COLOR_FILL)
 
 	# ── 5. Top-edge highlight ─────────────────────────────────────────────────
-	# A thin permanent bright stripe along the top of the fill gives the bar a
+	# A thin permanent bright stripe along the top of the track fill gives a
 	# "glass tube" depth even when the sheen is elsewhere in its sweep.
-	draw_rect(Rect2(track_x, track_y, fill_w, 3.0), Color(0.55, 0.80, 1.0, 0.35))
+	if fill_w > 0.0:
+		draw_rect(Rect2(track_x, track_y, fill_w, 3.0), Color(0.55, 0.80, 1.0, 0.35))
 
 	# ── 6. Animated sheen sweep ───────────────────────────────────────────────
-	# A soft bright column sweeps from left to right across the fill. It is built
-	# from SHEEN_STEPS thin vertical strips whose alpha follows a bell curve
-	# peaked at the column's centre. This approximates a Gaussian glow without
-	# needing a shader or gradient texture.
-	var sheen_cx := track_x + _sheen_pct * fill_w
-	var strip_w  := (SHEEN_HALF_W * 2.0) / float(SHEEN_STEPS)
-	for step in range(SHEEN_STEPS):
-		var t      := (float(step) + 0.5) / float(SHEEN_STEPS)   # 0…1 across the band
-		var offset := (t - 0.5) * (SHEEN_HALF_W * 2.0)           # pixels from centre
-		var sx     := sheen_cx + offset
-		# Skip strips that fall entirely outside the filled region.
-		if sx + strip_w * 0.5 < track_x or sx - strip_w * 0.5 > track_x + fill_w:
-			continue
-		# Bell-curve alpha: 1.0 at centre, 0.0 at the band's edges.
-		# norm_d is -1…+1; squaring it gives a smooth parabolic falloff.
-		var norm_d := offset / SHEEN_HALF_W
-		var bell   := maxf(0.0, 1.0 - norm_d * norm_d)
-		var col    := Color(COLOR_SHEEN.r, COLOR_SHEEN.g, COLOR_SHEEN.b,
-				COLOR_SHEEN.a * bell)
-		draw_rect(Rect2(sx - strip_w * 0.5, track_y, strip_w, BAR_H), col)
+	# A soft bright column sweeps across the track fill only; the bulb has its
+	# own glow.  Built from SHEEN_STEPS thin strips with a bell-curve alpha.
+	if fill_w > 0.0:
+		var sheen_cx := track_x + _sheen_pct * fill_w
+		var strip_w  := (SHEEN_HALF_W * 2.0) / float(SHEEN_STEPS)
+		for step in range(SHEEN_STEPS):
+			var t      := (float(step) + 0.5) / float(SHEEN_STEPS)
+			var offset := (t - 0.5) * (SHEEN_HALF_W * 2.0)
+			var sx     := sheen_cx + offset
+			if sx + strip_w * 0.5 < track_x or sx - strip_w * 0.5 > track_x + fill_w:
+				continue
+			var norm_d := offset / SHEEN_HALF_W
+			var bell   := maxf(0.0, 1.0 - norm_d * norm_d)
+			var col    := Color(COLOR_SHEEN.r, COLOR_SHEEN.g, COLOR_SHEEN.b,
+					COLOR_SHEEN.a * bell)
+			draw_rect(Rect2(sx - strip_w * 0.5, track_y, strip_w, BAR_H), col)
 
 	# ── 7. Sparkle flecks ────────────────────────────────────────────────────
-	# Small bright circles that swirl within the filled region.
-	# x drifts slowly; y oscillates via the orbit angle to produce a swirling path.
-	# Alpha follows a three-phase ramp: fade-in (0–30%), hold (30–70%), fade-out (70–100%).
-	# Peak alpha is multiplied by COLOR_SPARKLE.a so the constant governs overall brightness.
+	# Sparkles span the entire filled region (bulb + track).
+	# sp_x_pct (0–1) maps across [ell_left, fill_right_px], so sparkles appear
+	# inside the bulb at low fill and spread into the track as it advances.
+	# Alpha: three-phase ramp fade-in (0–30%), hold (30–70%), fade-out (70–100%).
+	var sparkle_span := fill_right_px - ell_left
 	for sp in _sparkles:
 		# Explicit float types required — sp is a Dictionary value (Variant),
 		# so := cannot infer the type from sp.key lookups.
 		var sp_x_pct : float = clampf(
 				float(sp["pct"]) + float(sp["drift"]) * float(sp["age"]), 0.0, 1.0)
-		var sp_x     : float = track_x + sp_x_pct * fill_w
-		# Discard sparkles whose position now falls beyond the current fill edge
-		# (can happen if fill shrinks after a level-up reset).
-		if sp_x > track_x + fill_w:
+		var sp_x     : float = ell_left + sp_x_pct * sparkle_span
+		if sp_x > fill_right_px:
 			continue
 		# Swirl: y oscillates around the bar centreline using orbit radius and phase.
 		var sp_angle : float = float(sp["angle"]) + float(sp["angular_vel"]) * float(sp["age"])
