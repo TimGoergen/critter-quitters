@@ -1200,7 +1200,7 @@ class _PeekTooltip extends Control:
 		var text_h: float   = font.get_height(font_size)
 		_lbl.size           = Vector2(text_w, text_h)
 		size                = Vector2(text_w + (BORDER + PAD_H) * 2.0,
-		                              text_h + (BORDER + PAD_V) * 2.0)
+									  text_h + (BORDER + PAD_V) * 2.0)
 		visible             = true
 		queue_redraw()
 
@@ -1211,4 +1211,4 @@ class _PeekTooltip extends Control:
 		draw_rect(Rect2(0.0, 0.0, w, h), Color(0.75, 0.75, 0.80, 1.0))
 		# Dark gray fill, inset by the border width.
 		draw_rect(Rect2(BORDER, BORDER, w - BORDER * 2.0, h - BORDER * 2.0),
-		          Color(0.14, 0.14, 0.16, 0.97))
+				  Color(0.14, 0.14, 0.16, 0.97))
