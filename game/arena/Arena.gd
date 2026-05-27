@@ -193,6 +193,11 @@ enum ZoomState { OVERVIEW, ZOOMED_IN }
 var _zoom_state:           ZoomState = ZoomState.OVERVIEW
 var _overview_camera_size: float     = 0.0   # camera.size at the overview level; set by _fit_camera_to_grid
 var _camera_base_h_offset: float     = 0.0   # h_offset that centres the arena between the two panels
+var _camera_base_v_offset: float     = 0.0   # v_offset (world units, overview zoom) that centres the
+											  # arena in the zone below the experience bar
+var _v_center_offset_px:   float     = 0.0   # arena-zone vertical centre minus viewport centre, in pixels;
+											  # converted to world units on every _apply_pan call so the
+											  # shift scales correctly at different zoom levels
 var _pan_world_pos:         Vector2  = Vector2.ZERO   # current camera XZ pan offset (world units)
 var _arena_world_half:      float    = 0.0   # half the grid world width (X); used for pan clamping
 var _arena_world_half_z:    float    = 0.0   # half the grid world height (Z); used for pan clamping
@@ -2492,10 +2497,13 @@ func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
 func _fit_camera_to_grid() -> void:
 	var vp       := get_viewport().get_visible_rect().size
 	# Left/right: match the HUD panel inner padding (MARGIN).
-	# Top/bottom: match the HUD panel screen-edge inset (SCREEN_EDGE_MARGIN)
+	# Top: the experience bar occupies the full top edge of the arena zone.
+	# Bottom: match the HUD panel screen-edge inset (SCREEN_EDGE_MARGIN)
 	# which clears rounded corners on mobile devices.
-	var usable_w := vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.MARGIN * 2.0
-	var usable_h := vp.y - HUD.SCREEN_EDGE_MARGIN * 2.0
+	var usable_w   := vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.MARGIN * 2.0
+	var top_margin := ExperienceBar.PANEL_H
+	var bot_margin := HUD.SCREEN_EDGE_MARGIN
+	var usable_h   := vp.y - top_margin - bot_margin
 	if usable_h <= 0.0 or usable_w <= 0.0:
 		return
 
@@ -2515,13 +2523,21 @@ func _fit_camera_to_grid() -> void:
 	if _zoom_state == ZoomState.OVERVIEW:
 		_camera.size = _overview_camera_size
 
-	# Shift the camera centre to the midpoint of the usable horizontal band
+	# Horizontal: shift the camera centre to the midpoint of the usable horizontal band
 	# (left panel + MARGIN … right panel + MARGIN).
 	var world_per_px     := _overview_camera_size / vp.y
 	var h_center_px      := HUD.LEFT_PANEL_W + HUD.MARGIN + usable_w * 0.5
 	_camera_base_h_offset = (h_center_px - vp.x * 0.5) * world_per_px
 	_camera.h_offset      = _camera_base_h_offset
-	_camera.v_offset      = 0.0
+
+	# Vertical: shift the camera centre into the arena zone below the experience bar.
+	# The zone top is at top_margin px; zone centre is at top_margin + usable_h/2.
+	# We store the pixel-space offset (_v_center_offset_px) and convert to world units
+	# each time so the shift scales correctly at all zoom levels.
+	var v_center_px       := top_margin + usable_h * 0.5
+	_v_center_offset_px    = v_center_px - vp.y * 0.5
+	_camera_base_v_offset  = _v_center_offset_px * world_per_px
+	_camera.v_offset       = _camera_base_v_offset
 
 
 ## Each frame: track the followed enemy, and promote a held pointer to DRAG_PLACING.
@@ -2553,7 +2569,7 @@ func _toggle_zoom(center_pos: Vector2 = Vector2.ZERO) -> void:
 		_set_followed_enemy(null)
 		_camera.size     = _overview_camera_size
 		_camera.h_offset = _camera_base_h_offset
-		_camera.v_offset = 0.0
+		_camera.v_offset = _camera_base_v_offset
 	var zoomed_in := _zoom_state == ZoomState.ZOOMED_IN
 	if _floor_mi != null:
 		_floor_mi.material_override = _floor_mat_zoomed if zoomed_in else _floor_mat_overview
@@ -2565,12 +2581,16 @@ func _apply_pan(pos: Vector2) -> void:
 	var vp            := get_viewport().get_visible_rect().size
 	var world_per_px  := _camera.size / vp.y
 	var visible_half_w := (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.MARGIN * 2.0) * world_per_px * 0.5
-	var visible_half_h := (vp.y - HUD.SCREEN_EDGE_MARGIN * 2.0) * world_per_px * 0.5
+	# Arena zone height below the experience bar; used for pan clamping so the
+	# camera cannot scroll arena content entirely behind the XP bar or off-screen.
+	var visible_half_h := (vp.y - ExperienceBar.PANEL_H - HUD.SCREEN_EDGE_MARGIN) * world_per_px * 0.5
 	var cx := clampf(pos.x, -_arena_world_half   + visible_half_w, _arena_world_half   - visible_half_w)
 	var cz := clampf(pos.y, -_arena_world_half_z + visible_half_h, _arena_world_half_z - visible_half_h)
 	_pan_world_pos   = Vector2(cx, cz)
 	_camera.h_offset = _camera_base_h_offset + cx
-	_camera.v_offset = -cz
+	# _v_center_offset_px is converted to world units using the CURRENT camera size
+	# so the pixel-space centering stays correct at both overview and zoomed-in levels.
+	_camera.v_offset = _v_center_offset_px * world_per_px - cz
 
 
 ## Scrolls the camera based on how far the drag ghost has entered the edge bands.
@@ -2582,9 +2602,11 @@ func _apply_edge_scroll(delta: float) -> void:
 	var pos         := _hud_drag_last_screen_pos
 
 	# Arena zone boundaries — mirror the margins used in _fit_camera_to_grid.
+	# Top edge is the bottom of the experience bar, not the screen-edge margin,
+	# because the XP bar blocks drag-and-drop placements at the very top.
 	var left_edge   := HUD.LEFT_PANEL_W + HUD.ARENA_MARGIN_PX
 	var right_edge  := vp.x - HUD.RIGHT_PANEL_W - HUD.ARENA_MARGIN_PX
-	var top_edge    := HUD.SCREEN_EDGE_MARGIN
+	var top_edge    := ExperienceBar.PANEL_H
 	var bottom_edge := vp.y - HUD.SCREEN_EDGE_MARGIN
 
 	# Signed scroll factors: negative = pan left/up, positive = pan right/down.

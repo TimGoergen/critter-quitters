@@ -302,8 +302,10 @@ func set_countdown(seconds: int) -> void:
 
 ## Increases infestation_level by points / INFESTATION_MAX.
 ## Calls end_run() if the level reaches 1.0.
+## Clamped to [0.0, 1.0] — callers should not pass negative values; use
+## heal_infestation() to reduce infestation instead.
 func add_infestation(points: float) -> void:
-	infestation_level = minf(infestation_level + points / float(INFESTATION_MAX), 1.0)
+	infestation_level = clampf(infestation_level + points / float(INFESTATION_MAX), 0.0, 1.0)
 	infestation_changed.emit(infestation_level)
 	if infestation_level >= 1.0:
 		end_run()
@@ -374,3 +376,48 @@ func apply_campaign_buff(buff_id: String, magnitude: float) -> void:
 		"infestation_heal": infestation_heal_per_kill  += magnitude
 		"upgrade_discount": upgrade_cost_discount = minf(
 				upgrade_cost_discount + magnitude, 0.80)
+
+
+# ---------------------------------------------------------------------------
+# Display formatting
+# ---------------------------------------------------------------------------
+
+## Formats a Bug Bucks integer into a compact, human-readable string.
+##
+## Below 10,000  — exact integer, no suffix:  "1", "115", "9995"
+## At 10,000+    — one decimal place with a unit suffix, decimal dropped when .0:
+##                 "10K", "39.2K", "1.5M", "2.3B", "1.2T", "9.1Q"
+##
+## All UI code should call this function rather than formatting amounts
+## directly, so the display rule is defined in exactly one place.
+static func format_bucks(amount: int) -> String:
+	# Below the compaction threshold — exact display.
+	if amount < 10_000:
+		return str(amount)
+
+	# Suffix table: [divisor, suffix letter].
+	# Checked largest-first so we always select the correct unit without
+	# having to re-examine boundaries after the match.
+	const THRESHOLDS := [
+		[1_000_000_000_000_000, "Q"],  # quadrillion
+		[1_000_000_000_000,     "T"],  # trillion
+		[1_000_000_000,         "B"],  # billion
+		[1_000_000,             "M"],  # million
+		[1_000,                 "K"],  # thousand
+	]
+
+	for entry in THRESHOLDS:
+		var divisor: int   = entry[0]
+		var suffix: String = entry[1]
+		if amount >= divisor:
+			# Compute via integer math to avoid floating-point rounding artefacts.
+			# Example: 39176 → round(39.176 × 10) = 392 → whole=39, decimal=2 → "39.2k"
+			var tenths: int  = roundi(float(amount) / float(divisor) * 10.0)
+			var whole: int   = tenths / 10
+			var decimal: int = tenths % 10
+			if decimal == 0:
+				return "%d%s" % [whole, suffix]
+			return "%d.%d%s" % [whole, decimal, suffix]
+
+	# Unreachable: every integer >= 10,000 matches the "k" threshold above.
+	return str(amount)

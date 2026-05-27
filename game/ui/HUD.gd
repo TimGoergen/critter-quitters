@@ -98,6 +98,10 @@ const INNER_BORDER_W: float = 2.0      # black separator line at the arena-facin
 const ROW_H:          float = 56.0     # fixed height for every trap and boost selector row
 const COLOR_SILVER_BORDER := Color(0.72, 0.72, 0.80, 1.0)
 const SILVER_BORDER_W: float = 4.0    # thickness of the silver panel border lines
+# Outer corner radius for each side panel — mimics the rounded edge of a phone display.
+# Only the screen-edge corners (top-left/bottom-left for the left panel; top-right/bottom-right
+# for the right panel) are rounded; the inner corners facing the arena remain sharp.
+const PANEL_CORNER_RADIUS: int = 20
 
 const PAUSE_BANNER_H:      float = 50.0
 # How many px each side angles inward from the top edge to the bottom edge.
@@ -1021,21 +1025,63 @@ func _build_run_over_overlay() -> void:
 # Panel borders
 # ---------------------------------------------------------------------------
 
-## Draws thick silver lines around the left panel, arena, and right panel.
+## Draws the silver outline around the left panel, the arena center edges, and the right panel.
 ## Called last in _build_ui() so borders render on top of all panel content.
+##
+## Each side panel gets a single Panel + StyleBoxFlat that draws the full outline
+## (all four sides) in one pass.  The two outer corners of each panel — the ones
+## that sit at the physical edge of the phone display — use PANEL_CORNER_RADIUS so
+## the silver line follows the device's rounded bezel.  The inner corners (facing the
+## arena) are left at radius 0 so the outline meets the arena lines cleanly.
+## draw_center = false keeps the panel interior transparent; only the border strip
+## is visible over the existing dark panel background.
 func _build_panel_borders() -> void:
-	# Top edge — full width
-	_add_border_line(0.0, 0.0, 1.0, 0.0,  0.0,  0.0,  0.0,  SILVER_BORDER_W)
-	# Bottom edge — full width
-	_add_border_line(0.0, 1.0, 1.0, 1.0,  0.0, -SILVER_BORDER_W,  0.0,  0.0)
-	# Left screen edge
-	_add_border_line(0.0, 0.0, 0.0, 1.0,  0.0,  0.0,  SILVER_BORDER_W,  0.0)
-	# Right screen edge
-	_add_border_line(1.0, 0.0, 1.0, 1.0, -SILVER_BORDER_W,  0.0,  0.0,  0.0)
-	# Left panel / arena divider
-	_add_border_line(0.0, 0.0, 0.0, 1.0,  LEFT_PANEL_W,  0.0,  LEFT_PANEL_W + SILVER_BORDER_W,  0.0)
-	# Arena / right panel divider
-	_add_border_line(1.0, 0.0, 1.0, 1.0, -RIGHT_PANEL_W - SILVER_BORDER_W,  0.0, -RIGHT_PANEL_W,  0.0)
+	# --- Left panel outline ---
+	# Rounded: top-left, bottom-left.   Sharp: top-right, bottom-right (arena edge).
+	var left_border := Panel.new()
+	left_border.anchor_left   = 0.0
+	left_border.anchor_right  = 0.0
+	left_border.anchor_top    = 0.0
+	left_border.anchor_bottom = 1.0
+	left_border.offset_right  = LEFT_PANEL_W
+	left_border.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	var left_style := StyleBoxFlat.new()
+	left_style.draw_center                = false
+	left_style.border_color               = COLOR_SILVER_BORDER
+	left_style.set_border_width_all(int(SILVER_BORDER_W))
+	left_style.corner_radius_top_left     = PANEL_CORNER_RADIUS
+	left_style.corner_radius_bottom_left  = PANEL_CORNER_RADIUS
+	left_style.corner_radius_top_right    = 0
+	left_style.corner_radius_bottom_right = 0
+	left_border.add_theme_stylebox_override("panel", left_style)
+	add_child(left_border)
+
+	# --- Right panel outline ---
+	# Rounded: top-right, bottom-right.   Sharp: top-left, bottom-left (arena edge).
+	var right_border := Panel.new()
+	right_border.anchor_left   = 1.0
+	right_border.anchor_right  = 1.0
+	right_border.anchor_top    = 0.0
+	right_border.anchor_bottom = 1.0
+	right_border.offset_left   = -RIGHT_PANEL_W
+	right_border.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	var right_style := StyleBoxFlat.new()
+	right_style.draw_center                = false
+	right_style.border_color               = COLOR_SILVER_BORDER
+	right_style.set_border_width_all(int(SILVER_BORDER_W))
+	right_style.corner_radius_top_right    = PANEL_CORNER_RADIUS
+	right_style.corner_radius_bottom_right = PANEL_CORNER_RADIUS
+	right_style.corner_radius_top_left     = 0
+	right_style.corner_radius_bottom_left  = 0
+	right_border.add_theme_stylebox_override("panel", right_style)
+	add_child(right_border)
+
+	# --- Arena center edges ---
+	# The StyleBoxFlats above already draw the top and bottom border strips across
+	# their respective panels.  These two ColorRect lines bridge the gap across the
+	# arena zone to complete the top and bottom edges of the full-screen outline.
+	_add_border_line(0.0, 0.0, 1.0, 0.0,  LEFT_PANEL_W,  0.0,  -RIGHT_PANEL_W,  SILVER_BORDER_W)
+	_add_border_line(0.0, 1.0, 1.0, 1.0,  LEFT_PANEL_W,  -SILVER_BORDER_W,  -RIGHT_PANEL_W,  0.0)
 
 
 ## Trapezoidal tab that slides down from the top border when the game is paused.
@@ -1298,7 +1344,7 @@ func _on_settings_close_pressed() -> void:
 # ---------------------------------------------------------------------------
 
 func _on_bucks_changed(amount: int) -> void:
-	_bucks_label.text = "%d" % amount
+	_bucks_label.text = GameState.format_bucks(amount)
 	_refresh_trap_selector()
 
 
@@ -1323,7 +1369,7 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 		_countdown_active       = true
 		_last_countdown_seconds = seconds_remaining
 		_countdown_seconds_label.text = "INCOMING  %d..." % seconds_remaining
-		_send_wave_reward_label.text  = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate * _wave_multiplier)
+		_send_wave_reward_label.text  = GameState.format_bucks(seconds_remaining * GameState.early_wave_bonus_rate * _wave_multiplier)
 		if _max_countdown_seconds == 0:
 			_max_countdown_seconds = seconds_remaining
 		_update_reward_bar_display(float(seconds_remaining) / float(_max_countdown_seconds))
@@ -1545,9 +1591,9 @@ func _on_multiplier_btn_pressed() -> void:
 ## without waiting for the next spawn tick or countdown second.
 func _refresh_reward_label() -> void:
 	if _countdown_active and _last_countdown_seconds > 0:
-		_send_wave_reward_label.text = "%d" % (_last_countdown_seconds * GameState.early_wave_bonus_rate * _wave_multiplier)
+		_send_wave_reward_label.text = GameState.format_bucks(_last_countdown_seconds * GameState.early_wave_bonus_rate * _wave_multiplier)
 	elif _current_wave_reward > 0:
-		_send_wave_reward_label.text = "%d" % (_current_wave_reward * _wave_multiplier)
+		_send_wave_reward_label.text = GameState.format_bucks(_current_wave_reward * _wave_multiplier)
 
 
 func _on_send_wave_pressed() -> void:
@@ -1591,7 +1637,7 @@ func _on_early_bonus_awarded(coins: int) -> void:
 
 func _on_early_send_reward_changed(amount: int) -> void:
 	_current_wave_reward         = amount
-	_send_wave_reward_label.text = "%d" % (amount * _wave_multiplier)
+	_send_wave_reward_label.text = GameState.format_bucks(amount * _wave_multiplier)
 	# Bar fill during spawn is driven by _on_wave_spawn_progress_changed;
 	# only collapse the overlay once the reward reaches zero.
 	if amount <= 0:
@@ -1709,7 +1755,7 @@ func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 	cost_row.add_child(coin_icon)
 
 	var cost_lbl := Label.new()
-	cost_lbl.text                = str(Trap.STATS[type]["cost"])
+	cost_lbl.text                = GameState.format_bucks(Trap.STATS[type]["cost"])
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	cost_lbl.add_theme_font_size_override("font_size", 15)
@@ -1958,7 +2004,7 @@ func _build_boost_row(parent: VBoxContainer, type: int) -> Control:
 	cost_row.add_child(coin_icon)
 
 	var cost_lbl := Label.new()
-	cost_lbl.text                = str(BoostUnit.STATS[type]["cost"])
+	cost_lbl.text                = GameState.format_bucks(BoostUnit.STATS[type]["cost"])
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	cost_lbl.add_theme_font_size_override("font_size", 15)
