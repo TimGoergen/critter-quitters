@@ -4,21 +4,21 @@
 ##
 ## Targeting model:
 ##   Each trap type has its own targeting priority:
-##     SNAP_TRAP  â€” nearest enemy in range
-##     ZAPPER     â€” farthest-along-path enemy in range (Phase 4)
-##     FOGGER     â€” all enemies in range simultaneously (Phase 4)
-##     GLUE_BOARD â€” passive AoE slow; cosmetic projectile fires when an enemy first enters range
+##     SNAP_TRAP  â€" nearest enemy in range
+##     ZAPPER     â€" farthest-along-path enemy in range (Phase 4)
+##     FOGGER     â€" all enemies in range simultaneously (Phase 4)
+##     GLUE_BOARD â€" passive AoE slow; cosmetic projectile fires when an enemy first enters range
 ##
-##   "Farthest along path" is determined by the enemy's path index â€”
+##   "Farthest along path" is determined by the enemy's path index â€"
 ##   higher index means closer to the exit, so it is the greater threat.
 ##
 ## Damage model:
 ##   Damage is applied instantly when the trap fires. The projectile that
-##   follows is purely cosmetic â€” it travels to where the enemy was at
+##   follows is purely cosmetic â€" it travels to where the enemy was at
 ##   fire time and does nothing on arrival.
 ##
 ## Upgrade model:
-##   Each trap instance tracks three independent upgrade levels â€” one per stat.
+##   Each trap instance tracks three independent upgrade levels â€" one per stat.
 ##   Active traps (Snap, Zapper, Fogger): Damage, Range, Fire Rate.
 ##   Glue Board: Adhesion, Range, Duration (seconds the slow persists after leaving range).
 ##   Each stat can be upgraded up to MAX_UPGRADE_LEVEL (3) times.
@@ -36,7 +36,7 @@ const UIFonts            = preload("res://ui/UIFonts.gd")
 const SHADOW_OUTLINE_SHADER = preload("res://assets/shadow_outline.gdshader")
 const BAIT_GLOW_SHADER      = preload("res://assets/bait_glow.gdshader")
 
-# SVG sprite frames â€” idle (index 0) and fire (index 1) for each trap type.
+# SVG sprite frames â€" idle (index 0) and fire (index 1) for each trap type.
 const SNAP_TRAP_FRAMES:    Array[Texture2D] = [preload("res://assets/snap_trap_idle.svg"),   preload("res://assets/snap_trap_fire.svg")]
 const ZAPPER_FRAMES:       Array[Texture2D] = [preload("res://assets/zapper_idle.svg"),      preload("res://assets/zapper_fire.svg")]
 const FOGGER_FRAMES:       Array[Texture2D] = [preload("res://assets/fogger_idle.svg"),      preload("res://assets/fogger_fire.svg")]
@@ -51,16 +51,16 @@ const BAIT_STATION_FRAMES: Array[Texture2D] = [preload("res://assets/bait_statio
 
 enum TrapType { SNAP_TRAP, ZAPPER, FOGGER, GLUE_BOARD, FLY_STRIP_LAUNCHER, BAIT_STATION }
 
-## Per-type stat table. All numeric values are placeholders â€” tuned via playtesting.
-##   damage           â€” HP removed from each target per shot
-##   range            â€” circular detection radius in world units (1 unit = 1 cell)
-##   cooldown         â€” seconds between shots; 0.0 = passive (no shots fired)
-##   cost             â€” Bug Bucks to place one trap of this type
-##   color            â€” placeholder box colour (replaced by sprites in Phase 8)
-##   cloud_duration   â€” FLY_STRIP_LAUNCHER only: seconds the sticky cloud persists
-##   adhesion         â€” FLY_STRIP_LAUNCHER only: slow factor applied to flying enemies (0.0â€“1.0)
-##   pulse_interval   â€” BAIT_STATION only: seconds between damage pulses
-##   poison_*         â€” BAIT_STATION only: poison DoT applied after each pulse
+## Per-type stat table. All numeric values are placeholders â€" tuned via playtesting.
+##   damage           â€" HP removed from each target per shot
+##   range            â€" circular detection radius in world units (1 unit = 1 cell)
+##   cooldown         â€" seconds between shots; 0.0 = passive (no shots fired)
+##   cost             â€" Bug Bucks to place one trap of this type
+##   color            â€" placeholder box colour (replaced by sprites in Phase 8)
+##   cloud_duration   â€" FLY_STRIP_LAUNCHER only: seconds the sticky cloud persists
+##   adhesion         â€" FLY_STRIP_LAUNCHER only: slow factor applied to flying enemies (0.0â€"1.0)
+##   pulse_interval   â€" BAIT_STATION only: seconds between damage pulses
+##   poison_*         â€" BAIT_STATION only: poison DoT applied after each pulse
 const STATS := {
 	TrapType.SNAP_TRAP:  { "damage": 5.0,  "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.78, 0.52, 0.22) },
 	TrapType.ZAPPER:     { "damage": 30.0, "range": 9.6, "cooldown": 2.5, "cost": 75, "color": Color(0.10, 0.50, 1.00) },
@@ -94,7 +94,7 @@ const UPGRADE_FIRE_RATE_FACTOR: float = 0.08  # âˆ’8% of base cooldown per l
 ## Critical hit constants. Crit chance defaults to 0.0 (no crits) so the stats
 ## are present on every trap but dormant until the player upgrades them.
 ## On a successful crit roll the trap deals damage Ã— (1 + crit_damage_bonus).
-const CRIT_CHANCE_BASE:           float = 0.00  # 0% â€” dormant by default
+const CRIT_CHANCE_BASE:           float = 0.00  # 0% â€" dormant by default
 const CRIT_DAMAGE_BONUS_BASE:     float = 0.25  # 25% extra on a crit
 const UPGRADE_CRIT_CHANCE_PER_LEVEL: float = 0.02   # +2% per level
 const UPGRADE_CRIT_DAMAGE_PER_LEVEL: float = 0.25   # +25% per level
@@ -128,14 +128,14 @@ const BAIT_GLOW_REST_OPACITY: float = 0.25   # dim persistent glow at zero stars
 const BAIT_GLOW_REST_SCALE:   float = 0.27   # matches trap footprint at rest
 const BAIT_GLOW_FIRE_SCALE:   float = 0.41   # ~50% larger than footprint on pulse
 
-## Resting glow opacity indexed by number of maxed stats (0â€“3).
+## Resting glow opacity indexed by number of maxed stats (0â€"3).
 ## As the player upgrades the Bait Station, the persistent red glow brightens to
-## signal increasing toxicity â€” 0 stars is faint, 3 stars is noticeably intense.
+## signal increasing toxicity â€" 0 stars is faint, 3 stars is noticeably intense.
 const BAIT_GLOW_OPACITY_BY_STARS: Array[float] = [0.25, 0.40, 0.55, 0.70]
 
 ## Bug Bucks cost for each upgrade level per trap type.
 ## Index 0 = first upgrade, 1 = second, 2 = third.
-## All values are tuning placeholders â€” finalize via playtesting.
+## All values are tuning placeholders â€" finalize via playtesting.
 const UPGRADE_COSTS := {
 	TrapType.SNAP_TRAP:          [20, 30,  50],
 	TrapType.ZAPPER:             [50, 75, 120],
@@ -156,7 +156,7 @@ signal fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, 
 
 ## Emitted once per Fogger firing cycle. Arena spawns a FogCloud that persists
 ## for its full visual lifetime and ticks damage to any enemy in range on a
-## fixed interval â€” including enemies that enter the area after the cloud forms.
+## fixed interval â€" including enemies that enter the area after the cloud forms.
 signal aoe_fired(from_pos: Vector3, aoe_range: float, damage: float, active_enemies: Array)
 
 ## Emitted once per Fly Strip Launcher firing cycle. Arena spawns a FlyStripCloud
@@ -179,7 +179,7 @@ var _cooldown: float           = 0.0
 var _cooldown_remaining: float = 0.0
 var _cost:     int             = 0
 
-# Upgrade state â€” each stat tracks its own level independently (0â€“MAX_UPGRADE_LEVEL).
+# Upgrade state â€" each stat tracks its own level independently (0â€"MAX_UPGRADE_LEVEL).
 var _damage_level: int = 0
 var _range_level:  int = 0
 var _rate_level:   int = 0   # always stays 0 for passive traps
@@ -240,11 +240,11 @@ var _indicator_pinned: bool  = false
 # All three meshes are pre-spawned; _update_star_display() shows/hides and repositions them.
 var _star_meshes: Array[MeshInstance3D] = []
 
-# Boost indicator â€” small diamond shown in the trap's top-right corner whenever at
+# Boost indicator â€" small diamond shown in the trap's top-right corner whenever at
 # least one boost aura is currently active on this trap.
 var _boost_indicator: Label3D = null
 
-# Upgrade tint â€” materials updated in _update_star_display() to lerp toward gold.
+# Upgrade tint â€" materials updated in _update_star_display() to lerp toward gold.
 var _base_color:   Color                       = Color.WHITE
 var _outline_mats: Array[StandardMaterial3D]   = []
 var _shadow_mat:   ShaderMaterial              = null
@@ -254,18 +254,18 @@ var _shadow_mat:   ShaderMaterial              = null
 # so hide_decorators() can remove them for icon-only previews (e.g. HUD panel icons).
 var _decorator_nodes: Array[Node3D] = []
 
-# SVG sprite state â€” shared by all trap types.
+# SVG sprite state â€" shared by all trap types.
 var _trap_frames:    Array[Texture2D]    = []     # [idle, fire] set in _spawn_svg_trap_visual
 var _visual_material: StandardMaterial3D = null   # albedo_texture swapped on each fire
 var _bg_mat:          StandardMaterial3D = null   # colored background plate material; stored for dim/undim
 
-# Per-type fire animation guard flags â€” prevent overlapping texture swaps.
+# Per-type fire animation guard flags â€" prevent overlapping texture swaps.
 var _snap_animating:      bool = false
 var _fogger_animating:    bool = false
 var _zapper_animating:    bool = false
 var _fly_strip_animating: bool = false
 
-# Bait Station animation state â€” null for all other trap types.
+# Bait Station animation state â€" null for all other trap types.
 # _bait_glow_mat is the radial glow shader material; at rest it holds
 # BAIT_GLOW_REST_OPACITY and BAIT_GLOW_REST_SCALE, then pulses to full on each fire.
 # _bait_glow_mi is the plane node so its scale can be tweened during the pulse.
@@ -276,16 +276,16 @@ var _bait_animating: bool            = false
 # Tracks how many particle batches from this trap are still visually alive.
 # Each fire increments the count; a timer decrements it after the particles expire.
 # Firing is blocked when the count reaches the cap (~6 puffs on screen).
-const FOG_BATCH_CAP: int       = 2   # 2 batches Ã— 3â€“4 puffs each â‰ˆ 6 puffs max
+const FOG_BATCH_CAP: int       = 2   # 2 batches Ã— 3â€"4 puffs each â‰ˆ 6 puffs max
 const FLY_STRIP_BATCH_CAP: int = 2   # same limit for fly strip clouds
 var _active_fog_batches:       int = 0
 var _active_fly_strip_batches: int = 0
 
-# Fly Strip Launcher â€” extra stats that go beyond the base damage/range/cooldown tuple.
+# Fly Strip Launcher â€" extra stats that go beyond the base damage/range/cooldown tuple.
 var _fly_strip_adhesion:       float = 0.0   # slow factor applied to flying enemies in the cloud
 var _fly_strip_cloud_duration: float = 0.0   # how many seconds the cloud lingers
 
-# Bait Station â€” pulse interval and poison parameters (stored separately because
+# Bait Station â€" pulse interval and poison parameters (stored separately because
 # cooldown = 0.0 in STATS so the base fire loop treats it as passive).
 var _bait_pulse_interval:          float = 0.0
 var _bait_pulse_timer:             float = 0.0
@@ -352,7 +352,7 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 
 
 ## Lightweight setup for placement preview ghosts.
-## Builds the visual and range indicator â€” no combat state or hover area.
+## Builds the visual and range indicator â€" no combat state or hover area.
 ## Caller should set process_mode = DISABLED before adding to the tree.
 func initialize_preview(trap_type: TrapType) -> void:
 	_is_preview = true
@@ -371,11 +371,11 @@ func _ready() -> void:
 	_spawn_hover_area()
 	# Register with the global group so TrapUpgradePanel can query all placed
 	# traps during peek mode without needing a direct Arena reference.
-	add_to_group(“placed_traps”)
+	add_to_group("placed_traps")
 
 
 # ---------------------------------------------------------------------------
-# Upgrade â€” cost
+# Upgrade â€" cost
 # ---------------------------------------------------------------------------
 
 ## Bug Bucks cost for the next upgrade to each stat. Returns 0 when already maxed.
@@ -413,7 +413,7 @@ func get_crit_damage_upgrade_cost() -> int:
 
 
 # ---------------------------------------------------------------------------
-# Upgrade â€” stat previews
+# Upgrade â€" stat previews
 # ---------------------------------------------------------------------------
 
 ## Damage this trap would have after one damage upgrade.
@@ -457,7 +457,7 @@ func get_effective_shots_per_sec_after_upgrade() -> float:
 	return _fire_rate_multiplier / maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
 
 
-## Glue Board / Bait Station â€” duration value after the next duration upgrade.
+## Glue Board / Bait Station â€" duration value after the next duration upgrade.
 func get_duration_after_upgrade() -> float:
 	if _trap_type == TrapType.BAIT_STATION:
 		return BAIT_POISON_DURATION_LEVELS[mini(_duration_level + 1, MAX_UPGRADE_LEVEL)]
@@ -473,7 +473,7 @@ func get_crit_damage_after_upgrade() -> float:
 
 
 # ---------------------------------------------------------------------------
-# Upgrade â€” apply
+# Upgrade â€" apply
 # ---------------------------------------------------------------------------
 
 ## Increases damage by 20% of base (or advances to the next adhesion tier for Glue Board).
@@ -543,7 +543,7 @@ func apply_crit_damage_upgrade() -> void:
 # These use the same stat formulas as the paid upgrades but draw from a
 # separate pool (_free_*_level caps at FREE_MAX_LEVEL = 3). Because they
 # modify the same underlying stats (_damage, _range, _cooldown, etc.) the
-# TrapUpgradePanel's “current value” display automatically reflects both
+# TrapUpgradePanel's "current value" display automatically reflects both
 # paid and free contributions, and combat math picks them up with no extra
 # code in the fire loops.
 # ---------------------------------------------------------------------------
@@ -659,7 +659,7 @@ func is_crit_chance_maxed() -> bool:
 func is_crit_damage_maxed() -> bool:
 	return _crit_damage_level >= MAX_UPGRADE_LEVEL
 
-## Glue Board â€” slow duration in seconds. Bait Station â€” poison duration in seconds.
+## Glue Board â€" slow duration in seconds. Bait Station â€" poison duration in seconds.
 func get_duration() -> float:
 	if _trap_type == TrapType.BAIT_STATION:
 		return _bait_poison_duration
@@ -715,7 +715,7 @@ func get_description() -> String:
 		TrapType.FOGGER:
 			return "Fires an expanding cloud that hits all pests from closest to farthest. Cannot hit flying pests."
 		TrapType.GLUE_BOARD:
-			return "Continuously slows every ground pest inside its range. Passive â€” no firing. Cannot hit flying pests."
+			return "Continuously slows every ground pest inside its range. Passive â€" no firing. Cannot hit flying pests."
 		TrapType.FLY_STRIP_LAUNCHER:
 			return "Targets flying pests only. Releases a sticky cloud on impact that slows and damages."
 		TrapType.BAIT_STATION:
@@ -773,11 +773,11 @@ func get_cost() -> int:
 func get_base_color() -> Color:
 	return _base_color
 
-## Glue Board only â€” adhesion strength as a percentage (e.g. 50.0 for 50% slow).
+## Glue Board only â€" adhesion strength as a percentage (e.g. 50.0 for 50% slow).
 func get_adhesion_pct() -> float:
 	return _damage * 100.0
 
-## Glue Board only â€” adhesion after the next damage upgrade, as a percentage.
+## Glue Board only â€" adhesion after the next damage upgrade, as a percentage.
 func get_adhesion_after_upgrade_pct() -> float:
 	return get_damage_after_upgrade() * 100.0
 
@@ -905,8 +905,8 @@ func _find_target() -> Node3D:
 
 
 ## Returns true if at least one non-flying enemy is in range and the batch cap has not been reached.
-## Damage is NOT applied here â€” FogCloud ticks it on a fixed interval while alive.
-## Flying enemies are excluded â€” the Fogger cannot hit airborne pests.
+## Damage is NOT applied here â€" FogCloud ticks it on a fixed interval while alive.
+## Flying enemies are excluded â€" the Fogger cannot hit airborne pests.
 func _fire_fogger() -> bool:
 	if _active_fog_batches >= FOG_BATCH_CAP:
 		return false
@@ -924,14 +924,14 @@ func _fire_fogger() -> bool:
 ## after the enemy leaves the radius before being removed. Runs every frame.
 func _update_glue_aoe(delta: float) -> void:
 	# First pass: tick duration countdowns and collect enemies whose slow has expired.
-	# Cannot erase from a Dictionary while iterating â€” collect targets first.
+	# Cannot erase from a Dictionary while iterating â€" collect targets first.
 	var to_release: Array = []
 	for enemy in _glue_slowed_enemies:
 		if not is_instance_valid(enemy):
 			to_release.append(enemy)
 			continue
 		if _xz_distance(enemy.global_position) <= _effective_range():
-			_glue_slowed_enemies[enemy] = -1.0   # still in range — reset to “no countdown”
+			_glue_slowed_enemies[enemy] = -1.0   # still in range — reset to "no countdown"
 		else:
 			var remaining: float = _glue_slowed_enemies[enemy]
 			if remaining < 0.0:
@@ -949,7 +949,7 @@ func _update_glue_aoe(delta: float) -> void:
 		_glue_slowed_enemies.erase(enemy)
 
 	# Second pass: apply slow to newly-in-range ground enemies and fire a cosmetic projectile.
-	# Flying enemies are excluded â€” they never contact the adhesive surface.
+	# Flying enemies are excluded â€" they never contact the adhesive surface.
 	var newly_caught := false
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
@@ -976,7 +976,7 @@ func _refresh_glue_slow() -> void:
 
 
 ## Returns the first in-range flying enemy, or null if the batch cap is reached or none qualify.
-## Damage is NOT applied here â€” FlyStripCloud ticks it while alive.
+## Damage is NOT applied here â€" FlyStripCloud ticks it while alive.
 ## The returned node is used by the combat loop as the cosmetic projectile's visual target.
 func _fire_fly_strip() -> Node3D:
 	if _active_fly_strip_batches >= FLY_STRIP_BATCH_CAP:
@@ -1009,7 +1009,7 @@ func _update_bait_station(delta: float) -> void:
 		enemy.apply_poison(_bait_poison_damage_per_tick, _bait_poison_duration, _bait_poison_tick_rate)
 		hit_any = true
 	if hit_any:
-		# Only start the cooldown after a successful hit â€” keeps the trap "ready"
+		# Only start the cooldown after a successful hit â€" keeps the trap "ready"
 		# when no enemy was in range, so the first enemy to enter is hit immediately.
 		_bait_pulse_timer = _bait_pulse_interval
 		AudioManager.play_trap_fire(TrapType.BAIT_STATION)
@@ -1088,8 +1088,8 @@ func _nearest_in_range() -> Node3D:
 
 
 ## Returns the enemy in range farthest along the path to the exit
-## (used by Zapper â€” highest path index = closest to exit = biggest threat).
-## Flying enemies are excluded â€” the Zapper cannot hit airborne pests.
+## (used by Zapper â€" highest path index = closest to exit = biggest threat).
+## Flying enemies are excluded â€" the Zapper cannot hit airborne pests.
 func _farthest_in_range() -> Node3D:
 	var best: Node3D = null
 	var best_index   := -1
@@ -1297,7 +1297,7 @@ func _update_boost_indicator() -> void:
 
 ## Shows the range indicator. Called by Arena when a placement preview overlaps this trap,
 ## or when the upgrade panel pins it open.
-## Pass dimmed=true when shown because a new trap is being placed over this one â€” the gray
+## Pass dimmed=true when shown because a new trap is being placed over this one â€" the gray
 ## tint signals "existing trap" vs. the full-white preview of the trap being placed.
 func show_range_indicator(dimmed: bool = false) -> void:
 	_indicator_pinned = true
@@ -1503,7 +1503,7 @@ func _make_ring_mesh(radius: float, width: float) -> ArrayMesh:
 ## Creates a flat Area3D over the trap footprint for mouse-enter/exit hover detection.
 func _spawn_hover_area() -> void:
 	_hover_area                    = Area3D.new()
-	_hover_area.collision_layer    = 8   # dedicated layer â€” no gameplay collisions
+	_hover_area.collision_layer    = 8   # dedicated layer â€" no gameplay collisions
 	_hover_area.collision_mask     = 0
 	_hover_area.monitoring         = false
 	_hover_area.monitorable        = false
@@ -1565,7 +1565,7 @@ func _spawn_footprint_outline(color: Color) -> void:
 
 ## Adds a rectangular outline shadow matching the footprint boundary.
 ## The shadow is transparent at the centre and peaks in opacity right at the
-## boundary line, fading outward beyond it â€” like a soft halo around the outline.
+## boundary line, fading outward beyond it â€" like a soft halo around the outline.
 ## The shadow quad is wider than the footprint so the halo has room to breathe.
 ## Sits just above the floor (world y = 0.05); local Y offset is -0.20 because
 ## the trap root is at y = 0.25.
@@ -1662,7 +1662,7 @@ func _spawn_visual(_color: Color) -> void:
 		_:                           c = Color(0.80, 0.80, 0.80)
 	_base_color = c
 
-	# Bait Station: no background plate or shadow â€” the glow plane is its only
+	# Bait Station: no background plate or shadow â€" the glow plane is its only
 	# ambient marker. The SVG grate is transparent so the glow shows through the holes.
 	if _trap_type == TrapType.BAIT_STATION:
 		_spawn_bait_glow_plane()
@@ -1683,7 +1683,7 @@ func _spawn_visual(_color: Color) -> void:
 
 ## Places the SVG sprite quad for any trap type.
 ## The quad lies flat on the XZ plane (basis rotated so its normal points +Y)
-## at world y = 0.17 â€” above the background plate (0.07) and below enemies (0.25).
+## at world y = 0.17 â€" above the background plate (0.07) and below enemies (0.25).
 ## The trap root sits at world y = 0.25, so local y offset = 0.17 âˆ’ 0.25 = âˆ’0.08.
 func _spawn_svg_trap_visual(frames: Array[Texture2D]) -> void:
 	_trap_frames = frames
@@ -1793,7 +1793,7 @@ func _bait_current_rest_opacity() -> float:
 ## Plays the Bait Station fire animation: the radial glow plane snaps to full opacity
 ## then fades back to invisible, simulating a toxic pulse seen through the grate.
 ## The grate itself does not move.  Opacity is a shader parameter so the radial gradient
-## stays intact throughout â€” only its overall intensity changes.
+## stays intact throughout â€" only its overall intensity changes.
 func _play_bait_animation() -> void:
 	if _bait_glow_mat == null or _bait_glow_mi == null or _bait_animating:
 		return
