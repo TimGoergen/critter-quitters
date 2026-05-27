@@ -257,6 +257,7 @@ var _decorator_nodes: Array[Node3D] = []
 # SVG sprite state â€” shared by all trap types.
 var _trap_frames:    Array[Texture2D]    = []     # [idle, fire] set in _spawn_svg_trap_visual
 var _visual_material: StandardMaterial3D = null   # albedo_texture swapped on each fire
+var _bg_mat:          StandardMaterial3D = null   # colored background plate material; stored for dim/undim
 
 # Per-type fire animation guard flags â€” prevent overlapping texture swaps.
 var _snap_animating:      bool = false
@@ -368,6 +369,9 @@ func _ready() -> void:
 		return
 	_spawn_range_indicator()
 	_spawn_hover_area()
+	# Register with the global group so TrapUpgradePanel can query all placed
+	# traps during peek mode without needing a direct Arena reference.
+	add_to_group(“placed_traps”)
 
 
 # ---------------------------------------------------------------------------
@@ -1340,6 +1344,30 @@ func hide_peek_outline() -> void:
 	_update_star_display()
 
 
+## Fades this trap's visual materials so it recedes into the background while
+## another trap's peek mode is active. Does not affect range indicators or stars.
+func dim_for_peek() -> void:
+	if _visual_material != null:
+		# Drive albedo far below normal (normally 2.0 for a bright-white sprite tint)
+		# so the sprite reads as a muted silhouette rather than a full-color image.
+		_visual_material.albedo_color = Color(0.30, 0.30, 0.30, 0.30)
+	if _bg_mat != null:
+		_bg_mat.albedo_color = Color(0.06, 0.06, 0.06, 0.45)
+	for mat: StandardMaterial3D in _outline_mats:
+		mat.albedo_color = Color(0.15, 0.15, 0.15, 0.20)
+
+
+## Restores materials changed by dim_for_peek() to their normal upgrade-level state.
+func undim_for_peek() -> void:
+	if _visual_material != null:
+		_visual_material.albedo_color = Color(2.0, 2.0, 2.0, 1.0)
+	if _bg_mat != null:
+		_bg_mat.albedo_color = Color(_base_color.r * 0.65, _base_color.g * 0.65, _base_color.b * 0.65, 0.92)
+	# _update_star_display() restores _outline_mats and _shadow_mat to their
+	# correct upgrade-level tint, so we don't need to track those separately.
+	_update_star_display()
+
+
 ## Applies or removes peek-mode style: brighter alpha and a thicker ring border.
 ## The white/gray tint is managed separately by _set_range_indicator_dimmed.
 func _set_range_indicator_peek(peeking: bool) -> void:
@@ -1642,7 +1670,7 @@ func _spawn_visual(_color: Color) -> void:
 		return
 
 	_spawn_shadow(c)
-	_spawn_background(c)
+	_bg_mat = _spawn_background(c)
 	_spawn_footprint_outline(c)
 
 	match _trap_type:

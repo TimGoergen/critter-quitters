@@ -190,6 +190,7 @@ var _decorator_nodes: Array[Node3D] = []
 var _boost_frames:    Array[Texture2D]    = []     # 4-frame cycle set in _spawn_svg_boost_visual
 var _visual_material: StandardMaterial3D = null   # albedo_texture swapped each frame cycle
 var _idle_time:       float              = 0.0    # accumulates in _process; drives frame index
+var _bg_mat:          StandardMaterial3D = null   # colored background plate material; stored for dim/undim
 
 # Glow indicator — pulsing OmniLight + emissive LED sphere.
 var _glow_light:         OmniLight3D        = null  # pulsing colored point light
@@ -262,6 +263,9 @@ func _ready() -> void:
 		if _range_indicator != null:
 			_range_indicator.visible = true
 		return
+	# Register with the global group so TrapUpgradePanel can query all placed
+	# boosts during peek mode without needing a direct Arena reference.
+	add_to_group("placed_boosts")
 	# Apply the aura immediately on placement rather than waiting for the first
 	# _process frame — ensures nearby traps are boosted before any panel opens.
 	match _boost_type:
@@ -312,7 +316,7 @@ func on_enemy_died_near(death_pos: Vector3) -> void:
 	elif _boost_type == BoostType.QUARANTINE_MARKER and _remaining_capacity > 0.0:
 		var restore := minf(_restore_per_kill, _remaining_capacity)
 		_remaining_capacity -= restore
-		GameState.add_infestation(-restore)   # negative = reduce infestation
+		GameState.heal_infestation(restore)
 		if _remaining_capacity <= 0.0:
 			_remaining_capacity = 0.0
 			boost_depleted.emit()
@@ -659,6 +663,27 @@ func hide_peek_outline() -> void:
 	_update_star_display()
 
 
+## Fades this boost's visual materials so it recedes into the background while
+## a trap's peek mode is active. Mirrors Trap.dim_for_peek().
+func dim_for_peek() -> void:
+	if _visual_material != null:
+		_visual_material.albedo_color = Color(0.30, 0.30, 0.30, 0.30)
+	if _bg_mat != null:
+		_bg_mat.albedo_color = Color(0.06, 0.06, 0.06, 0.45)
+	for mat: StandardMaterial3D in _outline_mats:
+		mat.albedo_color = Color(0.15, 0.15, 0.15, 0.20)
+
+
+## Restores materials changed by dim_for_peek() to their normal upgrade-level state.
+## Mirrors Trap.undim_for_peek().
+func undim_for_peek() -> void:
+	if _visual_material != null:
+		_visual_material.albedo_color = Color(2.0, 2.0, 2.0, 1.0)
+	if _bg_mat != null:
+		_bg_mat.albedo_color = Color(_base_color.r * 0.65, _base_color.g * 0.65, _base_color.b * 0.65, 0.92)
+	_update_star_display()
+
+
 ## Applies or removes the gray tint on the range indicator materials.
 func _set_range_indicator_dimmed(dimmed: bool) -> void:
 	if _range_fill_mat == null or _range_ring_mat == null:
@@ -959,6 +984,7 @@ func _spawn_visual() -> void:
 	bg_mi.material_override = bg_mat
 	add_child(bg_mi)
 	_decorator_nodes.append(bg_mi)
+	_bg_mat = bg_mat   # stored so dim_for_peek() / undim_for_peek() can modify it
 
 	# Footprint outline — four thin bars matching Trap._spawn_footprint_outline().
 	var fp        := Grid.CELL_SIZE * 1.9

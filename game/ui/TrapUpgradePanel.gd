@@ -103,6 +103,11 @@ var _lbl_sell_value: Label  = null
 # Cleared in _on_peek_up so every show_range_indicator call is paired with a hide.
 var _peek_boost_sources: Array = []
 
+# Trap and boost nodes that were dimmed during the last peek gesture (all placed
+# units that are NOT the selected trap and NOT an active boost source for it).
+# Cleared in _on_peek_up so every dim call is paired with an undim.
+var _peeked_dim_units: Array = []
+
 var _is_peeking:   bool    = false   # true while the peek (eye) button is held down
 var _peek_tooltip: Control = null    # _PeekTooltip shown when hovering a valid unit during peek
 var _btn_peek:     Button  = null    # lives at CanvasLayer level so _visual.modulate doesn't dim it
@@ -600,6 +605,19 @@ func _on_peek_down() -> void:
 		if is_instance_valid(boost):
 			boost.show_range_indicator_peek_dim()
 			boost.show_peek_outline(boost.get_base_color())
+	# Dim every other placed trap and boost so the selected trap and its active
+	# boost sources read clearly against a muted background.
+	# _peek_boost_sources is already populated above, so exclude is final here.
+	_peeked_dim_units.clear()
+	var exclude: Array = [_trap] + _peek_boost_sources
+	for unit in get_tree().get_nodes_in_group("placed_traps"):
+		if is_instance_valid(unit) and not (unit in exclude):
+			unit.dim_for_peek()
+			_peeked_dim_units.append(unit)
+	for unit in get_tree().get_nodes_in_group("placed_boosts"):
+		if is_instance_valid(unit) and not (unit in exclude):
+			unit.dim_for_peek()
+			_peeked_dim_units.append(unit)
 	# Create the hover tooltip. Added to self (the CanvasLayer) so it sits at full
 	# opacity as a sibling of _visual — not dimmed with the rest of the panel.
 	_peek_tooltip = _PeekTooltip.new()
@@ -620,6 +638,11 @@ func _on_peek_up() -> void:
 			boost.hide_range_indicator()
 			boost.hide_peek_outline()
 	_peek_boost_sources.clear()
+	# Restore all units that were dimmed when peek started.
+	for unit in _peeked_dim_units:
+		if is_instance_valid(unit):
+			unit.undim_for_peek()
+	_peeked_dim_units.clear()
 	if _peek_tooltip != null:
 		_peek_tooltip.queue_free()
 		_peek_tooltip = null
