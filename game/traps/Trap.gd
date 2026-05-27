@@ -1397,7 +1397,11 @@ func _rebuild_range_indicator() -> void:
 ## circle reads clearly against the arena while the player is choosing a cell.
 func _spawn_range_indicator() -> void:
 	_range_indicator            = Node3D.new()
-	_range_indicator.position.y = 0.02
+	# Local y offset from the trap root (world y = 0.25) to land at world y = 0.02 —
+	# just above the arena floor and below all trap visual layers (shadow=0.05,
+	# background=0.07, sprite=0.17). Transparent objects are depth-sorted back-to-front,
+	# so placing the ring at the lowest world y ensures it renders behind everything.
+	_range_indicator.position.y = 0.02 - 0.25
 	_range_indicator.visible    = false
 
 	var fill_alpha := 0.12 if _is_preview else 0.025
