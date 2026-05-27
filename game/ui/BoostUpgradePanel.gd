@@ -88,6 +88,7 @@ var _lbl_capacity:      Label     = null
 
 var _is_peeking:   bool    = false   # true while the peek (eye) button is held down
 var _peek_tooltip: Control = null    # _PeekTooltip shown when hovering the selected boost during peek
+var _btn_peek:     Button  = null    # lives at CanvasLayer level so _visual.modulate doesn't dim it
 
 
 # ---------------------------------------------------------------------------
@@ -172,14 +173,30 @@ func _build_ui() -> void:
 	_lbl_title.add_theme_font_override("font", UIFonts.header())
 	header.add_child(_lbl_title)
 
-	# Peek button — hold to make the panel semi-transparent so the paused game is visible.
-	var btn_peek := Button.new()
-	btn_peek.text                = ""
-	btn_peek.custom_minimum_size = Vector2(58.0, 58.0)
-	_apply_neutral_button_style(btn_peek)
-	btn_peek.button_down.connect(_on_peek_down)
-	btn_peek.button_up.connect(_on_peek_up)
-	header.add_child(btn_peek)
+	# Peek button — added to the CanvasLayer (self) directly, not to the header HBox.
+	# During peek, _visual.modulate.a drops to 0 (fully transparent). Godot's modulate
+	# is multiplicative down the scene tree, so any child of _visual would also become
+	# invisible regardless of its own modulate value. By placing the button as a sibling
+	# of _visual at the CanvasLayer level it sits outside that chain and can remain at
+	# 20% opacity — faint enough not to distract, visible enough to find and release.
+	_btn_peek = Button.new()
+	_btn_peek.text                = ""
+	_btn_peek.custom_minimum_size = Vector2(58.0, 58.0)
+	_btn_peek.size                = Vector2(58.0, 58.0)
+	# Screen position mirrors where the button would appear in the header HBox.
+	# From the header's right edge: close(58) + sep(7) + sell(144) + sep(7) + this(58) = 274 px.
+	_btn_peek.position = Vector2(px + panel_w - PADDING - 274.0, py + PADDING)
+	_apply_neutral_button_style(_btn_peek)
+	_btn_peek.button_down.connect(_on_peek_down)
+	_btn_peek.button_up.connect(_on_peek_up)
+	add_child(_btn_peek)
+
+	# Spacer fills the gap in the header HBox so the title label still sizes correctly
+	# without the real button present.
+	var peek_spacer := Control.new()
+	peek_spacer.custom_minimum_size = Vector2(58.0, 58.0)
+	peek_spacer.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	header.add_child(peek_spacer)
 
 	var eye_icon := EyeIcon.new()
 	eye_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -188,7 +205,7 @@ func _build_ui() -> void:
 	eye_icon.offset_top    =  9.0
 	eye_icon.offset_bottom = -9.0
 	eye_icon.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	btn_peek.add_child(eye_icon)
+	_btn_peek.add_child(eye_icon)
 
 	_btn_sell = Button.new()
 	_btn_sell.text                = ""
@@ -490,7 +507,8 @@ func _on_btn_stat_c() -> void:
 
 func _on_peek_down() -> void:
 	_is_peeking = true
-	_visual.modulate.a = 0.18   # dims the whole wrapper: border, background, and all UI children
+	_visual.modulate.a   = 0.0    # fully transparent — panel, border, and all content hidden
+	_btn_peek.modulate.a = 0.20   # button stays faintly visible so the player can find and release it
 	# Create the hover tooltip. Added to self (the CanvasLayer) so it sits at full
 	# opacity as a sibling of _visual — not dimmed with the rest of the panel.
 	_peek_tooltip = _PeekTooltip.new()
@@ -501,7 +519,8 @@ func _on_peek_down() -> void:
 
 func _on_peek_up() -> void:
 	_is_peeking = false
-	_visual.modulate.a = 1.0
+	_visual.modulate.a   = 1.0
+	_btn_peek.modulate.a = 1.0
 	if _peek_tooltip != null:
 		_peek_tooltip.queue_free()
 		_peek_tooltip = null
