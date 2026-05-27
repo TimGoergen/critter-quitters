@@ -540,7 +540,8 @@ func _update_peek_tooltip(screen_pos: Vector2) -> void:
 	# Pin the tooltip's top-left to the boost's bottom-right corner in screen space.
 	# In the top-down view, +X is screen-right and +Z is screen-down, so the
 	# bottom-right corner of the 2×2 footprint is at global_position + (1, 0, 1).
-	var corner_world  := _boost.global_position + Vector3(1.0, 0.0, 1.0)
+	# _boost is typed as Node, so := can't infer Vector3 here — explicit annotation required.
+	var corner_world: Vector3 = _boost.global_position + Vector3(1.0, 0.0, 1.0)
 	var corner_screen := camera.unproject_position(corner_world)
 	_peek_tooltip.show_for(_boost.get_type_name())
 	_peek_tooltip.position = corner_screen
@@ -982,7 +983,7 @@ class _PeekTooltip extends Control:
 		var text_h: float   = font.get_height(font_size)
 		_lbl.size           = Vector2(text_w, text_h)
 		size                = Vector2(text_w + (BORDER + PAD_H) * 2.0,
-		                              text_h + (BORDER + PAD_V) * 2.0)
+									  text_h + (BORDER + PAD_V) * 2.0)
 		visible             = true
 		queue_redraw()
 
@@ -993,4 +994,4 @@ class _PeekTooltip extends Control:
 		draw_rect(Rect2(0.0, 0.0, w, h), Color(0.75, 0.75, 0.80, 1.0))
 		# Dark gray fill, inset by the border width.
 		draw_rect(Rect2(BORDER, BORDER, w - BORDER * 2.0, h - BORDER * 2.0),
-		          Color(0.14, 0.14, 0.16, 0.97))
+				  Color(0.14, 0.14, 0.16, 0.97))
