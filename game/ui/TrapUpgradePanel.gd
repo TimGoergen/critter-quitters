@@ -943,7 +943,10 @@ func _apply_button_style(btn: Button, maxed: bool) -> void:
 			box.content_margin_top    = 4.0
 			box.content_margin_bottom = 4.0
 			btn.add_theme_stylebox_override(state, box)
-		btn.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+		# Disabled buttons use font_disabled_color, not font_color.
+		# Gold matches the border and signals "this is a completed achievement"
+		# rather than "this is blocked by cost" (which uses COLOR_TEXT_DIM).
+		btn.add_theme_color_override("font_disabled_color", COLOR_GOLD)
 		return
 
 	for state: Array in [
