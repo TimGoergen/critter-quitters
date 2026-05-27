@@ -508,7 +508,7 @@ func _on_btn_stat_c() -> void:
 func _on_peek_down() -> void:
 	_is_peeking = true
 	_visual.modulate.a   = 0.0    # fully transparent — panel, border, and all content hidden
-	_btn_peek.modulate.a = 0.20   # button stays faintly visible so the player can find and release it
+	_btn_peek.modulate.a = 0.50   # button stays visible at half opacity so the player can find and release it
 	# Create the hover tooltip. Added to self (the CanvasLayer) so it sits at full
 	# opacity as a sibling of _visual — not dimmed with the rest of the panel.
 	_peek_tooltip = _PeekTooltip.new()

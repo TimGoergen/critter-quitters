@@ -588,16 +588,18 @@ func _on_btn_e() -> void:
 func _on_peek_down() -> void:
 	_is_peeking = true
 	_visual.modulate.a   = 0.0    # fully transparent — panel, border, and all content hidden
-	_btn_peek.modulate.a = 0.20   # button stays faintly visible so the player can find and release it
-	# Highlight the selected trap — brighter range circle and white footprint outline.
+	_btn_peek.modulate.a = 0.50   # button stays visible at half opacity so the player can find and release it
+	# Highlight the selected trap — brighter white range circle and matching white footprint outline.
 	_trap.show_range_indicator_peek()
-	_trap.show_peek_outline()
-	# Show each buffing boost with a subdued range circle and white footprint outline.
+	_trap.show_peek_outline()   # white — matches the selected trap's white ring
+	# Show each buffing boost with its identity-coloured range circle and a matching outline.
+	# The outline color is passed explicitly so each boost's bars read as the same hue as
+	# its ring, distinguishing it from the selected trap's white circle.
 	_peek_boost_sources = _trap.get_boost_source_nodes()
 	for boost in _peek_boost_sources:
 		if is_instance_valid(boost):
 			boost.show_range_indicator_peek_dim()
-			boost.show_peek_outline()
+			boost.show_peek_outline(boost.get_base_color())
 	# Create the hover tooltip. Added to self (the CanvasLayer) so it sits at full
 	# opacity as a sibling of _visual — not dimmed with the rest of the panel.
 	_peek_tooltip = _PeekTooltip.new()

@@ -1326,10 +1326,13 @@ func hide_range_indicator_peek() -> void:
 	_set_range_indicator_peek(false)
 
 
-## Sets the footprint outline bars to white for the peek-gesture highlight.
-func show_peek_outline() -> void:
+## Sets the footprint outline bars to the given colour for the peek-gesture highlight.
+## Defaults to white (the selected trap's ring colour in peek mode). Pass a specific
+## colour when the caller wants the outline to match a different ring — e.g. passing
+## get_base_color() for a buffing boost makes its outline match its identity-coloured ring.
+func show_peek_outline(color: Color = Color.WHITE) -> void:
 	for mat: StandardMaterial3D in _outline_mats:
-		mat.albedo_color = Color.WHITE
+		mat.albedo_color = color
 
 
 ## Restores the footprint outline bars to their normal upgrade-level tint.
