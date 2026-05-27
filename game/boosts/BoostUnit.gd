@@ -1,4 +1,4 @@
-﻿## BoostUnit.gd
+## BoostUnit.gd
 ## A player-placed unit that applies a passive benefit to nearby traps, the
 ## economy, or infestation control. Unlike Traps, Boosts do not attack enemies
 ## directly — they amplify or compensate in other ways.

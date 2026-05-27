@@ -1,4 +1,4 @@
-﻿## Trap.gd
+## Trap.gd
 ## A player-placed trap that scans for enemies within its range and fires
 ## on a cooldown, dealing damage instantly on fire.
 ##

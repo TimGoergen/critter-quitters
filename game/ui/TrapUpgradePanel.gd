@@ -612,11 +612,13 @@ func _on_peek_down() -> void:
 	var exclude: Array = [_trap] + _peek_boost_sources
 	for unit in get_tree().get_nodes_in_group("placed_traps"):
 		if is_instance_valid(unit) and not (unit in exclude):
-			unit.dim_for_peek()
+			# get_nodes_in_group returns Array[Node]; use .call() to invoke the method
+			# without triggering UNSAFE_METHOD_ACCESS in Godot 4.5's stricter type checker.
+			unit.call(&"dim_for_peek")
 			_peeked_dim_units.append(unit)
 	for unit in get_tree().get_nodes_in_group("placed_boosts"):
 		if is_instance_valid(unit) and not (unit in exclude):
-			unit.dim_for_peek()
+			unit.call(&"dim_for_peek")
 			_peeked_dim_units.append(unit)
 	# Create the hover tooltip. Added to self (the CanvasLayer) so it sits at full
 	# opacity as a sibling of _visual — not dimmed with the rest of the panel.
@@ -641,7 +643,7 @@ func _on_peek_up() -> void:
 	# Restore all units that were dimmed when peek started.
 	for unit in _peeked_dim_units:
 		if is_instance_valid(unit):
-			unit.undim_for_peek()
+			unit.call(&"undim_for_peek")
 	_peeked_dim_units.clear()
 	if _peek_tooltip != null:
 		_peek_tooltip.queue_free()
