@@ -45,7 +45,7 @@ const TAILPIPE_IMG_Y := 450.0
 const CARD_WIDTH_FRAC    := 0.24
 # The top card (last drawn, highest z-order) is scaled up so it reads as the
 # "featured" card sitting on top of the pile.
-const TOP_CARD_SCALE_MULT := 1.25
+const TOP_CARD_SCALE_MULT := 1.50
 
 # Four cards dropped in a pile. Each entry: [rotation_deg, x_offset_frac, y_offset_frac, brightness].
 # Drawn bottom-to-top (index 0 is furthest back). Offsets are fractions of viewport size
@@ -55,7 +55,7 @@ const _CARD_PILE: Array = [
 	[  5.0, -0.09,  0.10, 0.27],
 	[ -7.0, -0.05,  0.14, 0.33],
 	[ 13.0, -0.02, -0.13, 0.40],
-	[-17.0,  0.03, -0.05, 0.80],
+	[-17.0,  0.00,  0.03, 0.80],
 ]
 
 var _van:       Sprite2D
