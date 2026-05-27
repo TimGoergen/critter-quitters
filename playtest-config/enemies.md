@@ -95,22 +95,6 @@ The `enum_name` field is the key used during sync. **Do not change it.**
 
 ---
 
-## RAT
-
-| Property | Value |
-|---|---|
-| enum_name | RAT |
-| display_name | Rat |
-| hp | 200 |
-| speed | 0.6 |
-| infestation | 10.0 |
-| bounty | 50 |
-| is_flying | false |
-| bug_bucks_steal | 0 |
-| notes | Boss-tier. Extremely high HP and infestation. Slow enough to focus fire. |
-
----
-
 ## MOSQUITO
 
 Flying enemies travel in a straight line from entrance to exit, ignoring the path and all ground obstacles.
@@ -129,8 +113,64 @@ Flying enemies travel in a straight line from entrance to exit, ignoring the pat
 
 ---
 
+## MOUSE
+
+Boss every 10 waves (alternates with Rat King every 20 waves).
+Steals Bug Bucks from the player on exit in addition to dealing infestation damage.
+
+| Property | Value |
+|---|---|
+| enum_name | MOUSE |
+| display_name | Mouse |
+| hp | 200 |
+| speed | 0.6 |
+| infestation | 10.0 |
+| bounty | 50 |
+| is_flying | false |
+| bug_bucks_steal | 20 |
+| notes | Boss-tier. Very high HP and infestation. Slow enough to focus fire, but economically punishing if it exits. |
+
+---
+
+## RAT_KING
+
+Mega-boss every 20 waves. Splits into 3 RATs on death.
+
+| Property | Value |
+|---|---|
+| enum_name | RAT_KING |
+| display_name | Rat King |
+| hp | 600 |
+| speed | 0.35 |
+| infestation | 20.0 |
+| bounty | 150 |
+| is_flying | false |
+| bug_bucks_steal | 0 |
+| notes | Mega-boss. Extreme HP and infestation. Splits into 3 Rats on death. Near-certain run loss if it exits. |
+
+---
+
+## RAT
+
+Mid-tier ground enemy. Spawned from a RAT_KING death split; also enters the standard wave pool from wave 15 so the player encounters it before ever facing the Rat King.
+
+| Property | Value |
+|---|---|
+| enum_name | RAT |
+| display_name | Rat |
+| hp | 65 |
+| speed | 1.3 |
+| infestation | 4.0 |
+| bounty | 25 |
+| is_flying | false |
+| bug_bucks_steal | 0 |
+| notes | Mid-tier enemy. Tanky, moderate speed. Spawned by Rat King on death; also appears in regular waves from wave 15. |
+
+---
+
 ## COCKROACH_NYMPH
 
+**Planned — not yet implemented in code.**
 Splits into two COCKROACH_MINI on death. The split is hardcoded behavior — not driven by config.
 
 | Property | Value |
@@ -149,6 +189,7 @@ Splits into two COCKROACH_MINI on death. The split is hardcoded behavior — not
 
 ## COCKROACH_MINI
 
+**Planned — not yet implemented in code.**
 Spawned from a COCKROACH_NYMPH split. Not placed directly in waves.
 
 | Property | Value |
@@ -162,21 +203,3 @@ Spawned from a COCKROACH_NYMPH split. Not placed directly in waves.
 | is_flying | false |
 | bug_bucks_steal | 0 |
 | notes | Spawned by COCKROACH_NYMPH death split. Not placed directly in waves. |
-
----
-
-## MOUSE
-
-Steals Bug Bucks from the player on exit in addition to dealing infestation damage.
-
-| Property | Value |
-|---|---|
-| enum_name | MOUSE |
-| display_name | Mouse |
-| hp | 35 |
-| speed | 2.5 |
-| infestation | 5.0 |
-| bounty | 15 |
-| is_flying | false |
-| bug_bucks_steal | 20 |
-| notes | Steals Bug Bucks on exit. Medium threat but economically punishing if not killed. |
