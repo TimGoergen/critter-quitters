@@ -12,7 +12,28 @@
    xmlns="http://www.w3.org/2000/svg"
    xmlns:svg="http://www.w3.org/2000/svg">
   <defs
-     id="defs21" />
+     id="defs21">
+    <marker
+       markerWidth="0.001"
+       markerHeight="0.00190476"
+       refX="-3"
+       refY="0"
+       orient="auto-start-reverse"
+       id="CapTriangle"
+       viewBox="0 0 0.525 1"
+       inkscape:stockid="Triangle cap"
+       style="overflow:visible"
+       preserveAspectRatio="xMidYMid"
+       inkscape:isstock="true"
+       inkscape:collect="always">
+      <path
+         style="fill:context-stroke;stroke-linecap:butt"
+         d="M 0,-1 1,0 0,1 -0.05,0 Z"
+         sodipodi:nodetypes="sssssscsss"
+         transform="scale(0.5)"
+         id="path61" />
+    </marker>
+  </defs>
   <sodipodi:namedview
      id="namedview21"
      pagecolor="#ffffff"
@@ -23,11 +44,11 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:zoom="6.3046875"
-     inkscape:cx="1.110285"
-     inkscape:cy="79.068154"
+     inkscape:cx="42.032218"
+     inkscape:cy="73.199504"
      inkscape:window-width="1920"
      inkscape:window-height="1009"
-     inkscape:window-x="-8"
+     inkscape:window-x="1912"
      inkscape:window-y="-8"
      inkscape:window-maximized="1"
      inkscape:current-layer="svg21" />
@@ -244,4 +265,8 @@
      fill="white"
      opacity="0.20"
      id="ellipse21" />
+  <path
+     style="fill:#0036ff;stroke:#ffffff;stroke-width:2.5;paint-order:markers stroke fill;fill-opacity:1;stroke-opacity:1;marker-start:url(#CapTriangle)"
+     d="M 75.182156,38.542751 63.762082,60.907063 H 76.451053 L 54.086741,89.457249 62.334572,68.04461 h -11.89591 z"
+     id="path1" />
 </svg>

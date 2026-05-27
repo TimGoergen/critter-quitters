@@ -23,60 +23,63 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:zoom="6.3046875"
-     inkscape:cx="63.920694"
-     inkscape:cy="64"
+     inkscape:cx="64"
+     inkscape:cy="66.22057"
      inkscape:window-width="1920"
      inkscape:window-height="1009"
-     inkscape:window-x="-8"
+     inkscape:window-x="1912"
      inkscape:window-y="-8"
      inkscape:window-maximized="1"
      inkscape:current-layer="svg16" />
   <!-- Background -->
   <rect
-     width="128"
-     height="128"
+     width="125.20425"
+     height="124.72842"
      rx="18"
      fill="#1a1a2e"
      id="rect1"
-     style="fill:#000000;fill-opacity:1;stroke:#cc0000;stroke-opacity:1" />
+     style="fill:#000000;fill-opacity:1;stroke:#cc0000;stroke-width:2.44075;stroke-dasharray:none;stroke-opacity:1"
+     ry="18"
+     x="1.5564934"
+     y="1.7151055" />
   <!-- Legs -->
   <path
-     d="M 56 54 Q 39 43 26 36"
+     d="m 56.475836,58.44114 q -17,-11 -30,-18"
      stroke="#c07840"
      stroke-width="3.5"
      stroke-linecap="round"
      fill="none"
      id="path1" />
   <path
-     d="M 55 59 Q 37 57 24 57"
+     d="m 55.475836,63.44114 q -18,-2 -31,-2"
      stroke="#c07840"
      stroke-width="3.5"
      stroke-linecap="round"
      fill="none"
      id="path2" />
   <path
-     d="M 56 66 Q 39 75 26 80"
+     d="m 56.475836,69.648079 q -17,9 -30,14"
      stroke="#c07840"
      stroke-width="3.5"
      stroke-linecap="round"
      fill="none"
      id="path3" />
   <path
-     d="M 72 54 Q 89 43 102 36"
+     d="m 72.475836,58.44114 q 17,-11 30.000004,-18"
      stroke="#c07840"
      stroke-width="3.5"
      stroke-linecap="round"
      fill="none"
      id="path4" />
   <path
-     d="M 73 59 Q 91 57 104 57"
+     d="m 73.475836,63.44114 q 18,-2 31.000004,-2"
      stroke="#c07840"
      stroke-width="3.5"
      stroke-linecap="round"
      fill="none"
      id="path5" />
   <path
-     d="M 72 66 Q 89 75 102 80"
+     d="m 72.475836,69.489467 q 17,9 30.000004,14"
      stroke="#c07840"
      stroke-width="3.5"
      stroke-linecap="round"
@@ -84,106 +87,111 @@
      id="path6" />
   <!-- Antennae -->
   <path
-     d="M 57 23 Q 46 12 37 7"
+     d="m 57.475836,27.44114 q -11,-11 -20,-16"
      stroke="#c07840"
      stroke-width="2.5"
      stroke-linecap="round"
      fill="none"
      id="path7" />
   <path
-     d="M 71 23 Q 82 12 91 7"
+     d="m 71.475836,27.44114 q 11,-11 20,-16"
      stroke="#c07840"
      stroke-width="2.5"
      stroke-linecap="round"
      fill="none"
      id="path8" />
   <circle
-     cx="37"
-     cy="7"
+     cx="37.475838"
+     cy="11.44114"
      r="5"
      fill="#c07840"
      id="circle8" />
   <circle
-     cx="91"
-     cy="7"
+     cx="91.475838"
+     cy="11.44114"
      r="5"
      fill="#c07840"
      id="circle9" />
   <!-- Abdomen -->
   <ellipse
-     cx="64"
-     cy="92"
+     cx="64.475838"
+     cy="96.441139"
      rx="22"
      ry="25"
      fill="#c07840"
      id="ellipse9" />
   <ellipse
-     cx="60"
-     cy="82"
+     cx="60.475838"
+     cy="86.441139"
      rx="8"
      ry="6"
-     fill="white"
+     fill="#ffffff"
      opacity="0.2"
-     id="ellipse10" />
+     id="ellipse10"
+     style="opacity:0.35" />
   <!-- Thorax -->
   <ellipse
-     cx="64"
-     cy="59"
+     cx="64.475838"
+     cy="63.441139"
      rx="8.8413877"
      ry="12.599752"
      fill="#c07840"
      id="ellipse11"
      style="stroke-width:1.24387" />
   <ellipse
-     cx="62"
-     cy="55"
+     cx="62.475838"
+     cy="59.441139"
      rx="3"
      ry="2.5"
-     fill="white"
+     fill="#ffffff"
      opacity="0.2"
-     id="ellipse12" />
+     id="ellipse12"
+     style="opacity:0.35" />
   <!-- Head -->
   <circle
-     cx="64"
-     cy="35"
+     cx="64.475838"
+     cy="39.441139"
      r="15"
      fill="#c07840"
      id="circle12" />
   <ellipse
-     cx="61"
-     cy="28"
+     cx="61.475838"
+     cy="32.441139"
      rx="5"
      ry="4"
-     fill="white"
+     fill="#ffffff"
      opacity="0.2"
-     id="ellipse13" />
+     id="ellipse13"
+     style="opacity:0.35" />
   <!-- Eyes -->
   <circle
-     cx="58"
-     cy="33"
+     cx="58.475838"
+     cy="37.441139"
      r="4"
      fill="#1a1a2e"
-     id="circle13" />
+     id="circle13"
+     style="fill:#000000;fill-opacity:1" />
   <circle
-     cx="70"
-     cy="33"
+     cx="70.475838"
+     cy="37.441139"
      r="4"
      fill="#1a1a2e"
-     id="circle14" />
+     id="circle14"
+     style="fill:#000000;fill-opacity:1" />
   <circle
-     cx="57"
-     cy="32"
+     cx="57.475838"
+     cy="36.441139"
      r="1.5"
-     fill="white"
+     fill="#ffffff"
      opacity="0.6"
      id="circle15"
-     style="opacity:0.75" />
+     style="opacity:1" />
   <circle
-     cx="69"
-     cy="32"
+     cx="69.475838"
+     cy="36.441139"
      r="1.5"
-     fill="white"
+     fill="#ffffff"
      opacity="0.6"
      id="circle16"
-     style="opacity:0.75" />
+     style="opacity:1" />
 </svg>

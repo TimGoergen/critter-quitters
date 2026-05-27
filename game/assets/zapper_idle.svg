@@ -9,33 +9,10 @@
    inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
-   xmlns:xlink="http://www.w3.org/1999/xlink"
    xmlns="http://www.w3.org/2000/svg"
    xmlns:svg="http://www.w3.org/2000/svg">
   <defs
-     id="defs16">
-    <linearGradient
-       id="linearGradient1"
-       inkscape:collect="always">
-      <stop
-         style="stop-color:#1a5acc;stop-opacity:1;"
-         offset="0"
-         id="stop1" />
-      <stop
-         style="stop-color:#1a5acc;stop-opacity:0;"
-         offset="1"
-         id="stop2" />
-    </linearGradient>
-    <linearGradient
-       inkscape:collect="always"
-       xlink:href="#linearGradient1"
-       id="linearGradient2"
-       x1="63.999992"
-       y1="53.39999"
-       x2="63.999992"
-       y2="74.599998"
-       gradientUnits="userSpaceOnUse" />
-  </defs>
+     id="defs16" />
   <sodipodi:namedview
      id="namedview16"
      pagecolor="#ffffff"
@@ -50,7 +27,7 @@
      inkscape:cy="65.495766"
      inkscape:window-width="1920"
      inkscape:window-height="1009"
-     inkscape:window-x="1912"
+     inkscape:window-x="-8"
      inkscape:window-y="-8"
      inkscape:window-maximized="1"
      inkscape:current-layer="svg16" />
@@ -210,14 +187,6 @@
      opacity="0.50"
      id="circle14" />
   <!-- Central UV emitter (bright tube from above) -->
-  <ellipse
-     cx="64"
-     cy="64"
-     rx="10"
-     ry="14"
-     fill="#C0D8FF"
-     id="ellipse14"
-     style="fill:url(#linearGradient2);fill-opacity:1;stroke:#fafcff;stroke-opacity:1;stroke-width:1.2;stroke-dasharray:none" />
   <!-- UV tube highlight -->
   <ellipse
      cx="61"
@@ -237,4 +206,8 @@
      fill="white"
      opacity="0.15"
      id="ellipse16" />
+  <path
+     style="fill:#4261d8;fill-opacity:1;stroke:#ffffff;stroke-width:0.3;stroke-opacity:1;paint-order:markers stroke fill;stroke-dasharray:none"
+     d="m 75.232574,38.726993 -11.42008,22.364312 h 12.68897 l -22.36431,28.550186 8.24783,-21.412639 h -11.89591 z"
+     id="path1" />
 </svg>
