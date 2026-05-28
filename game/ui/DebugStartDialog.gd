@@ -12,7 +12,7 @@ extends CanvasLayer
 ## enemy types should appear in static mode; empty array means all types.
 signal confirmed(bug_bucks: int, wave_size: int, static_enemies: bool, allowed_types: Array)
 
-const DEFAULT_BUG_BUCKS: int = 1000
+const DEFAULT_BUG_BUCKS: int = GameState.STARTING_BUG_BUCKS
 const DEFAULT_WAVE_SIZE:  int = 10
 
 ## Two-column layout: left column holds the input controls; right column holds
