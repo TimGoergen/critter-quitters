@@ -1,32 +1,185 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="128"
+   height="128"
+   viewBox="0 0 128 128"
+   version="1.1"
+   id="svg19"
+   sodipodi:docname="cockroach_walk_4.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs19" />
+  <sodipodi:namedview
+     id="namedview19"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="4.3586504"
+     inkscape:cx="66.649071"
+     inkscape:cy="48.180051"
+     inkscape:window-width="958"
+     inkscape:window-height="1000"
+     inkscape:window-x="2873"
+     inkscape:window-y="0"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg19" />
   <!-- Transition: Group A continuing back, Group B continuing forward -->
-  <path d="M 36 35 Q 20 42 10 48" stroke="#4A2808" stroke-width="3.5" stroke-linecap="round" fill="none"/>
-  <path d="M 40 60 Q 22 64 8 68" stroke="#4A2808" stroke-width="3.5" stroke-linecap="round" fill="none"/>
-  <path d="M 42 84 Q 24 90 10 96" stroke="#4A2808" stroke-width="3.5" stroke-linecap="round" fill="none"/>
-  <path d="M 92 35 Q 108 28 118 22" stroke="#4A2808" stroke-width="3.5" stroke-linecap="round" fill="none"/>
-  <path d="M 88 60 Q 108 54 120 50" stroke="#4A2808" stroke-width="3.5" stroke-linecap="round" fill="none"/>
-  <path d="M 86 84 Q 106 76 118 70" stroke="#4A2808" stroke-width="3.5" stroke-linecap="round" fill="none"/>
-
+  <path
+     d="M 47.683317,64.847735 Q 35.59896,69.656933 28.046238,73.779103"
+     stroke="#4a2808"
+     stroke-width="2.5212"
+     stroke-linecap="round"
+     fill="none"
+     id="path1" />
+  <path
+     d="M 44.244008,91.933432 Q 32.484922,96.80996 23.338967,101.68648"
+     stroke="#4a2808"
+     stroke-width="3.12351"
+     stroke-linecap="round"
+     fill="none"
+     id="path2" />
+  <path
+     d="m 47.479821,103.20707 q -10.625556,4.72181 -18.889878,9.44361"
+     stroke="#4a2808"
+     stroke-width="2.38554"
+     stroke-linecap="round"
+     fill="none"
+     id="path3" />
+  <path
+     d="M 79.541482,67.737352 Q 92.428711,62.966872 100.48323,58.87789"
+     stroke="#4a2808"
+     stroke-width="2.5931"
+     stroke-linecap="round"
+     fill="none"
+     id="path4" />
+  <path
+     d="M 84.061543,91.679902 Q 96.409267,86.969169 103.81791,83.828679"
+     stroke="#4a2808"
+     stroke-width="2.43678"
+     stroke-linecap="round"
+     fill="none"
+     id="path5" />
+  <path
+     d="m 84.074513,106.14865 q 13.041334,-5.04644 20.866137,-8.831274"
+     stroke="#4a2808"
+     stroke-width="2.24471"
+     stroke-linecap="round"
+     fill="none"
+     id="path6" />
   <!-- Antennae -->
-  <path d="M 52 22 Q 28 10 6 4" stroke="#4A2808" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-  <path d="M 76 22 Q 100 10 122 4" stroke="#4A2808" stroke-width="2.5" stroke-linecap="round" fill="none"/>
-
+  <path
+     d="M 52.11732,23.723322 Q 33.142085,11.26099 15.748119,5.0298236"
+     stroke="#4a2808"
+     stroke-width="2.26537"
+     stroke-linecap="round"
+     fill="none"
+     id="path7" />
+  <path
+     d="M 73.975712,23.106572 Q 91.349767,11.160668 107.27598,5.1877159"
+     stroke="#4a2808"
+     stroke-width="2.12229"
+     stroke-linecap="round"
+     fill="none"
+     id="path8" />
   <!-- Abdomen -->
-  <ellipse cx="64" cy="88" rx="22" ry="42" fill="#7A3510"/>
-  <ellipse cx="64" cy="66" rx="19" ry="3" fill="#4A1E08" opacity="0.55"/>
-  <ellipse cx="64" cy="79" rx="20" ry="3" fill="#4A1E08" opacity="0.55"/>
-  <ellipse cx="64" cy="92" rx="20" ry="3" fill="#4A1E08" opacity="0.55"/>
-  <ellipse cx="64" cy="105" rx="18" ry="2.5" fill="#4A1E08" opacity="0.55"/>
-  <ellipse cx="64" cy="116" rx="14" ry="2" fill="#4A1E08" opacity="0.55"/>
-  <ellipse cx="56" cy="60" rx="7" ry="3.5" fill="white" opacity="0.15"/>
-
+  <ellipse
+     cx="64"
+     cy="84.787994"
+     rx="22"
+     ry="42"
+     fill="#7a3510"
+     id="ellipse8" />
+  <ellipse
+     cx="64"
+     cy="66"
+     rx="19"
+     ry="3"
+     fill="#4A1E08"
+     opacity="0.55"
+     id="ellipse9" />
+  <ellipse
+     cx="64"
+     cy="79"
+     rx="20"
+     ry="3"
+     fill="#4A1E08"
+     opacity="0.55"
+     id="ellipse10" />
+  <ellipse
+     cx="64"
+     cy="92"
+     rx="20"
+     ry="3"
+     fill="#4A1E08"
+     opacity="0.55"
+     id="ellipse11" />
+  <ellipse
+     cx="64"
+     cy="105"
+     rx="18"
+     ry="2.5"
+     fill="#4A1E08"
+     opacity="0.55"
+     id="ellipse12" />
+  <ellipse
+     cx="64"
+     cy="116"
+     rx="14"
+     ry="2"
+     fill="#4A1E08"
+     opacity="0.55"
+     id="ellipse13" />
+  <ellipse
+     cx="56"
+     cy="60"
+     rx="7"
+     ry="3.5"
+     fill="white"
+     opacity="0.15"
+     id="ellipse14" />
   <!-- Pronotum with yellowish rim -->
-  <ellipse cx="64" cy="40" rx="25" ry="22" fill="#C8A060" opacity="0.55"/>
-  <ellipse cx="64" cy="40" rx="22" ry="20" fill="#7A3510"/>
-  <ellipse cx="58" cy="30" rx="7" ry="4.5" fill="white" opacity="0.15"/>
-
+  <ellipse
+     cx="64"
+     cy="40"
+     rx="22"
+     ry="20"
+     fill="#7A3510"
+     id="ellipse16"
+     style="stroke-width:0.3;stroke-dasharray:none;stroke:#ffcf99;stroke-opacity:1" />
+  <ellipse
+     cx="58"
+     cy="30"
+     rx="7"
+     ry="4.5"
+     fill="white"
+     opacity="0.15"
+     id="ellipse17" />
   <!-- Head -->
-  <ellipse cx="64" cy="22" rx="8" ry="6" fill="#4A1E08"/>
-  <circle cx="58" cy="20" r="2.5" fill="#CC4400"/>
-  <circle cx="70" cy="20" r="2.5" fill="#CC4400"/>
+  <ellipse
+     cx="63.837769"
+     cy="29.300381"
+     rx="8"
+     ry="6"
+     fill="#4a1e08"
+     id="ellipse18" />
+  <circle
+     cx="57.837769"
+     cy="27.300381"
+     r="2.5"
+     fill="#cc4400"
+     id="circle18" />
+  <circle
+     cx="69.837769"
+     cy="27.300381"
+     r="2.5"
+     fill="#cc4400"
+     id="circle19" />
 </svg>

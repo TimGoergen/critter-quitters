@@ -1214,13 +1214,9 @@ func _on_enemy_died(enemy: Node3D) -> void:
 	GameState.add_bug_bucks(bounty)
 	_spawn_earn_label(_camera.unproject_position(enemy.global_position), bounty)
 
-	# Award XP proportional to how dangerous this enemy is (its infestation value),
-	# scaled to one-third so levelling up takes roughly three times as many kills.
-	# ceili() means even weak enemies (Gnat: 0.5) award at least 1 XP per three kills
-	# on average — the fractional accumulation happens inside GameState.add_experience.
-	# Dividing by 3.0 before ceili would make Gnats always award 1 XP (ceili(0.5/3)=1),
-	# so we pass the rounded full value and let GameState accumulate correctly instead.
-	GameState.add_experience(ceili(enemy.get_infestation_damage() / 3.0))
+	# Award flat XP from the enemy's stat table. Decoupled from infestation so
+	# both systems can be tuned independently.
+	GameState.add_experience(enemy.get_xp_reward())
 	# Launch small blue dots from the death position to the XP bar bulb.
 	_spawn_xp_particles(enemy.global_position)
 

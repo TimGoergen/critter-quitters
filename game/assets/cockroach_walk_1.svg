@@ -22,56 +22,56 @@
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="6.3046875"
-     inkscape:cx="64"
-     inkscape:cy="48.45601"
-     inkscape:window-width="1920"
-     inkscape:window-height="1009"
-     inkscape:window-x="-8"
-     inkscape:window-y="-8"
-     inkscape:window-maximized="1"
+     inkscape:zoom="4.4580873"
+     inkscape:cx="52.152411"
+     inkscape:cy="78.284694"
+     inkscape:window-width="958"
+     inkscape:window-height="1000"
+     inkscape:window-x="-7"
+     inkscape:window-y="0"
+     inkscape:window-maximized="0"
      inkscape:current-layer="svg19" />
   <!-- Very long angular legs — cockroach legs reach near canvas edges -->
   <!-- Group A (L-front, R-mid, L-back) forward; Group B (R-front, L-mid, R-back) back -->
   <path
-     d="m 46.627014,66.881041 q -18,-13 -28,-23"
+     d="M 47.442485,67.696512 Q 37.839136,60.747836 32.503943,55.4027"
      stroke="#4a2808"
-     stroke-width="3.5"
+     stroke-width="1.86906"
      stroke-linecap="round"
      fill="none"
      id="path1" />
   <path
-     d="m 47.771995,92.356877 q -20,-4 -34,-8"
+     d="M 48.092482,92.677364 Q 35.236469,88.525111 26.23726,84.372857"
      stroke="#4a2808"
-     stroke-width="3.5"
+     stroke-width="2.85902"
      stroke-linecap="round"
      fill="none"
      id="path2" />
   <path
-     d="m 47.234201,106.2057 q -20,-12 -34,-22"
+     d="M 47.167599,106.47557 Q 36.68023,98.524649 29.339072,91.898891"
      stroke="#4a2808"
-     stroke-width="3.5"
+     stroke-width="2.06303"
      stroke-linecap="round"
      fill="none"
      id="path3" />
   <path
-     d="m 82.007435,65.770756 q 16,11 25.999995,21"
+     d="m 81.585062,62.656646 q 10.998331,9.210052 17.872287,17.582829"
      stroke="#4a2808"
-     stroke-width="3.5"
+     stroke-width="2.65526"
      stroke-linecap="round"
      fill="none"
      id="path4" />
   <path
-     d="m 84.510533,92.198265 q 19.999997,4 31.999997,8.000005"
+     d="m 83.812068,91.4998 q 10.779064,2.679663 17.246502,5.359329"
      stroke="#4a2808"
-     stroke-width="3.5"
+     stroke-width="2.10307"
      stroke-linecap="round"
      fill="none"
      id="path5" />
   <path
-     d="m 82.827757,104.9368 q 20.000003,10 32.000003,18"
+     d="m 82.314699,104.42374 q 12.369841,8.07772 19.791741,14.53989"
      stroke="#4a2808"
-     stroke-width="3.5"
+     stroke-width="2.47388"
      stroke-linecap="round"
      fill="none"
      id="path6" />
@@ -92,11 +92,11 @@
      id="path8" />
   <!-- Abdomen: long oval with five segmentation bands -->
   <ellipse
-     cx="64"
-     cy="88"
+     cx="64.224312"
+     cy="85.083954"
      rx="22"
      ry="42"
-     fill="#7A3510"
+     fill="#7a3510"
      id="ellipse8" />
   <ellipse
      cx="64"
@@ -149,23 +149,13 @@
   <!-- Pronotum: very wide shield, the head is hidden beneath it -->
   <!-- Yellowish translucent rim — the unmistakable cockroach signature -->
   <ellipse
-     cx="63.446449"
-     cy="41.057495"
-     rx="22.224844"
-     ry="20.493189"
-     fill="#c8a060"
-     opacity="0.55"
-     id="ellipse15"
-     style="stroke-width:0.910004"
-     transform="matrix(0.99997492,0.00708189,0,1,0,0)" />
-  <ellipse
      cx="63.127636"
      cy="41.506813"
      rx="20.334572"
      ry="18.493185"
      fill="#7a3510"
      id="ellipse16"
-     style="stroke-width:0.924479" />
+     style="stroke-width:0.3;stroke-dasharray:none;stroke:#ffce97;stroke-opacity:1" />
   <ellipse
      cx="58"
      cy="30"

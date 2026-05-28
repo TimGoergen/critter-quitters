@@ -85,28 +85,34 @@ const MOSQUITO_FRAMES: Array[Texture2D] = [
 
 enum EnemyType { ANT, GNAT, CRICKET, BEETLE, COCKROACH, MOUSE, MOSQUITO, RAT_KING, RAT }
 
-## Per-type stat table. All numeric values are placeholders — tuned via playtesting.
+## Per-type stat table. Numeric values tuned for the target game feel:
+##   - infestation sized so wave 1 (10 Gnats uncontested) fills threshold to 2×
+##   - bounties sized so standard enemies yield ~0.25× the cheapest trap cost per kill
+##   - xp sized so the player levels up every 2–4 waves (decoupled from infestation)
+##
 ##   hp              — starting (and maximum) hit points
 ##   speed           — movement speed in cells per second
 ##   infestation     — Infestation Level increase when this pest reaches the exit
+##   bounty          — Bug Bucks awarded to the player when this pest is killed
+##   xp              — experience awarded when this pest is killed (flat, not derived)
 ##   color           — used only for kill-burst particle color
 ##   is_flying       — optional; true = enemy flies straight to exit, ignores pathfinder
 ##   bug_bucks_steal — optional; Bug Bucks removed from player when this pest exits
 const STATS := {
-	EnemyType.ANT:      { "hp": 10,  "speed": 2.5,  "infestation":  1.0, "bounty":  10, "color": Color(0.85, 0.35, 0.15) },
-	EnemyType.GNAT:     { "hp":  5,  "speed": 5.6,  "infestation":  0.5, "bounty":   5, "color": Color(0.16, 0.14, 0.19) },
-	EnemyType.CRICKET:  { "hp": 12,  "speed": 3.2,  "infestation":  1.0, "bounty":  15, "color": Color(0.35, 0.55, 0.12) },
-	EnemyType.BEETLE:   { "hp": 25,  "speed": 1.5,  "infestation":  3.0, "bounty":  15, "color": Color(0.10, 0.22, 0.50) },
-	EnemyType.COCKROACH:{ "hp": 80,  "speed": 1.0,  "infestation":  5.0, "bounty":  25, "color": Color(0.48, 0.21, 0.06) },
+	EnemyType.ANT:      { "hp": 10,  "speed": 2.5,  "infestation":  8.0, "bounty":   6, "xp":  2, "color": Color(0.85, 0.35, 0.15) },
+	EnemyType.GNAT:     { "hp":  5,  "speed": 5.6,  "infestation":  4.0, "bounty":   3, "xp":  1, "color": Color(0.16, 0.14, 0.19) },
+	EnemyType.CRICKET:  { "hp": 12,  "speed": 3.2,  "infestation":  8.0, "bounty":  10, "xp":  2, "color": Color(0.35, 0.55, 0.12) },
+	EnemyType.BEETLE:   { "hp": 25,  "speed": 1.5,  "infestation": 20.0, "bounty":  20, "xp":  5, "color": Color(0.10, 0.22, 0.50) },
+	EnemyType.COCKROACH:{ "hp": 80,  "speed": 1.0,  "infestation": 35.0, "bounty":  35, "xp":  8, "color": Color(0.48, 0.21, 0.06) },
 	# MOUSE: renamed from Rat. Boss every 10 waves (alternates with Rat King every 20 waves).
 	# Steals Bug Bucks on exit in addition to dealing infestation damage.
-	EnemyType.MOUSE:    { "hp": 200, "speed": 0.6,  "infestation": 10.0, "bounty":  50, "color": Color(0.55, 0.48, 0.40), "bug_bucks_steal": 20 },
-	EnemyType.MOSQUITO: { "hp": 15,  "speed": 5.5,  "infestation":  3.0, "bounty":   8, "color": Color(0.35, 0.20, 0.30), "is_flying": true },
+	EnemyType.MOUSE:    { "hp": 200, "speed": 0.6,  "infestation": 60.0, "bounty":  60, "xp": 20, "color": Color(0.55, 0.48, 0.40), "bug_bucks_steal": 20 },
+	EnemyType.MOSQUITO: { "hp": 15,  "speed": 5.5,  "infestation": 18.0, "bounty":  10, "xp":  3, "color": Color(0.35, 0.20, 0.30), "is_flying": true },
 	# RAT_KING: mega-boss every 20 waves. Splits into 3 Rats on death.
-	EnemyType.RAT_KING: { "hp": 600, "speed": 0.35, "infestation": 20.0, "bounty": 150, "color": Color(0.35, 0.12, 0.10) },
+	EnemyType.RAT_KING: { "hp": 600, "speed": 0.35, "infestation": 100.0, "bounty": 180, "xp": 40, "color": Color(0.35, 0.12, 0.10) },
 	# RAT: mid-tier enemy spawned from Rat King's death; also enters the standard wave pool
 	# at wave 15 so the player encounters it before ever facing the Rat King.
-	EnemyType.RAT:      { "hp": 65,  "speed": 1.3,  "infestation":  4.0, "bounty":  25, "color": Color(0.48, 0.38, 0.28) },
+	EnemyType.RAT:      { "hp": 65,  "speed": 1.3,  "infestation": 22.0, "bounty":  20, "xp":  6, "color": Color(0.48, 0.38, 0.28) },
 }
 
 # Visual quad size and shadow size vary by type so larger enemies read bigger on screen.
@@ -253,6 +259,7 @@ var _move_speed: float = 0.0
 var _max_hp: float = 0.0
 var _current_hp: float = 0.0
 var _infestation_damage: float = 0.0
+var _xp_reward: int = 0
 
 # Set to true when _die() is called; stops movement and prevents re-entry.
 var _is_dead: bool = false
@@ -329,10 +336,14 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 	_base_move_speed   = _move_speed
 	_waddle_speed      = WADDLE_RADS_PER_CELL * _move_speed
 	_waddle_offset     = WADDLE_OFFSET_FRACTION * VISUAL_QUAD_SIZE[enemy_type] * Grid.CELL_SIZE
-	_max_hp             = wave * 1.02 + stats["hp"]
+	# HP scales in steps every 5 waves (+30% per tier) so difficulty feels like
+	# a noticeable jump rather than imperceptible per-wave drift.
+	var _wave_tier := wave / 5
+	_max_hp = stats["hp"] * (1.0 + _wave_tier * 0.3)
 	_current_hp         = _max_hp
 	_infestation_damage = stats["infestation"]
 	_bounty             = stats["bounty"]
+	_xp_reward          = stats["xp"]
 	_is_flying          = stats.get("is_flying", false)
 	_bug_bucks_steal    = stats.get("bug_bucks_steal", 0)
 
@@ -446,6 +457,11 @@ func get_infestation_damage() -> float:
 ## Returns the Bug Bucks awarded to the player for killing this pest.
 func get_bounty() -> int:
 	return _bounty
+
+
+## Returns the flat XP awarded to the player for killing this pest.
+func get_xp_reward() -> int:
+	return _xp_reward
 
 
 ## Returns true if at least one slow source is currently active.

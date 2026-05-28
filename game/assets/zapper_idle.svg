@@ -185,7 +185,8 @@
      r="22"
      fill="#80AAFF"
      opacity="0.50"
-     id="circle14" />
+     id="circle14"
+     style="opacity:0.81" />
   <!-- Central UV emitter (bright tube from above) -->
   <!-- UV tube highlight -->
   <ellipse
@@ -205,9 +206,10 @@
      ry="5"
      fill="white"
      opacity="0.15"
-     id="ellipse16" />
+     id="ellipse16"
+     style="opacity:0.42" />
   <path
-     style="fill:#4261d8;fill-opacity:1;stroke:#ffffff;stroke-width:0.3;stroke-opacity:1;paint-order:markers stroke fill;stroke-dasharray:none"
-     d="m 75.232574,38.726993 -11.42008,22.364312 h 12.68897 l -22.36431,28.550186 8.24783,-21.412639 h -11.89591 z"
+     style="fill:#17286d;fill-opacity:1;stroke:#ffffff;stroke-width:0.532316;stroke-dasharray:none;stroke-opacity:1;paint-order:markers stroke fill"
+     d="M 85.024127,23.61489 62.363918,59.10097 H 87.541912 L 43.165696,104.40236 59.531391,70.426317 h -23.60437 z"
      id="path1" />
 </svg>

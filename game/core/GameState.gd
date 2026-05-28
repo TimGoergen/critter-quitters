@@ -108,8 +108,8 @@ signal level_up(new_level: int)
 
 ## Starting currency given to the player at the beginning of every run.
 ## Increased by business upgrades purchased with Service Fees.
-## TODO: tune via playtesting; increase via meta upgrades
-const STARTING_BUG_BUCKS: int = 1000
+## 75 BB = exactly 3 Snap Traps — tight by design; forces immediate strategic decisions.
+const STARTING_BUG_BUCKS: int = 75
 
 ## Total infestation points that fill the bar to 1.0.
 ## TODO: tune via playtesting
@@ -323,10 +323,11 @@ func heal_infestation(amount: float) -> void:
 # ---------------------------------------------------------------------------
 
 ## Returns the XP required to advance from the current level to the next.
-## Level 0 → 1 costs 12 XP. Each subsequent level costs 3% more (geometric
-## curve), so the bar fills at a pace that scales smoothly with wave progress.
+## Level 0 → 1 costs 20 XP — calibrated so the player levels up mid-wave 2
+## with wave 1 = 10 Gnats × 1 XP each, satisfying the "every 2–4 waves" target.
+## Each subsequent level costs 3% more (geometric curve).
 func exp_for_next_level() -> int:
-	return ceili(12.0 * pow(1.03, float(current_player_level)))
+	return ceili(20.0 * pow(1.03, float(current_player_level)))
 
 
 ## Awards XP for a kill. Emits xp_changed each time; emits level_up whenever
