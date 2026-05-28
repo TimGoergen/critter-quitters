@@ -1,0 +1,56 @@
+
+# plan balancing damage, infestation and experience
+
+i want to talk through the best ways to balance the game
+-how quickly you acquire bug bucks
+-how much damage you can do
+-how much hp enemies have
+-how infestation level is impacted when enemy reaches exit
+
+i want to lay out a more refined vision for the game play loop and progression loop of this game, and then i need guidance for identifying the best balance to make the game fun and engaging.
+
+# game play loop and progression
+
+I have posited a number of overall directions for the core game play of this game.  i have made up my mind, this is the target goal that i am setting for the design of the game.  This context helps inform the best form of balance for this game.
+
+## high level game play
+
+-the player starts the game with limited resources and an empty arena
+-when the round begins, a wave of enemies will enter the arena one-by-one on the left side, and take the shortest path to the exit on the right
+-if the player does nothing, the enemies march across the arena and increase your infestation level when they reach the exit
+-in order to prevent the enemies from reaching the exit, the player can place traps that act as both weapons against the enemies as well as physical obstructions that impact pathfinding
+-each time an enemy is killed, the player gains experience
+-when a player gains enough experience to reach the next level, they choose between 1 of 3 upgrade options that improve their shot against the enemy
+-the game ends when the infestation level reaches 100%
+-upgrades purchased during the game are lost at teh end of the active game
+-there will be an upgrade store outside of gameplay that allows the player to purchase permanent upgrades
+
+## desired game play
+
+-this type of game is best when the player has to stay focused in order to buy enough traps in order to defeat the enemies as they increase in numbers and strength
+-the chance of being overrun ("infested") should always loom
+-best possible outcome, the player feels smart for figuring out how to place enough of the right traps in the right place, and that their choices impacted their ability to survive
+-enemy health should probably scale every 3 to 5 waves
+-experience gained per kill should rise very slowly over time naturally, but upgrades will exist to more greatly increase experience gained
+-infestation level should rise quickly in order to make infestation seem imminent
+-boosts should have a cost more appropriate for their value
+--what is the best way to quantify teh value of a boost
+--what is the best way to quantify the value of traps (dps?)
+-the rate at which you collect bug bucks should feel ungenerous while being high enough to allow progression
+-the rate at which you gain experience should feel generous enough to keep them engaged (level up every 2 to 4 waves) without happening so often that it feels less valuable
+
+## player success criteria
+
+-here are some options i want to think through
+--track the highest wave or level that the player has reached
+--track total experience gained between games
+--have challenges in a challenge mode that allow them to earn permanent rewards for completing challenges, like "survive 25 waves with only snap traps"
+
+# outcomes
+
+-based on the final direction of the game, i want to talk through the areas of design and implementation that need to change
+-this includes
+--how many bug bucks should the player start with
+--how many bug bucks should the player receive for killing an enemy
+--how much experience should the player receive for killing an enemy (relative to the cost of the next level)
+--how much infestation should the player suffer if an enemy reaches the exit
