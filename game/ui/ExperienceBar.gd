@@ -205,8 +205,11 @@ func _ready() -> void:
 	_level_lbl.horizontal_alignment  = HORIZONTAL_ALIGNMENT_RIGHT
 	_level_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 	_level_lbl.mouse_filter          = Control.MOUSE_FILTER_IGNORE
-	_level_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_level_lbl.add_theme_font_size_override("font_size", 22)   # large enough to visually fill the 44px panel
+	var lvl_font := FontVariation.new()
+	lvl_font.base_font = UIFonts.primary_bold()
+	lvl_font.variation_embolden = 0.7
+	_level_lbl.add_theme_font_override("font", lvl_font)
+	_level_lbl.add_theme_font_size_override("font_size", 27)
 	# Black text — legible against the silver panel background.
 	# No drop shadow needed; the high contrast between black and silver makes the
 	# label stand out without it, and the shadow made it look embossed/cluttered.
