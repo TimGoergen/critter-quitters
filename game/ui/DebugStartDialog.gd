@@ -37,14 +37,15 @@ const CELL_PAD:        float = 6.0    # horizontal text inset inside each cell
 const BORDER_W:        float = 3.0    # outer box border thickness
 const ROW_H:           float = 28.0   # enemy-type data row height
 const ROW_STRIDE:      float = 29.0   # ROW_H + 1px row-divider
-## ENEMY_SECTION_H = BORDER_W + 7 × ROW_H + 6 × 1px dividers + BORDER_W
-##                 = 3 + 196 + 6 + 3 = 208px
-const ENEMY_SECTION_H: float = 208.0
+## ENEMY_SECTION_H = BORDER_W + 9 × ROW_H + 8 × 1px dividers + BORDER_W
+##                 = 3 + 252 + 8 + 3 = 266px
+const ENEMY_SECTION_H: float = 266.0
 
 const COLOR_BG           := Color(0.04, 0.22, 0.00, 0.95)
 const COLOR_OUTLINE      := Color(0.22, 0.60, 0.04, 1.0)
 const COLOR_TEXT         := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM     := Color(0.55, 0.78, 0.50, 1.0)
+const COLOR_LABEL        := Color(0.96, 0.96, 0.96, 1.0)   # near-white for all field labels
 const COLOR_DIVIDER      := Color(0.06, 0.22, 0.01, 1.0)
 const COLOR_BTN_NORMAL   := Color(0.02, 0.15, 0.00, 1.0)
 const COLOR_BTN_HOVER    := Color(0.07, 0.32, 0.02, 1.0)
@@ -53,7 +54,7 @@ const COLOR_BTN_BORDER   := Color(0.22, 0.60, 0.04, 1.0)
 const COLOR_FIELD_BG     := Color(0.02, 0.14, 0.00, 1.0)
 const COLOR_FIELD_BORDER := Color(0.22, 0.60, 0.04, 1.0)
 const COLOR_GRID         := Color(0.12, 0.42, 0.04, 1.0)   # enemy list borders and row separators
-const COLOR_GRID_HEADER  := Color(0.06, 0.26, 0.01, 1.0)   # header bar background
+const COLOR_GRID_HEADER  := Color(0.01, 0.08, 0.00, 1.0)   # header bar background — darker than rows
 const COLOR_ROW_A        := Color(0.03, 0.18, 0.00, 1.0)   # alternating row background A (darker)
 const COLOR_ROW_B        := Color(0.06, 0.28, 0.01, 1.0)   # alternating row background B (lighter)
 
@@ -150,9 +151,6 @@ func _build_ui() -> void:
 	_add_divider(bg, y)
 	y += 14.0   # 2px line + 12px breathing room
 
-	# Capture y here so the right column top aligns with the first input row.
-	var right_col_y := y
-
 	_field_bucks = _add_field_row(bg, PADDING, y, LEFT_COL_W, ROW_H_CTRL,
 			"Bug Bucks", str(DEFAULT_BUG_BUCKS), 10000, 0)
 	y += ROW_H_CTRL
@@ -175,8 +173,8 @@ func _build_ui() -> void:
 	static_lbl.text                  = "Static Enemies"
 	static_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	static_lbl.add_theme_font_size_override("font_size", 22)
-	static_lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
-	static_lbl.add_theme_font_override("font", UIFonts.primary())
+	static_lbl.add_theme_color_override("font_color", COLOR_LABEL)
+	static_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	static_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 	static_row.add_child(static_lbl)
 
@@ -209,15 +207,21 @@ func _build_ui() -> void:
 	bg.add_child(start_btn)
 
 	# ── Right column ───────────────────────────────────────────────────────────
-	# Top edge aligns with the first input row; hidden until Static Enemies is on.
+	# Centered vertically in the panel regardless of where the left column content lands.
+	# Always visible — dimmed and non-interactive when Static Enemies is off.
+	var right_col_h   := ENEMY_HEADER_H + ENEMY_SECTION_H
+	var right_col_top := (PANEL_H - right_col_h) * 0.5
+
 	_right_col = Control.new()
-	_right_col.position            = Vector2(RIGHT_COL_X, right_col_y)
-	_right_col.custom_minimum_size = Vector2(RIGHT_COL_W, ENEMY_HEADER_H + ENEMY_SECTION_H)
-	_right_col.visible             = false
+	_right_col.position            = Vector2(RIGHT_COL_X, right_col_top)
+	_right_col.custom_minimum_size = Vector2(RIGHT_COL_W, right_col_h)
 	bg.add_child(_right_col)
 
 	_build_enemy_header(_right_col, RIGHT_COL_W)
 	_build_enemy_section(_right_col, ENEMY_HEADER_H, RIGHT_COL_W)
+
+	# Disable interactivity to match the unchecked default state.
+	_set_enemy_list_editable(false)
 
 
 ## Adds a 2px horizontal divider spanning the left column at the given y.
@@ -244,8 +248,8 @@ func _add_field_row(parent: Control, x: float, y: float, w: float, h: float,
 	lbl.text                  = label_text
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.add_theme_font_size_override("font_size", 20)
-	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
-	lbl.add_theme_font_override("font", UIFonts.primary())
+	lbl.add_theme_color_override("font_color", COLOR_LABEL)
+	lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 	row.add_child(lbl)
 
@@ -311,7 +315,7 @@ func _build_enemy_header(parent: Control, w: float) -> void:
 	lbl.custom_minimum_size = Vector2(w - BORDER_W * 2.0 - CELL_PAD - check_w, inner_h)
 	lbl.add_theme_font_size_override("font_size", 16)
 	lbl.add_theme_color_override("font_color", COLOR_TEXT)
-	lbl.add_theme_font_override("font", UIFonts.primary())
+	lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	lbl.vertical_alignment  = VERTICAL_ALIGNMENT_CENTER
 	parent.add_child(lbl)
 
@@ -365,7 +369,9 @@ func _build_enemy_section(parent: Control, y: float, w: float) -> void:
 
 		var type_row := HBoxContainer.new()
 		type_row.position            = Vector2(BORDER_W + CELL_PAD, row_top)
-		type_row.custom_minimum_size = Vector2(w - BORDER_W * 2.0 - CELL_PAD * 2.0, ROW_H)
+		# CELL_PAD only on the left — right edge flush with the border so the checkbox
+		# aligns with the check-all button in the header, which is pinned to w - BORDER_W.
+		type_row.custom_minimum_size = Vector2(w - BORDER_W * 2.0 - CELL_PAD, ROW_H)
 		type_row.add_theme_constant_override("separation", 4)
 		section.add_child(type_row)
 
@@ -373,7 +379,7 @@ func _build_enemy_section(parent: Control, y: float, w: float) -> void:
 		type_lbl.text                  = ENEMY_TYPE_NAMES[enemy_type]
 		type_lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 		type_lbl.add_theme_font_size_override("font_size", 16)
-		type_lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+		type_lbl.add_theme_color_override("font_color", COLOR_TEXT)
 		type_lbl.add_theme_font_override("font", UIFonts.primary())
 		type_lbl.vertical_alignment    = VERTICAL_ALIGNMENT_CENTER
 		type_row.add_child(type_lbl)
@@ -408,11 +414,20 @@ func _section_line(parent: Control, x: float, y: float, w: float, h: float) -> v
 	parent.add_child(line)
 
 
-## Shows or hides the right column when Static Enemies is toggled.
-## No panel resize needed — the panel is fixed size.
+## Updates the checkbox label and enables/disables the enemy list when Static Enemies is toggled.
+## The right column is always visible — editable only when the toggle is on.
 func _on_static_toggled(pressed: bool) -> void:
 	_check_static.text = "✓" if pressed else ""
-	_right_col.visible = pressed
+	_set_enemy_list_editable(pressed)
+
+
+## Dims the enemy-type column and disables all its buttons when editable is false.
+## modulate at 0.4 alpha gives a clear "inactive" look without hiding the layout.
+func _set_enemy_list_editable(editable: bool) -> void:
+	_right_col.modulate = Color(1.0, 1.0, 1.0, 1.0) if editable else Color(1.0, 1.0, 1.0, 0.4)
+	_check_all_btn.disabled = not editable
+	for btn: Button in _enemy_type_checks.values():
+		btn.disabled = not editable
 
 
 ## Returns true when screen_pos falls inside the dialog panel.

@@ -74,7 +74,7 @@ func _on_viewport_resized() -> void:
 		return
 	var vp      := get_viewport().get_visible_rect().size
 	var scale_f := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
-	_van.scale    = Vector2(scale_f * 1.375, scale_f * 1.375)
+	_van.scale    = Vector2(scale_f * 1.485, scale_f * 1.485)
 	_van.position = Vector2(vp.x * 0.65, vp.y * 0.40)
 
 	for i: int in _cards.size():
@@ -133,7 +133,7 @@ func _build_ui() -> void:
 	_van.centered = true
 	_van.z_index  = 1
 	var scale_f   := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
-	_van.scale    = Vector2(scale_f * 1.375, scale_f * 1.375)
+	_van.scale    = Vector2(scale_f * 1.485, scale_f * 1.485)
 	_van.position = Vector2(vp.x * 0.65, vp.y * 0.40)
 	add_child(_van)
 

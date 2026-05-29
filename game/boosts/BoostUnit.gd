@@ -678,7 +678,7 @@ func dim_for_peek() -> void:
 ## Mirrors Trap.undim_for_peek().
 func undim_for_peek() -> void:
 	if _visual_material != null:
-		_visual_material.albedo_color = Color(2.0, 2.0, 2.0, 1.0)
+		_visual_material.albedo_color = Color(1.0, 1.0, 1.0, 1.0)
 	if _bg_mat != null:
 		_bg_mat.albedo_color = Color(_base_color.r * 0.65, _base_color.g * 0.65, _base_color.b * 0.65, 0.92)
 	_update_star_display()
@@ -1035,7 +1035,7 @@ func _spawn_svg_boost_visual(frames: Array[Texture2D]) -> void:
 	var quad := QuadMesh.new()
 	quad.size = Vector2(fp, fp)
 	var mat := StandardMaterial3D.new()
-	mat.albedo_color = Color.WHITE
+	mat.albedo_color = Color(1.0, 1.0, 1.0, 1.0)
 	mat.albedo_texture = frames[0]
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA

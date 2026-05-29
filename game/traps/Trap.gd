@@ -65,7 +65,7 @@ const STATS := {
 	TrapType.SNAP_TRAP:  { "damage": 5.0,  "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.78, 0.52, 0.22) },
 	TrapType.ZAPPER:     { "damage": 30.0, "range": 9.6, "cooldown": 2.5, "cost": 75, "color": Color(0.10, 0.50, 1.00) },
 	TrapType.FOGGER:     { "damage": 3.0,  "range": 4.0, "cooldown": 2.2, "cost": 60, "color": Color(0.35, 0.88, 0.18) },
-	TrapType.GLUE_BOARD: { "damage": 0.20, "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(1.00, 0.58, 0.14) },
+	TrapType.GLUE_BOARD: { "damage": 0.20, "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(1.00, 0.58, 0.14), "pulse_interval": 3.0 },
 	TrapType.FLY_STRIP_LAUNCHER: {
 		"damage": 2.0, "range": 5.0, "cooldown": 5.0, "cost": 65, "color": Color(0.85, 0.20, 0.65),
 		"cloud_duration": 3.0, "adhesion": 0.30,
@@ -222,6 +222,10 @@ var _glue_slowed_enemies: Dictionary = {}
 var _slow_duration:  float = 0.0
 var _duration_level: int   = 0
 
+# Glue Board pulse timing — how often it fires and the current countdown.
+var _glue_pulse_interval: float = 0.0
+var _glue_pulse_timer:    float = 0.0
+
 # When true, this node is a visual-only placement preview: no combat, no hover area,
 # no range indicator. Set by initialize_preview() before the node enters the tree.
 var _is_preview: bool = false
@@ -345,7 +349,9 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	stats_changed.connect(_rebuild_range_indicator)
 	stats_changed.connect(_update_star_display)
 	if _trap_type == TrapType.GLUE_BOARD:
-		_slow_duration = GLUE_DURATION_LEVELS[0]
+		_glue_pulse_interval = stats.get("pulse_interval", 3.0)
+		_glue_pulse_timer    = 0.0   # fire immediately on the first pulse
+		_slow_duration       = GLUE_DURATION_LEVELS[0]
 		stats_changed.connect(_refresh_glue_slow)
 	if _trap_type == TrapType.BAIT_STATION:
 		_bait_poison_duration = BAIT_POISON_DURATION_LEVELS[0]
@@ -715,7 +721,7 @@ func get_description() -> String:
 		TrapType.FOGGER:
 			return "Fires an expanding cloud that hits all pests from closest to farthest. Cannot hit flying pests."
 		TrapType.GLUE_BOARD:
-			return "Continuously slows every ground pest inside its range. Passive — no firing. Cannot hit flying pests."
+			return "Pulses adhesive every few seconds, slowing every ground pest in range at the moment of each pulse. The slow lingers briefly after pests leave its range. Cannot hit flying pests."
 		TrapType.FLY_STRIP_LAUNCHER:
 			return "Targets flying pests only. Releases a sticky cloud on impact that slows and damages."
 		TrapType.BAIT_STATION:
@@ -920,10 +926,12 @@ func _fire_fogger() -> bool:
 	return false
 
 
-## Slows every enemy that enters range. The slow persists for _slow_duration seconds
-## after the enemy leaves the radius before being removed. Runs every frame.
+## Pulses adhesive on a fixed interval. On each pulse, slows every ground enemy currently
+## in range and starts a cosmetic projectile toward each. Between pulses the slow lingers
+## on enemies that have already left range, counting down each frame until _slow_duration
+## expires. Flying enemies are excluded — they never contact the adhesive surface.
 func _update_glue_aoe(delta: float) -> void:
-	# First pass: tick duration countdowns and collect enemies whose slow has expired.
+	# Every frame: tick duration countdowns for enemies that have left range.
 	# Cannot erase from a Dictionary while iterating — collect targets first.
 	var to_release: Array = []
 	for enemy in _glue_slowed_enemies:
@@ -931,7 +939,7 @@ func _update_glue_aoe(delta: float) -> void:
 			to_release.append(enemy)
 			continue
 		if _xz_distance(enemy.global_position) <= _effective_range():
-			_glue_slowed_enemies[enemy] = -1.0   # still in range — reset to "no countdown"
+			_glue_slowed_enemies[enemy] = -1.0   # still in range — reset countdown sentinel
 		else:
 			var remaining: float = _glue_slowed_enemies[enemy]
 			if remaining < 0.0:
@@ -948,20 +956,28 @@ func _update_glue_aoe(delta: float) -> void:
 			enemy.remove_slow_source(self)
 		_glue_slowed_enemies.erase(enemy)
 
-	# Second pass: apply slow to newly-in-range ground enemies and fire a cosmetic projectile.
-	# Flying enemies are excluded — they never contact the adhesive surface.
-	var newly_caught := false
+	# Tick the pulse timer.
+	_glue_pulse_timer -= delta
+	if _glue_pulse_timer > 0.0:
+		return
+
+	# Pulse fires: apply slow to all ground enemies currently in range.
+	var hit_any := false
 	for enemy in _active_enemies:
 		if not is_instance_valid(enemy):
 			continue
 		if enemy.get_is_flying():
 			continue
-		if _xz_distance(enemy.global_position) <= _effective_range() and not _glue_slowed_enemies.has(enemy):
+		if _xz_distance(enemy.global_position) <= _effective_range():
 			enemy.add_slow_source(self, _damage)
 			_glue_slowed_enemies[enemy] = -1.0
 			fired.emit(global_position, enemy.global_position, enemy, 0.0, _trap_type)
-			newly_caught = true
-	if newly_caught:
+			hit_any = true
+
+	# Always start the next cooldown, whether or not any enemies were in range.
+	_glue_pulse_timer = _glue_pulse_interval
+
+	if hit_any:
 		AudioManager.play_trap_fire(TrapType.GLUE_BOARD)
 		_play_glue_board_animation()
 
@@ -1009,12 +1025,12 @@ func _update_bait_station(delta: float) -> void:
 		enemy.apply_poison(_bait_poison_damage_per_tick, _bait_poison_duration, _bait_poison_tick_rate)
 		hit_any = true
 	if hit_any:
-		# Only start the cooldown after a successful hit — keeps the trap "ready"
-		# when no enemy was in range, so the first enemy to enter is hit immediately.
 		_bait_pulse_timer = _bait_pulse_interval
 		AudioManager.play_trap_fire(TrapType.BAIT_STATION)
 		_play_bait_animation()
 	else:
+		# No enemies in range — stay ready; clamp to 0 so the timer does not
+		# drift negative unboundedly while the range is empty.
 		_bait_pulse_timer = 0.0
 
 
@@ -1348,8 +1364,6 @@ func hide_peek_outline() -> void:
 ## another trap's peek mode is active. Does not affect range indicators or stars.
 func dim_for_peek() -> void:
 	if _visual_material != null:
-		# Drive albedo far below normal (normally 2.0 for a bright-white sprite tint)
-		# so the sprite reads as a muted silhouette rather than a full-color image.
 		_visual_material.albedo_color = Color(0.30, 0.30, 0.30, 0.30)
 	if _bg_mat != null:
 		_bg_mat.albedo_color = Color(0.06, 0.06, 0.06, 0.45)
@@ -1360,7 +1374,7 @@ func dim_for_peek() -> void:
 ## Restores materials changed by dim_for_peek() to their normal upgrade-level state.
 func undim_for_peek() -> void:
 	if _visual_material != null:
-		_visual_material.albedo_color = Color(2.0, 2.0, 2.0, 1.0)
+		_visual_material.albedo_color = Color(1.0, 1.0, 1.0, 1.0)
 	if _bg_mat != null:
 		_bg_mat.albedo_color = Color(_base_color.r * 0.65, _base_color.g * 0.65, _base_color.b * 0.65, 0.92)
 	# _update_star_display() restores _outline_mats and _shadow_mat to their
@@ -1690,6 +1704,7 @@ func _spawn_svg_trap_visual(frames: Array[Texture2D]) -> void:
 	var quad := QuadMesh.new()
 	quad.size = Vector2(Grid.CELL_SIZE * 1.7, Grid.CELL_SIZE * 1.7)
 	var mat := StandardMaterial3D.new()
+	mat.albedo_color = Color(1.0, 1.0, 1.0, 1.0)
 	mat.albedo_texture = frames[0]
 	mat.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	mat.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA

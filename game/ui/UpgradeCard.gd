@@ -127,7 +127,7 @@ func _build_card() -> void:
 	_tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_tier_lbl.add_theme_color_override("font_color", tier_color)
 	_tier_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_tier_lbl.add_theme_font_size_override("font_size", 10)
+	_tier_lbl.add_theme_font_size_override("font_size", 12)
 	add_child(_tier_lbl)
 
 	# --- Title — main name, large and prominent ---
@@ -138,7 +138,7 @@ func _build_card() -> void:
 	_title_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
 	_title_lbl.add_theme_color_override("font_color", Color(0.95, 0.95, 0.98, 1.0))
 	_title_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_title_lbl.add_theme_font_size_override("font_size", 17)
+	_title_lbl.add_theme_font_size_override("font_size", 19)
 	add_child(_title_lbl)
 
 	# --- Stat name (equipment only) or empty for campaign cards ---
@@ -148,7 +148,7 @@ func _build_card() -> void:
 	_stat_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_stat_lbl.add_theme_color_override("font_color", tier_color)
 	_stat_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_stat_lbl.add_theme_font_size_override("font_size", 13)
+	_stat_lbl.add_theme_font_size_override("font_size", 15)
 	add_child(_stat_lbl)
 
 	# --- Impact line — the concrete effect of this upgrade ---
@@ -164,7 +164,7 @@ func _build_card() -> void:
 	_impact_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
 	_impact_lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.20, 1.0))
 	_impact_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_impact_lbl.add_theme_font_size_override("font_size", 14)
+	_impact_lbl.add_theme_font_size_override("font_size", 16)
 	add_child(_impact_lbl)
 
 	# --- Plain-text description — fills remaining space to the card bottom ---
@@ -173,8 +173,8 @@ func _build_card() -> void:
 	_plain_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_plain_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_plain_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
-	_plain_lbl.add_theme_color_override("font_color", Color(0.68, 0.68, 0.72, 1.0))
-	_plain_lbl.add_theme_font_size_override("font_size", 11)
+	_plain_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	_plain_lbl.add_theme_font_size_override("font_size", 12)
 	add_child(_plain_lbl)
 
 	resized.connect(_on_resized)
