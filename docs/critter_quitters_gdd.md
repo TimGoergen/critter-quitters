@@ -1,6 +1,6 @@
 ﻿# **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.34 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
+**Version:** Draft v0.35 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / SVG sprites **Reference:** Desktop Tower Defense
 
 ---
 
@@ -41,6 +41,7 @@
 | v0.31 | Critical hit system added. Every trap now carries two new upgradeable stats: Crit Chance (default 0%, +2% per tier) and Crit Damage Bonus (default 25%, +25% per tier). When Crit Chance is greater than zero, each firing rolls against the percentage; on success the damage is multiplied by (1 + Crit Damage Bonus). AoE traps roll once per burst. Glue Board holds the stats for consistency but they have no mechanical effect. Upgrade panel expanded from three to five rows; row height reduced to 80px to keep the panel within the 600px virtual resolution. |
 | v0.32 | Enemy roster redesigned. Old Rat renamed to Mouse — it keeps its role as the standard boss (every 10 waves) and its Bug Bucks theft mechanic on exit; its Gnat-release-on-death mechanic is removed. Cockroach Nymph and its sub-type removed entirely. New enemy: Rat King — a mega-boss that appears on every 20th wave (superseding the Mouse boss on those waves); extremely high HP, slow movement, and splits into 3 Rats on death. New enemy: Rat — a fast, low-HP mid-tier pest that spawns from Rat King death and also appears in standard waves from wave 15 onward. Section 5 updated; Cockroach Nymph section removed; Mouse, Rat King, and Rat sections added. Phase 7 and Phase 8 enemy lists updated. Boss wave description in Section 7 updated. |
 | v0.34 | Phase 9 implementation deliverables corrected: "Between-wave store — basic version" replaced with "The Truck hub / meta update screen" to match the v0.15 decision that removed the between-wave store and the Section 8 design for The Truck / Service Fees meta progression. |
+| v0.35 | Phase 8 renamed and redesigned to reflect SVG art as the confirmed house standard. All assets use the SVG-on-quad approach (QuadMesh + StandardMaterial3D, unshaded). Traps (6 types) and Boosts (5 types) marked complete. Enemy list corrected: 7 of 9 enemies already have dedicated SVG frames (Ant, Gnat, Cricket, Beetle, Cockroach, Mosquito, Rat); Mouse and Rat King use Rat frames as placeholders and are the only remaining enemy work. Gnat added to enemy list (was omitted). Art Style tag in header updated from "illustrated sprites" to "SVG sprites". |
 | v0.33 | Balance pass: gameplay loop and progression. Starting Bug Bucks reduced from 1,000 to 75 (buys exactly 3 Snap Traps; forces immediate strategic decisions). Infestation values scaled up ~8× so wave 1 uncontested = 2× threshold (10 Gnats × 4.0 = 40 infestation, threshold = 20). Kill bounties adjusted downward for standard enemies so Bug Bucks feel ungenerous: Gnat 3, Ant 6, Cricket 10, Beetle 20, Cockroach 35, Mosquito 10, Mouse 60, Rat 20, Rat King 180. XP system decoupled from infestation: each enemy type now carries a flat `xp` value; Arena.gd reads it directly rather than deriving from infestation damage. Level-up threshold raised from 12 to 20 XP so first level-up lands mid-wave 2 (satisfies 2–4 waves target). HP scaling changed from continuous linear (wave × 1.02 + base) to a step multiplier every 5 waves (+30% per tier): waves 1–4 = 1.0×, waves 5–9 = 1.3×, waves 10–14 = 1.6×, etc. |
 
 ---
@@ -871,13 +872,19 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: no implementation work begins on new content until the full roster is specified — prevents scope creep and mid-build redesigns*
 
-### **Phase 8 — Sprite Art Migration**
-- Illustrated Sprite3D art for all 8 enemies: Ant (replace SVG placeholder), Cricket, Beetle, Cockroach, Mouse, Mosquito, Rat King, Rat
-- Illustrated Sprite3D art for all 4 traps: Snap Trap (replace procedural mesh), Zapper, Fogger, Glue Board
-- Per-element color palette finalized across all sprites
+### **Phase 8 — SVG Art for All Assets**
+
+All assets use the confirmed SVG-on-quad approach: QuadMesh + StandardMaterial3D (unshaded, alpha), laid flat on the XZ plane. This is the house standard for all gameplay-visible units.
+
+- ✓ SVG art for all 6 traps: Snap Trap, Zapper, Fogger, Glue Board, Fly Strip Launcher, Bait Station (2 frames each: idle + fire)
+- ✓ SVG art for all 5 boosts: Pheromone Dispenser, Compressor, Cash Register, Air Freshener, Quarantine Marker (4-frame idle cycle at 2.5 fps)
+- ✓ SVG art for 7 of 9 enemies: Ant, Gnat, Cricket, Beetle, Cockroach, Mosquito, Rat (4-frame walk cycle each)
+- SVG art for Mouse (currently using Rat frames as placeholder)
+- SVG art for Rat King (currently using Rat frames as placeholder)
+- Per-element color palette finalized across all SVGs
 - Procedural animated background system
 
-*Goal: all gameplay-visible assets are illustrated sprites; no colored cylinders, boxes, or placeholder meshes remain*
+*Goal: all gameplay-visible assets use SVG-on-quad; no colored cylinders, boxes, or placeholder meshes remain*
 
 ### **Phase 9 — Full Game Loop**
 
