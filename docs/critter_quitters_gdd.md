@@ -1,6 +1,6 @@
 ﻿# **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.33 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
+**Version:** Draft v0.34 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
 
 ---
 
@@ -40,6 +40,7 @@
 | v0.30 | Phase 9 updated: game mode design added as a first deliverable within the phase (design-first, like Phase 7). Three game modes confirmed: Endless (infinite waves, current dev pattern), Journey (structured Rounds → Levels / Contracts progression), Challenge (pre-defined scenarios with constrained starting conditions — e.g. limited Bug Bucks, restricted trap roster). Section 15 (Game Modes) added. |
 | v0.31 | Critical hit system added. Every trap now carries two new upgradeable stats: Crit Chance (default 0%, +2% per tier) and Crit Damage Bonus (default 25%, +25% per tier). When Crit Chance is greater than zero, each firing rolls against the percentage; on success the damage is multiplied by (1 + Crit Damage Bonus). AoE traps roll once per burst. Glue Board holds the stats for consistency but they have no mechanical effect. Upgrade panel expanded from three to five rows; row height reduced to 80px to keep the panel within the 600px virtual resolution. |
 | v0.32 | Enemy roster redesigned. Old Rat renamed to Mouse — it keeps its role as the standard boss (every 10 waves) and its Bug Bucks theft mechanic on exit; its Gnat-release-on-death mechanic is removed. Cockroach Nymph and its sub-type removed entirely. New enemy: Rat King — a mega-boss that appears on every 20th wave (superseding the Mouse boss on those waves); extremely high HP, slow movement, and splits into 3 Rats on death. New enemy: Rat — a fast, low-HP mid-tier pest that spawns from Rat King death and also appears in standard waves from wave 15 onward. Section 5 updated; Cockroach Nymph section removed; Mouse, Rat King, and Rat sections added. Phase 7 and Phase 8 enemy lists updated. Boss wave description in Section 7 updated. |
+| v0.34 | Phase 9 implementation deliverables corrected: "Between-wave store — basic version" replaced with "The Truck hub / meta update screen" to match the v0.15 decision that removed the between-wave store and the Section 8 design for The Truck / Service Fees meta progression. |
 | v0.33 | Balance pass: gameplay loop and progression. Starting Bug Bucks reduced from 1,000 to 75 (buys exactly 3 Snap Traps; forces immediate strategic decisions). Infestation values scaled up ~8× so wave 1 uncontested = 2× threshold (10 Gnats × 4.0 = 40 infestation, threshold = 20). Kill bounties adjusted downward for standard enemies so Bug Bucks feel ungenerous: Gnat 3, Ant 6, Cricket 10, Beetle 20, Cockroach 35, Mosquito 10, Mouse 60, Rat 20, Rat King 180. XP system decoupled from infestation: each enemy type now carries a flat `xp` value; Arena.gd reads it directly rather than deriving from infestation damage. Level-up threshold raised from 12 to 20 XP so first level-up lands mid-wave 2 (satisfies 2–4 waves target). HP scaling changed from continuous linear (wave × 1.02 + base) to a step multiplier every 5 waves (+30% per tier): waves 1–4 = 1.0×, waves 5–9 = 1.3×, waves 10–14 = 1.6×, etc. |
 
 ---
@@ -893,7 +894,7 @@ Phase 9 begins with a design pass (like Phase 7) before any implementation work 
 - All 4 trap types
 - All 5 enemy types
 - Starting trap selection — 3 offered, player picks 2
-- Between-wave store — basic version (trap upgrades, player upgrades, trap unlocks)
+- The Truck hub / meta update screen
 - Arena Evolution — obstacle spawning every 10 waves
 - Save file system — multiple independent run slots
 - Game mode selection and routing from main menu
