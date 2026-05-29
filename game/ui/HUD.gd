@@ -121,7 +121,7 @@ var _incoming_banner:         Control = null
 var _incoming_banner_tween:   Tween   = null
 var _countdown_seconds_label: Label
 
-var _send_wave_btn:           Button           # ">>" fast-forward button inside the send-wave panel
+var _send_wave_btn:           Button           # fast-forward button inside the send-wave panel
 var _multiplier_btn:          Button           # small gold button cycling ×1 → ×5 → ×10
 var _multiplier_label:        Label
 var _send_wave_header_label:  Label            # "SEND 1 WAVE" / "SEND 5 WAVES" — updates with multiplier
@@ -684,9 +684,8 @@ void fragment() {
 	bold_font.base_font          = UIFonts.header()
 	bold_font.variation_embolden = 0.8
 
-	# >> send-wave button — dark background with gold border, same 50px height as
-	# the multiplier pill. Text is a Label child (not Button.text) so we can use
-	# VERTICAL_ALIGNMENT_CENTER with the same Bebas Neue font as the ×N labels.
+	# Send-wave button — dark background with gold border, same 50px height as
+	# the multiplier pill. Icon is a TextureRect child so it scales with the button.
 	_send_wave_btn = Button.new()
 	_send_wave_btn.text                  = ""
 	_send_wave_btn.custom_minimum_size   = Vector2(0, 50)
@@ -696,30 +695,21 @@ void fragment() {
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	mid_hbox.add_child(_send_wave_btn)
 
-	var ff_bold_font := FontVariation.new()
-	ff_bold_font.base_font          = UIFonts.header()
-	ff_bold_font.variation_embolden = 1.12
-
-	var ff_label := Label.new()
-	ff_label.text                 = ">>"
-	ff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ff_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	ff_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	# Bebas Neue's reported descender (no visible glyphs below baseline) makes
-	# VERTICAL_ALIGNMENT_CENTER place glyphs above the geometric center. Shifting
-	# the rect down 4px (equal offset_top/bottom keeps height at 50px) moves the
-	# content center to y=29 so after the font-metric bias the glyphs land at y≈25.
-	ff_label.anchor_left   = 0.0
-	ff_label.anchor_right  = 1.0
-	ff_label.anchor_top    = 0.0
-	ff_label.anchor_bottom = 1.0
-	ff_label.offset_top    = 4
-	ff_label.offset_bottom = 4
-	ff_label.add_theme_font_override("font", ff_bold_font)
-	ff_label.add_theme_font_size_override("font_size", 44)
-	ff_label.add_theme_color_override("font_color",        COLOR_GOLD_BORDER)
-	ff_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
-	_send_wave_btn.add_child(ff_label)
+	var ff_texture := TextureRect.new()
+	ff_texture.texture      = load("res://assets/SendWave.svg")
+	# EXPAND_IGNORE_SIZE lets the rect be sized by anchors rather than by the
+	# SVG's natural pixel dimensions; STRETCH_KEEP_ASPECT_CENTERED then draws
+	# the image centered within whatever rect the button gives us.
+	ff_texture.expand_mode  = TextureRect.EXPAND_IGNORE_SIZE
+	ff_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	ff_texture.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	# Fill full width; vertically centered at 56% of button height (22% inset top and bottom).
+	# 56% = 70% target × 0.8 (user-requested 20% reduction).
+	ff_texture.anchor_left   = 0.0
+	ff_texture.anchor_right  = 1.0
+	ff_texture.anchor_top    = 0.22
+	ff_texture.anchor_bottom = 0.78
+	_send_wave_btn.add_child(ff_texture)
 
 	# Multiplier button — gold filled, true square (50×50) matching the >> button height.
 	_multiplier_btn = Button.new()
