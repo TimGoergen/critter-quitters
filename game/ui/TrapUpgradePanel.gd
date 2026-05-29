@@ -38,6 +38,12 @@ const BOOST_ENTRY_H:       float = 20.0   # height per boost entry row
 const HEADER_ICON_RENDER:  float = 81.0   # SubViewport pixel resolution
 const HEADER_ICON_DISPLAY: float = 58.0   # icon displayed as a 58×58 square (matches button height)
 
+# Peek-mode tooltip offset from the pointer to the tooltip center.
+# Same direction as HUD.DRAG_OFFSET (above-left of finger) but 30% farther so
+# the label clears the fingertip on touch screens, matching the placement-ghost clearance.
+# Derived as HUD.DRAG_OFFSET * 1.3 = Vector2(-15.0, -47.5) * 1.3.
+const PEEK_TOOLTIP_OFFSET: Vector2 = Vector2(-19.5, -61.75)
+
 # Theme colours — derived from the placed trap's identity colour at runtime.
 # Declared as vars so _apply_trap_theme() can assign them before _build_ui() runs
 # (GDScript const cannot be assigned after declaration).
@@ -694,15 +700,10 @@ func _update_peek_tooltip(screen_pos: Vector2) -> void:
 		_peek_tooltip.visible = false
 		return
 
-	# Pin the tooltip's top-left to the unit's bottom-right corner in screen space.
-	# In the top-down view, +X is screen-right and +Z is screen-down, so the
-	# bottom-right corner of the 2×2 footprint is at global_position + (1, 0, 1).
-	# hit_unit is typed as Node (its static type), so := can't infer Vector3 here.
-	# Explicit type annotation tells the parser what the expression produces.
-	var corner_world: Vector3 = hit_unit.global_position + Vector3(1.0, 0.0, 1.0)
-	var corner_screen := camera.unproject_position(corner_world)
+	# Center the tooltip at PEEK_TOOLTIP_OFFSET from the pointer — above-left of the
+	# finger so the fingertip does not obscure the label on touch screens.
 	_peek_tooltip.show_for(hit_unit.get_type_name())
-	_peek_tooltip.position = corner_screen
+	_peek_tooltip.position = screen_pos + PEEK_TOOLTIP_OFFSET - _peek_tooltip.size * 0.5
 
 
 func _on_btn_sell() -> void:

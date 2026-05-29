@@ -890,7 +890,7 @@ func _mi(mesh: Mesh, mat: StandardMaterial3D) -> MeshInstance3D:
 ## Spawns three MeshInstance3D polygon stars. Called from initialize() only —
 ## preview instances skip this so the HUD icon SubViewport stays clean.
 func _spawn_star_display() -> void:
-	var radii: Array[float] = [0.17, 0.12, 0.12]   # [center, left, right] outer radius
+	var radii: Array[float] = [0.34, 0.24, 0.24]   # [center, left, right] outer radius
 	var gold := Color(1.0, 0.92, 0.30, 1.0)
 	for r: float in radii:
 		var mi := Trap._make_star_mesh(r, gold)
@@ -908,7 +908,7 @@ func _update_star_display() -> void:
 
 	const STAR_Z:      float = 0.45
 	const STAR_Y:      float = 0.65
-	const SIDE_OFFSET: float = 0.30  # matches Trap.gd
+	const SIDE_OFFSET: float = 0.42  # wide enough to clear the doubled-size star radii
 
 	var positions := [
 		Vector3(0.0,          STAR_Y, STAR_Z),

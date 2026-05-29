@@ -1178,7 +1178,7 @@ func _check_full_upgrade_bonus() -> void:
 func _spawn_star_display() -> void:
 	# Center star is larger; side stars are smaller to signal hierarchy.
 	# Outer radius in world units; inner notch = outer × 0.42 (balanced proportion).
-	var radii: Array[float] = [0.17, 0.12, 0.12]   # [center, left, right]
+	var radii: Array[float] = [0.34, 0.24, 0.24]   # [center, left, right]
 	var gold := Color(1.0, 0.92, 0.30, 1.0)
 	for r: float in radii:
 		var mi := _make_star_mesh(r, gold)
@@ -1242,7 +1242,7 @@ func _update_star_display() -> void:
 	# SIDE_OFFSET: spacing chosen so side stars don’t overlap the center star.
 	const STAR_Z:       float = 0.45
 	const STAR_Y:       float = 0.65
-	const SIDE_OFFSET:  float = 0.30   # slightly wider than before to avoid mesh overlap
+	const SIDE_OFFSET:  float = 0.42   # wide enough to clear the doubled-size star radii
 
 	# Slot 0 = center, 1 = left, 2 = right
 	var positions := [
