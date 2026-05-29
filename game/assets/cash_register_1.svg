@@ -22,14 +22,14 @@
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="6.3046875"
-     inkscape:cx="64.079306"
-     inkscape:cy="63.920694"
-     inkscape:window-width="958"
-     inkscape:window-height="1000"
-     inkscape:window-x="-7"
-     inkscape:window-y="0"
-     inkscape:window-maximized="0"
+     inkscape:zoom="4.4580873"
+     inkscape:cx="31.852225"
+     inkscape:cy="65.835409"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
      inkscape:current-layer="svg10" />
   <!-- Cash Register — stacked coins from above, frame 1 (B facing 12 o'clock) -->
   <!-- Bottom coin (largest) -->
@@ -83,35 +83,33 @@
      stroke-dasharray="4,3"
      id="circle7" />
   <!-- Bug Buck emblem on top coin — rotating "B" -->
-  <g
-     transform="rotate(0, 64, 62)"
-     id="g9">
-    <!-- Green disc embossment -->
-    <circle
-       cx="64"
-       cy="62"
-       r="14"
-       fill="#228840"
-       opacity="0.80"
-       id="circle8" />
-    <!-- "B" letterform as path -->
-    <text
-       x="64"
-       y="67"
-       text-anchor="middle"
-       font-family="Arial Black, sans-serif"
-       font-weight="900"
-       font-size="16"
-       fill="#106020"
-       id="text8">B</text>
-    <!-- Marker dot to show rotation direction -->
-    <circle
-       cx="64"
-       cy="50"
-       r="3"
-       fill="#FFEE20"
-       id="circle9" />
-  </g>
+  <circle
+     cx="64"
+     cy="62"
+     r="14"
+     fill="#228840"
+     opacity="0.8"
+     id="circle8"
+     style="fill:#bec200;fill-opacity:1" />
+  <text
+     xml:space="preserve"
+     style="font-size:24.6993px;line-height:0;writing-mode:lr-tb;direction:ltr;fill:#ffff00;fill-opacity:1;stroke:none;stroke-width:1.5437;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:5.4"
+     x="-69.329254"
+     y="-58.005562"
+     id="text1"
+     transform="matrix(-1.0792822,-0.02690122,0.02307981,-0.92596647,0,0)"><tspan
+       sodipodi:role="line"
+       id="tspan1"
+       x="-69.329254"
+       y="-58.005562"
+       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:24.6993px;line-height:0;font-family:sans-serif;-inkscape-font-specification:'sans-serif Bold';stroke-width:1.5437">$</tspan></text>
+  <circle
+     cx="64"
+     cy="50"
+     r="3"
+     fill="#ffee20"
+     id="circle9"
+     style="fill:#ffff00;fill-opacity:1" />
   <!-- Coin edge specular -->
   <ellipse
      cx="50"

@@ -22,14 +22,14 @@
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="4.4580873"
-     inkscape:cx="52.152411"
-     inkscape:cy="78.284694"
-     inkscape:window-width="958"
-     inkscape:window-height="1000"
-     inkscape:window-x="-7"
-     inkscape:window-y="0"
-     inkscape:window-maximized="0"
+     inkscape:zoom="6.3046875"
+     inkscape:cx="38.701363"
+     inkscape:cy="57.655514"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
      inkscape:current-layer="svg19" />
   <!-- Very long angular legs — cockroach legs reach near canvas edges -->
   <!-- Group A (L-front, R-mid, L-back) forward; Group B (R-front, L-mid, R-back) back -->
@@ -149,13 +149,13 @@
   <!-- Pronotum: very wide shield, the head is hidden beneath it -->
   <!-- Yellowish translucent rim — the unmistakable cockroach signature -->
   <ellipse
-     cx="63.127636"
-     cy="41.506813"
+     cx="64.71376"
+     cy="36.431225"
      rx="20.334572"
      ry="18.493185"
      fill="#7a3510"
      id="ellipse16"
-     style="stroke-width:0.3;stroke-dasharray:none;stroke:#ffce97;stroke-opacity:1" />
+     style="stroke:#ffce97;stroke-width:0.3;stroke-dasharray:none;stroke-opacity:1" />
   <ellipse
      cx="58"
      cy="30"
@@ -185,22 +185,18 @@
      r="2.5"
      fill="#cc4400"
      id="circle19" />
-  <circle
-     style="fill:#4a2808;fill-opacity:1"
+  <ellipse
+     style="fill:#4a2808;fill-opacity:1;stroke-width:0.811035"
      id="path19"
-     cx="5.7893434"
-     cy="9.9132586"
-     r="3.5687733" />
-  <circle
-     style="fill:#4a2808;fill-opacity:1"
-     id="circle20"
-     cx="5.7893434"
-     cy="9.9132586"
-     r="3.5687733" />
-  <circle
-     style="fill:#4a2808;fill-opacity:1"
+     cx="6.7410169"
+     cy="10.785625"
+     rx="2.9343247"
+     ry="2.8550186" />
+  <ellipse
+     style="fill:#4a2808;fill-opacity:1;stroke-width:0.833259"
      id="circle20-9"
-     cx="121.09418"
-     cy="8.589839"
-     r="3.5687733" />
+     cx="121.64932"
+     cy="9.224288"
+     rx="3.0136309"
+     ry="2.9343247" />
 </svg>

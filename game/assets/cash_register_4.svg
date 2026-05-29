@@ -22,15 +22,15 @@
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="6.3046875"
-     inkscape:cx="64"
-     inkscape:cy="63.920694"
-     inkscape:window-width="958"
-     inkscape:window-height="1000"
-     inkscape:window-x="2873"
-     inkscape:window-y="0"
-     inkscape:window-maximized="0"
-     inkscape:current-layer="svg10" />
+     inkscape:zoom="8.9161746"
+     inkscape:cx="44.413666"
+     inkscape:cy="55.236693"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="g1" />
   <!-- Cash Register — frame 4 (B rotated 270°) -->
   <circle
      cx="64"
@@ -79,30 +79,36 @@
      stroke-dasharray="4,3"
      id="circle7" />
   <g
-     transform="rotate(270, 64, 62)"
-     id="g9">
+     id="g1">
     <circle
-       cx="64"
-       cy="62"
+       cx="-62"
+       cy="64"
        r="14"
        fill="#228840"
-       opacity="0.80"
-       id="circle8" />
-    <text
-       x="64"
-       y="67"
-       text-anchor="middle"
-       font-family="Arial Black, sans-serif"
-       font-weight="900"
-       font-size="16"
-       fill="#106020"
-       id="text8">B</text>
+       opacity="0.8"
+       id="circle8"
+       transform="rotate(-90)"
+       style="fill:#bdc100;fill-opacity:1" />
     <circle
-       cx="64"
-       cy="50"
+       cx="-62"
+       cy="52"
        r="3"
-       fill="#FFEE20"
-       id="circle9" />
+       fill="#ffee20"
+       id="circle9"
+       transform="rotate(-90)"
+       style="fill:#ffff00;fill-opacity:1" />
+    <text
+       xml:space="preserve"
+       style="font-size:24.6993px;line-height:0;writing-mode:lr-tb;direction:ltr;opacity:1;fill:#ffff00;fill-opacity:1;stroke:none;stroke-width:1.5437;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:5.4"
+       x="-66.453728"
+       y="76.537239"
+       id="text1"
+       transform="matrix(0,-1.0796174,0.92625406,0,0,0)"><tspan
+         sodipodi:role="line"
+         id="tspan1"
+         x="-66.453728"
+         y="76.537239"
+         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:24.6993px;line-height:0;font-family:sans-serif;-inkscape-font-specification:'sans-serif Bold';stroke-width:1.5437">$</tspan></text>
   </g>
   <ellipse
      cx="50"
