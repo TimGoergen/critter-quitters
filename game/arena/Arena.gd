@@ -1240,8 +1240,14 @@ func _on_enemy_died(enemy: Node3D) -> void:
 	match enemy.get_enemy_type():
 		Enemy.EnemyType.RAT_KING:
 			# Splits into three Rats that inherit the path from the kill point.
-			for _i in 3:
-				spawn_enemy_at_grid_position(death_cell, Enemy.EnemyType.RAT)
+			# Rat 0 spawns immediately so _active_enemies is non-empty before the
+			# wave-end check below runs. Rats 1 and 2 are staggered by 0.4 s each
+			# so they separate visually instead of stacking on the same cell.
+			spawn_enemy_at_grid_position(death_cell, Enemy.EnemyType.RAT)
+			for i in range(1, 3):
+				get_tree().create_timer(i * 0.4, false).timeout.connect(
+					spawn_enemy_at_grid_position.bind(death_cell, Enemy.EnemyType.RAT)
+				)
 
 	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
 		_start_wave()
