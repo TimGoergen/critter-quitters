@@ -61,7 +61,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Sharpened Instincts",
 		"stat_name":       "Crit Chance",
 		"impact_template": "+%s%% Crit Chance for all traps",
-		"plain_text":      "Every trap has a higher chance to deal bonus damage on each shot. Has no effect until a trap's own Crit Chance is upgraded above 0%.",
+		"plain_text":      "Every trap has a higher chance to deal bonus damage on each shot. Applies directly — a trap with 0% crit chance becomes 2% (or more) immediately.",
 		"magnitudes":      [0.02, 0.04, 0.08],
 	},
 	{

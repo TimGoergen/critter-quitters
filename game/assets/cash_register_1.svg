@@ -91,18 +91,6 @@
      opacity="0.8"
      id="circle8"
      style="fill:#bec200;fill-opacity:1" />
-  <text
-     xml:space="preserve"
-     style="font-size:24.6993px;line-height:0;writing-mode:lr-tb;direction:ltr;fill:#ffff00;fill-opacity:1;stroke:none;stroke-width:1.5437;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:5.4"
-     x="-69.329254"
-     y="-58.005562"
-     id="text1"
-     transform="matrix(-1.0792822,-0.02690122,0.02307981,-0.92596647,0,0)"><tspan
-       sodipodi:role="line"
-       id="tspan1"
-       x="-69.329254"
-       y="-58.005562"
-       style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:24.6993px;line-height:0;font-family:sans-serif;-inkscape-font-specification:'sans-serif Bold';stroke-width:1.5437">$</tspan></text>
   <circle
      cx="64"
      cy="50"
@@ -128,4 +116,10 @@
      fill="white"
      opacity="0.35"
      id="ellipse10" />
+  <path
+     style="font-weight:bold;font-size:24.6993px;line-height:0;-inkscape-font-specification:'sans-serif Bold';fill:#ffff00;stroke-width:1.5437;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:5.4"
+     d="m -53.168579,-63.17939 q 0,2.038175 -1.712549,3.49746 -1.712549,1.459284 -4.546697,1.652248 v 4.377854 h -2.098476 v -4.305493 q -1.350743,-0.01206 -3.123593,-0.325626 -1.772851,-0.313565 -2.773848,-0.783913 v -3.52158 h 0.54271 q 1.109538,0.60301 2.544703,0.964817 1.447225,0.361806 2.870329,0.470348 v -3.304497 l -1.16984,-0.265324 q -1.109539,-0.253265 -2.050235,-0.59095 -0.928636,-0.337686 -1.604007,-0.892456 -0.675372,-0.554769 -1.049238,-1.362803 -0.373867,-0.820094 -0.373867,-2.014054 0,-1.796971 1.640188,-3.075352 1.640188,-1.278382 4.546698,-1.543707 v -2.810028 h 2.098476 v 2.785908 q 1.109538,0.04824 2.592944,0.313565 1.495465,0.265325 2.35174,0.615071 v 3.473339 h -0.530649 q -0.856275,-0.494469 -1.989934,-0.820094 -1.133659,-0.325626 -2.424101,-0.410047 v 3.063292 l 0.964816,0.192963 q 2.725606,0.530649 4.003988,1.616068 1.290442,1.073358 1.290442,3.002991 z m -8.164759,-5.077346 v -2.797968 q -0.795973,0.0603 -1.435164,0.410047 -0.627131,0.337686 -0.627131,0.964816 0,0.56683 0.410047,0.880395 0.410047,0.313566 1.652248,0.54271 z m 3.786905,5.547694 q 0,-0.699492 -0.651252,-1.037178 -0.63919,-0.349746 -1.278381,-0.446227 v 2.990931 q 0.795973,-0.108542 1.362803,-0.458288 0.56683,-0.361806 0.56683,-1.049238 z"
+     id="text1"
+     transform="matrix(-1.0792822,-0.02690122,0.02307981,-0.92596647,0,0)"
+     aria-label="$" />
 </svg>

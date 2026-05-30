@@ -23,14 +23,14 @@
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
      inkscape:zoom="8.9161746"
-     inkscape:cx="44.413666"
+     inkscape:cx="44.637977"
      inkscape:cy="55.236693"
      inkscape:window-width="1920"
      inkscape:window-height="1009"
-     inkscape:window-x="1912"
+     inkscape:window-x="-8"
      inkscape:window-y="-8"
      inkscape:window-maximized="1"
-     inkscape:current-layer="g1" />
+     inkscape:current-layer="svg10" />
   <!-- Cash Register — frame 4 (B rotated 270°) -->
   <circle
      cx="64"
@@ -78,38 +78,23 @@
      stroke-width="2"
      stroke-dasharray="4,3"
      id="circle7" />
-  <g
-     id="g1">
-    <circle
-       cx="-62"
-       cy="64"
-       r="14"
-       fill="#228840"
-       opacity="0.8"
-       id="circle8"
-       transform="rotate(-90)"
-       style="fill:#bdc100;fill-opacity:1" />
-    <circle
-       cx="-62"
-       cy="52"
-       r="3"
-       fill="#ffee20"
-       id="circle9"
-       transform="rotate(-90)"
-       style="fill:#ffff00;fill-opacity:1" />
-    <text
-       xml:space="preserve"
-       style="font-size:24.6993px;line-height:0;writing-mode:lr-tb;direction:ltr;opacity:1;fill:#ffff00;fill-opacity:1;stroke:none;stroke-width:1.5437;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:5.4"
-       x="-66.453728"
-       y="76.537239"
-       id="text1"
-       transform="matrix(0,-1.0796174,0.92625406,0,0,0)"><tspan
-         sodipodi:role="line"
-         id="tspan1"
-         x="-66.453728"
-         y="76.537239"
-         style="font-style:normal;font-variant:normal;font-weight:bold;font-stretch:normal;font-size:24.6993px;line-height:0;font-family:sans-serif;-inkscape-font-specification:'sans-serif Bold';stroke-width:1.5437">$</tspan></text>
-  </g>
+  <circle
+     cx="-62"
+     cy="64"
+     r="14"
+     fill="#228840"
+     opacity="0.8"
+     id="circle8"
+     transform="rotate(-90)"
+     style="fill:#bdc100;fill-opacity:1" />
+  <circle
+     cx="-62"
+     cy="52"
+     r="3"
+     fill="#ffee20"
+     id="circle9"
+     transform="rotate(-90)"
+     style="fill:#ffff00;fill-opacity:1" />
   <ellipse
      cx="50"
      cy="48"
@@ -126,4 +111,10 @@
      fill="white"
      opacity="0.35"
      id="ellipse10" />
+  <path
+     style="font-weight:bold;font-size:24.6993px;line-height:0;-inkscape-font-specification:'sans-serif Bold';fill:#ffff00;stroke-width:1.5437;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:5.4"
+     d="m -50.293052,71.363411 q 0,2.038175 -1.71255,3.49746 -1.712549,1.459284 -4.546697,1.652248 v 4.377854 h -2.098476 V 76.58548 q -1.350743,-0.01206 -3.123593,-0.325626 -1.77285,-0.313565 -2.773847,-0.783913 v -3.52158 h 0.542709 q 1.109539,0.60301 2.544703,0.964816 1.447225,0.361807 2.870329,0.470348 v -3.304496 l -1.16984,-0.265324 q -1.109539,-0.253265 -2.050235,-0.59095 -0.928635,-0.337686 -1.604007,-0.892456 -0.675371,-0.554769 -1.049238,-1.362803 -0.373866,-0.820094 -0.373866,-2.014054 0,-1.796971 1.640188,-3.075353 1.640188,-1.278381 4.546697,-1.543706 v -2.810028 h 2.098476 v 2.785908 q 1.109539,0.04824 2.592944,0.313565 1.495466,0.265325 2.35174,0.615071 v 3.473339 h -0.530649 q -0.856274,-0.494469 -1.989934,-0.820094 -1.133659,-0.325626 -2.424101,-0.410047 v 3.063292 l 0.964816,0.192963 q 2.725607,0.530649 4.003989,1.616068 1.290442,1.073358 1.290442,3.002991 z m -8.16476,-5.077347 v -2.797967 q -0.795973,0.0603 -1.435164,0.410047 -0.627131,0.337686 -0.627131,0.964816 0,0.56683 0.410047,0.880395 0.410047,0.313566 1.652248,0.542709 z m 3.786905,5.547695 q 0,-0.699492 -0.651251,-1.037178 -0.639191,-0.349746 -1.278382,-0.446227 v 2.990931 q 0.795974,-0.108542 1.362803,-0.458288 0.56683,-0.361806 0.56683,-1.049238 z"
+     id="text1"
+     transform="matrix(0,-1.0796174,0.92625406,0,0,0)"
+     aria-label="$" />
 </svg>
