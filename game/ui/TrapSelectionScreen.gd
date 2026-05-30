@@ -239,8 +239,9 @@ func _build_boost_card(boost_type: int) -> UpgradeCard:
 # Selection logic
 # ---------------------------------------------------------------------------
 
-## Called when any card is tapped. Enforces the PICK_COUNT limit across both
-## traps and boosts — rejects a third selection immediately via force_deselect.
+## Called when any card is tapped. Updates selection lists then refreshes all
+## card states — dimming and blocking unchosen cards when the limit is reached,
+## restoring them if a previously chosen card is deselected.
 func _on_card_toggled(_data: Dictionary, card: UpgradeCard, slot: Dictionary) -> void:
 	var category: String = slot["category"]
 	var item_type: int   = slot["type"]
@@ -248,6 +249,8 @@ func _on_card_toggled(_data: Dictionary, card: UpgradeCard, slot: Dictionary) ->
 	if card.is_card_selected():
 		var total: int = _selected_traps.size() + _selected_boosts.size()
 		if total >= PICK_COUNT:
+			# Safety net — at-limit cards have mouse_filter=IGNORE so this
+			# normally won't fire, but guard just in case.
 			card.force_deselect()
 			return
 		if category == "boost":
@@ -262,6 +265,27 @@ func _on_card_toggled(_data: Dictionary, card: UpgradeCard, slot: Dictionary) ->
 
 	var picked: int = _selected_traps.size() + _selected_boosts.size()
 	_start_btn.disabled = picked < PICK_COUNT
+	_refresh_card_states(picked)
+
+
+## Updates each card's visual brightness and input filter based on how many
+## picks have been made.
+##   Selected cards:            bright (1.0), input on (can deselect)
+##   Unselected, picks left:    dim (0.65),   input on (can select)
+##   Unselected, at pick limit: very dim (0.4), input off (blocked)
+func _refresh_card_states(picked: int) -> void:
+	var at_limit: bool = picked >= PICK_COUNT
+	for c in _cards:
+		var card := c as UpgradeCard
+		if card.is_card_selected():
+			card.modulate    = Color(1.0, 1.0, 1.0, 1.0)
+			card.mouse_filter = Control.MOUSE_FILTER_STOP
+		elif at_limit:
+			card.modulate    = Color(0.4, 0.4, 0.4, 1.0)
+			card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		else:
+			card.modulate    = Color(0.65, 0.65, 0.65, 1.0)
+			card.mouse_filter = Control.MOUSE_FILTER_STOP
 
 
 # ---------------------------------------------------------------------------
