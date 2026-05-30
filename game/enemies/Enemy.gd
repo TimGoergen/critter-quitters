@@ -71,6 +71,12 @@ const RAT_FRAMES: Array[Texture2D] = [
 	preload("res://assets/rat_walk_3.svg"),
 	preload("res://assets/rat_walk_4.svg"),
 ]
+const MOUSE_FRAMES: Array[Texture2D] = [
+	preload("res://assets/mouse_walk_1.svg"),
+	preload("res://assets/mouse_walk_2.svg"),
+	preload("res://assets/mouse_walk_3.svg"),
+	preload("res://assets/mouse_walk_4.svg"),
+]
 const MOSQUITO_FRAMES: Array[Texture2D] = [
 	preload("res://assets/mosquito_walk_1.svg"),
 	preload("res://assets/mosquito_walk_2.svg"),
@@ -891,8 +897,7 @@ func _build_glue_blob_mesh(base_r: float, color: Color) -> ImmediateMesh:
 
 
 ## Returns the walk-frame array for the given enemy type.
-## Mouse, Rat King, and Rat all share the existing rat SVGs as placeholders until
-## dedicated art is created for each.
+## Rat King still uses rat SVGs as a placeholder until dedicated art is created.
 func _frames_for_type(enemy_type: EnemyType) -> Array[Texture2D]:
 	match enemy_type:
 		EnemyType.ANT:      return ANT_FRAMES
@@ -900,7 +905,7 @@ func _frames_for_type(enemy_type: EnemyType) -> Array[Texture2D]:
 		EnemyType.CRICKET:  return CRICKET_FRAMES
 		EnemyType.BEETLE:   return BEETLE_FRAMES
 		EnemyType.COCKROACH:return COCKROACH_FRAMES
-		EnemyType.MOUSE:    return RAT_FRAMES    # placeholder — dedicated mouse art pending
+		EnemyType.MOUSE:    return MOUSE_FRAMES
 		EnemyType.MOSQUITO: return MOSQUITO_FRAMES
 		EnemyType.RAT_KING: return RAT_FRAMES    # placeholder — dedicated rat king art pending
 		EnemyType.RAT:      return RAT_FRAMES    # placeholder — dedicated rat art pending
