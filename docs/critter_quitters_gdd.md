@@ -576,7 +576,7 @@ Composite of total pests eliminated and highest wave reached. Exact formula TBD.
 | Attribute | Value |
 | :---- | :---- |
 | Currency | Bug Bucks |
-| Starting Bug Bucks | 75 — buys exactly 3 Snap Traps; deliberately ungenerous |
+| Starting Bug Bucks | 100 |
 | Sell value | 70% of buy price |
 | Infestation Level | Starts at zero; fills as pests exit; run ends at maximum threshold (20 internal points = 100%) |
 | Exit infestation | Per pest type: Gnat 4.0, Ant 8.0, Cricket 8.0, Beetle 20.0, Cockroach 35.0, Mosquito 18.0, Mouse 60.0, Rat 22.0, Rat King 100.0. Wave 1 = 10 Gnats × 4.0 = 40 = 2× threshold. |
