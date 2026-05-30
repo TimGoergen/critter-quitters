@@ -44,6 +44,7 @@
 | v0.35 | Phase 8 renamed and redesigned to reflect SVG art as the confirmed house standard. All assets use the SVG-on-quad approach (QuadMesh + StandardMaterial3D, unshaded). Traps (6 types) and Boosts (5 types) marked complete. Enemy list corrected: 7 of 9 enemies already have dedicated SVG frames (Ant, Gnat, Cricket, Beetle, Cockroach, Mosquito, Rat); Mouse and Rat King use Rat frames as placeholders and are the only remaining enemy work. Gnat added to enemy list (was omitted). Art Style tag in header updated from "illustrated sprites" to "SVG sprites". |
 | v0.36 | Game mode design simplified. Three-mode structure (Endless / Journey / Challenge) replaced with a single unified mode: endless waves, run ends when Infestation Level reaches 100%, Service Fees earned equal to XP levels reached during the run. Challenge mode deferred to Future Pass. Round/Contract/perk structure removed — the level-up upgrade card system (implemented in Phase 8) already serves as the run-modifying choice layer. Section 15 rewritten. Phase 9 design and implementation deliverables updated accordingly. |
 | v0.37 | Permanent upgrade tree fully specified. Two categories (Equipment and Business), 9 upgrade lines, 18 tiers total, 99 SF to fill. Equipment: Reinforced Mechanisms, Extended Range, Tuned Triggers, Wider Selection. Business: Starting Capital, Hazard Insurance, Salvage Value, Bulk Discount, Field Experience. All values are playtesting placeholders. |
+| v0.38 | Starting trap selection UI specified. Same full-screen card layout as the level-up screen; 3 trap cards offered, player picks 2; "Start Buggin'" button activates on 2 selections. Wider Selection meta upgrade scales both the offer count (3→4) and pick count (2→3). |
 | v0.33 | Balance pass: gameplay loop and progression. Starting Bug Bucks reduced from 1,000 to 75 (buys exactly 3 Snap Traps; forces immediate strategic decisions). Infestation values scaled up ~8× so wave 1 uncontested = 2× threshold (10 Gnats × 4.0 = 40 infestation, threshold = 20). Kill bounties adjusted downward for standard enemies so Bug Bucks feel ungenerous: Gnat 3, Ant 6, Cricket 10, Beetle 20, Cockroach 35, Mosquito 10, Mouse 60, Rat 20, Rat King 180. XP system decoupled from infestation: each enemy type now carries a flat `xp` value; Arena.gd reads it directly rather than deriving from infestation damage. Level-up threshold raised from 12 to 20 XP so first level-up lands mid-wave 2 (satisfies 2–4 waves target). HP scaling changed from continuous linear (wave × 1.02 + base) to a step multiplier every 5 waves (+30% per tier): waves 1–4 = 1.0×, waves 5–9 = 1.3×, waves 10–14 = 1.6×, etc. |
 
 ---
@@ -560,7 +561,13 @@ This layer sits between Bug Bucks (tactical, wave-to-wave) and Service Fees (per
 
 **Starting trap selection**
 
-At run start, before wave 1, 3 trap types are randomly selected and presented to the player. The player chooses 2. The chosen traps are immediately available for purchase and placement. Trap unlock mechanic TBD.
+At run start, before wave 1, the player is shown a full-screen selection overlay that matches the visual design of the level-up screen: a dim overlay, a header, and 3 trap cards laid out identically to upgrade cards.
+
+Each card represents one trap type and displays that trap's name, description, and base stats. 3 trap types are randomly selected from the available roster and presented as cards. The player taps a card to select it — selected cards are visually highlighted. The player must choose exactly 2. A **"Start Buggin'"** button is shown beneath the cards and becomes active once 2 cards are selected; tapping it confirms the selection and begins wave 1.
+
+The 2 chosen trap types are immediately available for purchase and placement. Remaining trap types are locked for the run (unlock mechanic TBD).
+
+If the Wider Selection meta upgrade (tier 1) is purchased, 4 cards are offered instead of 3. If tier 2 is purchased, the player picks 3 instead of 2.
 
 **High score**
 
