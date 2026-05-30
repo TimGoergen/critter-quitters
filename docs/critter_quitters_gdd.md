@@ -43,6 +43,7 @@
 | v0.34 | Phase 9 implementation deliverables corrected: "Between-wave store — basic version" replaced with "The Truck hub / meta update screen" to match the v0.15 decision that removed the between-wave store and the Section 8 design for The Truck / Service Fees meta progression. |
 | v0.35 | Phase 8 renamed and redesigned to reflect SVG art as the confirmed house standard. All assets use the SVG-on-quad approach (QuadMesh + StandardMaterial3D, unshaded). Traps (6 types) and Boosts (5 types) marked complete. Enemy list corrected: 7 of 9 enemies already have dedicated SVG frames (Ant, Gnat, Cricket, Beetle, Cockroach, Mosquito, Rat); Mouse and Rat King use Rat frames as placeholders and are the only remaining enemy work. Gnat added to enemy list (was omitted). Art Style tag in header updated from "illustrated sprites" to "SVG sprites". |
 | v0.36 | Game mode design simplified. Three-mode structure (Endless / Journey / Challenge) replaced with a single unified mode: endless waves, run ends when Infestation Level reaches 100%, Service Fees earned equal to XP levels reached during the run. Challenge mode deferred to Future Pass. Round/Contract/perk structure removed — the level-up upgrade card system (implemented in Phase 8) already serves as the run-modifying choice layer. Section 15 rewritten. Phase 9 design and implementation deliverables updated accordingly. |
+| v0.37 | Permanent upgrade tree fully specified. Two categories (Equipment and Business), 9 upgrade lines, 18 tiers total, 99 SF to fill. Equipment: Reinforced Mechanisms, Extended Range, Tuned Triggers, Wider Selection. Business: Starting Capital, Hazard Insurance, Salvage Value, Bulk Discount, Field Experience. All values are playtesting placeholders. |
 | v0.33 | Balance pass: gameplay loop and progression. Starting Bug Bucks reduced from 1,000 to 75 (buys exactly 3 Snap Traps; forces immediate strategic decisions). Infestation values scaled up ~8× so wave 1 uncontested = 2× threshold (10 Gnats × 4.0 = 40 infestation, threshold = 20). Kill bounties adjusted downward for standard enemies so Bug Bucks feel ungenerous: Gnat 3, Ant 6, Cricket 10, Beetle 20, Cockroach 35, Mosquito 10, Mouse 60, Rat 20, Rat King 180. XP system decoupled from infestation: each enemy type now carries a flat `xp` value; Arena.gd reads it directly rather than deriving from infestation damage. Level-up threshold raised from 12 to 20 XP so first level-up lands mid-wave 2 (satisfies 2–4 waves target). HP scaling changed from continuous linear (wave × 1.02 + base) to a step multiplier every 5 waves (+30% per tier): waves 1–4 = 1.0×, waves 5–9 = 1.3×, waves 10–14 = 1.6×, etc. |
 
 ---
@@ -603,20 +604,28 @@ Service Fees are earned at the end of each run equal to the number of XP levels 
 
 **Meta Upgrades**
 
-Meta upgrades are permanent improvements purchased with Service Fees. They persist across all future runs. Two categories are available:
+Meta upgrades are permanent improvements purchased with Service Fees. They persist across all future runs. Each upgrade line has two tiers; tier 2 requires tier 1. Upgrade lines within a category are independent of each other. All numeric values are tuning placeholders subject to playtesting.
 
-**Equipment upgrades** — improvements to the player's tools and traps:
-- Starting stats for specific trap types (damage, range, trigger rate)
-- Unlocking traps as permanent starting options
-- DoT effectiveness, duration, or other trap modifiers
+**Equipment upgrades** — improvements to traps across all runs:
 
-**Business upgrades** — improvements to the operation itself:
-- Starting Bug Bucks amount at the beginning of each run
-- Store options (more choices, reduced reroll costs)
-- Starting Infestation Level threshold improvements
-- Other run-start advantages
+| Upgrade | Tier 1 | Tier 2 | Cost (SF) |
+| :---- | :---- | :---- | :---- |
+| Reinforced Mechanisms | All traps start with +15% base damage | +30% base damage | 4 / 8 |
+| Extended Range | All traps start with +10% base range | +20% base range | 3 / 6 |
+| Tuned Triggers | Active traps start with +10% fire rate | +20% fire rate | 3 / 6 |
+| Wider Selection | Starting trap selection offers 4 types instead of 3 | Player picks 3 of those 4 instead of 2 | 5 / 10 |
 
-Specific upgrade trees and costs are TBD via playtesting.
+**Business upgrades** — improvements to economy and survivability:
+
+| Upgrade | Tier 1 | Tier 2 | Cost (SF) |
+| :---- | :---- | :---- | :---- |
+| Starting Capital | +25 Bug Bucks at run start (100 total) | +50 Bug Bucks (150 total) | 4 / 8 |
+| Hazard Insurance | Infestation threshold +10% | +20% | 5 / 10 |
+| Salvage Value | Sell refund increases to 75% | Sell refund increases to 80% | 4 / 8 |
+| Bulk Discount | All trap and boost upgrade costs −5% | −10% | 5 / 10 |
+| Field Experience | +15% XP per kill | +30% XP per kill | 4 / 8 |
+
+Total Service Fees to fill both trees: 99 SF across 18 tiers. At 10–15 SF earned per run, a player who improves steadily will fill the tree over roughly 7–10 runs.
 
 ---
 
