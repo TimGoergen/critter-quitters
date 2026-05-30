@@ -230,19 +230,28 @@ func _build_screen(new_level: int) -> void:
 # ---------------------------------------------------------------------------
 
 ## Generates 3 unique upgrade card data Dictionaries.
-## Tiers are rolled independently per card. Category (equipment vs campaign)
-## is chosen randomly, with a fallback to campaign if no eligible traps exist.
+## One slot is always reserved for an unlock card when locked units exist;
+## the remaining slots are equipment or campaign cards. All three positions
+## are shuffled so the unlock card doesn't always appear in the same spot.
 func _generate_cards() -> Array:
 	var result: Array = []
-	# Track which upgrade IDs have already been offered to avoid duplicates.
 	var used_ids: Array = []
 
-	for _i in 3:
-		var tier   := _roll_tier()
-		var card   := _build_card(tier, used_ids)
+	# Always try to fill one slot with an unlock card first.
+	var unlock_tier := _roll_tier()
+	var unlock_card := _build_unlock_card(unlock_tier, used_ids)
+	if not unlock_card.is_empty():
+		result.append(unlock_card)
+		used_ids.append(unlock_card.get("id", ""))
+
+	# Fill remaining slots with equipment or campaign cards.
+	while result.size() < 3:
+		var tier := _roll_tier()
+		var card := _build_equipment_or_campaign_card(tier, used_ids)
 		result.append(card)
 		used_ids.append(card.get("id", ""))
 
+	result.shuffle()
 	return result
 
 
@@ -275,22 +284,15 @@ const BOOST_DISPLAY: Dictionary = {
 }
 
 
-## Builds a card Dictionary for the given tier.
-## Tries an unlock card first (~33% chance), then equipment (50/50), then campaign.
-func _build_card(tier: int, used_ids: Array) -> Dictionary:
-	# Try an unlock card first — gives the player a meaningful new tool option.
-	if randf() < 0.33:
-		var unlock := _build_unlock_card(tier, used_ids)
-		if not unlock.is_empty():
-			return unlock
-
-	# Try equipment next.
+## Builds an equipment or campaign card for the given tier.
+## Tries equipment first (50/50 split), falling back to campaign if no traps
+## are eligible or the chosen upgrade ID is already in used_ids.
+func _build_equipment_or_campaign_card(tier: int, used_ids: Array) -> Dictionary:
 	if randf() < 0.50:
 		var equip_card := _build_equipment_card(tier, used_ids)
 		if not equip_card.is_empty():
 			return equip_card
 
-	# Fall back to a campaign card.
 	return _build_campaign_card(tier, used_ids)
 
 
