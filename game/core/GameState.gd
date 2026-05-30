@@ -285,6 +285,22 @@ func end_run() -> void:
 	run_ended.emit()
 
 
+## Unlocks a single trap type mid-run (e.g. chosen from a level-up card).
+## No-ops if already unlocked. Emits unlocked_traps_set so HUD updates.
+func unlock_trap(trap_type: int) -> void:
+	if trap_type not in unlocked_trap_types:
+		unlocked_trap_types.append(trap_type)
+		unlocked_traps_set.emit(unlocked_trap_types)
+
+
+## Unlocks a single boost type mid-run (e.g. chosen from a level-up card).
+## No-ops if already unlocked. Emits unlocked_boosts_set so HUD updates.
+func unlock_boost(boost_type: int) -> void:
+	if boost_type not in unlocked_boost_types:
+		unlocked_boost_types.append(boost_type)
+		unlocked_boosts_set.emit(unlocked_boost_types)
+
+
 ## Records the trap and boost types chosen in TrapSelectionScreen.
 ## Selects the first unlocked trap as the active placement type and
 ## notifies listeners (primarily HUD) so they can show the right rows.

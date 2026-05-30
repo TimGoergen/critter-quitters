@@ -2680,17 +2680,22 @@ func _show_level_up_screen(new_level: int) -> void:
 ## the fire-rate (and range indicator) changes take effect immediately.
 ## For equipment upgrades, calls the free-upgrade method directly on the trap.
 func _on_level_up_upgrade_chosen(upgrade: Dictionary) -> void:
-	if upgrade.get("category") == "campaign":
-		GameState.apply_campaign_buff(upgrade["id"], upgrade["magnitude"])
-		# Fire-rate and range indicator changes require each trap to recalculate.
-		_refresh_global_trap_multipliers()
-	else:
-		# Equipment upgrade: free stat boost applied to every placed trap of this type
-		# AND recorded so new placements of the same type inherit the upgrade immediately.
-		_apply_free_equipment_upgrade_by_type(
-			upgrade.get("trap_type", -1),
-			upgrade.get("stat", "")
-		)
+	match upgrade.get("category", ""):
+		"campaign":
+			GameState.apply_campaign_buff(upgrade["id"], upgrade["magnitude"])
+			# Fire-rate and range indicator changes require each trap to recalculate.
+			_refresh_global_trap_multipliers()
+		"unlock_trap":
+			GameState.unlock_trap(upgrade["item_type"])
+		"unlock_boost":
+			GameState.unlock_boost(upgrade["item_type"])
+		_:
+			# Equipment upgrade: free stat boost applied to every placed trap of this
+			# type AND recorded so new placements inherit it immediately.
+			_apply_free_equipment_upgrade_by_type(
+				upgrade.get("trap_type", -1),
+				upgrade.get("stat", "")
+			)
 
 
 ## Iterates all placed traps and tells each one to recompute its multipliers.

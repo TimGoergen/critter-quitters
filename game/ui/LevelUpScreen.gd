@@ -11,6 +11,7 @@ extends CanvasLayer
 
 const UIFonts     = preload("res://ui/UIFonts.gd")
 const Trap        = preload("res://traps/Trap.gd")
+const BoostUnit   = preload("res://boosts/BoostUnit.gd")
 const UpgradeCard = preload("res://ui/UpgradeCard.gd")
 
 
@@ -255,18 +256,103 @@ func _roll_tier() -> int:
 	return UpgradeCard.Tier.COMMON
 
 
+## Short display text for each trap and boost type, used on unlock cards.
+const TRAP_DISPLAY: Dictionary = {
+	0: { "name": "Snap Trap",          "desc": "Targets the nearest pest. Fast fire rate, low damage. The only ground trap that can also hit flying pests." },
+	1: { "name": "Zapper",             "desc": "Targets the pest farthest along the path. Very slow rate, very high damage. Cannot hit flying pests." },
+	2: { "name": "Fogger",             "desc": "Fires an expanding cloud that damages all pests from closest to farthest. Cannot hit flying pests." },
+	3: { "name": "Glue Board",         "desc": "Pulses adhesive every few seconds, slowing all ground pests in range at the moment of each pulse." },
+	4: { "name": "Fly Strip Launcher", "desc": "Targets flying pests only. Releases a sticky cloud on impact that slows and damages over time." },
+	5: { "name": "Bait Station",       "desc": "Enemies walk straight over it. Pulses poison onto every pest in range, dealing damage over time." },
+}
+
+const BOOST_DISPLAY: Dictionary = {
+	0: { "name": "Pheromone Dispenser", "desc": "Aura boost. All traps within range deal increased damage." },
+	1: { "name": "Compressor",          "desc": "Aura boost. All traps within range fire more often." },
+	2: { "name": "Cash Register",       "desc": "Earns Bug Bucks each wave and pays a bonus per kill inside its aura." },
+	3: { "name": "Air Freshener",       "desc": "Absorbs infestation from pests that escape through its aura. Perishable." },
+	4: { "name": "Quarantine Marker",   "desc": "Restores infestation for every kill inside its aura. Perishable." },
+}
+
+
 ## Builds a card Dictionary for the given tier.
-## Tries equipment first (50/50 split), falling back to campaign if no traps
-## are eligible or the chosen upgrade ID is already in used_ids.
+## Tries an unlock card first (~33% chance), then equipment (50/50), then campaign.
 func _build_card(tier: int, used_ids: Array) -> Dictionary:
-	# Try equipment first with a 50% probability.
+	# Try an unlock card first — gives the player a meaningful new tool option.
+	if randf() < 0.33:
+		var unlock := _build_unlock_card(tier, used_ids)
+		if not unlock.is_empty():
+			return unlock
+
+	# Try equipment next.
 	if randf() < 0.50:
 		var equip_card := _build_equipment_card(tier, used_ids)
 		if not equip_card.is_empty():
 			return equip_card
 
-	# Fall back to (or always choose) a campaign card.
+	# Fall back to a campaign card.
 	return _build_campaign_card(tier, used_ids)
+
+
+## Builds an unlock card for a randomly chosen locked trap or boost type.
+## Returns empty if all traps and boosts are already unlocked, or all
+## eligible unlock IDs are already in used_ids.
+func _build_unlock_card(tier: int, used_ids: Array) -> Dictionary:
+	var candidates: Array = []
+
+	for t in range(6):
+		var uid := "unlock_trap_%d" % t
+		if t not in GameState.unlocked_trap_types and uid not in used_ids:
+			candidates.append({ "category": "unlock_trap", "type": t, "uid": uid })
+
+	for b in range(5):
+		var uid := "unlock_boost_%d" % b
+		if b not in GameState.unlocked_boost_types and uid not in used_ids:
+			candidates.append({ "category": "unlock_boost", "type": b, "uid": uid })
+
+	if candidates.is_empty():
+		return {}
+
+	candidates.shuffle()
+	var chosen: Dictionary = candidates[0]
+	var category: String   = chosen["category"]
+	var item_type: int     = chosen["type"]
+	var uid: String        = chosen["uid"]
+
+	if category == "unlock_trap":
+		var display: Dictionary = TRAP_DISPLAY.get(item_type, {})
+		return {
+			"id":           uid,
+			"category":     "unlock_trap",
+			"tier":         tier,
+			"tier_label":   "NEW TRAP",
+			"title":        display.get("name", "Trap"),
+			"stat_name":    "",
+			"impact_line":  "Unlocks for placement",
+			"plain_text":   display.get("desc", ""),
+			"custom_color": Trap.STATS[item_type].get("color", Color.WHITE),
+			"item_type":    item_type,
+			"magnitude":    0.0,
+			"trap_node":    null,
+			"stat":         "",
+		}
+	else:
+		var display: Dictionary = BOOST_DISPLAY.get(item_type, {})
+		return {
+			"id":           uid,
+			"category":     "unlock_boost",
+			"tier":         tier,
+			"tier_label":   "NEW BOOST",
+			"title":        display.get("name", "Boost"),
+			"stat_name":    "",
+			"impact_line":  "Unlocks for placement",
+			"plain_text":   display.get("desc", ""),
+			"custom_color": BoostUnit.GLOW_COLORS[item_type],
+			"item_type":    item_type,
+			"magnitude":    0.0,
+			"trap_node":    null,
+			"stat":         "",
+		}
 
 
 ## Tries to find an eligible trap type and non-exhausted free-upgrade stat.
@@ -442,6 +528,8 @@ func _spawn_cards(cards: Array) -> void:
 
 	for i in 3:
 		var card_ctrl := UpgradeCard.new()
+		# Apply identity colour for unlock cards before setup() reads it.
+		card_ctrl.custom_color = cards[i].get("custom_color", Color.TRANSPARENT)
 		card_ctrl.setup(cards[i])
 		card_ctrl.position    = Vector2(start_x + i * (CARD_W + CARD_GAP), card_y)
 		card_ctrl.size        = Vector2(CARD_W, CARD_H)
