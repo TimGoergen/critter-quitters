@@ -42,6 +42,7 @@
 | v0.32 | Enemy roster redesigned. Old Rat renamed to Mouse — it keeps its role as the standard boss (every 10 waves) and its Bug Bucks theft mechanic on exit; its Gnat-release-on-death mechanic is removed. Cockroach Nymph and its sub-type removed entirely. New enemy: Rat King — a mega-boss that appears on every 20th wave (superseding the Mouse boss on those waves); extremely high HP, slow movement, and splits into 3 Rats on death. New enemy: Rat — a fast, low-HP mid-tier pest that spawns from Rat King death and also appears in standard waves from wave 15 onward. Section 5 updated; Cockroach Nymph section removed; Mouse, Rat King, and Rat sections added. Phase 7 and Phase 8 enemy lists updated. Boss wave description in Section 7 updated. |
 | v0.34 | Phase 9 implementation deliverables corrected: "Between-wave store — basic version" replaced with "The Truck hub / meta update screen" to match the v0.15 decision that removed the between-wave store and the Section 8 design for The Truck / Service Fees meta progression. |
 | v0.35 | Phase 8 renamed and redesigned to reflect SVG art as the confirmed house standard. All assets use the SVG-on-quad approach (QuadMesh + StandardMaterial3D, unshaded). Traps (6 types) and Boosts (5 types) marked complete. Enemy list corrected: 7 of 9 enemies already have dedicated SVG frames (Ant, Gnat, Cricket, Beetle, Cockroach, Mosquito, Rat); Mouse and Rat King use Rat frames as placeholders and are the only remaining enemy work. Gnat added to enemy list (was omitted). Art Style tag in header updated from "illustrated sprites" to "SVG sprites". |
+| v0.36 | Game mode design simplified. Three-mode structure (Endless / Journey / Challenge) replaced with a single unified mode: endless waves, run ends when Infestation Level reaches 100%, Service Fees earned equal to XP levels reached during the run. Challenge mode deferred to Future Pass. Round/Contract/perk structure removed — the level-up upgrade card system (implemented in Phase 8) already serves as the run-modifying choice layer. Section 15 rewritten. Phase 9 design and implementation deliverables updated accordingly. |
 | v0.33 | Balance pass: gameplay loop and progression. Starting Bug Bucks reduced from 1,000 to 75 (buys exactly 3 Snap Traps; forces immediate strategic decisions). Infestation values scaled up ~8× so wave 1 uncontested = 2× threshold (10 Gnats × 4.0 = 40 infestation, threshold = 20). Kill bounties adjusted downward for standard enemies so Bug Bucks feel ungenerous: Gnat 3, Ant 6, Cricket 10, Beetle 20, Cockroach 35, Mosquito 10, Mouse 60, Rat 20, Rat King 180. XP system decoupled from infestation: each enemy type now carries a flat `xp` value; Arena.gd reads it directly rather than deriving from infestation damage. Level-up threshold raised from 12 to 20 XP so first level-up lands mid-wave 2 (satisfies 2–4 waves target). HP scaling changed from continuous linear (wave × 1.02 + base) to a step multiplier every 5 waves (+30% per tier): waves 1–4 = 1.0×, waves 5–9 = 1.3×, waves 10–14 = 1.6×, etc. |
 
 ---
@@ -64,7 +65,7 @@
 12. Future Pass
 13. Tech Stack
 14. Development Path
-15. Game Modes
+15. Game Structure
 
 ---
 
@@ -544,15 +545,15 @@ Tapping a placed trap opens the upgrade panel for that specific trap instance. T
 
 See Section 4 for upgrade costs, stat increments, and the full upgrade bonus.
 
-**Round-end perks**
+**Level-up upgrades**
 
-At the end of each Round (a group of 3–5 waves), the player is presented with 3 randomly selected perks and must choose 1. Perks are temporary — they apply for the remainder of the current run only and do not carry into future runs.
+Each time the player gains an XP level, the game pauses and presents 3 randomly selected upgrade cards. The player picks 1. Upgrades are temporary — they apply for the remainder of the current run only and do not carry into future runs.
 
-Perks are drawn from a pool of run-modifying buffs. Specific perk designs and the pool are TBD, but the mechanic is confirmed. The Copilot design doc includes sample perks as a starting point (*Lightweight Plastics*, *Industrial Solvent*, *Marathon Sprinter*).
+Two categories of card are offered: campaign buffs (global stat bonuses to all traps) and equipment upgrades (type-wide free stat improvements for a specific placed trap type). See Section 14 (playtest-config/level-up-upgrades.md) for the full card pool.
 
-This layer sits between Bug Bucks (tactical, wave-to-wave) and Service Fees (permanent, meta). It adds meaningful strategic choice at the round boundary without permanently changing the game state.
+This layer sits between Bug Bucks (tactical, wave-to-wave) and Service Fees (permanent, meta). It adds meaningful strategic choice as the player progresses through a run.
 
-*(Not yet implemented — applies to the Wave/Round/Level target structure only.)*
+*(Implemented.)*
 
 ---
 
@@ -596,12 +597,7 @@ Between runs, the player returns to **The Truck** — their vehicle, home base, 
 
 Service Fees are the player's profit across runs. While Bug Bucks represent gross earnings on the job — much of which goes to overhead and in-run expenses — Service Fees are what's left over: clean profit that goes back into the business.
 
-Service Fees are earned at the end of each run based on performance:
-
-- Pests eliminated during the run
-- Highest wave reached
-
-Better performance earns more Service Fees. Service Fees persist across runs and are never lost.
+Service Fees are earned at the end of each run equal to the number of XP levels the player reached during that run. A longer, more successful run reaches higher levels and earns more Service Fees. Service Fees persist across runs and are never lost.
 
 ---
 
@@ -766,6 +762,8 @@ The following mechanics were identified during design but deferred to a later pa
 
 **Blocking terrain secondary effects** — Terrain objects with passive effects on adjacent pests or traps. Currently inert — secondary effects deferred.
 
+**Challenge mode** — Pre-defined scenarios with constrained starting conditions (limited Bug Bucks, restricted trap roster, pre-placed obstacles). Removed from v1 scope; candidate for a post-launch content pass.
+
 ---
 
 ## **13. Tech Stack**
@@ -888,29 +886,23 @@ All assets use the confirmed SVG-on-quad approach: QuadMesh + StandardMaterial3D
 
 ### **Phase 9 — Full Game Loop**
 
-Phase 9 begins with a design pass (like Phase 7) before any implementation work starts. The first deliverable is a fully specified game mode design written into Section 15 of the GDD.
+Phase 9 begins with a design pass (like Phase 7) before any implementation work starts. Game structure design is written into Section 15 of the GDD before implementation begins.
 
 **Design deliverables (before implementation):**
-- Game mode selection screen design — how the player chooses a mode from the main menu
-- Full specification of all three modes — win/loss conditions, structure, and constraints (see Section 15)
-- Challenge scenario definitions — a starter set of named scenarios with their specific constraints
-- Mode-specific UI requirements identified
+- Game structure confirmed — single endless mode, Service Fees = XP levels reached (complete; see Section 15)
+- Permanent upgrade tree — what can be purchased with Service Fees (TBD)
 
 **Implementation deliverables:**
 - Wave composition system — complexity curve, group-based spawning, boss waves
-- All 4 trap types
-- All 5 enemy types
+- All 6 trap types fully implemented in gameplay
+- All 9 enemy types in the wave pool
 - Starting trap selection — 3 offered, player picks 2
 - The Truck hub / meta update screen
-- Arena Evolution — obstacle spawning every 10 waves
+- Arena Evolution — obstacle spawning after boss waves
 - Save file system — multiple independent run slots
-- Game mode selection and routing from main menu
+- Service Fees awarded at run end (= XP level reached)
 
-*Goal: complete playable game from start to run-end, across all three game modes*
-
-### **Prototype note (Phase 9)**
-
-The current prototype uses an endless-wave structure for testing and balancing purposes. This corresponds to the Endless mode target. The Journey mode groups waves into Rounds (3–5 waves) and Rounds into Levels (Contracts, 5–10 rounds). At the end of each Round, the player picks 1 of 3 randomly offered temporary perks that last for the remainder of the run. Completing a Level (Contract) awards Service Fees for meta progression. The prototype will remain endless until the core loop is balanced and the mode designs are fully specified.
+*Goal: complete playable game from run start to run end with full meta progression loop*
 
 ### **Phase 9b — Meta Progression**
 - Service Fees earned at run end based on performance
@@ -939,57 +931,30 @@ The current prototype uses an endless-wave structure for testing and balancing p
 
 ---
 
-## **15. Game Modes**
+## **15. Game Structure**
 
-The player selects a game mode from the main menu before beginning a run. Each mode uses the same core gameplay — trap placement, pathfinding, enemy waves, Bug Bucks economy — but differs in structure, win/loss conditions, and starting constraints.
+The game has a single play mode. Each run is an endless wave sequence that ends when the Infestation Level reaches 100%. There is no win condition within a run — the player plays until they are overrun.
 
-Three modes are confirmed for v1. Full specifications for each mode are a Phase 9 design deliverable and will be written into this section before implementation begins.
+**Run structure:**
 
----
+- Waves escalate continuously with no chapter breaks or structured endpoints
+- Boss waves occur every 10 waves (Mouse on odd multiples of 10; Rat King on even multiples)
+- Arena Evolution triggers after each boss wave
+- XP levels up throughout the run; each level-up pauses the game and presents 3 upgrade cards
+- The run ends when the Infestation Level reaches its maximum threshold
 
-### **Endless**
+**Between runs:**
 
-The player survives as long as possible against an infinite escalating wave sequence. There is no structured end — the run continues until the Infestation Level reaches its maximum threshold.
+At run end, the player earns Service Fees equal to the number of XP levels they reached during that run. They return to The Truck hub to spend those fees on permanent upgrades before starting a new run.
 
-This mode mirrors the current prototype structure and is the baseline difficulty reference. High score is the primary goal: composite of total pests eliminated and highest wave reached.
-
-**Win condition:** None — the run always ends in infestation. Score is the measure of success.
 **Loss condition:** Infestation Level reaches maximum threshold.
-**Structure:** Infinite waves with smooth complexity curve. Boss waves every 10 waves. Arena Evolution applies.
+**Win condition:** None — the run always ends in infestation. Level reached and Service Fees earned are the measures of success.
 
 ---
 
-### **Journey**
+### **Future Pass — Challenge Mode**
 
-A structured campaign of increasing difficulty. Waves are grouped into Rounds (3–5 waves each), and Rounds are grouped into Levels (Contracts, 5–10 rounds each). Completing a Contract awards Service Fees for meta progression.
-
-At the end of each Round, the player chooses 1 of 3 randomly offered temporary perks that apply for the remainder of the run. Completing a Contract is a meaningful milestone — the player has survived a defined gauntlet and earned a permanent reward.
-
-**Win condition:** Complete all Contracts in the campaign.
-**Loss condition:** Infestation Level reaches maximum threshold at any point during a run.
-**Structure:** Rounds → Levels (Contracts) → Campaign. Perk selection at each Round boundary. Service Fees awarded on Contract completion.
-
-*Full contract count, perk pool, and campaign structure: TBD during Phase 9 design.*
-
----
-
-### **Challenge**
-
-A pre-defined scenario with specific starting constraints the player must survive. Each challenge presents a named context — a particular job with unusual conditions — that forces the player to adapt their strategy to a constrained situation.
-
-Challenges are discrete, replayable, and completable. A challenge is either beaten or not. High score within a challenge may apply for leaderboard or personal best purposes.
-
-**Win condition:** Survive the defined wave sequence without the Infestation Level reaching its maximum threshold.
-**Loss condition:** Infestation Level reaches maximum threshold.
-**Structure:** Fixed wave sequence defined per challenge. Starting constraints are set by the scenario definition.
-
-**Constraint types** (examples — not exhaustive):
-- Limited starting Bug Bucks — the player begins with significantly fewer resources than a standard run
-- Restricted trap roster — only a specific subset of trap types is available for the run
-- Pre-placed obstacles — the arena begins with blocking terrain already in place
-- Other scenario-specific rules TBD during Phase 9 design
-
-*Starter set of named challenge scenarios: TBD during Phase 9 design.*
+A challenge mode (pre-defined scenarios with constrained starting conditions) was considered for v1 and deferred. It remains a candidate for a post-launch content pass. See Section 12 (Future Pass).
 
 ---
 
