@@ -79,7 +79,7 @@ func _ready() -> void:
 
 func _build_screen() -> void:
 	# Pick OFFER_COUNT random trap types.
-	var all_types: Array[int] = range(Trap.TrapType.size())
+	var all_types: Array[int] = [0, 1, 2, 3, 4, 5]   # one per TrapType enum value
 	all_types.shuffle()
 	for i in OFFER_COUNT:
 		_offered_types.append(all_types[i])
