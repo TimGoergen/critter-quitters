@@ -75,6 +75,14 @@ var _plain_lbl:  Label = null   # plain-English explanation
 var _upgrade_data: Dictionary = {}
 var _selected:     bool       = false
 
+## When true, tapping the card toggles selection on/off rather than locking
+## in and emitting once. Used by TrapSelectionScreen for multi-pick behaviour.
+var toggleable: bool = false
+
+## Optional colour override for the card border and bg tint. When alpha > 0
+## this replaces the tier colour, allowing trap-identity colours on trap cards.
+var custom_color: Color = Color.TRANSPARENT
+
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -96,7 +104,7 @@ func setup(upgrade: Dictionary) -> void:
 
 func _build_card() -> void:
 	var tier: int         = _upgrade_data.get("tier", Tier.COMMON)
-	var tier_color: Color = TIER_COLORS[tier]
+	var tier_color: Color = custom_color if custom_color.a > 0.0 else TIER_COLORS[tier]
 	var px               := 10.0   # horizontal padding used throughout
 
 	# Make the entire card surface catch input so any tap/click selects it.
@@ -122,7 +130,7 @@ func _build_card() -> void:
 
 	# --- Tier name ("RARE" etc.) — top-left in tier colour ---
 	_tier_lbl = Label.new()
-	_tier_lbl.text                 = TIER_NAMES[tier]
+	_tier_lbl.text                 = _upgrade_data.get("tier_label", TIER_NAMES[tier])
 	_tier_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_tier_lbl.add_theme_color_override("font_color", tier_color)
@@ -263,7 +271,9 @@ func _notification(what: int) -> void:
 				modulate = Color(1.15, 1.15, 1.15, 1.0)
 		NOTIFICATION_MOUSE_EXIT:
 			if not _selected:
-				modulate = Color(1.0, 1.0, 1.0, 1.0)
+				# Toggleable unselected cards return to their dim resting state;
+				# single-select cards return to full brightness.
+				modulate = Color(0.65, 0.65, 0.65, 1.0) if toggleable else Color(1.0, 1.0, 1.0, 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -271,14 +281,32 @@ func _notification(what: int) -> void:
 # ---------------------------------------------------------------------------
 
 func _on_select_pressed() -> void:
+	if toggleable:
+		# Toggle mode: flip selection, update brightness, always emit so the
+		# parent (TrapSelectionScreen) can update its selection count.
+		_selected = not _selected
+		modulate = Color(1.0, 1.0, 1.0, 1.0) if _selected else Color(0.65, 0.65, 0.65, 1.0)
+		card_selected.emit(_upgrade_data)
+		return
+	# Single-select mode: lock in, block further input, dim, emit once.
 	if _selected:
 		return
 	_selected = true
-	# Block further input immediately — a second tap before the screen dismisses
-	# must not trigger a second selection.
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	modulate = Color(0.6, 0.6, 0.6, 1.0)
 	card_selected.emit(_upgrade_data)
+
+
+## Forces the card back to an unselected visual state without emitting.
+## Called by TrapSelectionScreen when the pick limit is reached and a
+## third card tap must be rejected.
+func force_deselect() -> void:
+	_selected  = false
+	modulate   = Color(0.65, 0.65, 0.65, 1.0)
+
+
+func is_card_selected() -> bool:
+	return _selected
 
 
 # ---------------------------------------------------------------------------

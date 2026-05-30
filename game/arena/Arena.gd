@@ -37,7 +37,8 @@ const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
 const BoostUpgradePanel = preload("res://ui/BoostUpgradePanel.gd")
 const EnemyStatsPanel   = preload("res://ui/EnemyStatsPanel.gd")
 const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
-const LevelUpScreen     = preload("res://ui/LevelUpScreen.gd")
+const LevelUpScreen         = preload("res://ui/LevelUpScreen.gd")
+const TrapSelectionScreen   = preload("res://ui/TrapSelectionScreen.gd")
 const ExperienceBar     = preload("res://ui/ExperienceBar.gd")
 
 
@@ -321,11 +322,11 @@ func _ready() -> void:
 	_fit_camera_to_grid()
 	get_viewport().size_changed.connect(_fit_camera_to_grid)
 
-	# Show the playtest setup dialog before starting the first wave.
-	var dialog := DebugStartDialog.new()
-	dialog.confirmed.connect(_on_debug_confirmed)
-	add_child(dialog)
-	_debug_dialog = dialog
+	# Show trap selection first so the player picks their starting traps,
+	# then hand off to the playtest debug dialog which calls _start_wave().
+	var selection := TrapSelectionScreen.new()
+	selection.traps_selected.connect(_on_traps_selected)
+	add_child(selection)
 
 
 # ---------------------------------------------------------------------------
@@ -1281,6 +1282,16 @@ func _on_countdown_tick(seconds_remaining: int) -> void:
 
 func _handle_key(_keycode: int) -> void:
 	pass
+
+
+## Called when TrapSelectionScreen confirms the player's chosen trap types.
+## Unlocks the selected types in GameState, then shows the playtest debug dialog.
+func _on_traps_selected(types: Array[int]) -> void:
+	GameState.set_unlocked_traps(types)
+	var dialog := DebugStartDialog.new()
+	dialog.confirmed.connect(_on_debug_confirmed)
+	add_child(dialog)
+	_debug_dialog = dialog
 
 
 ## Receives the confirmed playtest values from DebugStartDialog and starts the run.

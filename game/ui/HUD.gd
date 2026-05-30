@@ -339,6 +339,11 @@ func _build_left_panel() -> void:
 		var row_panel := _build_trap_row(trap_vbox, i)
 		_icon_controls.append(row_panel)
 
+	# All trap rows start hidden — TrapSelectionScreen sets the unlocked
+	# types before the first wave and fires unlocked_traps_set to reveal them.
+	_refresh_trap_visibility()
+	GameState.unlocked_traps_set.connect(_on_unlocked_traps_set)
+
 	# --- Boost tab (hidden until Boosts tab is selected) ---
 	_boost_scroll = ScrollContainer.new()
 	_boost_scroll.size_flags_vertical    = Control.SIZE_EXPAND_FILL
@@ -1661,6 +1666,19 @@ func _on_exit_pressed() -> void:
 # ---------------------------------------------------------------------------
 # Trap selector
 # ---------------------------------------------------------------------------
+
+## Shows only the trap rows that are unlocked for this run.
+## Called once after TrapSelectionScreen confirms, and on every subsequent
+## unlock_traps_set emission (future: meta upgrades may change the set mid-run).
+func _refresh_trap_visibility() -> void:
+	for i in range(_icon_controls.size()):
+		_icon_controls[i].visible = i in GameState.unlocked_trap_types
+
+
+func _on_unlocked_traps_set(_types: Array[int]) -> void:
+	_refresh_trap_visibility()
+	_refresh_trap_selector()
+
 
 func _refresh_trap_selector() -> void:
 	for i in range(_icon_controls.size()):
