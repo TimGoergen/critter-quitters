@@ -5,7 +5,7 @@
    viewBox="0 0 128 128"
    version="1.1"
    id="svg18"
-   sodipodi:docname="rat_walk_4.svg"
+   sodipodi:docname="mouse_walk_2.svg"
    inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
    xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
    xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
@@ -22,9 +22,9 @@
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="6.3046875"
-     inkscape:cx="64.079306"
-     inkscape:cy="64"
+     inkscape:zoom="6.1640625"
+     inkscape:cx="35.204056"
+     inkscape:cy="67.893536"
      inkscape:window-width="1920"
      inkscape:window-height="1009"
      inkscape:window-x="1912"
@@ -34,49 +34,49 @@
   <!-- Transition: legs returning from frame 3 toward frame 1; slight lean toward diagonal A -->
   <!-- Left-front leg (beginning to angle forward) -->
   <path
-     d="M 50 54 Q 44 52 38 50"
+     d="M 50,54 35.728771,53.406844"
      stroke="#606060"
-     stroke-width="8.0"
+     stroke-width="8"
      stroke-linecap="round"
      fill="none"
      id="path1"
-     style="stroke:#2e1f00;stroke-opacity:1" />
+     sodipodi:nodetypes="cc" />
   <!-- Left-back leg (slight back lean) -->
   <path
-     d="M 50 100 Q 44 103 38 106"
+     d="m 50,100 -14.108999,0.64639"
      stroke="#606060"
-     stroke-width="8.0"
+     stroke-width="8"
      stroke-linecap="round"
      fill="none"
      id="path2"
-     style="stroke:#2e1f00;stroke-opacity:1" />
+     sodipodi:nodetypes="cc" />
   <!-- Right-front leg (slight back lean) -->
   <path
-     d="M 78 54 Q 84 56 90 58"
+     d="m 78,54 14.43346,2.053232"
      stroke="#606060"
-     stroke-width="8.0"
+     stroke-width="8"
      stroke-linecap="round"
      fill="none"
      id="path3"
-     style="stroke:#2e1f00;stroke-opacity:1" />
+     sodipodi:nodetypes="cc" />
   <!-- Right-back leg (beginning to angle forward) -->
   <path
-     d="M 78 100 Q 84 97 90 95"
+     d="m 78,100 c 4,-0.702155 9.622306,-0.09759 13.622307,1.16476"
      stroke="#606060"
-     stroke-width="8.0"
+     stroke-width="8"
      stroke-linecap="round"
      fill="none"
      id="path4"
-     style="stroke:#2e1f00;stroke-opacity:1" />
+     sodipodi:nodetypes="cc" />
   <!-- Tail: slight right-wiggle returning to center -->
   <path
-     d="M 64 116 Q 70 122 74 128"
-     stroke="#C09888"
-     stroke-width="2.0"
+     d="m 63.813371,115.81337 c -4.028037,7.26045 3.885223,8.21759 13.942333,7.26299"
+     stroke="#c09888"
+     stroke-width="2"
      stroke-linecap="round"
      fill="none"
      id="path5"
-     style="stroke:#7b5241;stroke-opacity:1" />
+     sodipodi:nodetypes="cc" />
   <!-- Body -->
   <ellipse
      cx="64"
@@ -85,33 +85,31 @@
      ry="38"
      fill="#8C8C8C"
      id="ellipse5"
-     style="fill:#865604;fill-opacity:1" />
+     style="fill:#a0a0a0;fill-opacity:1" />
   <ellipse
      cx="64"
-     cy="68"
+     cy="64.430923"
      rx="18"
      ry="5"
-     fill="#3C3C3C"
-     opacity="0.50"
+     fill="#3c3c3c"
+     opacity="0.5"
      id="ellipse6" />
   <ellipse
-     cx="60"
-     cy="85"
+     cx="63.650188"
+     cy="83.539925"
      rx="16"
      ry="4"
-     fill="#3C3C3C"
+     fill="#3c3c3c"
      opacity="0.45"
-     id="ellipse7"
-     style="stroke:#2e1f00;stroke-opacity:1" />
+     id="ellipse7" />
   <ellipse
-     cx="66"
-     cy="100"
+     cx="63.647655"
+     cy="99.756653"
      rx="14"
      ry="3.5"
-     fill="#3C3C3C"
-     opacity="0.40"
-     id="ellipse8"
-     style="stroke:#2e1f00;stroke-opacity:1" />
+     fill="#3c3c3c"
+     opacity="0.4"
+     id="ellipse8" />
   <!-- Head -->
   <circle
      cx="64"
@@ -119,10 +117,10 @@
      r="22"
      fill="#8C8C8C"
      id="circle8"
-     style="fill:#865604;fill-opacity:1" />
+     style="fill:#adadad;fill-opacity:1" />
   <ellipse
-     cx="64.05452"
-     cy="11.496902"
+     cx="64.167297"
+     cy="11.348542"
      rx="9"
      ry="5.5"
      fill="#ffffff"
@@ -130,11 +128,11 @@
      id="ellipse9" />
   <!-- Body back highlight: lighter upper-back suggesting top-down light -->
   <ellipse
-     cx="64"
-     cy="66"
+     cx="64.000008"
+     cy="64.296577"
      rx="18"
      ry="10"
-     fill="white"
+     fill="#ffffff"
      opacity="0.16"
      id="ellipse10" />
   <!-- Snout -->
@@ -144,8 +142,7 @@
      rx="6"
      ry="5"
      fill="#E8A090"
-     id="ellipse11"
-     style="fill:#f2d3b0;fill-opacity:1" />
+     id="ellipse11" />
   <circle
      cx="64"
      cy="8"
@@ -153,38 +150,6 @@
      fill="#C06878"
      id="circle11" />
   <!-- Ears -->
-  <ellipse
-     cx="44"
-     cy="26"
-     rx="10"
-     ry="5"
-     fill="#C87080"
-     transform="rotate(-35, 44, 26)"
-     id="ellipse12" />
-  <ellipse
-     cx="84"
-     cy="26"
-     rx="10"
-     ry="5"
-     fill="#C87080"
-     transform="rotate(35, 84, 26)"
-     id="ellipse13" />
-  <ellipse
-     cx="44"
-     cy="26"
-     rx="5"
-     ry="2.5"
-     fill="#884050"
-     transform="rotate(-35, 44, 26)"
-     id="ellipse14" />
-  <ellipse
-     cx="84"
-     cy="26"
-     rx="5"
-     ry="2.5"
-     fill="#884050"
-     transform="rotate(35, 84, 26)"
-     id="ellipse15" />
   <!-- Eyes -->
   <circle
      cx="56"
@@ -212,4 +177,40 @@
      fill="white"
      opacity="0.80"
      id="circle18" />
+  <ellipse
+     cx="-99.746826"
+     cy="-64.656288"
+     rx="6.5205235"
+     ry="3.880785"
+     fill="#c87080"
+     transform="matrix(-0.52852515,-0.84891765,-0.48992497,0.8717646,0,0)"
+     id="ellipse18"
+     style="stroke-width:0.711403" />
+  <ellipse
+     cx="-102.55022"
+     cy="-68.701126"
+     rx="3.8770967"
+     ry="2.3416531"
+     fill="#884050"
+     transform="matrix(-0.50457371,-0.86336862,-0.4728738,0.88113017,0,0)"
+     id="ellipse19"
+     style="stroke-width:0.852236" />
+  <ellipse
+     cx="27.312319"
+     cy="59.35207"
+     rx="6.5205235"
+     ry="3.880785"
+     fill="#c87080"
+     transform="matrix(0.52852515,-0.84891765,0.48992497,0.8717646,0,0)"
+     id="ellipse20"
+     style="stroke-width:0.711403" />
+  <ellipse
+     cx="29.463533"
+     cy="60.927704"
+     rx="3.8770967"
+     ry="2.3416531"
+     fill="#884050"
+     transform="matrix(0.50457371,-0.86336862,0.4728738,0.88113017,0,0)"
+     id="ellipse21"
+     style="stroke-width:0.852236" />
 </svg>

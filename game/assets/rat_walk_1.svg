@@ -1,48 +1,219 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="128"
+   height="128"
+   viewBox="0 0 128 128"
+   version="1.1"
+   id="svg18"
+   sodipodi:docname="rat_walk_1.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs18" />
+  <sodipodi:namedview
+     id="namedview18"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="6.3046875"
+     inkscape:cx="63.920694"
+     inkscape:cy="64"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg18" />
   <!-- 4-limbed mammal gait: left-front + right-rear forward; right-front + left-rear back -->
   <!-- Start points are inside the body ellipse so the body covers the root;
        only the tip past the body edge is visible, giving a barely-peeking-out look. -->
   <!-- Left-front leg (forward: angled toward head) -->
-  <path d="M 50 54 Q 44 51 38 48" stroke="#606060" stroke-width="8.0" stroke-linecap="round" fill="none"/>
+  <path
+     d="M 50 54 Q 44 51 38 48"
+     stroke="#606060"
+     stroke-width="8.0"
+     stroke-linecap="round"
+     fill="none"
+     id="path1"
+     style="stroke:#2d1e00;stroke-opacity:1" />
   <!-- Left-back leg (back: angled toward tail) -->
-  <path d="M 50 100 Q 44 104 38 108" stroke="#606060" stroke-width="8.0" stroke-linecap="round" fill="none"/>
+  <path
+     d="M 50 100 Q 44 104 38 108"
+     stroke="#606060"
+     stroke-width="8.0"
+     stroke-linecap="round"
+     fill="none"
+     id="path2"
+     style="stroke:#2d1e00;stroke-opacity:1" />
   <!-- Right-front leg (back: angled toward tail) -->
-  <path d="M 78 54 Q 84 57 90 60" stroke="#606060" stroke-width="8.0" stroke-linecap="round" fill="none"/>
+  <path
+     d="M 78 54 Q 84 57 90 60"
+     stroke="#606060"
+     stroke-width="8.0"
+     stroke-linecap="round"
+     fill="none"
+     id="path3"
+     style="stroke:#2d1e00;stroke-opacity:1;fill:#845604;fill-opacity:1" />
   <!-- Right-back leg (forward: angled toward head) -->
-  <path d="M 78 100 Q 84 96 90 92" stroke="#606060" stroke-width="8.0" stroke-linecap="round" fill="none"/>
-
+  <path
+     d="M 78 100 Q 84 96 90 92"
+     stroke="#606060"
+     stroke-width="8.0"
+     stroke-linecap="round"
+     fill="none"
+     id="path4"
+     style="fill:#2d1e00;fill-opacity:1;stroke:#2d1e00;stroke-opacity:1" />
   <!-- Tail: thin curved line from base of body, with slight left-wiggle this frame -->
-  <path d="M 64 116 Q 76 122 80 128" stroke="#C09888" stroke-width="2.0" stroke-linecap="round" fill="none"/>
-
+  <path
+     d="M 64 116 Q 76 122 80 128"
+     stroke="#C09888"
+     stroke-width="2.0"
+     stroke-linecap="round"
+     fill="none"
+     id="path5"
+     style="stroke:#7b5141;stroke-opacity:1" />
   <!-- Body: large oval, the rat is significantly bigger than the other insects -->
-  <ellipse cx="64" cy="78" rx="28" ry="38" fill="#8C8C8C"/>
-
+  <ellipse
+     cx="64"
+     cy="78"
+     rx="28"
+     ry="38"
+     fill="#8C8C8C"
+     id="ellipse5"
+     style="fill:#845604;fill-opacity:1" />
   <!-- Fur texture: a few dark semi-transparent curved ellipses suggesting fur direction -->
-  <ellipse cx="64" cy="68" rx="18" ry="5" fill="#3C3C3C" opacity="0.50"/>
-  <ellipse cx="60" cy="85" rx="16" ry="4" fill="#3C3C3C" opacity="0.45"/>
-  <ellipse cx="66" cy="100" rx="14" ry="3.5" fill="#3C3C3C" opacity="0.40"/>
-
+  <ellipse
+     cx="64"
+     cy="68"
+     rx="18"
+     ry="5"
+     fill="#3C3C3C"
+     opacity="0.50"
+     id="ellipse6" />
+  <ellipse
+     cx="60"
+     cy="85"
+     rx="16"
+     ry="4"
+     fill="#3C3C3C"
+     opacity="0.45"
+     id="ellipse7"
+     style="stroke:#2d1e00;stroke-opacity:1" />
+  <ellipse
+     cx="66"
+     cy="100"
+     rx="14"
+     ry="3.5"
+     fill="#3C3C3C"
+     opacity="0.40"
+     id="ellipse8"
+     style="stroke:#2d1e00;stroke-opacity:1" />
   <!-- Head: large and round, slightly distinct from body -->
-  <circle cx="64" cy="28" r="22" fill="#8C8C8C"/>
-
+  <circle
+     cx="64"
+     cy="28"
+     r="22"
+     fill="#8C8C8C"
+     id="circle8"
+     style="fill:#845604;fill-opacity:1" />
   <!-- Head specular highlight -->
-  <ellipse cx="52" cy="18" rx="9" ry="5.5" fill="white" opacity="0.42"/>
+  <ellipse
+     cx="63.895912"
+     cy="11.33829"
+     rx="9"
+     ry="5.5"
+     fill="#ffffff"
+     opacity="0.42"
+     id="ellipse9" />
   <!-- Body back highlight: lighter upper-back suggesting top-down light -->
-  <ellipse cx="64" cy="66" rx="18" ry="10" fill="white" opacity="0.16"/>
-
+  <ellipse
+     cx="64"
+     cy="66"
+     rx="18"
+     ry="10"
+     fill="white"
+     opacity="0.16"
+     id="ellipse10" />
   <!-- Snout: small protruding oval at top -->
-  <ellipse cx="64" cy="11" rx="6" ry="5" fill="#E8A090"/>
-  <circle cx="64" cy="8" r="2.5" fill="#C06878"/>
-
+  <ellipse
+     cx="64"
+     cy="11"
+     rx="6"
+     ry="5"
+     fill="#E8A090"
+     id="ellipse11"
+     style="stroke:none;stroke-opacity:1;fill:#f2d3af;fill-opacity:1" />
+  <circle
+     cx="64"
+     cy="8"
+     r="2.5"
+     fill="#C06878"
+     id="circle11" />
   <!-- Ears: flat ovals angled backwards (long axis tilted toward the body), darker inner spot -->
-  <ellipse cx="44" cy="26" rx="10" ry="5" fill="#C87080" transform="rotate(-35, 44, 26)"/>
-  <ellipse cx="84" cy="26" rx="10" ry="5" fill="#C87080" transform="rotate(35, 84, 26)"/>
-  <ellipse cx="44" cy="26" rx="5" ry="2.5" fill="#884050" transform="rotate(-35, 44, 26)"/>
-  <ellipse cx="84" cy="26" rx="5" ry="2.5" fill="#884050" transform="rotate(35, 84, 26)"/>
-
+  <ellipse
+     cx="44"
+     cy="26"
+     rx="10"
+     ry="5"
+     fill="#C87080"
+     transform="rotate(-35, 44, 26)"
+     id="ellipse12" />
+  <ellipse
+     cx="84"
+     cy="26"
+     rx="10"
+     ry="5"
+     fill="#C87080"
+     transform="rotate(35, 84, 26)"
+     id="ellipse13" />
+  <ellipse
+     cx="44"
+     cy="26"
+     rx="5"
+     ry="2.5"
+     fill="#884050"
+     transform="rotate(-35, 44, 26)"
+     id="ellipse14" />
+  <ellipse
+     cx="84"
+     cy="26"
+     rx="5"
+     ry="2.5"
+     fill="#884050"
+     transform="rotate(35, 84, 26)"
+     id="ellipse15" />
   <!-- Eyes: very small, dark, beady -->
-  <circle cx="56" cy="26" r="3" fill="#201818"/>
-  <circle cx="72" cy="26" r="3" fill="#201818"/>
-  <circle cx="55" cy="25" r="1.2" fill="white" opacity="0.80"/>
-  <circle cx="71" cy="25" r="1.2" fill="white" opacity="0.80"/>
+  <circle
+     cx="56"
+     cy="26"
+     r="3"
+     fill="#201818"
+     id="circle15" />
+  <circle
+     cx="72"
+     cy="26"
+     r="3"
+     fill="#201818"
+     id="circle16" />
+  <circle
+     cx="55"
+     cy="25"
+     r="1.2"
+     fill="white"
+     opacity="0.80"
+     id="circle17" />
+  <circle
+     cx="71"
+     cy="25"
+     r="1.2"
+     fill="white"
+     opacity="0.80"
+     id="circle18" />
 </svg>
