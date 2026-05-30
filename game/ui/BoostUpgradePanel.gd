@@ -391,7 +391,7 @@ func _refresh() -> void:
 	_refresh_stat_row(
 		_rng_row, "Range", _boost.get_range_level(),
 		"%.1f" % _boost.get_range_radius(),
-		"+%.1f" % (_boost.get_range_after_upgrade() - _boost.get_range_radius()),
+		"+%.1f" % abs(_boost.get_range_after_upgrade() - _boost.get_range_radius()),
 		_boost.is_range_maxed(), _boost.get_range_upgrade_cost()
 	)
 
@@ -401,7 +401,7 @@ func _refresh() -> void:
 	_refresh_stat_row(
 		_b_row, _boost.get_stat_b_name(), _boost.get_stat_b_level(),
 		_boost.format_stat_b(b_cur),
-		"+%s" % _boost.format_stat_b(b_after - b_cur),
+		"+%s" % _boost.format_stat_b(abs(b_after - b_cur)),
 		_boost.is_stat_b_maxed(), _boost.get_stat_b_upgrade_cost()
 	)
 
@@ -412,7 +412,7 @@ func _refresh() -> void:
 		_refresh_stat_row(
 			_c_row, _boost.get_stat_c_name(), _boost.get_stat_c_level(),
 			_boost.format_stat_c(c_cur),
-			"+%s" % _boost.format_stat_c(c_after - c_cur),
+			"+%s" % _boost.format_stat_c(abs(c_after - c_cur)),
 			_boost.is_stat_c_maxed(), _boost.get_stat_c_upgrade_cost()
 		)
 

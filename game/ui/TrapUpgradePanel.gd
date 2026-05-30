@@ -417,21 +417,21 @@ func _refresh() -> void:
 		_refresh_stat_row(
 			_dmg_row, "Adhesion", _trap.get_damage_level(),
 			"%d%%" % int(_trap.get_adhesion_pct()),
-			"+%d%%" % int(_trap.get_adhesion_after_upgrade_pct() - _trap.get_adhesion_pct()),
+			"+%d%%" % int(abs(_trap.get_adhesion_after_upgrade_pct() - _trap.get_adhesion_pct())),
 			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
 		)
 	elif trap_type == Trap.TrapType.FOGGER:
 		_refresh_stat_row(
 			_dmg_row, "Potency", _trap.get_damage_level(),
 			"%.1f" % _trap.get_effective_damage(),
-			"+%.1f" % (_trap.get_effective_damage_after_upgrade() - _trap.get_effective_damage()),
+			"+%.1f" % abs(_trap.get_effective_damage_after_upgrade() - _trap.get_effective_damage()),
 			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
 		)
 	else:
 		_refresh_stat_row(
 			_dmg_row, "Damage", _trap.get_damage_level(),
 			"%.1f" % _trap.get_effective_damage(),
-			"+%.1f" % (_trap.get_effective_damage_after_upgrade() - _trap.get_effective_damage()),
+			"+%.1f" % abs(_trap.get_effective_damage_after_upgrade() - _trap.get_effective_damage()),
 			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
 		)
 
@@ -439,7 +439,7 @@ func _refresh() -> void:
 	_refresh_stat_row(
 		_rng_row, "Range", _trap.get_range_level(),
 		"%.1f" % _trap.get_range_radius(),
-		"+%.1f" % (_trap.get_range_after_upgrade() - _trap.get_range_radius()),
+		"+%.1f" % abs(_trap.get_range_after_upgrade() - _trap.get_range_radius()),
 		_trap.is_range_maxed(), _trap.get_range_upgrade_cost()
 	)
 
@@ -449,7 +449,7 @@ func _refresh() -> void:
 		_refresh_stat_row(
 			_rate_row, "Duration", _trap.get_duration_level(),
 			"%.1fs" % _trap.get_duration(),
-			"+%.1fs" % (_trap.get_duration_after_upgrade() - _trap.get_duration()),
+			"+%.1fs" % abs(_trap.get_duration_after_upgrade() - _trap.get_duration()),
 			_trap.is_duration_maxed(), _trap.get_duration_upgrade_cost()
 		)
 	elif _trap.is_passive():
@@ -459,7 +459,7 @@ func _refresh() -> void:
 		_refresh_stat_row(
 			_rate_row, "Fire Rate", _trap.get_rate_level(),
 			"%.2f /s" % _trap.get_effective_shots_per_sec(),
-			"+%.2f /s" % (_trap.get_effective_shots_per_sec_after_upgrade() - _trap.get_effective_shots_per_sec()),
+			"+%.2f /s" % abs(_trap.get_effective_shots_per_sec_after_upgrade() - _trap.get_effective_shots_per_sec()),
 			_trap.is_rate_maxed(), _trap.get_rate_upgrade_cost()
 		)
 
@@ -469,13 +469,13 @@ func _refresh() -> void:
 	_refresh_stat_row(
 		_crit_chance_row, "Crit Chance", _trap.get_crit_chance_level(),
 		"%.0f%%" % (_trap.get_crit_chance() * 100.0),
-		"+%.0f%%" % ((_trap.get_crit_chance_after_upgrade() - _trap.get_crit_chance()) * 100.0),
+		"+%.0f%%" % (abs(_trap.get_crit_chance_after_upgrade() - _trap.get_crit_chance()) * 100.0),
 		_trap.is_crit_chance_maxed(), _trap.get_crit_chance_upgrade_cost()
 	)
 	_refresh_stat_row(
 		_crit_damage_row, "Crit Bonus", _trap.get_crit_damage_level(),
 		"%.0f%%" % (_trap.get_crit_damage_bonus() * 100.0),
-		"+%.0f%%" % ((_trap.get_crit_damage_after_upgrade() - _trap.get_crit_damage_bonus()) * 100.0),
+		"+%.0f%%" % (abs(_trap.get_crit_damage_after_upgrade() - _trap.get_crit_damage_bonus()) * 100.0),
 		_trap.is_crit_damage_maxed(), _trap.get_crit_damage_upgrade_cost()
 	)
 
