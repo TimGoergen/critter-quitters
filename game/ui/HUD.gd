@@ -361,6 +361,10 @@ func _build_left_panel() -> void:
 		var row_panel := _build_boost_row(boost_vbox, i)
 		_boost_icon_controls.append(row_panel)
 
+	# All boost rows start hidden — shown when unlocked_boosts_set fires.
+	_refresh_boost_visibility()
+	GameState.unlocked_boosts_set.connect(_on_unlocked_boosts_set)
+
 	_update_tab_styles()
 
 
@@ -1678,6 +1682,15 @@ func _refresh_trap_visibility() -> void:
 func _on_unlocked_traps_set(_types: Array[int]) -> void:
 	_refresh_trap_visibility()
 	_refresh_trap_selector()
+
+
+func _refresh_boost_visibility() -> void:
+	for i in range(_boost_icon_controls.size()):
+		_boost_icon_controls[i].visible = i in GameState.unlocked_boost_types
+
+
+func _on_unlocked_boosts_set(_types: Array[int]) -> void:
+	_refresh_boost_visibility()
 
 
 func _refresh_trap_selector() -> void:

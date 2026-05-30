@@ -325,7 +325,7 @@ func _ready() -> void:
 	# Show trap selection first so the player picks their starting traps,
 	# then hand off to the playtest debug dialog which calls _start_wave().
 	var selection := TrapSelectionScreen.new()
-	selection.traps_selected.connect(_on_traps_selected)
+	selection.loadout_selected.connect(_on_traps_selected)
 	add_child(selection)
 
 
@@ -1284,10 +1284,10 @@ func _handle_key(_keycode: int) -> void:
 	pass
 
 
-## Called when TrapSelectionScreen confirms the player's chosen trap types.
-## Unlocks the selected types in GameState, then shows the playtest debug dialog.
-func _on_traps_selected(types: Array[int]) -> void:
-	GameState.set_unlocked_traps(types)
+## Called when TrapSelectionScreen confirms the player's chosen loadout.
+## Unlocks the selected traps and boosts in GameState, then shows the debug dialog.
+func _on_traps_selected(trap_types: Array[int], boost_types: Array[int]) -> void:
+	GameState.set_unlocked_loadout(trap_types, boost_types)
 	var dialog := DebugStartDialog.new()
 	dialog.confirmed.connect(_on_debug_confirmed)
 	add_child(dialog)

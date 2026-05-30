@@ -99,8 +99,8 @@ signal xp_changed(new_xp: int, xp_needed: int)
 signal level_up(new_level: int)
 
 ## Emitted once per run when TrapSelectionScreen confirms the player's choices.
-## types is the Array[int] of unlocked TrapType values for this run.
 signal unlocked_traps_set(types: Array[int])
+signal unlocked_boosts_set(types: Array[int])
 
 
 # ---------------------------------------------------------------------------
@@ -163,6 +163,10 @@ var selected_trap_type: int = 0
 ## Trap types available for purchase this run. Set by TrapSelectionScreen at run start.
 ## Empty until the selection is confirmed — HUD hides all trap rows until then.
 var unlocked_trap_types: Array[int] = []
+
+## Boost types available for purchase this run. Set alongside unlocked_trap_types.
+## Empty until the selection is confirmed — HUD hides all boost rows until then.
+var unlocked_boost_types: Array[int] = []
 
 ## Bug Bucks awarded per second remaining when the player clicks Send Wave Early
 ## during the between-wave countdown.  Default 2; upgradeable between runs.
@@ -251,8 +255,9 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 	current_wave = 0
 	bug_bucks = STARTING_BUG_BUCKS
 	infestation_level = 0.0
-	selected_trap_type   = 0
-	unlocked_trap_types  = []
+	selected_trap_type    = 0
+	unlocked_trap_types   = []
+	unlocked_boost_types  = []
 	early_wave_bonus_rate = 2
 	# Reset experience and all campaign buffs so each run starts clean.
 	current_xp = 0
@@ -280,14 +285,17 @@ func end_run() -> void:
 	run_ended.emit()
 
 
-## Records the trap types chosen in TrapSelectionScreen, selects the first one
-## as the active placement type, and notifies listeners (primarily HUD).
-func set_unlocked_traps(types: Array[int]) -> void:
-	unlocked_trap_types = types.duplicate()
+## Records the trap and boost types chosen in TrapSelectionScreen.
+## Selects the first unlocked trap as the active placement type and
+## notifies listeners (primarily HUD) so they can show the right rows.
+func set_unlocked_loadout(trap_types: Array[int], boost_types: Array[int]) -> void:
+	unlocked_trap_types  = trap_types.duplicate()
+	unlocked_boost_types = boost_types.duplicate()
 	if not unlocked_trap_types.is_empty():
 		selected_trap_type = unlocked_trap_types[0]
 		trap_type_selected.emit(selected_trap_type)
 	unlocked_traps_set.emit(unlocked_trap_types)
+	unlocked_boosts_set.emit(unlocked_boost_types)
 
 
 ## Adds amount to bug_bucks and notifies listeners.

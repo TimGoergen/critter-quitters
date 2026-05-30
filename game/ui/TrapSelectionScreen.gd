@@ -1,13 +1,13 @@
 ## TrapSelectionScreen.gd
 ## Full-screen overlay shown at the start of each run, before wave 1.
 ##
-## Presents 3 randomly chosen trap types as toggle-select cards. The player
-## picks exactly 2, then taps "Start Buggin'" to begin the run. The chosen
-## trap types are emitted via traps_selected so Arena can unlock them.
+## Presents 3 cards: always 2 trap types, plus a third slot that is a boost
+## 50% of the time and a third trap otherwise. The player picks exactly 2,
+## then taps "Start Buggin'" to confirm. Chosen traps and boosts are emitted
+## via loadout_selected so Arena can unlock them in GameState.
 ##
 ## Visual design mirrors LevelUpScreen: same card dimensions, dim overlay,
-## header, and card layout. Cards use each trap's identity colour instead
-## of upgrade-tier colours.
+## header, and card layout. Cards use each unit's identity colour.
 ##
 ## The pick and offer counts are constants here. The Wider Selection meta
 ## upgrade will increase them in a future pass.
@@ -16,6 +16,7 @@ extends CanvasLayer
 
 const UIFonts     = preload("res://ui/UIFonts.gd")
 const Trap        = preload("res://traps/Trap.gd")
+const BoostUnit   = preload("res://boosts/BoostUnit.gd")
 const UpgradeCard = preload("res://ui/UpgradeCard.gd")
 
 
@@ -24,8 +25,8 @@ const UpgradeCard = preload("res://ui/UpgradeCard.gd")
 # ---------------------------------------------------------------------------
 
 ## Emitted when the player confirms their choices.
-## types contains exactly PICK_COUNT TrapType int values.
-signal traps_selected(types: Array[int])
+## trap_types and boost_types contain the chosen int values (either may be empty).
+signal loadout_selected(trap_types: Array[int], boost_types: Array[int])
 
 
 # ---------------------------------------------------------------------------
@@ -36,15 +37,18 @@ const CARD_W:   float = 190.0
 const CARD_H:   float = 310.0
 const CARD_GAP: float = 20.0
 
-## How many trap types are offered and how many the player must pick.
+## Cards offered and cards the player must pick.
 ## Scaled by the Wider Selection meta upgrade in a future pass.
 const OFFER_COUNT: int = 3
 const PICK_COUNT:  int = 2
 
+## Probability that the third slot is a boost rather than a third trap.
+const BOOST_SLOT_CHANCE: float = 0.5
+
 
 # ---------------------------------------------------------------------------
-# Static display data — name and short description per trap type.
-# Descriptions are condensed from Trap.get_description() for card readability.
+# Static display data per trap and boost type.
+# Descriptions condensed for card readability.
 # ---------------------------------------------------------------------------
 
 const TRAP_DISPLAY: Dictionary = {
@@ -56,15 +60,26 @@ const TRAP_DISPLAY: Dictionary = {
 	5: { "name": "Bait Station",       "desc": "Enemies walk straight over it. Pulses poison onto every pest in range, dealing damage over time." },
 }
 
+const BOOST_DISPLAY: Dictionary = {
+	0: { "name": "Pheromone Dispenser", "desc": "Aura boost. All traps within range deal increased damage." },
+	1: { "name": "Compressor",          "desc": "Aura boost. All traps within range fire more often." },
+	2: { "name": "Cash Register",       "desc": "Earns Bug Bucks each wave and pays a bonus per kill inside its aura." },
+	3: { "name": "Air Freshener",       "desc": "Absorbs infestation from pests that escape through its aura. Perishable." },
+	4: { "name": "Quarantine Marker",   "desc": "Restores infestation for every kill inside its aura. Perishable." },
+}
+
 
 # ---------------------------------------------------------------------------
 # Internal state
+#
+# Each offered slot: { "category": "trap"|"boost", "type": int }
 # ---------------------------------------------------------------------------
 
-var _offered_types:  Array[int]     = []
-var _selected_types: Array[int]     = []
-var _cards:          Array          = []   # Array of UpgradeCard nodes
-var _start_btn:      Button         = null
+var _offered_slots:   Array      = []
+var _selected_traps:  Array[int] = []
+var _selected_boosts: Array[int] = []
+var _cards:           Array      = []   # UpgradeCard nodes, parallel to _offered_slots
+var _start_btn:       Button     = null
 
 
 # ---------------------------------------------------------------------------
@@ -78,20 +93,16 @@ func _ready() -> void:
 
 
 func _build_screen() -> void:
-	# Pick OFFER_COUNT random trap types.
-	var all_types: Array[int] = [0, 1, 2, 3, 4, 5]   # one per TrapType enum value
-	all_types.shuffle()
-	for i in OFFER_COUNT:
-		_offered_types.append(all_types[i])
+	_offered_slots = _generate_slots()
 
-	# Dim overlay — covers the full virtual viewport.
+	# Dim overlay.
 	var dim := ColorRect.new()
 	dim.color        = Color(0.0, 0.0, 0.0, 0.70)
 	dim.process_mode = Node.PROCESS_MODE_ALWAYS
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
 
-	# "CHOOSE YOUR GEAR" header.
+	# Header.
 	var header := Label.new()
 	header.text                 = "CHOOSE YOUR GEAR"
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
@@ -120,69 +131,106 @@ func _build_screen() -> void:
 	sub.offset_bottom = 140.0
 	add_child(sub)
 
-	# Three trap cards, horizontally centred.
+	# Cards.
 	var total_w := CARD_W * float(OFFER_COUNT) + CARD_GAP * float(OFFER_COUNT - 1)
 	var start_x := (1280.0 - total_w) * 0.5
 	var card_y  := 148.0
 
 	for i in OFFER_COUNT:
-		var trap_type: int = _offered_types[i]
-		var card := _build_trap_card(trap_type)
-		card.position    = Vector2(start_x + i * (CARD_W + CARD_GAP), card_y)
-		card.size        = Vector2(CARD_W, CARD_H)
+		var slot: Dictionary = _offered_slots[i]
+		var card := _build_card_for_slot(slot)
+		card.position     = Vector2(start_x + i * (CARD_W + CARD_GAP), card_y)
+		card.size         = Vector2(CARD_W, CARD_H)
 		card.process_mode = Node.PROCESS_MODE_ALWAYS
-		card.card_selected.connect(_on_card_toggled.bind(trap_type, card))
-		# Start dimmed — cards are "unselected" until tapped.
-		card.modulate = Color(0.65, 0.65, 0.65, 1.0)
+		card.modulate     = Color(0.65, 0.65, 0.65, 1.0)   # start dimmed until selected
+		card.card_selected.connect(_on_card_toggled.bind(card, slot))
 		add_child(card)
 		_cards.append(card)
 
 	# "Start Buggin'" button — disabled until PICK_COUNT cards are selected.
 	_start_btn = Button.new()
-	_start_btn.text              = "START BUGGIN'"
-	_start_btn.disabled          = true
-	_start_btn.focus_mode        = Control.FOCUS_NONE
+	_start_btn.text                = "START BUGGIN'"
+	_start_btn.disabled            = true
+	_start_btn.focus_mode          = Control.FOCUS_NONE
 	_start_btn.custom_minimum_size = Vector2(260.0, 54.0)
-	_start_btn.process_mode      = Node.PROCESS_MODE_ALWAYS
+	_start_btn.process_mode        = Node.PROCESS_MODE_ALWAYS
 	_start_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	_start_btn.add_theme_font_size_override("font_size", 22)
 	_start_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	_start_btn.pressed.connect(_on_start_pressed)
-	# Position centred horizontally, near the bottom of the virtual viewport.
-	var btn_x := (1280.0 - 260.0) * 0.5
-	var btn_y := card_y + CARD_H + 18.0
-	_start_btn.position = Vector2(btn_x, btn_y)
+	_start_btn.position = Vector2((1280.0 - 260.0) * 0.5, card_y + CARD_H + 18.0)
 	_start_btn.size     = Vector2(260.0, 54.0)
 	add_child(_start_btn)
+
+
+# ---------------------------------------------------------------------------
+# Slot generation
+# ---------------------------------------------------------------------------
+
+## Builds OFFER_COUNT slots: always 2 traps, third slot is boost or trap.
+func _generate_slots() -> Array:
+	var trap_pool:  Array[int] = [0, 1, 2, 3, 4, 5]
+	var boost_pool: Array[int] = [0, 1, 2, 3, 4]
+	trap_pool.shuffle()
+	boost_pool.shuffle()
+
+	var slots: Array = []
+	slots.append({ "category": "trap", "type": trap_pool[0] })
+	slots.append({ "category": "trap", "type": trap_pool[1] })
+
+	if randf() < BOOST_SLOT_CHANCE:
+		slots.append({ "category": "boost", "type": boost_pool[0] })
+	else:
+		slots.append({ "category": "trap",  "type": trap_pool[2] })
+
+	slots.shuffle()
+	return slots
 
 
 # ---------------------------------------------------------------------------
 # Card building
 # ---------------------------------------------------------------------------
 
-## Builds one UpgradeCard configured as a toggleable trap card.
+func _build_card_for_slot(slot: Dictionary) -> UpgradeCard:
+	if slot["category"] == "boost":
+		return _build_boost_card(slot["type"])
+	return _build_trap_card(slot["type"])
+
+
 func _build_trap_card(trap_type: int) -> UpgradeCard:
 	var display: Dictionary = TRAP_DISPLAY.get(trap_type, {})
-	var trap_name: String   = display.get("name", "Trap")
-	var trap_desc: String   = display.get("desc", "")
-	var cost: int           = Trap.STATS[trap_type].get("cost", 0)
-	var trap_color: Color   = Trap.STATS[trap_type].get("color", Color.WHITE)
-
 	var data := {
 		"id":          "trap_%d" % trap_type,
 		"category":    "trap",
 		"tier":        UpgradeCard.Tier.COMMON,
-		"tier_label":  trap_name.to_upper(),
-		"title":       trap_name,
-		"stat_name":   "",
-		"impact_line": "Cost: %d Bug Bucks" % cost,
-		"plain_text":  trap_desc,
-		"trap_type":   trap_type,
+		"tier_label":  display.get("name", "Trap").to_upper(),
+		"title":       display.get("name", "Trap"),
+		"stat_name":   "TRAP",
+		"impact_line": "Cost: %d Bug Bucks" % Trap.STATS[trap_type].get("cost", 0),
+		"plain_text":  display.get("desc", ""),
 	}
-
 	var card := UpgradeCard.new()
 	card.toggleable   = true
-	card.custom_color = trap_color
+	card.custom_color = Trap.STATS[trap_type].get("color", Color.WHITE)
+	card.setup(data)
+	return card
+
+
+func _build_boost_card(boost_type: int) -> UpgradeCard:
+	var display: Dictionary = BOOST_DISPLAY.get(boost_type, {})
+	var data := {
+		"id":          "boost_%d" % boost_type,
+		"category":    "boost",
+		"tier":        UpgradeCard.Tier.COMMON,
+		"tier_label":  display.get("name", "Boost").to_upper(),
+		"title":       display.get("name", "Boost"),
+		"stat_name":   "BOOST",
+		"impact_line": "Cost: %d Bug Bucks" % BoostUnit.STATS[boost_type].get("cost", 0),
+		"plain_text":  display.get("desc", ""),
+	}
+	var card := UpgradeCard.new()
+	card.toggleable   = true
+	card.custom_color = BoostUnit.GLOW_COLORS[boost_type]
 	card.setup(data)
 	return card
 
@@ -191,19 +239,29 @@ func _build_trap_card(trap_type: int) -> UpgradeCard:
 # Selection logic
 # ---------------------------------------------------------------------------
 
-## Called whenever a trap card is tapped. Enforces the PICK_COUNT limit:
-## if the player tries to select a third card, revert the tap immediately.
-func _on_card_toggled(_data: Dictionary, trap_type: int, card: UpgradeCard) -> void:
+## Called when any card is tapped. Enforces the PICK_COUNT limit across both
+## traps and boosts — rejects a third selection immediately via force_deselect.
+func _on_card_toggled(_data: Dictionary, card: UpgradeCard, slot: Dictionary) -> void:
+	var category: String = slot["category"]
+	var item_type: int   = slot["type"]
+
 	if card.is_card_selected():
-		if _selected_types.size() >= PICK_COUNT:
-			# At the limit — reject this selection without giving feedback.
+		var total: int = _selected_traps.size() + _selected_boosts.size()
+		if total >= PICK_COUNT:
 			card.force_deselect()
 			return
-		_selected_types.append(trap_type)
+		if category == "boost":
+			_selected_boosts.append(item_type)
+		else:
+			_selected_traps.append(item_type)
 	else:
-		_selected_types.erase(trap_type)
+		if category == "boost":
+			_selected_boosts.erase(item_type)
+		else:
+			_selected_traps.erase(item_type)
 
-	_start_btn.disabled = _selected_types.size() < PICK_COUNT
+	var picked: int = _selected_traps.size() + _selected_boosts.size()
+	_start_btn.disabled = picked < PICK_COUNT
 
 
 # ---------------------------------------------------------------------------
@@ -211,7 +269,7 @@ func _on_card_toggled(_data: Dictionary, trap_type: int, card: UpgradeCard) -> v
 # ---------------------------------------------------------------------------
 
 func _on_start_pressed() -> void:
-	traps_selected.emit(_selected_types.duplicate())
+	loadout_selected.emit(_selected_traps.duplicate(), _selected_boosts.duplicate())
 	queue_free()
 
 
