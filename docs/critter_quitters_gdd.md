@@ -1,6 +1,6 @@
 ﻿# **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.31 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / illustrated sprites **Reference:** Desktop Tower Defense
+**Version:** Draft v0.35 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / SVG sprites **Reference:** Desktop Tower Defense
 
 ---
 
@@ -39,6 +39,10 @@
 | v0.29 | Phase 7 design complete. New traps: Fly Strip Launcher (anti-air, AoE cloud, flying enemies only) and Bait Station (floor trap, passable cells, poison DoT). New enemies: Mosquito (flying, straight-line path), Cockroach Nymph (splits on death), Mouse (steals Bug Bucks on exit, releases Gnats on death). New unit category: Boosts (5 types — Pheromone Dispenser, Compressor, Cash Register, Air Freshener, Quarantine Marker). Boost rules: block pathfinding, 2×2 footprint, store-only availability, cost comparable to traps, custom upgrade stats per Boost. New systems identified: is_flying flag, straight-line path, FLOOR_TRAP cell state, Poisoned status effect, BoostUnit class, aura system, split-on-death spawn, Bug Bucks theft on exit. Section 4b (Boost Roster) added. Future Pass updated. |
 | v0.30 | Phase 9 updated: game mode design added as a first deliverable within the phase (design-first, like Phase 7). Three game modes confirmed: Endless (infinite waves, current dev pattern), Journey (structured Rounds → Levels / Contracts progression), Challenge (pre-defined scenarios with constrained starting conditions — e.g. limited Bug Bucks, restricted trap roster). Section 15 (Game Modes) added. |
 | v0.31 | Critical hit system added. Every trap now carries two new upgradeable stats: Crit Chance (default 0%, +2% per tier) and Crit Damage Bonus (default 25%, +25% per tier). When Crit Chance is greater than zero, each firing rolls against the percentage; on success the damage is multiplied by (1 + Crit Damage Bonus). AoE traps roll once per burst. Glue Board holds the stats for consistency but they have no mechanical effect. Upgrade panel expanded from three to five rows; row height reduced to 80px to keep the panel within the 600px virtual resolution. |
+| v0.32 | Enemy roster redesigned. Old Rat renamed to Mouse — it keeps its role as the standard boss (every 10 waves) and its Bug Bucks theft mechanic on exit; its Gnat-release-on-death mechanic is removed. Cockroach Nymph and its sub-type removed entirely. New enemy: Rat King — a mega-boss that appears on every 20th wave (superseding the Mouse boss on those waves); extremely high HP, slow movement, and splits into 3 Rats on death. New enemy: Rat — a fast, low-HP mid-tier pest that spawns from Rat King death and also appears in standard waves from wave 15 onward. Section 5 updated; Cockroach Nymph section removed; Mouse, Rat King, and Rat sections added. Phase 7 and Phase 8 enemy lists updated. Boss wave description in Section 7 updated. |
+| v0.34 | Phase 9 implementation deliverables corrected: "Between-wave store — basic version" replaced with "The Truck hub / meta update screen" to match the v0.15 decision that removed the between-wave store and the Section 8 design for The Truck / Service Fees meta progression. |
+| v0.35 | Phase 8 renamed and redesigned to reflect SVG art as the confirmed house standard. All assets use the SVG-on-quad approach (QuadMesh + StandardMaterial3D, unshaded). Traps (6 types) and Boosts (5 types) marked complete. Enemy list corrected: 7 of 9 enemies already have dedicated SVG frames (Ant, Gnat, Cricket, Beetle, Cockroach, Mosquito, Rat); Mouse and Rat King use Rat frames as placeholders and are the only remaining enemy work. Gnat added to enemy list (was omitted). Art Style tag in header updated from "illustrated sprites" to "SVG sprites". |
+| v0.33 | Balance pass: gameplay loop and progression. Starting Bug Bucks reduced from 1,000 to 75 (buys exactly 3 Snap Traps; forces immediate strategic decisions). Infestation values scaled up ~8× so wave 1 uncontested = 2× threshold (10 Gnats × 4.0 = 40 infestation, threshold = 20). Kill bounties adjusted downward for standard enemies so Bug Bucks feel ungenerous: Gnat 3, Ant 6, Cricket 10, Beetle 20, Cockroach 35, Mosquito 10, Mouse 60, Rat 20, Rat King 180. XP system decoupled from infestation: each enemy type now carries a flat `xp` value; Arena.gd reads it directly rather than deriving from infestation damage. Level-up threshold raised from 12 to 20 XP so first level-up lands mid-wave 2 (satisfies 2–4 waves target). HP scaling changed from continuous linear (wave × 1.02 + base) to a step multiplier every 5 waves (+30% per tier): waves 1–4 = 1.0×, waves 5–9 = 1.3×, waves 10–14 = 1.6×, etc. |
 
 ---
 
@@ -371,10 +375,10 @@ A biohazard zone marker. Kills made inside its aura restore a small amount of th
 | The Cricket | Fast / erratic | Low HP, very fast. Punishes gaps in coverage. | 2 |
 | The Beetle | Mid-tier tank | High HP, slow movement, moderate infestation damage on exit. Uncommon within waves. | 3 |
 | The Cockroach | High-tier resilient | Very high HP, very slow movement, high infestation damage on exit. Rare. | 4 |
-| The Rat | Boss | Massive HP, slowest movement, highest infestation damage on exit. Leads boss waves. One per wave maximum. | Boss |
+| The Mouse | Boss (every 10 waves) | High HP, slow movement, high infestation damage. Steals Bug Bucks on exit. Leads boss waves on waves 10, 30, 50… One per wave maximum. | Boss |
 | The Mosquito | Flying / fast | Low HP, fast, flies in a straight line ignoring all obstacles. Immune to most ground traps. | 2–3 |
-| The Cockroach Nymph | Splitting / resilient | High HP, slow. Splits into 2 smaller Nymphs on death. Nymphs do not split again. | 3–4 |
-| The Mouse | Carrier / economic threat | Mid HP and speed. Steals Bug Bucks on exit. Releases Gnats on death. | Mid |
+| The Rat King | Mega-Boss (every 20 waves) | Extremely high HP, slowest movement, very high infestation damage. Leads boss waves on waves 20, 40, 60… Splits into 3 Rats on death. | Boss |
+| The Rat | Mid-tier / sub-enemy | Low HP, fast, moderate infestation damage. Spawns from Rat King death. Also appears in standard waves from wave 15 onward. | 2–3 |
 
 **Exit damage** increases each wave. Wave 1 is balanced so that if all pests reached the exit uncontested, they would fill the Infestation Level to twice its threshold — the player must stop at least half to survive.
 
@@ -392,31 +396,49 @@ A biohazard zone marker. Kills made inside its aura restore a small amount of th
 
 ---
 
-### **The Cockroach Nymph**
+### **The Mouse**
 
-**Archetype:** Splitting / resilient
+**Archetype:** Boss / economic threat
 
-A cockroach that refuses to stay dead. Killing it is only the first problem.
+The Mouse is the standard boss: slower and far tougher than anything in the regular wave rotation, and punishing in two ways when it escapes.
 
-**On death:** Spawns 2 smaller Cockroach Nymphs at the parent's current grid position. The Nymphs inherit the remaining path from the point of death and continue toward the exit. Nymphs have reduced HP, speed, and infestation damage compared to the parent. Nymphs do not split again on death.
+**Frequency:** Appears as the lead unit on every 10th wave (waves 10, 30, 50, …). On wave 20, 40, 60, … the Rat King supersedes it as the boss of that wave.
 
-**Economy:** The full kill bounty is paid when the parent is killed. Each Nymph pays a reduced bounty on death.
+**On exit:** When the Mouse reaches the exit it deals its infestation damage as normal and additionally steals a flat amount of Bug Bucks directly from the player's current total. Letting a Mouse escape has two simultaneous consequences: the Infestation Level rises and the player's economy is set back. Bug Bucks stolen per escape: TBD (playtesting).
 
-**Tier:** 3–4 — high HP, slow movement, high infestation damage on exit. The split mechanic means apparent kills can still result in infestation damage if the Nymphs are not also stopped.
+**On death:** No special spawn. The Mouse dies cleanly — the economic threat is entirely on the exit path.
+
+**Tier:** Boss — high HP, slower than standard enemies, high infestation damage on exit. One per wave maximum.
 
 ---
 
-### **The Mouse**
+### **The Rat King**
 
-**Archetype:** Carrier / economic threat
+**Archetype:** Mega-Boss / split-on-death
 
-The Mouse punishes the player in both directions — letting it escape is expensive; killing it is not free either.
+The Rat King is the hardest single enemy in the game. Killing it solves one problem and immediately creates three more.
 
-**On exit:** When the Mouse reaches the exit, it deals its infestation damage as normal and additionally steals a flat amount of Bug Bucks directly from the player's current total. Letting a Mouse escape has two simultaneous consequences: the Infestation Level rises and the player's economy is set back. Bug Bucks stolen per escape: TBD (playtesting).
+**Frequency:** Appears as the lead unit on every 20th wave (waves 20, 40, 60, …), superseding the Mouse that would otherwise lead that wave.
 
-**On death:** When the Mouse is killed, it releases a small group of Gnats at its current position. The Gnats inherit the path from the Mouse's grid position and continue toward the exit. The correct counter is high-DPS trap coverage that extends beyond the Mouse's kill point — stopping the Mouse mid-corridor still requires covering the Gnats that follow. Gnats spawned per death: TBD (playtesting; 2–4 recommended starting range).
+**On death:** Spawns 3 Rats at the Rat King's current grid position. The Rats inherit the remaining path from the point of death and continue toward the exit. Clearing the Rat King requires also stopping the Rats that follow — high-DPS coverage beyond the kill point is essential.
 
-**Tier:** Mid — HP and speed between Cricket and Beetle. Not exceptionally fast or tanky, but strategically high-priority due to its dual threat.
+**Economy:** The full Rat King bounty is paid when it dies. Each spawned Rat pays its own bounty on death.
+
+**Tier:** Boss — extremely high HP, slowest movement of any enemy, very high infestation damage on exit. One per wave maximum.
+
+---
+
+### **The Rat**
+
+**Archetype:** Mid-tier / sub-enemy
+
+Fast, low HP, moderately dangerous. The Rat threatens through numbers and speed rather than raw staying power.
+
+**Spawn sources:** Spawns in groups of 3 when a Rat King is killed. Also enters as a standard wave enemy from wave 15 onward, appearing in the regular rotation alongside other pest types.
+
+**On death:** No special mechanic.
+
+**Tier:** 2–3 — low HP, fast movement, moderate infestation damage on exit. In the context of a Rat King boss wave, the Rats that spawn on the Rat King's death are the second half of the threat — players who over-commit to killing the Rat King without positioning traps downstream can find the Rats slipping through.
 
 ---
 
@@ -504,10 +526,15 @@ Example spawn sequences by complexity:
 
 Boss waves occur every 10 waves (waves 10, 20, 30, ...). The wave immediately following each boss wave triggers Arena Evolution.
 
-- The Rat spawns first, leading the wave
+The boss unit alternates between two types on a 20-wave cycle:
+- **Waves 10, 30, 50, … (odd multiples of 10):** The Mouse leads the wave. High HP, slow, steals Bug Bucks on exit.
+- **Waves 20, 40, 60, … (even multiples of 10):** The Rat King leads the wave. Extremely high HP, slowest movement, and splits into 3 Rats on death.
+
+In both cases:
+- The boss spawns first, leading the wave
 - Escort enemies follow, composed using the same complexity-based group rules as standard waves
 - Total escort count is half what a standard wave would contain at the same complexity
-- The Rat's HP equals 60% of the total combined HP of all enemies in an equivalent standard wave — it scales automatically with difficulty
+- Boss HP scales automatically with difficulty (exact formula TBD via playtesting)
 
 **Direct Trap Upgrades**
 
@@ -540,10 +567,12 @@ Composite of total pests eliminated and highest wave reached. Exact formula TBD.
 | Attribute | Value |
 | :---- | :---- |
 | Currency | Bug Bucks |
+| Starting Bug Bucks | 75 — buys exactly 3 Snap Traps; deliberately ungenerous |
 | Sell value | 70% of buy price |
-| Infestation Level | Starts at zero; fills as pests exit; run ends at maximum threshold |
-| Exit infestation | Per pest type; scales each wave; wave 1 balanced so uncontested exit fills threshold to 2× |
-| Bug Bucks reward | Per kill, varies by pest type; scales with wave number |
+| Infestation Level | Starts at zero; fills as pests exit; run ends at maximum threshold (20 internal points = 100%) |
+| Exit infestation | Per pest type: Gnat 4.0, Ant 8.0, Cricket 8.0, Beetle 20.0, Cockroach 35.0, Mosquito 18.0, Mouse 60.0, Rat 22.0, Rat King 100.0. Wave 1 = 10 Gnats × 4.0 = 40 = 2× threshold. |
+| Bug Bucks per kill | Per pest type: Gnat 3, Ant 6, Cricket 10, Beetle 20, Cockroach 35, Mosquito 10, Mouse 60, Rat 20, Rat King 180. Standard enemies ≈ 0.25× Snap Trap cost per kill. |
+| XP per kill | Flat per pest type: Gnat 1, Ant 2, Cricket 2, Beetle 5, Cockroach 8, Mosquito 3, Mouse 20, Rat 6, Rat King 40. First level-up at 20 XP (≈ wave 2). |
 | Wave clear bonus | Awarded on last pest eliminated per wave; amount TBD |
 | High score | Composite of total pests eliminated and highest wave reached; formula TBD |
 
@@ -705,7 +734,7 @@ The panel is dismissed by tapping the close button or tapping outside the panel.
 | Resolved | Entrance/exit: single entrance, single exit, on separate walls, not necessarily opposite |
 | Resolved | Wave complexity: smooth curve across all waves |
 | Resolved | Wave composition: group-based, group size shrinks with complexity, minimum group size 1 (uncommon) |
-| Resolved | Boss wave structure: Rat leads, escorts follow; escort count = half standard wave; Rat HP = 60% of standard wave total HP |
+| Resolved | Boss wave structure: Mouse leads every 10th wave; Rat King leads every 20th wave (supersedes Mouse); escorts follow; escort count = half standard wave; boss HP scales with difficulty |
 | Resolved | Arena Evolution: every 10 waves, small chance of 1–few obstacles added; overwrites traps with no refund |
 | Resolved | Starting trap selection: 3 offered, player picks 2; remaining unlockable in store |
 | Resolved | Upgrade system: direct per-trap upgrades via tap; three independent stat levels (Damage, Range, Fire Rate), each 0–3, displayed as ★★★ stars; cost formula defined. Star 0–5 / tier-up system is the design target for a future pass — not yet implemented. |
@@ -723,7 +752,7 @@ The panel is dismissed by tapping the close button or tapping outside the panel.
 | Resolved | Trap names — Snap Trap, Zapper, Fogger, Glue Board (final) |
 | Resolved | Audio — tone is understated and quirky; light enough to not distract, with enough personality to reinforce the pest control theme |
 | Resolved | Fogger AoE radius — equals the Fogger's range circle; no separate value needed |
-| Deferred | All numeric values (Infestation Level threshold, Bug Bucks rewards per pest type, wave clear bonus, early wave trigger bonus, upgrade stat increment amounts, high score formula) — to be determined via playtesting |
+| Resolved | Core numeric values set in v0.33: starting Bug Bucks = 75, infestation per pest type, kill bounties, flat XP per pest type, first level-up threshold = 20 XP, HP step scaling every 5 waves (+30% per tier). Wave clear bonus, early wave trigger bonus, and high score formula remain TBD via playtesting. |
 
 ---
 
@@ -835,7 +864,7 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 ### **Phase 7 — Define New Traps, Enemies, and Boosts** ✓ Complete
 - ✓ Full design spec for new traps: Fly Strip Launcher (anti-air, AoE cloud) and Bait Station (floor trap, poison DoT) — see Section 4
-- ✓ Full design spec for new enemies: Mosquito (flying), Cockroach Nymph (splitting), Mouse (carrier / economic threat) — see Section 5
+- ✓ Full design spec for new enemies: Mosquito (flying), Mouse (boss / economic threat), Rat King (mega-boss, splits on death), Rat (mid-tier / sub-enemy) — see Section 5
 - ✓ Boost unit category defined: 5 types (Pheromone Dispenser, Compressor, Cash Register, Air Freshener, Quarantine Marker) — see Section 4b
 - ✓ New systems identified for implementation: is_flying flag, straight-line path, FLOOR_TRAP cell state, Poisoned status effect, BoostUnit class, aura system, split-on-death spawn, Bug Bucks theft on exit
 - ✓ All designs written into GDD before implementation begins
@@ -843,13 +872,19 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: no implementation work begins on new content until the full roster is specified — prevents scope creep and mid-build redesigns*
 
-### **Phase 8 — Sprite Art Migration**
-- Illustrated Sprite3D art for all 5 enemies: Ant (replace SVG placeholder), Cricket, Beetle, Cockroach, Rat
-- Illustrated Sprite3D art for all 4 traps: Snap Trap (replace procedural mesh), Zapper, Fogger, Glue Board
-- Per-element color palette finalized across all sprites
+### **Phase 8 — SVG Art for All Assets**
+
+All assets use the confirmed SVG-on-quad approach: QuadMesh + StandardMaterial3D (unshaded, alpha), laid flat on the XZ plane. This is the house standard for all gameplay-visible units.
+
+- ✓ SVG art for all 6 traps: Snap Trap, Zapper, Fogger, Glue Board, Fly Strip Launcher, Bait Station (2 frames each: idle + fire)
+- ✓ SVG art for all 5 boosts: Pheromone Dispenser, Compressor, Cash Register, Air Freshener, Quarantine Marker (4-frame idle cycle at 2.5 fps)
+- ✓ SVG art for 7 of 9 enemies: Ant, Gnat, Cricket, Beetle, Cockroach, Mosquito, Rat (4-frame walk cycle each)
+- SVG art for Mouse (currently using Rat frames as placeholder)
+- SVG art for Rat King (currently using Rat frames as placeholder)
+- Per-element color palette finalized across all SVGs
 - Procedural animated background system
 
-*Goal: all gameplay-visible assets are illustrated sprites; no colored cylinders, boxes, or placeholder meshes remain*
+*Goal: all gameplay-visible assets use SVG-on-quad; no colored cylinders, boxes, or placeholder meshes remain*
 
 ### **Phase 9 — Full Game Loop**
 
@@ -866,7 +901,7 @@ Phase 9 begins with a design pass (like Phase 7) before any implementation work 
 - All 4 trap types
 - All 5 enemy types
 - Starting trap selection — 3 offered, player picks 2
-- Between-wave store — basic version (trap upgrades, player upgrades, trap unlocks)
+- The Truck hub / meta update screen
 - Arena Evolution — obstacle spawning every 10 waves
 - Save file system — multiple independent run slots
 - Game mode selection and routing from main menu

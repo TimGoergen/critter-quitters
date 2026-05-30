@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Quarantine Marker — biohazard-inspired rotating rings, frame 1 -->
+  <!-- Outer ring (rotates CW) — outer ring at 0° -->
+  <g transform="rotate(0, 64, 64)">
+    <circle cx="64" cy="64" r="52" fill="#505000"/>
+    <circle cx="64" cy="64" r="48" fill="#A0A000"/>
+    <!-- Outer tab protrusions (3 tabs at 0°, 120°, 240°) -->
+    <ellipse cx="64" cy="14" rx="10" ry="8" fill="#D4D410"/>
+    <ellipse cx="108.4" cy="90" rx="10" ry="8" transform="rotate(120, 64, 64)" fill="#D4D410"/>
+    <ellipse cx="19.6" cy="90" rx="10" ry="8" transform="rotate(240, 64, 64)" fill="#D4D410"/>
+  </g>
+  <!-- Inner ring gap -->
+  <circle cx="64" cy="64" r="38" fill="#383800"/>
+  <!-- Inner ring (rotates CCW) — inner ring at 0° -->
+  <g transform="rotate(0, 64, 64)">
+    <circle cx="64" cy="64" r="34" fill="#C0C000"/>
+    <!-- Inner tab protrusions (3 tabs offset by 60° from outer) -->
+    <ellipse cx="64" cy="32" rx="8" ry="7" fill="#EEEE20"/>
+    <ellipse cx="64" cy="32" rx="8" ry="7" transform="rotate(120, 64, 64)" fill="#EEEE20"/>
+    <ellipse cx="64" cy="32" rx="8" ry="7" transform="rotate(240, 64, 64)" fill="#EEEE20"/>
+  </g>
+  <!-- Center hazard zone -->
+  <circle cx="64" cy="64" r="20" fill="#282800"/>
+  <circle cx="64" cy="64" r="16" fill="#909000"/>
+  <!-- Center symbol — simplified hazard circle -->
+  <circle cx="64" cy="64" r="10" fill="#CCCC00"/>
+  <circle cx="64" cy="64" r="6" fill="#282800"/>
+  <!-- Specular -->
+  <ellipse cx="50" cy="44" rx="9" ry="6" fill="white" opacity="0.18"/>
+</svg>

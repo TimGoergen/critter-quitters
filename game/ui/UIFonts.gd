@@ -1,5 +1,5 @@
 ## UIFonts.gd
-## Central font registry. All UI scripts load fonts from here so the three
+## Central font registry. All UI scripts load fonts from here so the five
 ## typeface roles are defined in one place.
 ##
 ## Roles:
@@ -7,10 +7,13 @@
 ##   primary_bold — Roboto Condensed Bold     — emphasis labels (Bug Bucks)
 ##   header       — Bebas Neue Regular        — wave alerts, countdowns, run-over
 ##   flavor       — Montserrat Regular        — trap names, company branding
-##   symbols      — Noto Sans Symbols 2       — Unicode symbol glyphs (e.g. ⚡ on Zapper)
+##   symbols      — Noto Sans Symbols 2       — Unicode symbol glyphs (◆ ⚡ etc.)
 ##
-## Font files must be placed in res://assets/fonts/. If a file is missing,
-## the function returns a plain SystemFont so the UI still renders.
+## Note: ★ / ☆ star indicators are drawn as vector polygons by StarBar.gd and
+## Trap._make_star_mesh() rather than rendered as text. symbols() is only needed
+## for non-star glyphs (the ◆ boost indicator on placed traps, etc.).
+##
+## Font files live in res://assets/fonts/. Missing files degrade gracefully.
 
 const _PRIMARY_PATH      := "res://assets/fonts/RobotoCondensed-Regular.ttf"
 const _PRIMARY_BOLD_PATH := "res://assets/fonts/RobotoCondensed-Bold.ttf"
@@ -50,10 +53,8 @@ static func flavor_bold_italic() -> Font:
 	return fv
 
 
-## Returns a monochrome Unicode symbols font suitable for glyphs like ⚡.
-## Prefers the bundled Noto Sans Symbols 2 file; falls back to the OS symbol
-## font on the dev machine (Segoe UI Symbol on Windows, Noto on Linux).
-## For Android distribution the .ttf file must be present in assets/fonts/.
+## Returns the Noto Sans Symbols 2 font for non-star Unicode glyphs (◆ ⚡ etc.).
+## Falls back to a SystemFont on machines where the .ttf file is absent.
 static func symbols() -> Font:
 	if ResourceLoader.exists(_SYMBOLS_PATH):
 		return load(_SYMBOLS_PATH)

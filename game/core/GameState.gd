@@ -89,6 +89,15 @@ signal zoom_state_changed(is_zoomed: bool)
 ## show_when_zoomed:   true draws lines in the zoomed-in (2×) view.
 signal grid_lines_changed(show_when_overview: bool, show_when_zoomed: bool)
 
+## Emitted whenever current_xp or the required amount changes.
+## new_xp is the player's current accumulated experience toward the next level.
+## xp_needed is the total required to reach the next level from zero.
+signal xp_changed(new_xp: int, xp_needed: int)
+
+## Emitted when the player accumulates enough experience to advance a level.
+## new_level is the level just reached (first level-up emits 2).
+signal level_up(new_level: int)
+
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -99,8 +108,8 @@ signal grid_lines_changed(show_when_overview: bool, show_when_zoomed: bool)
 
 ## Starting currency given to the player at the beginning of every run.
 ## Increased by business upgrades purchased with Service Fees.
-## TODO: tune via playtesting; increase via meta upgrades
-const STARTING_BUG_BUCKS: int = 1000
+## 75 BB = exactly 3 Snap Traps — tight by design; forces immediate strategic decisions.
+const STARTING_BUG_BUCKS: int = 75
 
 ## Total infestation points that fill the bar to 1.0.
 ## TODO: tune via playtesting
@@ -165,6 +174,62 @@ const EARLY_SEND_PER_ENEMY: int = 3
 
 
 # ---------------------------------------------------------------------------
+# Experience & level state
+#
+# Reset at the start of each run. The level-up system is a mid-run progression
+# layer: kills fill the XP bar; filling it pauses the game and offers three
+# upgrade cards to choose from.
+# ---------------------------------------------------------------------------
+
+## How much XP the player has accumulated toward the next level this run.
+var current_xp: int = 0
+
+## The player's current level within this run. Starts at 0; the first
+## level-up advances it to 1, the second to 2, and so on.
+var current_player_level: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Campaign buff state
+#
+# These are additive bonus magnitudes, e.g. 0.05 means +5%.
+# Applied each time a Campaign-type upgrade card is selected at level-up.
+# All reset to zero at run start.
+# ---------------------------------------------------------------------------
+
+## +X% multiplied into every trap's damage output on each shot.
+var global_damage_bonus: float = 0.0
+
+## +X% multiplied into every trap's effective targeting range.
+var global_range_bonus: float = 0.0
+
+## +X% added to the fire rate multiplier for every trap (more shots per second).
+var global_fire_rate_bonus: float = 0.0
+
+## +X% added to the crit chance roll for every trap.
+var global_crit_chance_bonus: float = 0.0
+
+## +X% added to the crit damage multiplier for every trap.
+var global_crit_dmg_bonus: float = 0.0
+
+## +X% multiplied into every kill bounty paid to the player.
+var global_bucks_bonus: float = 0.0
+
+## Each kill reduces the Infestation Level by this amount (Hazmat Protocol buff).
+var infestation_heal_per_kill: float = 0.0
+
+## Fraction by which all Bug Bucks upgrade costs are reduced (capped at 0.80).
+## e.g. 0.10 means upgrades cost 10% less; 0.80 means they cost at most 80% less.
+var upgrade_cost_discount: float = 0.0
+
+## Tracks type-wide free upgrades awarded by level-up equipment cards.
+## Structure: { trap_type_int: { stat_string: upgrade_count_int } }
+## Arena applies these to all current and future traps of each type.
+## Separate from Bug Bucks paid upgrades — each pool is capped at Trap.FREE_MAX_LEVEL.
+var type_upgrade_queue: Dictionary = {}
+
+
+# ---------------------------------------------------------------------------
 # Public methods
 # ---------------------------------------------------------------------------
 
@@ -181,10 +246,23 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 	infestation_level = 0.0
 	selected_trap_type = 0
 	early_wave_bonus_rate = 2
+	# Reset experience and all campaign buffs so each run starts clean.
+	current_xp = 0
+	current_player_level = 0
+	global_damage_bonus = 0.0
+	global_range_bonus = 0.0
+	global_fire_rate_bonus = 0.0
+	global_crit_chance_bonus = 0.0
+	global_crit_dmg_bonus = 0.0
+	global_bucks_bonus = 0.0
+	infestation_heal_per_kill = 0.0
+	upgrade_cost_discount = 0.0
+	type_upgrade_queue = {}
 	current_phase = Phase.PLACING
 	run_started.emit()
 	bug_bucks_changed.emit(bug_bucks)
 	infestation_changed.emit(infestation_level)
+	xp_changed.emit(current_xp, exp_for_next_level())
 
 
 ## Ends the current run and returns the game to the hub.
@@ -224,8 +302,123 @@ func set_countdown(seconds: int) -> void:
 
 ## Increases infestation_level by points / INFESTATION_MAX.
 ## Calls end_run() if the level reaches 1.0.
+## Clamped to [0.0, 1.0] — callers should not pass negative values; use
+## heal_infestation() to reduce infestation instead.
 func add_infestation(points: float) -> void:
-	infestation_level = minf(infestation_level + points / float(INFESTATION_MAX), 1.0)
+	infestation_level = clampf(infestation_level + points / float(INFESTATION_MAX), 0.0, 1.0)
 	infestation_changed.emit(infestation_level)
 	if infestation_level >= 1.0:
 		end_run()
+
+
+## Reduces the Infestation Level by amount (Hazmat Protocol campaign buff).
+## Clamped to 0.0 — cannot go negative. Does not trigger end_run.
+func heal_infestation(amount: float) -> void:
+	infestation_level = maxf(0.0, infestation_level - amount)
+	infestation_changed.emit(infestation_level)
+
+
+# ---------------------------------------------------------------------------
+# Experience methods
+# ---------------------------------------------------------------------------
+
+## Returns the XP required to advance from the current level to the next.
+## Level 0 → 1 costs 20 XP — calibrated so the player levels up mid-wave 2
+## with wave 1 = 10 Gnats × 1 XP each, satisfying the "every 2–4 waves" target.
+## Each subsequent level costs 3% more (geometric curve).
+func exp_for_next_level() -> int:
+	return ceili(20.0 * pow(1.03, float(current_player_level)))
+
+
+## Awards XP for a kill. Emits xp_changed each time; emits level_up whenever
+## the bar fills. Handles multiple level-ups in a single call (rare but
+## possible if a high-value enemy is killed early with a large infestation value).
+func add_experience(amount: int) -> void:
+	if amount <= 0:
+		return
+	current_xp += amount
+	var needed := exp_for_next_level()
+	while current_xp >= needed:
+		current_xp -= needed
+		current_player_level += 1
+		level_up.emit(current_player_level)
+		needed = exp_for_next_level()
+	xp_changed.emit(current_xp, needed)
+
+
+# ---------------------------------------------------------------------------
+# Campaign buff methods
+# ---------------------------------------------------------------------------
+
+## Returns the Bug Bucks upgrade cost after applying any active upgrade discount.
+## Pass the base cost from UPGRADE_COSTS; the result is always at least 1 Buck.
+## Used by Trap.gd's get_X_upgrade_cost() methods so the discount is reflected
+## in both the UI display and the actual spend.
+func apply_upgrade_discount(base_cost: int) -> int:
+	if upgrade_cost_discount <= 0.0:
+		return base_cost
+	return maxi(1, roundi(float(base_cost) * (1.0 - upgrade_cost_discount)))
+
+
+## Applies a campaign buff identified by buff_id with the given magnitude.
+## Called by LevelUpScreen when the player selects a Campaign-type upgrade card.
+##
+## All bonuses are additive — picking the same buff twice doubles the bonus.
+## The upgrade_cost_discount is capped at 0.80 (max 80% cheaper) to prevent
+## free upgrades.
+func apply_campaign_buff(buff_id: String, magnitude: float) -> void:
+	match buff_id:
+		"dmg_all":          global_damage_bonus      += magnitude
+		"range_all":        global_range_bonus        += magnitude
+		"firerate_all":     global_fire_rate_bonus    += magnitude
+		"crit_chance_all":  global_crit_chance_bonus  += magnitude
+		"crit_dmg_all":     global_crit_dmg_bonus     += magnitude
+		"bucks_all":        global_bucks_bonus         += magnitude
+		"infestation_heal": infestation_heal_per_kill  += magnitude
+		"upgrade_discount": upgrade_cost_discount = minf(
+				upgrade_cost_discount + magnitude, 0.80)
+
+
+# ---------------------------------------------------------------------------
+# Display formatting
+# ---------------------------------------------------------------------------
+
+## Formats a Bug Bucks integer into a compact, human-readable string.
+##
+## Below 10,000  — exact integer, no suffix:  "1", "115", "9995"
+## At 10,000+    — one decimal place with a unit suffix, decimal dropped when .0:
+##                 "10K", "39.2K", "1.5M", "2.3B", "1.2T", "9.1Q"
+##
+## All UI code should call this function rather than formatting amounts
+## directly, so the display rule is defined in exactly one place.
+static func format_bucks(amount: int) -> String:
+	# Below the compaction threshold — exact display.
+	if amount < 10_000:
+		return str(amount)
+
+	# Suffix table: [divisor, suffix letter].
+	# Checked largest-first so we always select the correct unit without
+	# having to re-examine boundaries after the match.
+	const THRESHOLDS := [
+		[1_000_000_000_000_000, "Q"],  # quadrillion
+		[1_000_000_000_000,     "T"],  # trillion
+		[1_000_000_000,         "B"],  # billion
+		[1_000_000,             "M"],  # million
+		[1_000,                 "K"],  # thousand
+	]
+
+	for entry in THRESHOLDS:
+		var divisor: int   = entry[0]
+		var suffix: String = entry[1]
+		if amount >= divisor:
+			# Compute via integer math to avoid floating-point rounding artefacts.
+			# Example: 39176 → round(39.176 × 10) = 392 → whole=39, decimal=2 → "39.2k"
+			var tenths: int  = roundi(float(amount) / float(divisor) * 10.0)
+			var whole: int   = tenths / 10
+			var decimal: int = tenths % 10
+			if decimal == 0:
+				return "%d%s" % [whole, suffix]
+			return "%d.%d%s" % [whole, decimal, suffix]
+
+	# Unreachable: every integer >= 10,000 matches the "k" threshold above.
+	return str(amount)

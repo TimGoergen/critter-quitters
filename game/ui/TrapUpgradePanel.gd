@@ -21,9 +21,10 @@ signal sell_requested   # Arena connects this to _on_sell_trap_requested(anchor)
 const HUD     = preload("res://ui/HUD.gd")
 const UIFonts = preload("res://ui/UIFonts.gd")
 const Trap    = preload("res://traps/Trap.gd")
+const StarBar = preload("res://ui/StarBar.gd")
 
 const PADDING:    float = 9.0
-const BORDER_W:   float = 2.0
+const BORDER_W:   float = 6.0
 # Stat rows double as upgrade buttons — 72px keeps all five rows within the 600px
 # virtual viewport height while still hitting the 48px minimum touch target (72 × 0.60).
 const STAT_ROW_H:          float = 72.0
@@ -36,6 +37,12 @@ const BOOST_ENTRY_H:       float = 20.0   # height per boost entry row
 # Size of the trap thumbnail in the header.
 const HEADER_ICON_RENDER:  float = 81.0   # SubViewport pixel resolution
 const HEADER_ICON_DISPLAY: float = 58.0   # icon displayed as a 58×58 square (matches button height)
+
+# Peek-mode tooltip offset from the pointer to the tooltip center.
+# Same direction as HUD.DRAG_OFFSET (above-left of finger) but 30% farther so
+# the label clears the fingertip on touch screens, matching the placement-ghost clearance.
+# Derived as HUD.DRAG_OFFSET * 1.3 = Vector2(-15.0, -47.5) * 1.3.
+const PEEK_TOOLTIP_OFFSET: Vector2 = Vector2(-19.5, -61.75)
 
 # Theme colours — derived from the placed trap's identity colour at runtime.
 # Declared as vars so _apply_trap_theme() can assign them before _build_ui() runs
@@ -55,8 +62,9 @@ var COLOR_STAT_DISPLAY_BORDER: Color  # stat row panel border
 # Neutral colours — do not vary with trap type.
 const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_STARS       := Color(0.85, 0.72, 0.10, 1.0)
-# Max state border — always gray so it reads as permanently exhausted, not just unaffordable.
-const COLOR_BTN_MAX_BORDER := Color(0.55, 0.55, 0.55, 1.0)
+# Max state border — dark gold to match the wave and bug bucks panel outlines,
+# reinforcing that this is a completed/achieved state rather than merely unavailable.
+const COLOR_BTN_MAX_BORDER := Color(0.85, 0.62, 0.00, 1.0)
 # Cost label — gold to match the Bug Bucks coin icon.
 const COLOR_GOLD := Color(1.00, 0.82, 0.10, 1.0)
 # Delta label — green when the player can buy, amber when they cannot.
@@ -82,8 +90,8 @@ const COLOR_BTN_SELL_BORDER  := Color(0.75, 0.22, 0.12, 1.0)
 var _trap:        Node   = null
 var _panel_rect:  Rect2  = Rect2()
 
-var _border:     Panel     = null
-var _bg:         ColorRect = null
+var _visual:     Control   = null   # _PanelVisual — draws border + background via _draw()
+var _bg:         Control   = null   # transparent container for all UI children
 var _lbl_title:  Label     = null
 
 # Each stat row is a Button containing child labels.
@@ -96,6 +104,19 @@ var _crit_damage_row: Dictionary = {}
 
 var _btn_sell:       Button = null
 var _lbl_sell_value: Label  = null
+
+# Boost nodes whose range indicators were shown during the last peek gesture.
+# Cleared in _on_peek_up so every show_range_indicator call is paired with a hide.
+var _peek_boost_sources: Array = []
+
+# Trap and boost nodes that were dimmed during the last peek gesture (all placed
+# units that are NOT the selected trap and NOT an active boost source for it).
+# Cleared in _on_peek_up so every dim call is paired with an undim.
+var _peeked_dim_units: Array = []
+
+var _is_peeking:   bool    = false   # true while the peek (eye) button is held down
+var _peek_tooltip: Control = null    # _PeekTooltip shown when hovering a valid unit during peek
+var _btn_peek:     Button  = null    # lives at CanvasLayer level so _visual.modulate doesn't dim it
 
 
 # ---------------------------------------------------------------------------
@@ -142,23 +163,30 @@ func _build_ui() -> void:
 		Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
 	)
 
-	# Panel with a transparent background so only the ring is drawn.
-	# A solid ColorRect here would block the 3D scene behind the semi-transparent _bg.
-	var border_style         := StyleBoxFlat.new()
-	border_style.bg_color     = Color(0.0, 0.0, 0.0, 0.0)
-	border_style.border_color = COLOR_OUTLINE
-	border_style.set_border_width_all(int(BORDER_W))
-	_border          = Panel.new()
-	_border.position = Vector2(px - BORDER_W, py - BORDER_W)
-	_border.size     = Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
-	_border.add_theme_stylebox_override("panel", border_style)
-	add_child(_border)
+	# _PanelFrame draws the border ring and background using draw_polygon() and
+	# draw_rect(). These are low-level canvas primitives that work in every Godot
+	# renderer — including gl_compatibility, which does NOT support StyleBoxFlat
+	# corner_radius (shader-based anti-aliasing is required for that, which gl_compat
+	# doesn't provide). All previous Panel/StyleBoxFlat approaches failed for this reason.
+	var frame          := _PanelFrame.new()
+	frame.position      = Vector2(px - BORDER_W, py - BORDER_W)
+	frame.size          = Vector2(panel_w + BORDER_W * 2.0, panel_h + BORDER_W * 2.0)
+	frame.outline_color = COLOR_OUTLINE
+	frame.bg_color      = COLOR_BG
+	frame.bw            = BORDER_W
+	frame.cr            = float(10 + int(BORDER_W))   # 16px — outer radius matches inner (10) + border width
+	_visual             = frame
+	add_child(_visual)
 
-	_bg            = ColorRect.new()
-	_bg.color      = COLOR_BG
-	_bg.position   = Vector2(px, py)
-	_bg.size       = Vector2(panel_w, panel_h)
-	add_child(_bg)
+	# UI container — child of _visual so peek dims everything in one call.
+	# Position is BORDER_W offset from _visual's origin to land at screen (px, py):
+	#   screen pos = _visual.position + _bg.position
+	#              = (px-BORDER_W, py-BORDER_W) + (BORDER_W, BORDER_W) = (px, py) ✓
+	_bg              = Control.new()
+	_bg.position     = Vector2(BORDER_W, BORDER_W)
+	_bg.size         = Vector2(panel_w, panel_h)
+	_bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_visual.add_child(_bg)
 
 	var inner_w := panel_w - PADDING * 2.0
 	var y       := PADDING
@@ -184,14 +212,30 @@ func _build_ui() -> void:
 	_lbl_title.add_theme_font_override("font", UIFonts.header())
 	header.add_child(_lbl_title)
 
-	# Peek button — hold to make the panel semi-transparent so the paused game is visible.
-	var btn_peek := Button.new()
-	btn_peek.text                = ""
-	btn_peek.custom_minimum_size = Vector2(58.0, 58.0)
-	_apply_neutral_button_style(btn_peek)
-	btn_peek.button_down.connect(_on_peek_down)
-	btn_peek.button_up.connect(_on_peek_up)
-	header.add_child(btn_peek)
+	# Peek button — added to the CanvasLayer (self) directly, not to the header HBox.
+	# During peek, _visual.modulate.a drops to 0 (fully transparent). Godot's modulate
+	# is multiplicative down the scene tree, so any child of _visual would also become
+	# invisible regardless of its own modulate value. By placing the button as a sibling
+	# of _visual at the CanvasLayer level it sits outside that chain and can remain at
+	# 20% opacity — faint enough not to distract, visible enough to find and release.
+	_btn_peek = Button.new()
+	_btn_peek.text                = ""
+	_btn_peek.custom_minimum_size = Vector2(58.0, 58.0)
+	_btn_peek.size                = Vector2(58.0, 58.0)
+	# Screen position mirrors where the button would appear in the header HBox.
+	# From the header's right edge: close(58) + sep(7) + sell(144) + sep(7) + this(58) = 274 px.
+	_btn_peek.position = Vector2(px + panel_w - PADDING - 274.0, py + PADDING)
+	_apply_neutral_button_style(_btn_peek)
+	_btn_peek.button_down.connect(_on_peek_down)
+	_btn_peek.button_up.connect(_on_peek_up)
+	add_child(_btn_peek)
+
+	# Spacer fills the gap in the header HBox so the title label still sizes correctly
+	# without the real button present.
+	var peek_spacer := Control.new()
+	peek_spacer.custom_minimum_size = Vector2(58.0, 58.0)
+	peek_spacer.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	header.add_child(peek_spacer)
 
 	var eye_icon := EyeIcon.new()
 	eye_icon.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -200,7 +244,7 @@ func _build_ui() -> void:
 	eye_icon.offset_top    =  9.0
 	eye_icon.offset_bottom = -9.0
 	eye_icon.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	btn_peek.add_child(eye_icon)
+	_btn_peek.add_child(eye_icon)
 
 	# Sell button — red, in the header row next to the close button.
 	# Left side: trashcan icon. Right side: coin icon + refund amount.
@@ -291,7 +335,9 @@ func _apply_trap_theme() -> void:
 	var s    := base.s
 	var v    := base.v
 
-	COLOR_BG                  = Color.from_hsv(h, s * 0.75, v * 0.15, 0.80)
+	# Background derives from the same hue/saturation as the outline so the panel
+	# reads as a unified themed block — just much darker (0.62 * 0.35 ≈ 22% of outline brightness).
+	COLOR_BG                  = Color.from_hsv(h, s * 0.85, v * 0.62 * 0.35, 0.88)
 	COLOR_OUTLINE             = Color.from_hsv(h, s * 0.85, v * 0.62, 1.0)
 	COLOR_DIVIDER             = Color.from_hsv(h, s * 0.75, v * 0.22, 1.0)
 	COLOR_TEXT_DIM            = Color.from_hsv(h, s * 0.35, v * 0.78, 1.0)
@@ -444,9 +490,9 @@ func _refresh_stat_row(
 	cur_text: String, after_text: String,
 	maxed: bool, cost: int
 ) -> void:
-	row["name"].text  = name_text
-	row["stars"].text = _stars(level)
-	row["cur"].text   = cur_text
+	row["name"].text    = name_text
+	row["stars"].set_level(level)
+	row["cur"].text     = cur_text
 
 	if maxed:
 		# Hide the delta label so "MAX" fills the full button width and can center itself.
@@ -464,7 +510,7 @@ func _refresh_stat_row(
 		var can_afford := GameState.bug_bucks >= cost
 		var delta_color := COLOR_DELTA_AFFORDABLE if can_afford else COLOR_DELTA_UNAFFORDABLE
 		row["after"].add_theme_color_override("font_color", delta_color)
-		row["cost"].text    = "🪙%d" % cost
+		row["cost"].text    = "🪙" + GameState.format_bucks(cost)
 		row["btn"].disabled = not can_afford
 		_apply_button_style(row["btn"], false)
 
@@ -474,6 +520,7 @@ func _refresh_stat_row(
 # ---------------------------------------------------------------------------
 
 ## Closes the panel when the player taps outside it (on either mouse or touch).
+## During peek mode, also routes pointer-motion events to the hover tooltip.
 func _input(event: InputEvent) -> void:
 	var pos   := Vector2.ZERO
 	var fired := false
@@ -486,6 +533,14 @@ func _input(event: InputEvent) -> void:
 	if fired and not _panel_rect.has_point(pos):
 		get_viewport().set_input_as_handled()
 		_on_close()
+		return
+
+	# During peek, track pointer movement to show/hide the unit name tooltip.
+	if _is_peeking:
+		if event is InputEventMouseMotion:
+			_update_peek_tooltip(event.position)
+		elif event is InputEventScreenDrag:
+			_update_peek_tooltip(event.position)
 
 
 func _on_btn_a() -> void:
@@ -542,13 +597,113 @@ func _on_btn_e() -> void:
 
 
 func _on_peek_down() -> void:
-	_bg.modulate.a     = 0.18
-	_border.modulate.a = 0.18
+	_is_peeking = true
+	_visual.modulate.a   = 0.0    # fully transparent — panel, border, and all content hidden
+	_btn_peek.modulate.a = 0.50   # button stays visible at half opacity so the player can find and release it
+	# Highlight the selected trap — brighter white range circle and matching white footprint outline.
+	_trap.show_range_indicator_peek()
+	_trap.show_peek_outline()   # white — matches the selected trap's white ring
+	# Show each buffing boost with its identity-coloured range circle and a matching outline.
+	# The outline color is passed explicitly so each boost's bars read as the same hue as
+	# its ring, distinguishing it from the selected trap's white circle.
+	_peek_boost_sources = _trap.get_boost_source_nodes()
+	for boost in _peek_boost_sources:
+		if is_instance_valid(boost):
+			boost.show_range_indicator_peek_dim()
+			boost.show_peek_outline(boost.get_base_color())
+	# Dim every other placed trap and boost so the selected trap and its active
+	# boost sources read clearly against a muted background.
+	# _peek_boost_sources is already populated above, so exclude is final here.
+	_peeked_dim_units.clear()
+	var exclude: Array = [_trap] + _peek_boost_sources
+	for unit in get_tree().get_nodes_in_group("placed_traps"):
+		if is_instance_valid(unit) and not (unit in exclude):
+			# get_nodes_in_group returns Array[Node]; use .call() to invoke the method
+			# without triggering UNSAFE_METHOD_ACCESS in Godot 4.5's stricter type checker.
+			unit.call(&"dim_for_peek")
+			_peeked_dim_units.append(unit)
+	for unit in get_tree().get_nodes_in_group("placed_boosts"):
+		if is_instance_valid(unit) and not (unit in exclude):
+			unit.call(&"dim_for_peek")
+			_peeked_dim_units.append(unit)
+	# Create the hover tooltip. Added to self (the CanvasLayer) so it sits at full
+	# opacity as a sibling of _visual — not dimmed with the rest of the panel.
+	_peek_tooltip = _PeekTooltip.new()
+	_peek_tooltip.setup(UIFonts.primary_bold(), 14)
+	_peek_tooltip.visible = false
+	add_child(_peek_tooltip)
 
 
 func _on_peek_up() -> void:
-	_bg.modulate.a     = 1.0
-	_border.modulate.a = 1.0
+	_is_peeking = false
+	_visual.modulate.a   = 1.0
+	_btn_peek.modulate.a = 1.0
+	# Restore the selected trap's range circle and outline to normal pinned state.
+	_trap.hide_range_indicator_peek()
+	_trap.hide_peek_outline()
+	for boost in _peek_boost_sources:
+		if is_instance_valid(boost):
+			boost.hide_range_indicator()
+			boost.hide_peek_outline()
+	_peek_boost_sources.clear()
+	# Restore all units that were dimmed when peek started.
+	for unit in _peeked_dim_units:
+		if is_instance_valid(unit):
+			unit.call(&"undim_for_peek")
+	_peeked_dim_units.clear()
+	if _peek_tooltip != null:
+		_peek_tooltip.queue_free()
+		_peek_tooltip = null
+
+
+## Called during peek mode when the pointer moves. Casts a ray from the screen
+## position to the y = 0 arena plane and checks whether the hit point falls inside
+## the selected trap's 2×2 footprint or any active boost source. If so, shows
+## the _PeekTooltip anchored to the unit's bottom-right screen corner; otherwise
+## hides it.
+func _update_peek_tooltip(screen_pos: Vector2) -> void:
+	if _peek_tooltip == null:
+		return
+	var camera := get_viewport().get_camera_3d()
+	if camera == null:
+		_peek_tooltip.visible = false
+		return
+
+	# Unproject the screen position to the y = 0 arena plane via ray–plane intersection.
+	var from := camera.project_ray_origin(screen_pos)
+	var dir  := camera.project_ray_normal(screen_pos)
+	if absf(dir.y) < 0.0001:
+		_peek_tooltip.visible = false
+		return
+	var t         := -from.y / dir.y
+	var world_pos := from + dir * t
+
+	# Each unit occupies a 2×2 cell block centred at global_position (1.0 m half-size).
+	# A small margin (0.1 m) makes the hit area easier to land on mobile.
+	const HALF_SIZE: float = 1.10
+	var hit_unit: Node = null
+
+	var candidates: Array = [_trap]
+	for b in _peek_boost_sources:
+		if is_instance_valid(b):
+			candidates.append(b)
+
+	for unit in candidates:
+		if not is_instance_valid(unit):
+			continue
+		if absf(world_pos.x - unit.global_position.x) <= HALF_SIZE \
+				and absf(world_pos.z - unit.global_position.z) <= HALF_SIZE:
+			hit_unit = unit
+			break
+
+	if hit_unit == null:
+		_peek_tooltip.visible = false
+		return
+
+	# Center the tooltip at PEEK_TOOLTIP_OFFSET from the pointer — above-left of the
+	# finger so the fingertip does not obscure the label on touch screens.
+	_peek_tooltip.show_for(hit_unit.get_type_name())
+	_peek_tooltip.position = screen_pos + PEEK_TOOLTIP_OFFSET - _peek_tooltip.size * 0.5
 
 
 func _on_btn_sell() -> void:
@@ -760,16 +915,9 @@ func _build_stat_button_row(y: float, inner_w: float) -> Dictionary:
 
 	_set_mouse_passthrough(btn_hbox)
 
-	# Stars — rightmost element, sizes to its text content (always 3 characters).
-	var lbl_stars := Label.new()
-	lbl_stars.vertical_alignment  = VERTICAL_ALIGNMENT_CENTER
+	# Stars — rightmost element. StarBar draws polygon stars — no font dependency.
+	var lbl_stars := StarBar.new()
 	lbl_stars.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	lbl_stars.add_theme_font_size_override("font_size", 52)
-	lbl_stars.add_theme_color_override("font_color", COLOR_STARS)
-	lbl_stars.add_theme_color_override("font_outline_color", Color(0.08, 0.08, 0.08, 1.0))
-	lbl_stars.add_theme_constant_override("outline_size", 4)
-	lbl_stars.add_theme_font_override("font", UIFonts.primary_bold())
-	lbl_stars.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	hbox.add_child(lbl_stars)
 
 	return {
@@ -792,9 +940,7 @@ func _set_mouse_passthrough(node: Control) -> void:
 			_set_mouse_passthrough(child)
 
 
-## Returns filled/empty star characters for the given upgrade level out of 3.
-func _stars(level: int) -> String:
-	return "★".repeat(level) + "☆".repeat(3 - level)
+## (Removed — star display is now handled by StarBar.gd using draw_polygon().)
 
 
 func _add_divider(y: float, inner_w: float) -> void:
@@ -825,7 +971,10 @@ func _apply_button_style(btn: Button, maxed: bool) -> void:
 			box.content_margin_top    = 4.0
 			box.content_margin_bottom = 4.0
 			btn.add_theme_stylebox_override(state, box)
-		btn.add_theme_color_override("font_color", COLOR_TEXT_DIM)
+		# Disabled buttons use font_disabled_color, not font_color.
+		# Gold matches the border and signals "this is a completed achievement"
+		# rather than "this is blocked by cost" (which uses COLOR_TEXT_DIM).
+		btn.add_theme_color_override("font_disabled_color", COLOR_GOLD)
 		return
 
 	for state: Array in [
@@ -889,6 +1038,79 @@ func _apply_sell_button_style(btn: Button) -> void:
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
 	btn.focus_mode = Control.FOCUS_NONE
+
+
+# ---------------------------------------------------------------------------
+# Panel frame — draws the coloured border ring and background via canvas
+# primitives (draw_polygon + draw_rect) rather than StyleBoxFlat.
+#
+# Root cause of all previous failures: Godot's gl_compatibility renderer
+# does not support StyleBoxFlat corner_radius rendering — that feature uses
+# a shader that gl_compat doesn't provide. draw_polygon() is a fundamental
+# canvas call that works in every renderer, including gl_compatibility.
+#
+# Shape: full rect with two rounded top corners and two square bottom corners.
+# The border ring is the area between the outer polygon edge and the inset
+# background rect. Both are drawn in a single _draw() call.
+# ---------------------------------------------------------------------------
+class _PanelFrame extends Control:
+	var outline_color: Color = Color.WHITE
+	var bg_color:      Color = Color.BLACK
+	var bw:            float = 6.0    # border width in pixels
+	var cr:            float = 16.0   # corner radius for the two top corners
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		if w <= 0.0 or h <= 0.0:
+			return
+
+		# Outer shape: full panel rect with rounded top corners — border colour.
+		var outer := _rounded_top_poly(0.0, 0.0, w, h, cr, 12)
+		var oc    := PackedColorArray()
+		oc.resize(outer.size())
+		oc.fill(outline_color)
+		draw_polygon(outer, oc)
+
+		# Inner shape: background colour, inset by border width on all sides.
+		# Drawn as a rounded polygon (radius = cr − bw) so the border ring stays
+		# uniform thickness all the way into the top corners. A plain draw_rect()
+		# would cut straight across the curve and leave the inner top corners square.
+		var inner_r := maxf(0.0, cr - bw)
+		var inner   := _rounded_top_poly(bw, bw, w - bw * 2.0, h - bw * 2.0, inner_r, 12)
+		var ic      := PackedColorArray()
+		ic.resize(inner.size())
+		ic.fill(bg_color)
+		draw_polygon(inner, ic)
+
+	## Builds a closed polygon for a rectangle whose top two corners are rounded
+	## by radius r and whose bottom two corners are square.
+	## All coordinates are in local (Control-relative) space.
+	static func _rounded_top_poly(
+		x: float, y: float, w: float, h: float, r: float, segs: int
+	) -> PackedVector2Array:
+		var pts  := PackedVector2Array()
+		var step := (PI * 0.5) / float(segs)
+
+		# Top-left arc — centre at (x+r, y+r), sweeping from 180° to 270°
+		for i in segs + 1:
+			var a := PI + step * float(i)
+			pts.append(Vector2(x + r + cos(a) * r, y + r + sin(a) * r))
+
+		# Top-right arc — centre at (x+w-r, y+r), sweeping from 270° to 360°
+		for i in segs + 1:
+			var a := PI * 1.5 + step * float(i)
+			pts.append(Vector2(x + w - r + cos(a) * r, y + r + sin(a) * r))
+
+		# Bottom-right corner (square) then bottom-left corner (square)
+		pts.append(Vector2(x + w, y + h))
+		pts.append(Vector2(x, y + h))
+
+		return pts
 
 
 # ---------------------------------------------------------------------------
@@ -984,3 +1206,61 @@ class EyeIcon extends Control:
 			Vector2(cx + rx * 0.95, cy - ry * 1.20),
 			blk, lw * 1.5, true
 		)
+
+
+# ---------------------------------------------------------------------------
+# Peek tooltip — compact name badge shown pinned to the bottom-right corner
+# of a unit while the player hovers over it during peek mode.
+#
+# Silver outline + dark gray fill + bold white text. Sized dynamically to
+# fit the unit name; no wrapping. Added as a sibling of _visual on the
+# CanvasLayer so it is NOT dimmed when _visual.modulate is reduced during peek.
+#
+# Inner classes cannot access outer-class preloads (UIFonts), so the font
+# resource is passed in via setup() by the outer class before first use.
+# ---------------------------------------------------------------------------
+class _PeekTooltip extends Control:
+	const PAD_H:  float = 7.0   # horizontal space between border edge and text
+	const PAD_V:  float = 4.0   # vertical space between border edge and text
+	const BORDER: float = 2.0   # outline ring thickness
+
+	var _lbl: Label = null
+
+	func _ready() -> void:
+		mouse_filter = Control.MOUSE_FILTER_IGNORE
+
+	## Supply the font after instantiation.
+	func setup(font: Font, font_size: int) -> void:
+		_lbl = Label.new()
+		_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_lbl.add_theme_font_override("font", font)
+		_lbl.add_theme_font_size_override("font_size", font_size)
+		_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+		_lbl.position = Vector2(BORDER + PAD_H, BORDER + PAD_V)
+		add_child(_lbl)
+
+	## Update the displayed name and resize the panel to fit the new text.
+	func show_for(unit_name: String) -> void:
+		if _lbl == null:
+			return
+		_lbl.text = unit_name
+		# Measure the text directly via the font so we can size the Control
+		# without waiting for a layout pass.
+		var font:      Font = _lbl.get_theme_font("font")
+		var font_size: int  = _lbl.get_theme_font_size("font_size")
+		var text_w: float   = font.get_string_size(unit_name, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		var text_h: float   = font.get_height(font_size)
+		_lbl.size           = Vector2(text_w, text_h)
+		size                = Vector2(text_w + (BORDER + PAD_H) * 2.0,
+									  text_h + (BORDER + PAD_V) * 2.0)
+		visible             = true
+		queue_redraw()
+
+	func _draw() -> void:
+		var w := size.x
+		var h := size.y
+		# Silver outline.
+		draw_rect(Rect2(0.0, 0.0, w, h), Color(0.75, 0.75, 0.80, 1.0))
+		# Dark gray fill, inset by the border width.
+		draw_rect(Rect2(BORDER, BORDER, w - BORDER * 2.0, h - BORDER * 2.0),
+				  Color(0.14, 0.14, 0.16, 0.97))

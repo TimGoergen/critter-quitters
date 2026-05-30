@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Pheromone Dispenser — frame 2 (rotated 22.5°) -->
+  <circle cx="64" cy="64" r="46" fill="#7A3000"/>
+  <circle cx="64" cy="64" r="42" fill="#C84E00"/>
+  <g transform="rotate(22.5, 64, 64)">
+    <rect x="60" y="26" width="8" height="22" rx="4" fill="#E86010"/>
+    <circle cx="64" cy="22" r="7" fill="#FF9030"/>
+    <rect x="80" y="60" width="22" height="8" rx="4" fill="#E86010"/>
+    <circle cx="106" cy="64" r="7" fill="#FF9030"/>
+    <rect x="60" y="80" width="8" height="22" rx="4" fill="#E86010"/>
+    <circle cx="64" cy="106" r="7" fill="#FF9030"/>
+    <rect x="26" y="60" width="22" height="8" rx="4" fill="#E86010"/>
+    <circle cx="22" cy="64" r="7" fill="#FF9030"/>
+    <circle cx="64" cy="64" r="16" fill="#F07018"/>
+    <circle cx="64" cy="64" r="8" fill="#FFA040"/>
+    <circle cx="64" cy="20" r="3" fill="#FFEE88"/>
+  </g>
+  <ellipse cx="60" cy="60" rx="5" ry="3.5" fill="white" opacity="0.30"/>
+</svg>

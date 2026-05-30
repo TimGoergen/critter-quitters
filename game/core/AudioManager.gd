@@ -259,23 +259,26 @@ func _hit_stream(trap_type: int) -> AudioStream:
 
 
 func _death_stream(enemy_type: int) -> AudioStream:
-	# Enemy.EnemyType: ANT=0, GNAT=1, CRICKET=2, BEETLE=3, COCKROACH=4, RAT=5
+	# Enemy.EnemyType: ANT=0, GNAT=1, CRICKET=2, BEETLE=3, COCKROACH=4, MOUSE=5,
+	#                  MOSQUITO=6, RAT_KING=7, RAT=8
 	match enemy_type:
 		0, 1: return sfx_death_small    # Ant, Gnat
 		2, 3: return sfx_death_medium   # Cricket, Beetle
 		4:    return sfx_death_large    # Cockroach
-		5:    return sfx_death_rat      # Rat
+		5, 7, 8: return sfx_death_rat   # Mouse, Rat King, Rat (shared rodent sound)
 	return null
 
 
 func _step_stream(enemy_type: int) -> AudioStream:
+	# Enemy.EnemyType: ANT=0, GNAT=1, CRICKET=2, BEETLE=3, COCKROACH=4, MOUSE=5,
+	#                  MOSQUITO=6, RAT_KING=7, RAT=8
 	match enemy_type:
 		0: return sfx_step_ant
 		1: return sfx_step_gnat
 		2: return sfx_step_cricket
 		3: return sfx_step_beetle
 		4: return sfx_step_cockroach
-		5: return sfx_step_rat
+		5, 7, 8: return sfx_step_rat   # Mouse, Rat King, Rat (shared rodent sound)
 	return null
 
 

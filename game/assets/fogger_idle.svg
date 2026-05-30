@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="128"
+   height="128"
+   viewBox="0 0 128 128"
+   version="1.1"
+   id="svg12"
+   sodipodi:docname="fogger_idle.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs12" />
+  <sodipodi:namedview
+     id="namedview12"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="6.3046875"
+     inkscape:cx="64"
+     inkscape:cy="63.920694"
+     inkscape:window-width="958"
+     inkscape:window-height="1000"
+     inkscape:window-x="2873"
+     inkscape:window-y="0"
+     inkscape:window-maximized="0"
+     inkscape:current-layer="svg12" />
+  <!-- From above: aerosol fogger = concentric rings + nozzle arm -->
+  <!-- Outer body ring — dark green border -->
+  <circle
+     cx="64"
+     cy="64"
+     r="46"
+     fill="#1E6010"
+     id="circle1" />
+  <!-- Body — vivid green -->
+  <circle
+     cx="64"
+     cy="64"
+     r="42"
+     fill="#4ACC1E"
+     id="circle2" />
+  <!-- Amber label band (ring) -->
+  <circle
+     cx="64"
+     cy="64"
+     r="32"
+     fill="#E8B800"
+     id="circle3" />
+  <!-- Gray shoulder dome -->
+  <circle
+     cx="64"
+     cy="64"
+     r="22"
+     fill="#707078"
+     id="circle4" />
+  <!-- Silver nozzle cap -->
+  <circle
+     cx="64"
+     cy="64"
+     r="13"
+     fill="#B8B8C0"
+     id="circle5" />
+  <!-- Nozzle center (valve) -->
+  <circle
+     cx="64"
+     cy="64"
+     r="5"
+     fill="#888890"
+     id="circle6" />
+  <!-- Nozzle arm extending from housing -->
+  <rect
+     x="62"
+     y="14"
+     width="8"
+     height="22"
+     rx="4"
+     fill="#888890"
+     id="rect6" />
+  <!-- Nozzle tip — orange spray tip -->
+  <circle
+     cx="66"
+     cy="16"
+     r="7"
+     fill="#FF7020"
+     id="circle7" />
+  <circle
+     cx="66"
+     cy="16"
+     r="3.5"
+     fill="#FF9040"
+     id="circle8" />
+  <!-- Label text band highlights (horizontal stripes) -->
+  <line
+     x1="38.308537"
+     y1="58"
+     x2="90.48452"
+     y2="58"
+     stroke="#b07800"
+     stroke-width="1.93567"
+     stroke-linecap="round"
+     opacity="0.6"
+     id="line8"
+     style="stroke:#a3a3a3;stroke-opacity:1;opacity:1" />
+  <line
+     x1="34"
+     y1="64"
+     x2="94"
+     y2="64"
+     stroke="#B07800"
+     stroke-width="2"
+     stroke-linecap="round"
+     opacity="0.60"
+     id="line9"
+     style="opacity:1;stroke:#505050;stroke-opacity:1;stroke-linejoin:miter" />
+  <line
+     x1="38.4687"
+     y1="70"
+     x2="90.800201"
+     y2="70"
+     stroke="#b07800"
+     stroke-width="1.95752"
+     stroke-linecap="round"
+     opacity="0.6"
+     id="line10"
+     style="stroke:#a3a3a3;stroke-opacity:1;opacity:1" />
+  <!-- Body specular -->
+  <ellipse
+     cx="50"
+     cy="38"
+     rx="9"
+     ry="6"
+     fill="white"
+     opacity="0.22"
+     id="ellipse10" />
+  <!-- Dome specular -->
+  <ellipse
+     cx="60"
+     cy="57"
+     rx="5"
+     ry="3.5"
+     fill="white"
+     opacity="0.30"
+     id="ellipse11" />
+  <!-- Floor shadow -->
+  <ellipse
+     cx="64"
+     cy="112"
+     rx="30"
+     ry="5"
+     fill="#000000"
+     opacity="0.20"
+     id="ellipse12" />
+</svg>

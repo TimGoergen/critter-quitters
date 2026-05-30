@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="128"
+   height="128"
+   viewBox="0 0 128 128"
+   version="1.1"
+   id="svg9"
+   sodipodi:docname="glue_board_idle.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs9" />
+  <sodipodi:namedview
+     id="namedview9"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="6.3046875"
+     inkscape:cx="65.348203"
+     inkscape:cy="60.193309"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="1912"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg9" />
+  <!-- Landscape glue board from above -->
+  <!-- Dark cardboard border shadow -->
+  <rect
+     x="12"
+     y="34"
+     width="104"
+     height="60"
+     rx="5"
+     fill="#3A2808"
+     id="rect1" />
+  <!-- Cardboard base — warm tan -->
+  <rect
+     x="16"
+     y="38"
+     width="96"
+     height="52"
+     rx="3"
+     fill="#C8924A"
+     id="rect2"
+     style="fill:#ff7a13;fill-opacity:1" />
+  <!-- Red packaging end tabs -->
+  <rect
+     x="16"
+     y="38"
+     width="18"
+     height="52"
+     rx="3"
+     fill="#CC1A08"
+     id="rect3" />
+  <rect
+     x="94"
+     y="38"
+     width="18"
+     height="52"
+     rx="3"
+     fill="#CC1A08"
+     id="rect4" />
+  <!-- Cardboard gap seam lines -->
+  <line
+     x1="34"
+     y1="40"
+     x2="34"
+     y2="88"
+     stroke="#3A2808"
+     stroke-width="1.5"
+     stroke-dasharray="3,3"
+     id="line4" />
+  <line
+     x1="94"
+     y1="40"
+     x2="94"
+     y2="88"
+     stroke="#3A2808"
+     stroke-width="1.5"
+     stroke-dasharray="3,3"
+     id="line5" />
+  <!-- Amber adhesive surface -->
+  <rect
+     x="36"
+     y="39.413879"
+     width="56"
+     height="48.696407"
+     rx="2"
+     fill="#ffcb1a"
+     opacity="0.94"
+     id="rect5"
+     ry="2"
+     style="stroke-width:1.02889" />
+  <!-- Gloss sheen on adhesive (light stripe) -->
+  <rect
+     x="38"
+     y="43"
+     width="20"
+     height="40"
+     rx="1"
+     fill="white"
+     opacity="0.14"
+     id="rect6" />
+  <!-- Centre crease line -->
+  <line
+     x1="40"
+     y1="64"
+     x2="88"
+     y2="64"
+     stroke="#C8A000"
+     stroke-width="2.5"
+     stroke-linecap="round"
+     opacity="0.70"
+     id="line6"
+     style="fill:#4f3d00;fill-opacity:1;opacity:1;stroke-width:3;stroke-dasharray:none;stroke:#473900;stroke-opacity:1" />
+  <!-- Small sticker label on adhesive -->
+  <rect
+     x="52"
+     y="55.634449"
+     height="18"
+     fill="#FFE860"
+     opacity="0.70"
+     id="rect7"
+     style="opacity:1;fill:#f6ff53;fill-opacity:1;stroke:#ff8518;stroke-width:2.8;stroke-dasharray:none;stroke-opacity:1;paint-order:markers stroke fill"
+     rx="3"
+     width="24" />
+  <line
+     x1="54"
+     y1="68.965309"
+     x2="74"
+     y2="68.965309"
+     stroke="#c4a000"
+     stroke-width="1.5"
+     opacity="0.6"
+     id="line8"
+     style="opacity:1;fill:#000000;fill-opacity:1;stroke:#4b3d00;stroke-opacity:1" />
+  <!-- Red tab specular highlights -->
+  <ellipse
+     cx="22"
+     cy="50"
+     rx="4"
+     ry="6"
+     fill="white"
+     opacity="0.20"
+     id="ellipse8" />
+  <ellipse
+     cx="106"
+     cy="50"
+     rx="4"
+     ry="6"
+     fill="white"
+     opacity="0.20"
+     id="ellipse9" />
+  <line
+     x1="54.475838"
+     y1="59.096653"
+     x2="74.475838"
+     y2="59.096653"
+     stroke="#c4a000"
+     stroke-width="1.5"
+     opacity="0.60"
+     id="line7"
+     style="opacity:1;fill:#000000;fill-opacity:1;stroke:#4b3d00;stroke-opacity:1" />
+</svg>

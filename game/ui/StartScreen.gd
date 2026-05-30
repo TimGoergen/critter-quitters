@@ -1,6 +1,7 @@
 ## StartScreen.gd
 ## The game's opening screen. Displays the Critter Quitters van illustration as the
-## title graphic, a company slogan, and two buttons: "Start Buggin'" and "Bug Out".
+## title graphic, a scattered pile of business cards, and two buttons:
+## "Start Buggin'" and "Bug Out".
 ##
 ## When the player taps "Start Buggin'", the van accelerates left off screen while
 ## exhaust puffs billow from its rear, then the scene transitions to Main.tscn.
@@ -13,7 +14,6 @@ extends CanvasLayer
 const UIFonts = preload("res://ui/UIFonts.gd")
 
 const COLOR_BG     := Color(0.06, 0.06, 0.10, 1.0)
-const COLOR_SLOGAN := Color(0.75, 0.75, 0.78, 1.0)
 const COLOR_TEXT   := Color(0.90, 0.90, 0.90, 1.0)
 
 const COLOR_GREEN_NORMAL  := Color(0.04, 0.25, 0.00, 1.0)
@@ -39,7 +39,27 @@ const VAN_REF_H := 1024.0
 const TAILPIPE_IMG_X := 875.0
 const TAILPIPE_IMG_Y := 450.0
 
+# Business card scales to 40% of viewport width, measured against the content
+# rect (via get_used_rect) so transparent padding in the PNG doesn't throw off
+# the size or position calculation.
+const CARD_WIDTH_FRAC    := 0.24
+# The top card (last drawn, highest z-order) is scaled up so it reads as the
+# "featured" card sitting on top of the pile.
+const TOP_CARD_SCALE_MULT := 1.50
+
+# Four cards dropped in a pile. Each entry: [rotation_deg, x_offset_frac, y_offset_frac, brightness].
+# Drawn bottom-to-top (index 0 is furthest back). Offsets are fractions of viewport size
+# applied relative to the pile anchor point so the layout scales with the screen.
+const _CARD_PILE: Array = [
+	[  9.0, -0.08,  0.26, 0.20],
+	[  5.0, -0.09,  0.10, 0.27],
+	[ -7.0, -0.05,  0.14, 0.33],
+	[ 13.0, -0.02, -0.13, 0.40],
+	[-17.0,  0.00,  0.03, 0.80],
+]
+
 var _van:       Sprite2D
+var _cards:     Array[Sprite2D] = []
 var _start_btn: Button
 var _quit_btn:  Button
 
@@ -54,8 +74,18 @@ func _on_viewport_resized() -> void:
 		return
 	var vp      := get_viewport().get_visible_rect().size
 	var scale_f := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
-	_van.scale    = Vector2(scale_f, scale_f)
-	_van.position = Vector2(vp.x * 0.5, vp.y * 0.40)
+	_van.scale    = Vector2(scale_f * 1.485, scale_f * 1.485)
+	_van.position = Vector2(vp.x * 0.65, vp.y * 0.40)
+
+	for i: int in _cards.size():
+		var entry: Array  = _CARD_PILE[i]
+		var card_scale    := (vp.x * CARD_WIDTH_FRAC) / _cards[i].region_rect.size.x
+		var scale_mult    := TOP_CARD_SCALE_MULT if i == _cards.size() - 1 else 1.0
+		_cards[i].scale    = Vector2(card_scale * scale_mult, card_scale * scale_mult)
+		_cards[i].position = Vector2(
+			vp.x * 0.22 + vp.x * float(entry[1]),
+			vp.y * 0.32 + vp.y * float(entry[2])
+		)
 
 
 func _build_ui() -> void:
@@ -68,34 +98,44 @@ func _build_ui() -> void:
 	bg.color = COLOR_BG
 	add_child(bg)
 
+	# --- Business card pile ---
+	# Four cards with varying rotations and small position offsets to simulate a
+	# dropped pile. region_enabled clips to get_used_rect() so transparent PNG
+	# padding is excluded from scale and position math.
+	var card_tex:  Texture2D = load("res://assets/BusinessCard.png")
+	var used_rect            := card_tex.get_image().get_used_rect()
+	var card_scale           := (vp.x * CARD_WIDTH_FRAC) / used_rect.size.x
+	var pile_x               := vp.x * 0.22
+	var pile_y               := vp.y * 0.32
+	for i: int in _CARD_PILE.size():
+		var entry: Array   = _CARD_PILE[i]
+		var scale_mult     := TOP_CARD_SCALE_MULT if i == _CARD_PILE.size() - 1 else 1.0
+		var c              := Sprite2D.new()
+		c.texture           = card_tex
+		c.region_enabled    = true
+		c.region_rect       = Rect2(used_rect)
+		c.centered          = true
+		c.rotation_degrees  = float(entry[0])
+		var b: float        = float(entry[3])
+		c.modulate          = Color(b, b, b, 1.0)
+		c.scale             = Vector2(card_scale * scale_mult, card_scale * scale_mult)
+		c.position          = Vector2(pile_x + vp.x * float(entry[1]), pile_y + vp.y * float(entry[2]))
+		_cards.append(c)
+		add_child(c)
+
 	# --- Van illustration ---
-	# "Contain" scale: largest size where the full image fits on screen.
-	# centered = true (Godot default) means the texture is drawn with its
-	# centre at `position`, so (vp/2, vp/2) puts the sprite exactly in the
-	# middle of the screen regardless of image dimensions or scale.
+	# z_index = 1 guarantees the van renders above all z_index = 0 nodes
+	# (cards, exhaust puffs) regardless of scene-tree position, including
+	# while it drives left over the card pile during the exit animation.
 	var van_tex: Texture2D = load("res://assets/van.png")
 	_van          = Sprite2D.new()
 	_van.texture  = van_tex
 	_van.centered = true
+	_van.z_index  = 1
 	var scale_f   := minf(vp.x / VAN_REF_W, vp.y / VAN_REF_H)
-	_van.scale    = Vector2(scale_f, scale_f)
-	_van.position = Vector2(vp.x * 0.5, vp.y * 0.40)
+	_van.scale    = Vector2(scale_f * 1.485, scale_f * 1.485)
+	_van.position = Vector2(vp.x * 0.65, vp.y * 0.40)
 	add_child(_van)
-
-	# --- Slogan ---
-	var slogan := Label.new()
-	slogan.text                 = "\"Bugs don't have to go home but they can't stay here\""
-	slogan.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	slogan.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	slogan.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
-	slogan.anchor_left          = 0.10
-	slogan.anchor_right         = 0.90
-	slogan.anchor_top           = 0.72
-	slogan.anchor_bottom        = 0.80
-	slogan.add_theme_font_override("font", UIFonts.flavor_bold())
-	slogan.add_theme_font_size_override("font_size", 26)
-	slogan.add_theme_color_override("font_color", COLOR_SLOGAN)
-	add_child(slogan)
 
 	# --- Buttons: side by side, equal width, centred ---
 	# Each button shows a house icon beside its label to mirror the in-game
@@ -103,16 +143,16 @@ func _build_ui() -> void:
 	_start_btn = _make_icon_button("Start Buggin'", "res://assets/uninfested.png", true)
 	_start_btn.anchor_left   = 0.25
 	_start_btn.anchor_right  = 0.48
-	_start_btn.anchor_top    = 0.82
-	_start_btn.anchor_bottom = 0.92
+	_start_btn.anchor_top    = 0.80
+	_start_btn.anchor_bottom = 0.90
 	_start_btn.pressed.connect(_on_start_pressed)
 	add_child(_start_btn)
 
 	_quit_btn = _make_icon_button("Bug Out", "res://assets/infestation_level.png", false)
 	_quit_btn.anchor_left   = 0.52
 	_quit_btn.anchor_right  = 0.75
-	_quit_btn.anchor_top    = 0.82
-	_quit_btn.anchor_bottom = 0.92
+	_quit_btn.anchor_top    = 0.80
+	_quit_btn.anchor_bottom = 0.90
 	_quit_btn.pressed.connect(_on_quit_pressed)
 	add_child(_quit_btn)
 
@@ -220,7 +260,6 @@ func _spawn_exhaust_puffs() -> void:
 		)
 		puff.max_radius = randf_range(76.5, 103.5)   # base 90, ±15%
 		add_child(puff)
-		move_child(puff, _van.get_index())
 
 
 func _on_van_exited() -> void:

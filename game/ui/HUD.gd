@@ -12,9 +12,10 @@
 
 extends CanvasLayer
 
-const Trap      = preload("res://traps/Trap.gd")
-const BoostUnit = preload("res://boosts/BoostUnit.gd")
-const UIFonts   = preload("res://ui/UIFonts.gd")
+const Trap           = preload("res://traps/Trap.gd")
+const BoostUnit      = preload("res://boosts/BoostUnit.gd")
+const UIFonts        = preload("res://ui/UIFonts.gd")
+const ExperienceBar  = preload("res://ui/ExperienceBar.gd")
 
 const GEAR_OUTLINE_SHADER = preload("res://assets/gear_outline.gdshader")
 
@@ -54,7 +55,7 @@ const TRAP_BRAND: Array = [
 	{"normal": Color(0.52, 0.20, 0.07), "hover": Color(0.64, 0.26, 0.09), "sel": Color(0.68, 0.28, 0.10), "badge": "PRO GRADE"},
 	{"normal": Color(0.07, 0.25, 0.60), "hover": Color(0.10, 0.33, 0.76), "sel": Color(0.09, 0.30, 0.68), "badge": "+-1000V"},
 	{"normal": Color(0.09, 0.38, 0.18), "hover": Color(0.12, 0.48, 0.24), "sel": Color(0.11, 0.44, 0.20), "badge": "SAFE*"},
-	{"normal": Color(0.50, 0.34, 0.05), "hover": Color(0.62, 0.43, 0.07), "sel": Color(0.57, 0.38, 0.06), "badge": "STICKY"},
+	{"normal": Color(0.56, 0.27, 0.03), "hover": Color(0.70, 0.34, 0.04), "sel": Color(0.63, 0.30, 0.04), "badge": "STICKY"},
 	{"normal": Color(0.52, 0.10, 0.38), "hover": Color(0.66, 0.14, 0.48), "sel": Color(0.60, 0.12, 0.44), "badge": "FLYAWAY"},
 	{"normal": Color(0.25, 0.12, 0.32), "hover": Color(0.32, 0.16, 0.40), "sel": Color(0.29, 0.14, 0.37), "badge": "TOXIC"},
 ]
@@ -97,6 +98,10 @@ const INNER_BORDER_W: float = 2.0      # black separator line at the arena-facin
 const ROW_H:          float = 56.0     # fixed height for every trap and boost selector row
 const COLOR_SILVER_BORDER := Color(0.72, 0.72, 0.80, 1.0)
 const SILVER_BORDER_W: float = 4.0    # thickness of the silver panel border lines
+# Outer corner radius for each side panel — mimics the rounded edge of a phone display.
+# Only the screen-edge corners (top-left/bottom-left for the left panel; top-right/bottom-right
+# for the right panel) are rounded; the inner corners facing the arena remain sharp.
+const PANEL_CORNER_RADIUS: int = 20
 
 const PAUSE_BANNER_H:      float = 50.0
 # How many px each side angles inward from the top edge to the bottom edge.
@@ -116,7 +121,7 @@ var _incoming_banner:         Control = null
 var _incoming_banner_tween:   Tween   = null
 var _countdown_seconds_label: Label
 
-var _send_wave_btn:           Button           # ">>" fast-forward button inside the send-wave panel
+var _send_wave_btn:           Button           # fast-forward button inside the send-wave panel
 var _multiplier_btn:          Button           # small gold button cycling ×1 → ×5 → ×10
 var _multiplier_label:        Label
 var _send_wave_header_label:  Label            # "SEND 1 WAVE" / "SEND 5 WAVES" — updates with multiplier
@@ -243,6 +248,7 @@ func _build_ui() -> void:
 	_build_run_over_overlay()
 	_build_panel_borders()     # drawn last so borders appear on top of all panel content
 	_build_pause_banner()      # drawn after borders so it slides over the top edge
+	_build_experience_bar()    # overlaid on the arena zone, above all panel content
 
 
 # ---------------------------------------------------------------------------
@@ -678,9 +684,8 @@ void fragment() {
 	bold_font.base_font          = UIFonts.header()
 	bold_font.variation_embolden = 0.8
 
-	# >> send-wave button — dark background with gold border, same 50px height as
-	# the multiplier pill. Text is a Label child (not Button.text) so we can use
-	# VERTICAL_ALIGNMENT_CENTER with the same Bebas Neue font as the ×N labels.
+	# Send-wave button — dark background with gold border, same 50px height as
+	# the multiplier pill. Icon is a TextureRect child so it scales with the button.
 	_send_wave_btn = Button.new()
 	_send_wave_btn.text                  = ""
 	_send_wave_btn.custom_minimum_size   = Vector2(0, 50)
@@ -690,30 +695,21 @@ void fragment() {
 	_send_wave_btn.pressed.connect(_on_send_wave_pressed)
 	mid_hbox.add_child(_send_wave_btn)
 
-	var ff_bold_font := FontVariation.new()
-	ff_bold_font.base_font          = UIFonts.header()
-	ff_bold_font.variation_embolden = 1.12
-
-	var ff_label := Label.new()
-	ff_label.text                 = ">>"
-	ff_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	ff_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	ff_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	# Bebas Neue's reported descender (no visible glyphs below baseline) makes
-	# VERTICAL_ALIGNMENT_CENTER place glyphs above the geometric center. Shifting
-	# the rect down 4px (equal offset_top/bottom keeps height at 50px) moves the
-	# content center to y=29 so after the font-metric bias the glyphs land at y≈25.
-	ff_label.anchor_left   = 0.0
-	ff_label.anchor_right  = 1.0
-	ff_label.anchor_top    = 0.0
-	ff_label.anchor_bottom = 1.0
-	ff_label.offset_top    = 4
-	ff_label.offset_bottom = 4
-	ff_label.add_theme_font_override("font", ff_bold_font)
-	ff_label.add_theme_font_size_override("font_size", 44)
-	ff_label.add_theme_color_override("font_color",        COLOR_GOLD_BORDER)
-	ff_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
-	_send_wave_btn.add_child(ff_label)
+	var ff_texture := TextureRect.new()
+	ff_texture.texture      = load("res://assets/SendWave.svg")
+	# EXPAND_IGNORE_SIZE lets the rect be sized by anchors rather than by the
+	# SVG's natural pixel dimensions; STRETCH_KEEP_ASPECT_CENTERED then draws
+	# the image centered within whatever rect the button gives us.
+	ff_texture.expand_mode  = TextureRect.EXPAND_IGNORE_SIZE
+	ff_texture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	ff_texture.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	# Fill full width; vertically centered at 56% of button height (22% inset top and bottom).
+	# 56% = 70% target × 0.8 (user-requested 20% reduction).
+	ff_texture.anchor_left   = 0.0
+	ff_texture.anchor_right  = 1.0
+	ff_texture.anchor_top    = 0.22
+	ff_texture.anchor_bottom = 0.78
+	_send_wave_btn.add_child(ff_texture)
 
 	# Multiplier button — gold filled, true square (50×50) matching the >> button height.
 	_multiplier_btn = Button.new()
@@ -1019,21 +1015,63 @@ func _build_run_over_overlay() -> void:
 # Panel borders
 # ---------------------------------------------------------------------------
 
-## Draws thick silver lines around the left panel, arena, and right panel.
+## Draws the silver outline around the left panel, the arena center edges, and the right panel.
 ## Called last in _build_ui() so borders render on top of all panel content.
+##
+## Each side panel gets a single Panel + StyleBoxFlat that draws the full outline
+## (all four sides) in one pass.  The two outer corners of each panel — the ones
+## that sit at the physical edge of the phone display — use PANEL_CORNER_RADIUS so
+## the silver line follows the device's rounded bezel.  The inner corners (facing the
+## arena) are left at radius 0 so the outline meets the arena lines cleanly.
+## draw_center = false keeps the panel interior transparent; only the border strip
+## is visible over the existing dark panel background.
 func _build_panel_borders() -> void:
-	# Top edge — full width
-	_add_border_line(0.0, 0.0, 1.0, 0.0,  0.0,  0.0,  0.0,  SILVER_BORDER_W)
-	# Bottom edge — full width
-	_add_border_line(0.0, 1.0, 1.0, 1.0,  0.0, -SILVER_BORDER_W,  0.0,  0.0)
-	# Left screen edge
-	_add_border_line(0.0, 0.0, 0.0, 1.0,  0.0,  0.0,  SILVER_BORDER_W,  0.0)
-	# Right screen edge
-	_add_border_line(1.0, 0.0, 1.0, 1.0, -SILVER_BORDER_W,  0.0,  0.0,  0.0)
-	# Left panel / arena divider
-	_add_border_line(0.0, 0.0, 0.0, 1.0,  LEFT_PANEL_W,  0.0,  LEFT_PANEL_W + SILVER_BORDER_W,  0.0)
-	# Arena / right panel divider
-	_add_border_line(1.0, 0.0, 1.0, 1.0, -RIGHT_PANEL_W - SILVER_BORDER_W,  0.0, -RIGHT_PANEL_W,  0.0)
+	# --- Left panel outline ---
+	# Rounded: top-left, bottom-left.   Sharp: top-right, bottom-right (arena edge).
+	var left_border := Panel.new()
+	left_border.anchor_left   = 0.0
+	left_border.anchor_right  = 0.0
+	left_border.anchor_top    = 0.0
+	left_border.anchor_bottom = 1.0
+	left_border.offset_right  = LEFT_PANEL_W
+	left_border.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	var left_style := StyleBoxFlat.new()
+	left_style.draw_center                = false
+	left_style.border_color               = COLOR_SILVER_BORDER
+	left_style.set_border_width_all(int(SILVER_BORDER_W))
+	left_style.corner_radius_top_left     = PANEL_CORNER_RADIUS
+	left_style.corner_radius_bottom_left  = PANEL_CORNER_RADIUS
+	left_style.corner_radius_top_right    = 0
+	left_style.corner_radius_bottom_right = 0
+	left_border.add_theme_stylebox_override("panel", left_style)
+	add_child(left_border)
+
+	# --- Right panel outline ---
+	# Rounded: top-right, bottom-right.   Sharp: top-left, bottom-left (arena edge).
+	var right_border := Panel.new()
+	right_border.anchor_left   = 1.0
+	right_border.anchor_right  = 1.0
+	right_border.anchor_top    = 0.0
+	right_border.anchor_bottom = 1.0
+	right_border.offset_left   = -RIGHT_PANEL_W
+	right_border.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	var right_style := StyleBoxFlat.new()
+	right_style.draw_center                = false
+	right_style.border_color               = COLOR_SILVER_BORDER
+	right_style.set_border_width_all(int(SILVER_BORDER_W))
+	right_style.corner_radius_top_right    = PANEL_CORNER_RADIUS
+	right_style.corner_radius_bottom_right = PANEL_CORNER_RADIUS
+	right_style.corner_radius_top_left     = 0
+	right_style.corner_radius_bottom_left  = 0
+	right_border.add_theme_stylebox_override("panel", right_style)
+	add_child(right_border)
+
+	# --- Arena center edges ---
+	# The StyleBoxFlats above already draw the top and bottom border strips across
+	# their respective panels.  These two ColorRect lines bridge the gap across the
+	# arena zone to complete the top and bottom edges of the full-screen outline.
+	_add_border_line(0.0, 0.0, 1.0, 0.0,  LEFT_PANEL_W,  0.0,  -RIGHT_PANEL_W,  SILVER_BORDER_W)
+	_add_border_line(0.0, 1.0, 1.0, 1.0,  LEFT_PANEL_W,  -SILVER_BORDER_W,  -RIGHT_PANEL_W,  0.0)
 
 
 ## Trapezoidal tab that slides down from the top border when the game is paused.
@@ -1079,16 +1117,37 @@ func _build_pause_banner() -> void:
 	_pause_banner.add_child(label)
 
 
+## Builds the experience bar and pins it to the very top of the arena zone.
+## offset_top = 0 so the bar's own 4px silver border shares pixels with the
+## arena's top silver border — they are the same colour and merge visually.
+func _build_experience_bar() -> void:
+	var bar := ExperienceBar.new()
+	bar.anchor_left   = 0.0
+	bar.anchor_right  = 1.0
+	bar.anchor_top    = 0.0
+	bar.anchor_bottom = 0.0
+	bar.offset_left   = LEFT_PANEL_W
+	bar.offset_right  = -RIGHT_PANEL_W
+	bar.offset_top    = 0.0                    # was SILVER_BORDER_W — now overlaps the top outline
+	bar.offset_bottom = ExperienceBar.PANEL_H  # was SILVER_BORDER_W + PANEL_H
+	add_child(bar)
+
+
 ## Animates the pause banner into or out of view.
 ## Pass true to slide it down (paused), false to slide it back up (unpaused).
+## When visible the banner sits immediately below the experience bar, not at
+## the very top of the screen, so the XP bar remains readable while paused.
 func _show_pause_banner(visible_state: bool) -> void:
 	if _pause_banner_tween:
 		_pause_banner_tween.kill()
 	_pause_banner_tween = create_tween()
 	_pause_banner_tween.set_ease(Tween.EASE_OUT)
 	_pause_banner_tween.set_trans(Tween.TRANS_CUBIC)
-	var target_top:    float = 0.0              if visible_state else -PAUSE_BANNER_H
-	var target_bottom: float = PAUSE_BANNER_H   if visible_state else 0.0
+	# Visible position: top edge = bottom edge of the experience bar.
+	# The bar now starts at offset_top=0, so its bottom is simply PANEL_H.
+	var exp_bar_bottom: float = ExperienceBar.PANEL_H
+	var target_top:    float = exp_bar_bottom                       if visible_state else -PAUSE_BANNER_H
+	var target_bottom: float = exp_bar_bottom + PAUSE_BANNER_H     if visible_state else 0.0
 	_pause_banner_tween.tween_property(_pause_banner, "offset_top",    target_top,    0.22)
 	_pause_banner_tween.parallel().tween_property(_pause_banner, "offset_bottom", target_bottom, 0.22)
 
@@ -1275,7 +1334,7 @@ func _on_settings_close_pressed() -> void:
 # ---------------------------------------------------------------------------
 
 func _on_bucks_changed(amount: int) -> void:
-	_bucks_label.text = "%d" % amount
+	_bucks_label.text = GameState.format_bucks(amount)
 	_refresh_trap_selector()
 
 
@@ -1300,7 +1359,7 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 		_countdown_active       = true
 		_last_countdown_seconds = seconds_remaining
 		_countdown_seconds_label.text = "INCOMING  %d..." % seconds_remaining
-		_send_wave_reward_label.text  = "%d" % (seconds_remaining * GameState.early_wave_bonus_rate * _wave_multiplier)
+		_send_wave_reward_label.text  = GameState.format_bucks(seconds_remaining * GameState.early_wave_bonus_rate * _wave_multiplier)
 		if _max_countdown_seconds == 0:
 			_max_countdown_seconds = seconds_remaining
 		_update_reward_bar_display(float(seconds_remaining) / float(_max_countdown_seconds))
@@ -1522,9 +1581,9 @@ func _on_multiplier_btn_pressed() -> void:
 ## without waiting for the next spawn tick or countdown second.
 func _refresh_reward_label() -> void:
 	if _countdown_active and _last_countdown_seconds > 0:
-		_send_wave_reward_label.text = "%d" % (_last_countdown_seconds * GameState.early_wave_bonus_rate * _wave_multiplier)
+		_send_wave_reward_label.text = GameState.format_bucks(_last_countdown_seconds * GameState.early_wave_bonus_rate * _wave_multiplier)
 	elif _current_wave_reward > 0:
-		_send_wave_reward_label.text = "%d" % (_current_wave_reward * _wave_multiplier)
+		_send_wave_reward_label.text = GameState.format_bucks(_current_wave_reward * _wave_multiplier)
 
 
 func _on_send_wave_pressed() -> void:
@@ -1568,7 +1627,7 @@ func _on_early_bonus_awarded(coins: int) -> void:
 
 func _on_early_send_reward_changed(amount: int) -> void:
 	_current_wave_reward         = amount
-	_send_wave_reward_label.text = "%d" % (amount * _wave_multiplier)
+	_send_wave_reward_label.text = GameState.format_bucks(amount * _wave_multiplier)
 	# Bar fill during spawn is driven by _on_wave_spawn_progress_changed;
 	# only collapse the overlay once the reward reaches zero.
 	if amount <= 0:
@@ -1609,16 +1668,6 @@ func _refresh_trap_selector() -> void:
 	for i in range(_boost_icon_controls.size()):
 		_boost_icon_controls[i].modulate = Color(1, 1, 1, 1) if _can_afford_boost(i) else COLOR_UNAFFORDABLE_MODULATE
 
-
-## Returns the path where a trap's button image should live.
-## The file may not exist yet — callers check ResourceLoader.exists() first.
-func _trap_image_path(type: int) -> String:
-	match type:
-		0: return "res://assets/traps/snap_trap.png"
-		1: return "res://assets/traps/zapper.png"
-		2: return "res://assets/traps/fogger.png"
-		3: return "res://assets/traps/glue_board.png"
-	return ""
 
 
 ## Builds a full-width trap row: brand-colored panel spanning the entire left-panel
@@ -1696,7 +1745,7 @@ func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 	cost_row.add_child(coin_icon)
 
 	var cost_lbl := Label.new()
-	cost_lbl.text                = str(Trap.STATS[type]["cost"])
+	cost_lbl.text                = GameState.format_bucks(Trap.STATS[type]["cost"])
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	cost_lbl.add_theme_font_size_override("font_size", 15)
@@ -1945,7 +1994,7 @@ func _build_boost_row(parent: VBoxContainer, type: int) -> Control:
 	cost_row.add_child(coin_icon)
 
 	var cost_lbl := Label.new()
-	cost_lbl.text                = str(BoostUnit.STATS[type]["cost"])
+	cost_lbl.text                = GameState.format_bucks(BoostUnit.STATS[type]["cost"])
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	cost_lbl.add_theme_font_size_override("font_size", 15)

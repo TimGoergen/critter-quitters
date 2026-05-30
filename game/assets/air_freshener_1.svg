@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <!-- Air Freshener spray can from above — frame 1 (nozzle at rest) -->
+  <!-- Can shadow/border -->
+  <ellipse cx="64" cy="68" rx="38" ry="46" fill="#7080A0"/>
+  <!-- Can body -->
+  <ellipse cx="64" cy="68" rx="34" ry="42" fill="#C8DCF4"/>
+  <!-- Can label band (darker band in center) -->
+  <ellipse cx="64" cy="68" rx="34" ry="28" fill="#A8C4E8"/>
+  <!-- Label lines -->
+  <ellipse cx="64" cy="68" rx="30" ry="6" fill="#8AAED8" opacity="0.70"/>
+  <!-- Label text area (white band) -->
+  <ellipse cx="64" cy="60" rx="28" ry="12" fill="#E8F4FF" opacity="0.60"/>
+  <!-- Nozzle cap dome (top of can from above) -->
+  <ellipse cx="64" cy="28" rx="16" ry="12" fill="#8898B8"/>
+  <ellipse cx="64" cy="28" rx="12" ry="8" fill="#9AAAC8"/>
+  <!-- Nozzle button (small circle at top) -->
+  <circle cx="64" cy="24" r="6" fill="#C8D8F0"/>
+  <!-- Nozzle tip — at rest position, pointing slightly forward -->
+  <ellipse cx="64" cy="14" rx="5" ry="7" fill="#707888"/>
+  <!-- Can specular highlight -->
+  <ellipse cx="52" cy="38" rx="8" ry="12" fill="white" opacity="0.30"/>
+  <!-- Cap specular -->
+  <ellipse cx="58" cy="24" rx="4" ry="2.5" fill="white" opacity="0.40"/>
+</svg>

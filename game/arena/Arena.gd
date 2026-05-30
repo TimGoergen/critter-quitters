@@ -37,6 +37,8 @@ const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
 const BoostUpgradePanel = preload("res://ui/BoostUpgradePanel.gd")
 const EnemyStatsPanel   = preload("res://ui/EnemyStatsPanel.gd")
 const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
+const LevelUpScreen     = preload("res://ui/LevelUpScreen.gd")
+const ExperienceBar     = preload("res://ui/ExperienceBar.gd")
 
 
 # ---------------------------------------------------------------------------
@@ -191,6 +193,11 @@ enum ZoomState { OVERVIEW, ZOOMED_IN }
 var _zoom_state:           ZoomState = ZoomState.OVERVIEW
 var _overview_camera_size: float     = 0.0   # camera.size at the overview level; set by _fit_camera_to_grid
 var _camera_base_h_offset: float     = 0.0   # h_offset that centres the arena between the two panels
+var _camera_base_v_offset: float     = 0.0   # v_offset (world units, overview zoom) that centres the
+											  # arena in the zone below the experience bar
+var _v_center_offset_px:   float     = 0.0   # arena-zone vertical centre minus viewport centre, in pixels;
+											  # converted to world units on every _apply_pan call so the
+											  # shift scales correctly at different zoom levels
 var _pan_world_pos:         Vector2  = Vector2.ZERO   # current camera XZ pan offset (world units)
 var _arena_world_half:      float    = 0.0   # half the grid world width (X); used for pan clamping
 var _arena_world_half_z:    float    = 0.0   # half the grid world height (Z); used for pan clamping
@@ -289,6 +296,7 @@ func _ready() -> void:
 	GameState.wave_skip_multi_requested.connect(_on_wave_skip_multi_requested)
 	GameState.run_ended.connect(_close_upgrade_panel)
 	GameState.run_ended.connect(_on_run_ended_camera)
+	GameState.level_up.connect(_on_level_up)
 	GameState.trap_type_selected.connect(_on_trap_type_changed)
 	GameState.zoom_toggle_requested.connect(_toggle_zoom)
 	# Release enemy follow when a new wave launches (countdown expires).
@@ -1170,7 +1178,7 @@ func _spawn_enemy(path: Array[Vector2i], enemy_type: Enemy.EnemyType) -> void:
 
 
 ## Spawns a new enemy mid-arena starting from grid_pos.
-## Used for on-death effects (Cockroach Nymph splits, Mouse gnat swarm).
+## Used for on-death effects (e.g. Rat King splitting into Rats).
 ## Finds a fresh path from the given cell; does nothing if no path exists.
 func spawn_enemy_at_grid_position(grid_pos: Vector2i, enemy_type: Enemy.EnemyType) -> void:
 	var path := _find_shortest_exit_path(grid_pos)
@@ -1200,9 +1208,22 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 
 
 func _on_enemy_died(enemy: Node3D) -> void:
-	var bounty: int = enemy.get_bounty()
+	# Apply the global Bug Bucks bonus from campaign buffs (Invoice Padding).
+	# roundi() so the result stays an integer; small bonuses accumulate over time.
+	var bounty: int = roundi(float(enemy.get_bounty()) * (1.0 + GameState.global_bucks_bonus))
 	GameState.add_bug_bucks(bounty)
 	_spawn_earn_label(_camera.unproject_position(enemy.global_position), bounty)
+
+	# Award flat XP from the enemy's stat table. Decoupled from infestation so
+	# both systems can be tuned independently.
+	GameState.add_experience(enemy.get_xp_reward())
+	# Launch small blue dots from the death position to the XP bar bulb.
+	_spawn_xp_particles(enemy.global_position)
+
+	# If the Hazmat Protocol campaign buff is active, kills reduce infestation.
+	if GameState.infestation_heal_per_kill > 0.0:
+		GameState.heal_infestation(GameState.infestation_heal_per_kill)
+
 	_active_enemies.erase(enemy)
 	if enemy == _followed_enemy:
 		_set_followed_enemy(null)
@@ -1217,14 +1238,16 @@ func _on_enemy_died(enemy: Node3D) -> void:
 	# the spawned children don't cause an immediate false wave-end check.
 	var death_cell: Vector2i = enemy.get_current_cell()
 	match enemy.get_enemy_type():
-		Enemy.EnemyType.COCKROACH_NYMPH:
-			# Splits into two smaller cockroaches that continue toward the exit.
-			for _i in 2:
-				spawn_enemy_at_grid_position(death_cell, Enemy.EnemyType.COCKROACH_MINI)
-		Enemy.EnemyType.MOUSE:
-			# Releases a swarm of gnats from its position.
-			for _i in 3:
-				spawn_enemy_at_grid_position(death_cell, Enemy.EnemyType.GNAT)
+		Enemy.EnemyType.RAT_KING:
+			# Splits into three Rats that inherit the path from the kill point.
+			# Rat 0 spawns immediately so _active_enemies is non-empty before the
+			# wave-end check below runs. Rats 1 and 2 are staggered by 0.4 s each
+			# so they separate visually instead of stacking on the same cell.
+			spawn_enemy_at_grid_position(death_cell, Enemy.EnemyType.RAT)
+			for i in range(1, 3):
+				get_tree().create_timer(i * 0.4, false).timeout.connect(
+					spawn_enemy_at_grid_position.bind(death_cell, Enemy.EnemyType.RAT)
+				)
 
 	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
 		_start_wave()
@@ -1372,8 +1395,10 @@ func _launch_wave(additive: bool = false) -> void:
 			Enemy.EnemyType.CRICKET,
 			Enemy.EnemyType.BEETLE,
 			Enemy.EnemyType.COCKROACH,
-			Enemy.EnemyType.RAT,
+			Enemy.EnemyType.MOUSE,
 			Enemy.EnemyType.MOSQUITO,
+			Enemy.EnemyType.RAT_KING,
+			Enemy.EnemyType.RAT,
 		]
 		# Restrict to the subset selected in the playtest dialog (empty = all types).
 		if not _static_allowed_types.is_empty():
@@ -2362,6 +2387,14 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	trap.aoe_fired.connect(_on_fogger_aoe_fired)
 	trap.fly_strip_fired.connect(_on_fly_strip_fired)
 	trap.initialize(GameState.selected_trap_type as Trap.TrapType, _active_enemies)
+
+	# Apply any type-wide free upgrades that were earned from previous level-ups.
+	# This ensures a newly placed trap is immediately as strong as existing traps of the same type.
+	var tq: Dictionary = GameState.type_upgrade_queue.get(trap.get_type(), {})
+	for stat: String in tq.keys():
+		for _i in int(tq[stat]):
+			_apply_free_equipment_upgrade(trap, stat)
+
 	# Arena is PROCESS_MODE_ALWAYS; override so traps pause with the game.
 	trap.process_mode = Node.PROCESS_MODE_PAUSABLE
 	_trap_container.add_child(trap)
@@ -2466,10 +2499,13 @@ func _get_trap_cells(anchor: Vector2i) -> Array[Vector2i]:
 func _fit_camera_to_grid() -> void:
 	var vp       := get_viewport().get_visible_rect().size
 	# Left/right: match the HUD panel inner padding (MARGIN).
-	# Top/bottom: match the HUD panel screen-edge inset (SCREEN_EDGE_MARGIN)
+	# Top: the experience bar occupies the full top edge of the arena zone.
+	# Bottom: match the HUD panel screen-edge inset (SCREEN_EDGE_MARGIN)
 	# which clears rounded corners on mobile devices.
-	var usable_w := vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.MARGIN * 2.0
-	var usable_h := vp.y - HUD.SCREEN_EDGE_MARGIN * 2.0
+	var usable_w   := vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.MARGIN * 2.0
+	var top_margin := ExperienceBar.PANEL_H
+	var bot_margin := HUD.SCREEN_EDGE_MARGIN
+	var usable_h   := vp.y - top_margin - bot_margin
 	if usable_h <= 0.0 or usable_w <= 0.0:
 		return
 
@@ -2489,13 +2525,21 @@ func _fit_camera_to_grid() -> void:
 	if _zoom_state == ZoomState.OVERVIEW:
 		_camera.size = _overview_camera_size
 
-	# Shift the camera centre to the midpoint of the usable horizontal band
+	# Horizontal: shift the camera centre to the midpoint of the usable horizontal band
 	# (left panel + MARGIN … right panel + MARGIN).
 	var world_per_px     := _overview_camera_size / vp.y
 	var h_center_px      := HUD.LEFT_PANEL_W + HUD.MARGIN + usable_w * 0.5
 	_camera_base_h_offset = (h_center_px - vp.x * 0.5) * world_per_px
 	_camera.h_offset      = _camera_base_h_offset
-	_camera.v_offset      = 0.0
+
+	# Vertical: shift the camera centre into the arena zone below the experience bar.
+	# The zone top is at top_margin px; zone centre is at top_margin + usable_h/2.
+	# We store the pixel-space offset (_v_center_offset_px) and convert to world units
+	# each time so the shift scales correctly at all zoom levels.
+	var v_center_px       := top_margin + usable_h * 0.5
+	_v_center_offset_px    = v_center_px - vp.y * 0.5
+	_camera_base_v_offset  = _v_center_offset_px * world_per_px
+	_camera.v_offset       = _camera_base_v_offset
 
 
 ## Each frame: track the followed enemy, and promote a held pointer to DRAG_PLACING.
@@ -2527,7 +2571,7 @@ func _toggle_zoom(center_pos: Vector2 = Vector2.ZERO) -> void:
 		_set_followed_enemy(null)
 		_camera.size     = _overview_camera_size
 		_camera.h_offset = _camera_base_h_offset
-		_camera.v_offset = 0.0
+		_camera.v_offset = _camera_base_v_offset
 	var zoomed_in := _zoom_state == ZoomState.ZOOMED_IN
 	if _floor_mi != null:
 		_floor_mi.material_override = _floor_mat_zoomed if zoomed_in else _floor_mat_overview
@@ -2539,12 +2583,16 @@ func _apply_pan(pos: Vector2) -> void:
 	var vp            := get_viewport().get_visible_rect().size
 	var world_per_px  := _camera.size / vp.y
 	var visible_half_w := (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W - HUD.MARGIN * 2.0) * world_per_px * 0.5
-	var visible_half_h := (vp.y - HUD.SCREEN_EDGE_MARGIN * 2.0) * world_per_px * 0.5
+	# Arena zone height below the experience bar; used for pan clamping so the
+	# camera cannot scroll arena content entirely behind the XP bar or off-screen.
+	var visible_half_h := (vp.y - ExperienceBar.PANEL_H - HUD.SCREEN_EDGE_MARGIN) * world_per_px * 0.5
 	var cx := clampf(pos.x, -_arena_world_half   + visible_half_w, _arena_world_half   - visible_half_w)
 	var cz := clampf(pos.y, -_arena_world_half_z + visible_half_h, _arena_world_half_z - visible_half_h)
 	_pan_world_pos   = Vector2(cx, cz)
 	_camera.h_offset = _camera_base_h_offset + cx
-	_camera.v_offset = -cz
+	# _v_center_offset_px is converted to world units using the CURRENT camera size
+	# so the pixel-space centering stays correct at both overview and zoomed-in levels.
+	_camera.v_offset = _v_center_offset_px * world_per_px - cz
 
 
 ## Scrolls the camera based on how far the drag ghost has entered the edge bands.
@@ -2556,9 +2604,11 @@ func _apply_edge_scroll(delta: float) -> void:
 	var pos         := _hud_drag_last_screen_pos
 
 	# Arena zone boundaries — mirror the margins used in _fit_camera_to_grid.
+	# Top edge is the bottom of the experience bar, not the screen-edge margin,
+	# because the XP bar blocks drag-and-drop placements at the very top.
 	var left_edge   := HUD.LEFT_PANEL_W + HUD.ARENA_MARGIN_PX
 	var right_edge  := vp.x - HUD.RIGHT_PANEL_W - HUD.ARENA_MARGIN_PX
-	var top_edge    := HUD.SCREEN_EDGE_MARGIN
+	var top_edge    := ExperienceBar.PANEL_H
 	var bottom_edge := vp.y - HUD.SCREEN_EDGE_MARGIN
 
 	# Signed scroll factors: negative = pan left/up, positive = pan right/down.
@@ -2586,6 +2636,87 @@ func _on_run_ended_camera() -> void:
 	_set_followed_enemy(null)
 	if _zoom_state == ZoomState.ZOOMED_IN:
 		_toggle_zoom()
+
+
+## Called when the player accumulates enough XP to advance a level.
+## Waits 0.5 s so the XP bar can display 100% fill before the overlay appears,
+## then spawns the LevelUpScreen which pauses the game and presents upgrade cards.
+func _on_level_up(new_level: int) -> void:
+	if GameState.current_phase == GameState.Phase.RUN_OVER:
+		return
+	# process_always=false: if for any reason the tree is already paused, don't
+	# fire the timer — we'll wait until conditions are normal.
+	get_tree().create_timer(0.5, false).timeout.connect(
+		func(): _show_level_up_screen(new_level)
+	)
+
+
+## Creates and shows the LevelUpScreen overlay.
+## Called by _on_level_up after a short delay to let the XP bar animation complete.
+func _show_level_up_screen(new_level: int) -> void:
+	if GameState.current_phase == GameState.Phase.RUN_OVER:
+		return
+	var screen := LevelUpScreen.new()
+	screen.upgrade_chosen.connect(_on_level_up_upgrade_chosen)
+	# add_child before setup() so the node is in the tree when setup() calls
+	# get_tree().paused — that returns null if the node isn't in the tree yet.
+	add_child(screen)
+	screen.setup(new_level, _trap_nodes.values())
+
+
+## Applies the upgrade chosen on the LevelUpScreen.
+## For campaign buffs, updates GameState then refreshes all placed traps so
+## the fire-rate (and range indicator) changes take effect immediately.
+## For equipment upgrades, calls the free-upgrade method directly on the trap.
+func _on_level_up_upgrade_chosen(upgrade: Dictionary) -> void:
+	if upgrade.get("category") == "campaign":
+		GameState.apply_campaign_buff(upgrade["id"], upgrade["magnitude"])
+		# Fire-rate and range indicator changes require each trap to recalculate.
+		_refresh_global_trap_multipliers()
+	else:
+		# Equipment upgrade: free stat boost applied to every placed trap of this type
+		# AND recorded so new placements of the same type inherit the upgrade immediately.
+		_apply_free_equipment_upgrade_by_type(
+			upgrade.get("trap_type", -1),
+			upgrade.get("stat", "")
+		)
+
+
+## Iterates all placed traps and tells each one to recompute its multipliers.
+## Called after any campaign buff that affects fire rate or range is applied.
+func _refresh_global_trap_multipliers() -> void:
+	for trap in _trap_nodes.values():
+		if is_instance_valid(trap):
+			trap.refresh_global_multipliers()
+
+
+## Applies a free upgrade to every placed trap of trap_type, then records it in
+## GameState so future placements of that type receive the same upgrade at spawn time.
+func _apply_free_equipment_upgrade_by_type(trap_type: int, stat: String) -> void:
+	if trap_type < 0 or stat.is_empty():
+		return
+	# Apply to all currently placed instances of this type.
+	for trap in _trap_nodes.values():
+		if is_instance_valid(trap) and trap.get_type() == trap_type:
+			_apply_free_equipment_upgrade(trap, stat)
+	# Record in GameState so any trap placed later inherits this upgrade immediately.
+	if not GameState.type_upgrade_queue.has(trap_type):
+		GameState.type_upgrade_queue[trap_type] = {}
+	var tq: Dictionary = GameState.type_upgrade_queue[trap_type]
+	tq[stat] = tq.get(stat, 0) + 1
+
+
+## Applies one free (level-up) upgrade of stat to a specific trap node.
+## Calls the free-upgrade methods on Trap.gd, which have their own 0–3 cap
+## independent of the Bug Bucks paid-upgrade pool.
+func _apply_free_equipment_upgrade(trap: Node3D, stat: String) -> void:
+	match stat:
+		"damage":      trap.apply_free_damage_upgrade()
+		"range":       trap.apply_free_range_upgrade()
+		"fire_rate":   trap.apply_free_rate_upgrade()
+		"duration":    trap.apply_free_duration_upgrade()
+		"crit_chance": trap.apply_free_crit_chance_upgrade()
+		"crit_dmg":    trap.apply_free_crit_dmg_upgrade()
 
 
 ## Plays phase-transition audio cues.
@@ -2732,6 +2863,58 @@ func _spawn_earn_label(screen_pos: Vector2, amount: int) -> void:
 		.set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
 
 	get_tree().create_timer(1.6).timeout.connect(host.queue_free)
+
+
+## Spawns 3 small blue dots that fly from world_pos to the XP bar bulb.
+## Three particles per kill gives satisfying feedback without cluttering the screen.
+## Staggered 70 ms apart so each dot arrives as a distinct visual beat.
+func _spawn_xp_particles(world_pos: Vector3) -> void:
+	var screen_pos := _camera.unproject_position(world_pos)
+	var target     := Vector2(ExperienceBar.bulb_screen_x(), ExperienceBar.bulb_screen_y())
+
+	var host := CanvasLayer.new()
+	host.layer        = 5
+	host.process_mode = Node.PROCESS_MODE_ALWAYS
+	get_tree().root.add_child(host)
+
+	const PARTICLE_SIZE:   float = 12.0
+	const FLIGHT_DURATION: float = 0.55
+
+	for i in 3:
+		# Stagger particle launches by 70 ms so they arrive as three distinct beats
+		# rather than all at once.
+		var delay := i * 0.07
+
+		var dot_style := StyleBoxFlat.new()
+		dot_style.bg_color                  = ExperienceBar.COLOR_FILL
+		dot_style.corner_radius_top_left    = 6
+		dot_style.corner_radius_top_right   = 6
+		dot_style.corner_radius_bottom_left = 6
+		dot_style.corner_radius_bottom_right = 6
+
+		var dot := Panel.new()
+		dot.add_theme_stylebox_override("panel", dot_style)
+		dot.size     = Vector2(PARTICLE_SIZE, PARTICLE_SIZE)
+		# Small random scatter so the three dots don't stack on top of each other.
+		dot.position = screen_pos + Vector2(
+			randf_range(-8.0, 8.0),
+			randf_range(-8.0, 8.0)
+		) - Vector2(PARTICLE_SIZE, PARTICLE_SIZE) * 0.5
+		host.add_child(dot)
+
+		# Fly to bulb centre (TRANS_CIRC EASE_IN accelerates through the flight —
+		# starts leisurely, snaps home fast), and shrink slightly on arrival.
+		var tween := host.create_tween().set_parallel(true)
+		tween.tween_property(dot, "position",
+			target - Vector2(PARTICLE_SIZE, PARTICLE_SIZE) * 0.5,
+			FLIGHT_DURATION
+		).set_delay(delay).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_CIRC)
+		tween.tween_property(dot, "scale",
+			Vector2(0.5, 0.5), FLIGHT_DURATION * 0.3
+		).set_delay(delay + FLIGHT_DURATION * 0.7).set_ease(Tween.EASE_IN).set_trans(Tween.TRANS_QUAD)
+
+	# One second is comfortably past the last particle landing at 0 + 2*0.07 + 0.55 = 0.69 s.
+	get_tree().create_timer(1.0).timeout.connect(host.queue_free)
 
 
 ## Draws a coin icon followed by a gold number, both without any outline.
