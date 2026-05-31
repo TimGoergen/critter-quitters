@@ -131,7 +131,7 @@ func _build_card() -> void:
 
 	# --- Tier name ("RARE" etc.) — top-left in tier colour ---
 	_tier_lbl = Label.new()
-	_tier_lbl.text                 = _upgrade_data.get("tier_label", TIER_NAMES[tier])
+	_tier_lbl.text                 = _upgrade_data.get("tier_label", TIER_NAMES[tier] + " UPGRADE")
 	_tier_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_tier_lbl.add_theme_color_override("font_color", tier_color)
