@@ -544,9 +544,9 @@ func get_description() -> String:
 func get_cost() -> int:
 	return _cost
 
-## Returns 70% of the placement cost — the sell refund amount.
+## Returns the sell refund — 70% of placement cost plus the Salvage Value bonus.
 func get_sell_value() -> int:
-	return int(_cost * 0.70)
+	return int(_cost * (0.70 + GameState.sell_value_bonus))
 
 func get_range_radius() -> float:
 	return _range

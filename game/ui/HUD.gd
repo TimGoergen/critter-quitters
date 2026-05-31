@@ -1648,10 +1648,15 @@ func _on_run_ended() -> void:
 	_is_paused        = false
 	_pause_btn.text   = ""
 	_pause_bar_icon.show()
-	# Hide the pause banner — the run-over overlay provides context instead.
 	_show_pause_banner(false)
 	_run_over_overlay.visible = true
 	get_tree().paused = true
+	# After a brief INFESTED! flash, replace the overlay with the hub screen.
+	get_tree().create_timer(1.5).timeout.connect(func() -> void:
+		_run_over_overlay.visible = false
+		var hub: Node = load("res://ui/HubScreen.gd").new()
+		get_tree().root.add_child(hub)
+	)
 
 
 func _on_restart_pressed() -> void:

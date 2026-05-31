@@ -839,7 +839,7 @@ func get_sell_value() -> int:
 		total_spent += UPGRADE_COSTS[_trap_type][lvl]
 	for lvl in range(_crit_damage_level):
 		total_spent += UPGRADE_COSTS[_trap_type][lvl]
-	return int(total_spent * SELL_REFUND_FRACTION)
+	return int(total_spent * (SELL_REFUND_FRACTION + GameState.sell_value_bonus))
 
 
 # ---------------------------------------------------------------------------

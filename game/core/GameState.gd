@@ -41,6 +41,9 @@ signal run_started
 ## Emitted once when a run ends, before transitioning back to the hub.
 signal run_ended
 
+## Emitted whenever service_fees changes (purchase or run-end award).
+signal service_fees_changed(new_amount: int)
+
 ## Emitted whenever bug_bucks changes. HUD connects here to stay current.
 signal bug_bucks_changed(new_amount: int)
 
@@ -118,6 +121,68 @@ const STARTING_BUG_BUCKS: int = 100
 ## Total infestation points that fill the bar to 1.0.
 ## TODO: tune via playtesting
 const INFESTATION_MAX: int = 20
+
+## All permanent upgrades available for purchase with Service Fees.
+## tier_costs: SF cost to buy tier 1, then tier 2 (independent, not cumulative).
+## tier_effects: short label shown on each tier's purchase button.
+const PERMANENT_UPGRADE_DEFS: Array = [
+	# --- Equipment ---
+	{
+		"id": "reinforced_mechanisms", "category": "Equipment",
+		"name": "Reinforced Mechanisms",
+		"desc": "All traps start each run with bonus base damage.",
+		"tier_costs": [4, 8], "tier_effects": ["+15% Damage", "+30% Damage"],
+	},
+	{
+		"id": "extended_range", "category": "Equipment",
+		"name": "Extended Range",
+		"desc": "All traps start each run with a wider targeting radius.",
+		"tier_costs": [3, 6], "tier_effects": ["+10% Range", "+20% Range"],
+	},
+	{
+		"id": "tuned_triggers", "category": "Equipment",
+		"name": "Tuned Triggers",
+		"desc": "Active traps start each run firing more often.",
+		"tier_costs": [3, 6], "tier_effects": ["+10% Fire Rate", "+20% Fire Rate"],
+	},
+	{
+		"id": "wider_selection", "category": "Equipment",
+		"name": "Wider Selection",
+		"desc": "Gear selection at run start offers more options.",
+		"tier_costs": [5, 10], "tier_effects": ["4 offered, pick 2", "4 offered, pick 3"],
+	},
+	# --- Business ---
+	{
+		"id": "starting_capital", "category": "Business",
+		"name": "Starting Capital",
+		"desc": "Begin each run with more Bug Bucks.",
+		"tier_costs": [4, 8], "tier_effects": ["+25 Bug Bucks", "+50 Bug Bucks"],
+	},
+	{
+		"id": "hazard_insurance", "category": "Business",
+		"name": "Hazard Insurance",
+		"desc": "The infestation threshold is higher before the run ends.",
+		"tier_costs": [5, 10], "tier_effects": ["+10% Threshold", "+20% Threshold"],
+	},
+	{
+		"id": "salvage_value", "category": "Business",
+		"name": "Salvage Value",
+		"desc": "Selling placed units returns a higher refund.",
+		"tier_costs": [4, 8], "tier_effects": ["+5% Sell Value", "+10% Sell Value"],
+	},
+	{
+		"id": "bulk_discount", "category": "Business",
+		"name": "Bulk Discount",
+		"desc": "All Bug Bucks upgrade costs are reduced.",
+		"tier_costs": [5, 10], "tier_effects": ["−5% Upgrade Costs", "−10% Upgrade Costs"],
+	},
+	{
+		"id": "field_experience", "category": "Business",
+		"name": "Field Experience",
+		"desc": "Earn more XP per kill, reaching level-ups faster.",
+		"tier_costs": [4, 8], "tier_effects": ["+15% XP per Kill", "+30% XP per Kill"],
+	},
+]
 
 
 # ---------------------------------------------------------------------------
@@ -239,6 +304,43 @@ var upgrade_cost_discount: float = 0.0
 ## Separate from Bug Bucks paid upgrades — each pool is capped at Trap.FREE_MAX_LEVEL.
 var type_upgrade_queue: Dictionary = {}
 
+## XP multiplier applied to every kill reward (Field Experience upgrade).
+## e.g. 0.15 means each kill awards 15% more XP. Reset each run then set
+## from permanent upgrades.
+var global_xp_bonus: float = 0.0
+
+## Fraction added to the effective infestation threshold (Hazard Insurance).
+## e.g. 0.10 means the bar must fill 110% of INFESTATION_MAX to end the run.
+var infestation_max_bonus: float = 0.0
+
+## Additive bonus to the sell refund fraction (Salvage Value).
+## Applied on top of each unit type's base sell fraction.
+var sell_value_bonus: float = 0.0
+
+## Wider Selection upgrade tier for the current session. 0 = 3 offered / pick 2.
+## 1 = 4 offered / pick 2. 2 = 4 offered / pick 3.
+var wider_selection_tier: int = 0
+
+
+# ---------------------------------------------------------------------------
+# Persistent state — survives across runs; loaded at startup, saved on change.
+# ---------------------------------------------------------------------------
+
+## Accumulated Service Fees across all runs. Spent on permanent upgrades.
+var service_fees: int = 0
+
+## Service Fees awarded for the most recent completed run (= XP level reached).
+## Set by award_run_service_fees() so the hub screen can display it.
+var service_fees_last_run: int = 0
+
+## Purchased tier per permanent upgrade (0 = not purchased, 1 = tier 1, 2 = tier 2).
+## Keys match the "id" field in PERMANENT_UPGRADE_DEFS.
+var permanent_upgrades: Dictionary = {
+	"reinforced_mechanisms": 0, "extended_range": 0, "tuned_triggers": 0,
+	"wider_selection": 0, "starting_capital": 0, "hazard_insurance": 0,
+	"salvage_value": 0, "bulk_discount": 0, "field_experience": 0,
+}
+
 
 # ---------------------------------------------------------------------------
 # Public methods
@@ -270,7 +372,14 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 	global_bucks_bonus = 0.0
 	infestation_heal_per_kill = 0.0
 	upgrade_cost_discount = 0.0
+	global_xp_bonus = 0.0
+	infestation_max_bonus = 0.0
+	sell_value_bonus = 0.0
+	wider_selection_tier = 0
 	type_upgrade_queue = {}
+	# Apply permanent upgrades on top of the clean slate. Starting Capital
+	# bonus is added here after bug_bucks is already set to STARTING_BUG_BUCKS.
+	_apply_permanent_upgrade_bonuses()
 	current_phase = Phase.PLACING
 	run_started.emit()
 	bug_bucks_changed.emit(bug_bucks)
@@ -282,6 +391,7 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 ## Called when infestation_level reaches 1.0.
 func end_run() -> void:
 	current_phase = Phase.RUN_OVER
+	award_run_service_fees()
 	run_ended.emit()
 
 
@@ -342,12 +452,13 @@ func set_countdown(seconds: int) -> void:
 	wave_countdown_changed.emit(seconds)
 
 
-## Increases infestation_level by points / INFESTATION_MAX.
+## Increases infestation_level by points / effective_max.
+## The effective max is INFESTATION_MAX scaled by the Hazard Insurance bonus,
+## so higher insurance tiers require more infestation to end the run.
 ## Calls end_run() if the level reaches 1.0.
-## Clamped to [0.0, 1.0] — callers should not pass negative values; use
-## heal_infestation() to reduce infestation instead.
 func add_infestation(points: float) -> void:
-	infestation_level = clampf(infestation_level + points / float(INFESTATION_MAX), 0.0, 1.0)
+	var effective_max := float(INFESTATION_MAX) * (1.0 + infestation_max_bonus)
+	infestation_level = clampf(infestation_level + points / effective_max, 0.0, 1.0)
 	infestation_changed.emit(infestation_level)
 	if infestation_level >= 1.0:
 		end_run()
@@ -372,13 +483,13 @@ func exp_for_next_level() -> int:
 	return ceili(20.0 * pow(1.03, float(current_player_level)))
 
 
-## Awards XP for a kill. Emits xp_changed each time; emits level_up whenever
-## the bar fills. Handles multiple level-ups in a single call (rare but
-## possible if a high-value enemy is killed early with a large infestation value).
+## Awards XP for a kill. Applies the Field Experience bonus before adding.
+## Emits xp_changed each time; emits level_up whenever the bar fills.
 func add_experience(amount: int) -> void:
 	if amount <= 0:
 		return
-	current_xp += amount
+	var boosted := ceili(float(amount) * (1.0 + global_xp_bonus))
+	current_xp += boosted
 	var needed := exp_for_next_level()
 	while current_xp >= needed:
 		current_xp -= needed
@@ -419,6 +530,111 @@ func apply_campaign_buff(buff_id: String, magnitude: float) -> void:
 		"infestation_heal": infestation_heal_per_kill  += magnitude
 		"upgrade_discount": upgrade_cost_discount = minf(
 				upgrade_cost_discount + magnitude, 0.80)
+
+
+# ---------------------------------------------------------------------------
+# Lifecycle
+# ---------------------------------------------------------------------------
+
+func _ready() -> void:
+	_load_persistent()
+
+
+# ---------------------------------------------------------------------------
+# Service Fees & permanent upgrades
+# ---------------------------------------------------------------------------
+
+## Awards Service Fees at run end. The amount equals the XP level reached,
+## so longer runs earn more. Persists immediately to the save file.
+## Returns the number of fees awarded so the hub screen can display it.
+func award_run_service_fees() -> int:
+	service_fees_last_run = current_player_level
+	service_fees += service_fees_last_run
+	service_fees_changed.emit(service_fees)
+	_save_persistent()
+	return service_fees_last_run
+
+
+## Returns the purchased tier (0, 1, or 2) for the given upgrade id.
+func get_upgrade_tier(upgrade_id: String) -> int:
+	return permanent_upgrades.get(upgrade_id, 0)
+
+
+## Returns true if the player can afford the next tier of the given upgrade.
+func can_purchase_upgrade(upgrade_id: String) -> bool:
+	var tier := get_upgrade_tier(upgrade_id)
+	if tier >= 2:
+		return false
+	for def: Dictionary in PERMANENT_UPGRADE_DEFS:
+		if def["id"] == upgrade_id:
+			return service_fees >= def["tier_costs"][tier]
+	return false
+
+
+## Purchases the next tier of the given upgrade, deducting the SF cost.
+## Returns true on success, false if already maxed or unaffordable.
+func purchase_upgrade(upgrade_id: String) -> bool:
+	if not can_purchase_upgrade(upgrade_id):
+		return false
+	var tier := get_upgrade_tier(upgrade_id)
+	for def: Dictionary in PERMANENT_UPGRADE_DEFS:
+		if def["id"] == upgrade_id:
+			service_fees -= def["tier_costs"][tier]
+			permanent_upgrades[upgrade_id] = tier + 1
+			service_fees_changed.emit(service_fees)
+			_save_persistent()
+			return true
+	return false
+
+
+## Applies all purchased permanent upgrade effects to run-scoped state.
+## Called at the end of start_run() after all vars are reset to zero, so
+## permanent bonuses form the baseline that campaign cards then stack on top of.
+func _apply_permanent_upgrade_bonuses() -> void:
+	var t: int
+
+	t = permanent_upgrades.get("reinforced_mechanisms", 0)
+	global_damage_bonus    = ([0.0, 0.15, 0.30] as Array)[t]
+
+	t = permanent_upgrades.get("extended_range", 0)
+	global_range_bonus     = ([0.0, 0.10, 0.20] as Array)[t]
+
+	t = permanent_upgrades.get("tuned_triggers", 0)
+	global_fire_rate_bonus = ([0.0, 0.10, 0.20] as Array)[t]
+
+	wider_selection_tier   = permanent_upgrades.get("wider_selection", 0)
+
+	t = permanent_upgrades.get("starting_capital", 0)
+	bug_bucks             += ([0, 25, 50] as Array)[t]
+
+	t = permanent_upgrades.get("hazard_insurance", 0)
+	infestation_max_bonus  = ([0.0, 0.10, 0.20] as Array)[t]
+
+	t = permanent_upgrades.get("salvage_value", 0)
+	sell_value_bonus       = ([0.0, 0.05, 0.10] as Array)[t]
+
+	t = permanent_upgrades.get("bulk_discount", 0)
+	upgrade_cost_discount  = ([0.0, 0.05, 0.10] as Array)[t]
+
+	t = permanent_upgrades.get("field_experience", 0)
+	global_xp_bonus        = ([0.0, 0.15, 0.30] as Array)[t]
+
+
+func _save_persistent() -> void:
+	var cfg := ConfigFile.new()
+	cfg.set_value("meta", "service_fees", service_fees)
+	for upgrade_id: String in permanent_upgrades.keys():
+		cfg.set_value("upgrades", upgrade_id, permanent_upgrades[upgrade_id])
+	cfg.save("user://save.cfg")
+
+
+func _load_persistent() -> void:
+	var cfg := ConfigFile.new()
+	if cfg.load("user://save.cfg") != OK:
+		return
+	service_fees = cfg.get_value("meta", "service_fees", 0)
+	for upgrade_id: String in permanent_upgrades.keys():
+		permanent_upgrades[upgrade_id] = cfg.get_value("upgrades", upgrade_id, 0)
 
 
 # ---------------------------------------------------------------------------

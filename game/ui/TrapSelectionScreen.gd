@@ -37,13 +37,20 @@ const CARD_W:   float = 190.0
 const CARD_H:   float = 310.0
 const CARD_GAP: float = 20.0
 
-## Cards offered and cards the player must pick.
-## Scaled by the Wider Selection meta upgrade in a future pass.
-const OFFER_COUNT: int = 3
-const PICK_COUNT:  int = 2
+## Base offer and pick counts — scaled by the Wider Selection permanent upgrade.
+## Use _offer_count() and _pick_count() everywhere rather than these directly.
+const BASE_OFFER_COUNT: int = 3
+const BASE_PICK_COUNT:  int = 2
 
-## Probability that the third slot is a boost rather than a third trap.
+## Probability that the last slot is a boost rather than a trap.
 const BOOST_SLOT_CHANCE: float = 0.5
+
+
+func _offer_count() -> int:
+	return 4 if GameState.wider_selection_tier >= 1 else BASE_OFFER_COUNT
+
+func _pick_count() -> int:
+	return 3 if GameState.wider_selection_tier >= 2 else BASE_PICK_COUNT
 
 
 # ---------------------------------------------------------------------------
@@ -76,6 +83,7 @@ const BOOST_DISPLAY: Dictionary = {
 # ---------------------------------------------------------------------------
 
 var _offered_slots:   Array      = []
+var _offered_count:   int        = 0
 var _selected_traps:  Array[int] = []
 var _selected_boosts: Array[int] = []
 var _cards:           Array      = []   # UpgradeCard nodes, parallel to _offered_slots
@@ -118,9 +126,9 @@ func _build_screen() -> void:
 	header.offset_bottom = 100.0
 	add_child(header)
 
-	# "PICK 2" sub-header.
+	# "PICK N" sub-header.
 	var sub := Label.new()
-	sub.text                 = "PICK %d" % PICK_COUNT
+	sub.text                 = "PICK %d" % _pick_count()
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_font_override("font", UIFonts.primary_bold())
 	sub.add_theme_font_size_override("font_size", 28)
@@ -132,11 +140,12 @@ func _build_screen() -> void:
 	add_child(sub)
 
 	# Cards.
-	var total_w := CARD_W * float(OFFER_COUNT) + CARD_GAP * float(OFFER_COUNT - 1)
-	var start_x := (1280.0 - total_w) * 0.5
-	var card_y  := 148.0
+	var offer      := _offer_count()
+	var total_w    := CARD_W * float(offer) + CARD_GAP * float(offer - 1)
+	var start_x    := (1280.0 - total_w) * 0.5
+	var card_y     := 148.0
 
-	for i in OFFER_COUNT:
+	for i in offer:
 		var slot: Dictionary = _offered_slots[i]
 		var card := _build_card_for_slot(slot)
 		card.position     = Vector2(start_x + i * (CARD_W + CARD_GAP), card_y)
@@ -153,6 +162,8 @@ func _build_screen() -> void:
 	_start_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	_start_btn.pressed.connect(_on_start_pressed)
 	_start_btn.position = Vector2((1280.0 - 280.0) * 0.5, card_y + CARD_H + 18.0)
+	# store offer count for use in _on_card_toggled
+	_offered_count = offer
 	_start_btn.size     = Vector2(280.0, 54.0)
 	add_child(_start_btn)
 
@@ -186,23 +197,19 @@ func _generate_slots() -> Array:
 			"weight": 1.0 / float(BoostUnit.STATS[b]["cost"]),
 		})
 
-	# Two trap slots are always filled first; picks are removed from the pool
-	# so the same type cannot appear in both slots.
-	var pick1 := _weighted_pick(trap_candidates)
-	var pick2 := _weighted_pick(trap_candidates)
+	# Fill all but the last slot with traps (without replacement).
+	var slots: Array = []
+	for _i in range(_offer_count() - 1):
+		var pick := _weighted_pick(trap_candidates)
+		slots.append({ "category": pick["category"], "type": pick["type"] })
 
-	# Third slot: boost or trap at the configured probability.
-	var pick3: Dictionary
+	# Last slot: boost or trap at the configured probability.
+	var last_pick: Dictionary
 	if randf() < BOOST_SLOT_CHANCE:
-		pick3 = _weighted_pick(boost_candidates)
+		last_pick = _weighted_pick(boost_candidates)
 	else:
-		pick3 = _weighted_pick(trap_candidates)
-
-	var slots: Array = [
-		{ "category": pick1["category"], "type": pick1["type"] },
-		{ "category": pick2["category"], "type": pick2["type"] },
-		{ "category": pick3["category"], "type": pick3["type"] },
-	]
+		last_pick = _weighted_pick(trap_candidates)
+	slots.append({ "category": last_pick["category"], "type": last_pick["type"] })
 
 	# Ground-damage guarantee: at least one offered trap must deal direct HP
 	# damage to ground enemies. Glue Board (slow only) and Fly Strip Launcher
@@ -313,7 +320,7 @@ func _on_card_toggled(_data: Dictionary, card: UpgradeCard, slot: Dictionary) ->
 
 	if card.is_card_selected():
 		var total: int = _selected_traps.size() + _selected_boosts.size()
-		if total >= PICK_COUNT:
+		if total >= _pick_count():
 			# Safety net — at-limit cards have mouse_filter=IGNORE so this
 			# normally won't fire, but guard just in case.
 			card.force_deselect()
@@ -329,7 +336,7 @@ func _on_card_toggled(_data: Dictionary, card: UpgradeCard, slot: Dictionary) ->
 			_selected_traps.erase(item_type)
 
 	var picked: int = _selected_traps.size() + _selected_boosts.size()
-	_start_btn.disabled = picked < PICK_COUNT
+	_start_btn.disabled = picked < _pick_count()
 	_refresh_card_states(picked)
 
 
