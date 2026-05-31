@@ -260,9 +260,9 @@ func _input(event: InputEvent) -> void:
 	if mouse_filter == Control.MOUSE_FILTER_IGNORE:
 		return
 	# DIAGNOSTIC — remove once coordinate space is confirmed.
-	var rect   := get_global_rect()
-	var raw    := event.position
-	var screen := get_viewport().get_screen_transform().affine_inverse() * raw
+	var rect:   Rect2   = get_global_rect()
+	var raw:    Vector2 = (event as InputEventScreenTouch).position
+	var screen: Vector2 = get_viewport().get_screen_transform().affine_inverse() * raw
 	print("CARD_TOUCH raw=%s screen_mapped=%s global_rect=%s vp_size=%s" % [
 		raw, screen, rect, get_viewport().get_visible_rect().size
 	])
