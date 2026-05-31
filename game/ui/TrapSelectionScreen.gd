@@ -346,7 +346,7 @@ func _on_card_toggled(_data: Dictionary, card: UpgradeCard, slot: Dictionary) ->
 ##   Unselected, picks left:    full brightness, input on (can select)
 ##   Unselected, at pick limit: dimmed (0.4),    input off (blocked)
 func _refresh_card_states(picked: int) -> void:
-	var at_limit: bool = picked >= PICK_COUNT
+	var at_limit: bool = picked >= _pick_count()
 	for c in _cards:
 		var card := c as UpgradeCard
 		if card.is_card_selected():
