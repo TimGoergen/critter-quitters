@@ -167,6 +167,7 @@ const CARD_GAP: float = 20.0
 # ---------------------------------------------------------------------------
 
 var _trap_nodes: Array = []   # placed trap nodes passed in from Arena
+var _cards:      Array = []   # UpgradeCard nodes — used for mobile touch hit-testing
 
 
 # ---------------------------------------------------------------------------
@@ -610,6 +611,7 @@ func _spawn_cards(cards: Array) -> void:
 		card_ctrl.process_mode = Node.PROCESS_MODE_ALWAYS
 		card_ctrl.card_selected.connect(_on_card_selected)
 		add_child(card_ctrl)
+		_cards.append(card_ctrl)
 
 
 # ---------------------------------------------------------------------------
@@ -630,6 +632,19 @@ func _spawn_cards(cards: Array) -> void:
 ## so Godot's depth-first _unhandled_input traversal calls this method BEFORE
 ## Arena._unhandled_input() — the event is marked handled and Arena never sees it.
 func _unhandled_input(event: InputEvent) -> void:
+	# InputEventScreenTouch bypasses _gui_input for custom Controls on mobile,
+	# so we hit-test cards here as a fallback.
+	if event is InputEventScreenTouch and event.pressed:
+		var pos: Vector2 = event.position
+		for card_node in _cards:
+			var card := card_node as UpgradeCard
+			if card.mouse_filter == Control.MOUSE_FILTER_IGNORE:
+				continue
+			if Rect2(card.position, card.size).has_point(pos):
+				card.press()
+				get_viewport().set_input_as_handled()
+				return
+
 	if event is InputEventScreenTouch \
 			or event is InputEventMouseButton \
 			or event is InputEventScreenDrag \

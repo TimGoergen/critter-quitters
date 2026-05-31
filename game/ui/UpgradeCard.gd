@@ -297,6 +297,13 @@ func _on_select_pressed() -> void:
 	card_selected.emit(_upgrade_data)
 
 
+## Triggers card selection as if the user tapped it.
+## Called from parent screens that do their own touch hit-testing because
+## InputEventScreenTouch bypasses _gui_input for custom Controls on mobile.
+func press() -> void:
+	_on_select_pressed()
+
+
 ## Forces the card back to an unselected visual state without emitting.
 ## Called by TrapSelectionScreen when the pick limit is reached and a
 ## third card tap must be rejected.
