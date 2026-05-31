@@ -42,8 +42,11 @@ const CARD_GAP: float = 20.0
 const BASE_OFFER_COUNT: int = 3
 const BASE_PICK_COUNT:  int = 2
 
-## Probability that the last slot is a boost rather than a trap.
-const BOOST_SLOT_CHANCE: float = 0.5
+## Snap Trap and Fogger — affordable, ground-damage traps guaranteed in slot 1.
+const TIER_ONE_TRAP_TYPES: Array[int] = [0, 2]
+
+## Probability that each "wildcard" slot (slot 3 onward) offers a boost instead of a trap.
+const BOOST_SLOT_CHANCE: float = 0.20
 
 
 func _offer_count() -> int:
@@ -172,67 +175,77 @@ func _build_screen() -> void:
 # Slot generation
 # ---------------------------------------------------------------------------
 
-## Builds OFFER_COUNT slots: always 2 traps, third slot is boost or trap.
+## Builds OFFER_COUNT slots with three distinct rules:
 ##
-## Selection is cost-weighted: weight = 1/cost, so cheaper units appear more
-## often. Picks are without replacement so the same type cannot appear twice.
+##   Slot 1 — Tier-1 trap (Snap Trap or Fogger): the most affordable and
+##             versatile ground-damage options. Weighted by 1/cost.
+##   Slot 2 — Any trap, weighted by 1/cost. Cannot duplicate slot 1.
+##   Slot 3+ — Wildcard: BOOST_SLOT_CHANCE probability of a cost-weighted
+##              boost; otherwise a cost-weighted trap (no trap duplicates).
+##              If every trap type is already used, falls back to a boost.
 ##
-## Ground-damage guarantee: at least one offered trap must deal direct HP
-## damage to ground enemies. Glue Board (utility slow) and Fly Strip Launcher
-## (flying-only) do not qualify. The check is explicit so it holds if more
-## utility or flying-only traps are added to the roster later.
+## The tier-1 guarantee in slot 1 replaces the old post-hoc ground-damage
+## check — the structural rule is clearer and more predictable for the player.
 func _generate_slots() -> Array:
-	# Build candidate lists with per-item weights.
-	var trap_candidates: Array = []
-	for t in range(6):
-		trap_candidates.append({
+	var slots:           Array      = []
+	var used_trap_types: Array[int] = []
+
+	# --- Slot 1: always a tier-1 trap ---
+	var tier1_candidates: Array = []
+	for t in TIER_ONE_TRAP_TYPES:
+		tier1_candidates.append({
 			"category": "trap", "type": t,
 			"weight": 1.0 / float(Trap.STATS[t]["cost"]),
 		})
+	var tier1_pick := _weighted_pick(tier1_candidates)
+	slots.append({ "category": "trap", "type": tier1_pick["type"] })
+	used_trap_types.append(tier1_pick["type"])
 
-	var boost_candidates: Array = []
-	for b in range(5):
-		boost_candidates.append({
-			"category": "boost", "type": b,
-			"weight": 1.0 / float(BoostUnit.STATS[b]["cost"]),
-		})
-
-	# Fill all but the last slot with traps (without replacement).
-	var slots: Array = []
-	for _i in range(_offer_count() - 1):
-		var pick := _weighted_pick(trap_candidates)
-		slots.append({ "category": pick["category"], "type": pick["type"] })
-
-	# Last slot: boost or trap at the configured probability.
-	var last_pick: Dictionary
-	if randf() < BOOST_SLOT_CHANCE:
-		last_pick = _weighted_pick(boost_candidates)
-	else:
-		last_pick = _weighted_pick(trap_candidates)
-	slots.append({ "category": last_pick["category"], "type": last_pick["type"] })
-
-	# Ground-damage guarantee: at least one offered trap must deal direct HP
-	# damage to ground enemies. Glue Board (slow only) and Fly Strip Launcher
-	# (flying-only) do not qualify. If no qualifying trap was selected, replace
-	# one non-qualifying trap slot with a weighted pick from the qualifying set.
-	var has_ground_damage_trap := false
-	for slot in slots:
-		if slot["category"] == "trap" and slot["type"] in Trap.GROUND_DAMAGE_TYPES:
-			has_ground_damage_trap = true
-			break
-
-	if not has_ground_damage_trap:
-		var ground_candidates: Array = []
-		for t in Trap.GROUND_DAMAGE_TYPES:
-			ground_candidates.append({
+	# --- Slot 2: any trap, excluding the tier-1 choice ---
+	var any_trap_candidates: Array = []
+	for t in range(6):
+		if t not in used_trap_types:
+			any_trap_candidates.append({
 				"category": "trap", "type": t,
 				"weight": 1.0 / float(Trap.STATS[t]["cost"]),
 			})
-		var replacement := _weighted_pick(ground_candidates)
-		for i in slots.size():
-			if slots[i]["category"] == "trap" and not (slots[i]["type"] in Trap.GROUND_DAMAGE_TYPES):
-				slots[i] = { "category": "trap", "type": replacement["type"] }
-				break
+	var slot2_pick := _weighted_pick(any_trap_candidates)
+	slots.append({ "category": "trap", "type": slot2_pick["type"] })
+	used_trap_types.append(slot2_pick["type"])
+
+	# --- Slot 3+: wildcard (boost at BOOST_SLOT_CHANCE, otherwise trap) ---
+	for _i in range(_offer_count() - 2):
+		if randf() < BOOST_SLOT_CHANCE:
+			var boost_candidates: Array = []
+			for b in range(5):
+				boost_candidates.append({
+					"category": "boost", "type": b,
+					"weight": 1.0 / float(BoostUnit.STATS[b]["cost"]),
+				})
+			var boost_pick := _weighted_pick(boost_candidates)
+			slots.append({ "category": "boost", "type": boost_pick["type"] })
+		else:
+			var remaining_traps: Array = []
+			for t in range(6):
+				if t not in used_trap_types:
+					remaining_traps.append({
+						"category": "trap", "type": t,
+						"weight": 1.0 / float(Trap.STATS[t]["cost"]),
+					})
+			if remaining_traps.is_empty():
+				# All trap types already offered — give a boost instead.
+				var boost_candidates: Array = []
+				for b in range(5):
+					boost_candidates.append({
+						"category": "boost", "type": b,
+						"weight": 1.0 / float(BoostUnit.STATS[b]["cost"]),
+					})
+				var boost_pick := _weighted_pick(boost_candidates)
+				slots.append({ "category": "boost", "type": boost_pick["type"] })
+			else:
+				var trap_pick := _weighted_pick(remaining_traps)
+				slots.append({ "category": "trap", "type": trap_pick["type"] })
+				used_trap_types.append(trap_pick["type"])
 
 	slots.shuffle()
 	return slots
