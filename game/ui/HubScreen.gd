@@ -128,18 +128,47 @@ func _build_ui() -> void:
 	panel.add_child(divider)
 	y += 16.0
 
-	# SF balance.
+	# SF balance — "Service Fees" descriptor above, icon + number below.
+	var sf_desc_lbl := Label.new()
+	sf_desc_lbl.text                 = "Service Fees"
+	sf_desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sf_desc_lbl.position             = Vector2(16.0, y)
+	sf_desc_lbl.size                 = Vector2(inner_w, 20.0)
+	sf_desc_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	sf_desc_lbl.add_theme_font_size_override("font_size", 13)
+	sf_desc_lbl.add_theme_color_override("font_color", COLOR_DIM)
+	sf_desc_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(sf_desc_lbl)
+	y += 20.0
+
+	# Icon + number row — centred in the panel.
+	var sf_row := HBoxContainer.new()
+	sf_row.position    = Vector2(16.0, y)
+	sf_row.size        = Vector2(inner_w, 32.0)
+	sf_row.alignment   = BoxContainer.ALIGNMENT_CENTER
+	sf_row.add_theme_constant_override("separation", 6)
+	sf_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(sf_row)
+
+	var sf_icon := TextureRect.new()
+	sf_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
+	sf_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+	sf_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	# Height matches the label; width derives from the 80:52 bill aspect ratio.
+	sf_icon.custom_minimum_size = Vector2(49, 32)
+	sf_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sf_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	sf_row.add_child(sf_icon)
+
 	_sf_balance_lbl = Label.new()
-	_sf_balance_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_sf_balance_lbl.position             = Vector2(16.0, y)
-	_sf_balance_lbl.size                 = Vector2(inner_w, 36.0)
+	_sf_balance_lbl.text                 = "%d" % GameState.service_fees
+	_sf_balance_lbl.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
 	_sf_balance_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	_sf_balance_lbl.add_theme_font_size_override("font_size", 28)
 	_sf_balance_lbl.add_theme_color_override("font_color", COLOR_GOLD)
 	_sf_balance_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_sf_balance_lbl.text = "Service Fees: %d SF" % GameState.service_fees
-	panel.add_child(_sf_balance_lbl)
-	y += 52.0
+	sf_row.add_child(_sf_balance_lbl)
+	y += 32.0
 
 	# Button row: Bug-Up! | Start New Job | Bug Out
 	const BTN_H: float = 56.0
@@ -246,7 +275,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_fees_changed(new_amount: int) -> void:
 	if _sf_balance_lbl != null:
-		_sf_balance_lbl.text = "Service Fees: %d SF" % new_amount
+		_sf_balance_lbl.text = "%d" % new_amount
 
 
 func _on_bugup_pressed() -> void:

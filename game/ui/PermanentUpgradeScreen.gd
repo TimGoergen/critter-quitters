@@ -65,8 +65,8 @@ const BTN_H: float = 44.0
 # State
 # ---------------------------------------------------------------------------
 
-var _sf_lbl:   Label  = null
-var _buy_btns: Array  = []   # Array of { "id": String, "btn": Button, "cost_lbl": Label }
+var _sf_lbl:   Label  = null   # the number Label inside the SF balance HBoxContainer
+var _buy_btns: Array  = []   # Array of { "id": String, "btn": Button, "cost_lbl": Label, "cost_icon": TextureRect }
 
 
 # ---------------------------------------------------------------------------
@@ -124,16 +124,33 @@ func _build_ui() -> void:
 	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(title_lbl)
 
+	# SF balance header — icon on the left, number on the right, right-aligned as a pair.
+	var sf_hdr_row := HBoxContainer.new()
+	sf_hdr_row.position    = Vector2(panel_w - PANEL_PAD - 180.0, y + 4.0)
+	sf_hdr_row.size        = Vector2(180.0, header_h)
+	sf_hdr_row.alignment   = BoxContainer.ALIGNMENT_END
+	sf_hdr_row.add_theme_constant_override("separation", 5)
+	sf_hdr_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(sf_hdr_row)
+
+	var sf_hdr_icon := TextureRect.new()
+	sf_hdr_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
+	sf_hdr_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+	sf_hdr_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	# Height matches the font size; width from the 80:52 bill aspect ratio.
+	sf_hdr_icon.custom_minimum_size = Vector2(40, 26)
+	sf_hdr_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sf_hdr_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	sf_hdr_row.add_child(sf_hdr_icon)
+
 	_sf_lbl = Label.new()
-	_sf_lbl.text                 = "%d SF" % GameState.service_fees
-	_sf_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_sf_lbl.position             = Vector2(panel_w - PANEL_PAD - 180.0, y + 4.0)
-	_sf_lbl.size                 = Vector2(180.0, header_h)
+	_sf_lbl.text                 = "%d" % GameState.service_fees
+	_sf_lbl.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
 	_sf_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	_sf_lbl.add_theme_font_size_override("font_size", 26)
 	_sf_lbl.add_theme_color_override("font_color", COLOR_HEADER)
 	_sf_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(_sf_lbl)
+	sf_hdr_row.add_child(_sf_lbl)
 	y += header_h + 12.0
 
 	# Divider below header.
@@ -299,43 +316,63 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	btn.pressed.connect(_on_buy_pressed.bind(upgrade_id))
 	row.add_child(btn)
 
-	# Cost label inside the button (updated by _refresh_all_buttons).
+	# Cost content inside the button — icon + number, centred.
+	# The HBoxContainer fills the button face; the icon is hidden when "MAX" is shown.
+	var cost_row := HBoxContainer.new()
+	cost_row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cost_row.alignment   = BoxContainer.ALIGNMENT_CENTER
+	cost_row.add_theme_constant_override("separation", 3)
+	cost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(cost_row)
+
+	var cost_icon := TextureRect.new()
+	cost_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
+	cost_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+	cost_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	cost_icon.custom_minimum_size = Vector2(23, 15)
+	cost_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	cost_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	cost_row.add_child(cost_icon)
+
 	var cost_lbl := Label.new()
-	cost_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	cost_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	cost_lbl.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	cost_lbl.vertical_alignment  = VERTICAL_ALIGNMENT_CENTER
+	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	cost_lbl.add_theme_font_size_override("font_size", 15)
-	cost_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	btn.add_child(cost_lbl)
+	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	cost_row.add_child(cost_lbl)
 
-	_buy_btns.append({ "id": upgrade_id, "btn": btn, "cost_lbl": cost_lbl })
+	_buy_btns.append({ "id": upgrade_id, "btn": btn, "cost_lbl": cost_lbl, "cost_icon": cost_icon })
 
 
 ## Rebuilds all buy button states and cost labels from current GameState.
 func _refresh_all_buttons() -> void:
 	for entry: Dictionary in _buy_btns:
-		var upgrade_id: String = entry["id"]
-		var btn: Button        = entry["btn"]
-		var cost_lbl: Label    = entry["cost_lbl"]
-		var tier: int          = GameState.get_upgrade_tier(upgrade_id)
-		var maxed: bool        = tier >= 2
-		var can_buy: bool      = GameState.can_purchase_upgrade(upgrade_id)
+		var upgrade_id: String   = entry["id"]
+		var btn: Button          = entry["btn"]
+		var cost_lbl: Label      = entry["cost_lbl"]
+		var cost_icon: TextureRect = entry["cost_icon"]
+		var tier: int            = GameState.get_upgrade_tier(upgrade_id)
+		var maxed: bool          = tier >= 2
+		var can_buy: bool        = GameState.can_purchase_upgrade(upgrade_id)
 
 		btn.disabled = maxed or not can_buy
 
 		if maxed:
+			cost_icon.visible = false   # hide the bill icon when showing "MAX"
 			cost_lbl.text = "MAX"
 			cost_lbl.add_theme_color_override("font_color", COLOR_MAX)
 			_apply_btn_style(btn, false, true)
 		elif can_buy:
+			cost_icon.visible = true
 			var def := _def_for(upgrade_id)
-			cost_lbl.text = "%d SF" % def["tier_costs"][tier]
+			cost_lbl.text = "%d" % def["tier_costs"][tier]
 			cost_lbl.add_theme_color_override("font_color", COLOR_HEADER)
 			_apply_btn_style(btn, true, false)
 		else:
+			cost_icon.visible = true
 			var def := _def_for(upgrade_id)
-			cost_lbl.text = "%d SF" % def["tier_costs"][tier]
+			cost_lbl.text = "%d" % def["tier_costs"][tier]
 			cost_lbl.add_theme_color_override("font_color", COLOR_DIM)
 			_apply_btn_style(btn, false, false)
 
@@ -427,7 +464,7 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _on_fees_changed(_new_amount: int) -> void:
 	if _sf_lbl != null:
-		_sf_lbl.text = "%d SF" % GameState.service_fees
+		_sf_lbl.text = "%d" % GameState.service_fees
 	_refresh_all_buttons()
 
 
