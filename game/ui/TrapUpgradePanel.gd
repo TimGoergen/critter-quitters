@@ -149,8 +149,14 @@ func _build_ui() -> void:
 	var boosts:  Array = _trap.get_active_boost_display()
 	var boost_h: float = BOOST_SECTION_LEAD + BOOST_ENTRY_H * boosts.size() if not boosts.is_empty() else 0.0
 
-	# Height: top padding + header + description block + five stat rows + active boosts + bottom padding.
-	var panel_h := PADDING + 67.0 + DESC_H + 7.0 + (STAT_ROW_H + 7.0) * 4.0 + STAT_ROW_H + boost_h + PADDING
+	# Whether the third stat row (Fire Rate / Duration) applies to this trap.
+	# Glue Board shows Duration; active traps show Fire Rate; all others (Bait Station)
+	# have no timed stat and skip the row so no empty space appears in the panel.
+	var show_rate_row: bool = (_trap.get_type() == Trap.TrapType.GLUE_BOARD) or not _trap.is_passive()
+
+	# Height: header + description + N stat rows + active boosts.
+	var row_count: int = 5 if show_rate_row else 4
+	var panel_h := PADDING + 67.0 + DESC_H + 7.0 + (STAT_ROW_H + 7.0) * float(row_count - 1) + STAT_ROW_H + boost_h + PADDING
 
 	# Centre the panel in the arena zone (the space between the two HUD panels).
 	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
@@ -306,9 +312,15 @@ func _build_ui() -> void:
 	y += DESC_H + 8.0
 
 	# --- Stat rows: each row IS the upgrade button for that stat ---
-	_dmg_row         = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
-	_rng_row         = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
-	_rate_row        = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_dmg_row  = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_rng_row  = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_rate_row = _build_stat_button_row(y, inner_w)
+	if show_rate_row:
+		y += STAT_ROW_H + 8.0
+	else:
+		# Not applicable to this trap type — hide it now and don't advance Y
+		# so the crit rows start immediately below Range with no gap.
+		_rate_row["row"].visible = false
 	_crit_chance_row = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
 	_crit_damage_row = _build_stat_button_row(y, inner_w)
 
