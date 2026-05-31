@@ -91,6 +91,7 @@ var _selected_traps:  Array[int] = []
 var _selected_boosts: Array[int] = []
 var _cards:           Array      = []   # UpgradeCard nodes, parallel to _offered_slots
 var _start_btn:       Button     = null
+var _debug_lbl:       Label      = null   # DIAGNOSTIC — remove after coordinate fix
 
 
 # ---------------------------------------------------------------------------
@@ -169,6 +170,17 @@ func _build_screen() -> void:
 	_offered_count = offer
 	_start_btn.size     = Vector2(280.0, 54.0)
 	add_child(_start_btn)
+
+	# DIAGNOSTIC label — shows raw touch coords + first card rect on screen.
+	# Remove after coordinate space is confirmed.
+	_debug_lbl = Label.new()
+	_debug_lbl.process_mode = Node.PROCESS_MODE_ALWAYS
+	_debug_lbl.position     = Vector2(4.0, 560.0)
+	_debug_lbl.size         = Vector2(1272.0, 36.0)
+	_debug_lbl.add_theme_font_size_override("font_size", 14)
+	_debug_lbl.add_theme_color_override("font_color", Color(1, 1, 0, 1))
+	_debug_lbl.text = "tap anywhere — coords will appear here"
+	add_child(_debug_lbl)
 
 
 # ---------------------------------------------------------------------------
@@ -448,6 +460,15 @@ func _on_start_pressed() -> void:
 # ---------------------------------------------------------------------------
 
 func _unhandled_input(event: InputEvent) -> void:
+	# DIAGNOSTIC — update on-screen label with raw touch position so we can
+	# confirm the coordinate space without needing adb. Remove after fix.
+	if event is InputEventScreenTouch and event.pressed and _debug_lbl:
+		var pos: Vector2  = (event as InputEventScreenTouch).position
+		var card_rect: Rect2 = _cards[0].get_global_rect() if _cards.size() > 0 else Rect2()
+		_debug_lbl.text = "touch=%s  card0_rect=%s  vp=%s" % [
+			pos, card_rect, get_viewport().get_visible_rect().size
+		]
+
 	# Cards handle their own touch via UpgradeCard._input.
 	# Handle the start button here as a safety net in case Button._gui_input
 	# is also unreliable on mobile.
