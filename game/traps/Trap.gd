@@ -51,6 +51,12 @@ const BAIT_STATION_FRAMES: Array[Texture2D] = [preload("res://assets/bait_statio
 
 enum TrapType { SNAP_TRAP, ZAPPER, FOGGER, GLUE_BOARD, FLY_STRIP_LAUNCHER, BAIT_STATION }
 
+## Trap types that can target flying enemies.
+## Snap Trap launches with enough vertical force to catch low-flying pests.
+## Fly Strip Launcher is the dedicated anti-air option.
+## Everything else is ground-only.
+const ANTI_AIR_TYPES: Array[TrapType] = [TrapType.SNAP_TRAP, TrapType.FLY_STRIP_LAUNCHER]
+
 ## Per-type stat table. All numeric values are placeholders — tuned via playtesting.
 ##   damage           — HP removed from each target per shot
 ##   range            — circular detection radius in world units (1 unit = 1 cell)

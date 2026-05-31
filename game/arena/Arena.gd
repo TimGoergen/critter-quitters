@@ -1133,9 +1133,20 @@ func _spawn_gap_for_type(enemy_type: Enemy.EnemyType) -> float:
 	return (visual_size + SPAWN_GAP_CELLS) / speed
 
 
+## Returns true if the player has unlocked any trap capable of targeting flying enemies.
+## Called before adding Mosquito to the wave pool — if no anti-air exists, spawning
+## flying pests would give the player no way to counter them.
+func _player_has_anti_air() -> bool:
+	for trap_type: int in GameState.unlocked_trap_types:
+		if trap_type in Trap.ANTI_AIR_TYPES:
+			return true
+	return false
+
+
 ## Returns which enemy type to spawn for the given wave number.
 ## Wave 1 is pure gnats (tutorial difficulty). Every 10th wave is a rat boss wave.
 ## New types unlock progressively; gnats phase out after wave 6 as heavier enemies dominate.
+## Flying enemies are only added to the pool when the player has at least one anti-air trap.
 func _enemy_type_for_wave(wave: int) -> Enemy.EnemyType:
 	if wave == 1:
 		return Enemy.EnemyType.GNAT
@@ -1154,7 +1165,7 @@ func _enemy_type_for_wave(wave: int) -> Enemy.EnemyType:
 		pool.append_array([Enemy.EnemyType.BEETLE, Enemy.EnemyType.BEETLE])
 	if wave >= 8:
 		pool.append_array([Enemy.EnemyType.COCKROACH, Enemy.EnemyType.COCKROACH, Enemy.EnemyType.COCKROACH])
-	if wave >= 3:
+	if wave >= 3 and _player_has_anti_air():
 		pool.append(Enemy.EnemyType.MOSQUITO)
 
 	return pool[randi() % pool.size()]

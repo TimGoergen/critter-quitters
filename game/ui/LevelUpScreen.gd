@@ -408,13 +408,15 @@ func _build_unlock_card(tier: int, used_ids: Array) -> Dictionary:
 ## Tries to find an eligible trap type and non-exhausted free-upgrade stat.
 ## Returns an empty Dictionary if no eligible (type, stat) pair exists.
 ##
-## Equipment upgrades are now type-wide: the chosen upgrade applies to every
-## placed trap of that type AND all future placements (tracked in GameState).
-## The free pool (FREE_MAX_LEVEL = 3) is independent of the paid Bug-Bucks pool,
-## so a stat can be offered here even if already paid-maxed, and vice-versa.
+## Equipment upgrades are type-wide: the chosen upgrade applies to every placed
+## trap of that type AND all future placements (tracked in GameState).
+##
+## Eligibility is based on unlocked trap types, not just placed ones — if the player
+## has unlocked a Zapper but hasn't placed one yet, Zapper equipment cards can still
+## appear and will apply to any Zapper placed later in the run.
 func _build_equipment_card(tier: int, used_ids: Array) -> Dictionary:
 	# Build a map of {trap_type_int → representative_trap_node} from placed traps.
-	# One entry per type — we need only one instance to check passive-ness and naming.
+	# A placed node is preferred because it lets us call get_type_name() directly.
 	var type_to_rep: Dictionary = {}
 	for trap in _trap_nodes:
 		if not is_instance_valid(trap):
@@ -423,13 +425,19 @@ func _build_equipment_card(tier: int, used_ids: Array) -> Dictionary:
 		if not type_to_rep.has(t):
 			type_to_rep[t] = trap
 
+	# Include every unlocked type even if none of that type are currently placed.
+	# Null sentinel signals that we must derive type info from STATS instead of a live node.
+	for trap_type: int in GameState.unlocked_trap_types:
+		if not type_to_rep.has(trap_type):
+			type_to_rep[trap_type] = null
+
 	if type_to_rep.is_empty():
 		return {}
 
 	# Collect all eligible (type, stat) pairs where the free pool is not exhausted.
-	var eligible: Array = []   # each entry: { "type": int, "stat": String, "rep": Node3D }
+	var eligible: Array = []   # each entry: { "type": int, "stat": String, "rep": Node3D or null }
 	for trap_type: int in type_to_rep.keys():
-		var rep: Node3D = type_to_rep[trap_type]
+		var rep = type_to_rep[trap_type]   # Node3D or null
 		for stat: String in _get_free_upgradeable_stats(rep, trap_type):
 			var uid := "equip_%d_%s" % [trap_type, stat]
 			if uid not in used_ids:
@@ -440,9 +448,17 @@ func _build_equipment_card(tier: int, used_ids: Array) -> Dictionary:
 
 	eligible.shuffle()
 	var chosen: Dictionary = eligible[0]
-	var trap_type: int  = chosen["type"]
-	var stat: String    = chosen["stat"]
-	var rep: Node3D     = chosen["rep"]
+	var trap_type: int = chosen["type"]
+	var stat: String   = chosen["stat"]
+	var rep            = chosen["rep"]   # Node3D or null
+
+	# Resolve the display name: prefer a live node's get_type_name(); fall back to
+	# TRAP_DISPLAY which is always populated for all six trap types.
+	var title: String
+	if rep != null and is_instance_valid(rep):
+		title = rep.get_type_name()
+	else:
+		title = TRAP_DISPLAY.get(trap_type, {}).get("name", "Trap")
 
 	var stat_name: String  = STAT_NAMES.get(stat, stat)
 	var plain_text: String = STAT_PLAIN_TEXT.get(stat, "")
@@ -453,37 +469,45 @@ func _build_equipment_card(tier: int, used_ids: Array) -> Dictionary:
 		"id":        unique_id,
 		"category":  "equipment",
 		"tier":      tier,
-		"title":     rep.get_type_name(),
+		"title":     title,
 		"stat_name": stat_name,
-		# Impact line mirrors campaign card format: "+X% Stat" — relative, not absolute.
-		# Different traps of the same type may have different base stats, so we show a
-		# relative label rather than a precise current-to-after delta.
+		# Relative label — different traps of the same type may have different base stats,
+		# so "+X%" is shown rather than an absolute current-to-after delta.
 		"impact_line": "+%d%% %s" % [display_pct, stat_name],
 		"plain_text":  plain_text,
-		"current_val": "",   # not shown for equipment cards
+		"current_val": "",
 		"after_val":   "",
 		"magnitude":   0.0,
-		"trap_node":   null,   # unused — upgrade is applied by type, not by instance
+		"trap_node":   null,   # upgrade is applied by type, not by instance
 		"trap_type":   trap_type,
 		"stat":        stat,
 	}
 
 
 ## Returns stat strings whose free-upgrade pool is not yet exhausted for this type.
-## Uses the representative trap instance only to check passive status and naming;
-## the actual cap is checked against GameState.type_upgrade_queue.
-func _get_free_upgradeable_stats(rep: Node3D, trap_type: int) -> Array:
+##
+## rep may be a live Node3D or null (when the trap type is unlocked but not placed).
+## Passivity — which determines whether fire_rate or duration is the relevant stat —
+## is read from the live node when available, and derived from Trap.STATS otherwise.
+## A passive trap (cooldown == 0.0) has no fire cycle, so fire_rate doesn't apply;
+## it has a linger duration instead.
+func _get_free_upgradeable_stats(rep, trap_type: int) -> Array:
 	var result: Array = []
 	var queue: Dictionary = GameState.type_upgrade_queue.get(trap_type, {})
+
+	var passive: bool
+	if rep != null and is_instance_valid(rep):
+		passive = rep.is_passive()
+	else:
+		passive = Trap.STATS[trap_type]["cooldown"] == 0.0
 
 	if queue.get("damage", 0) < Trap.FREE_MAX_LEVEL:
 		result.append("damage")
 	if queue.get("range", 0) < Trap.FREE_MAX_LEVEL:
 		result.append("range")
-	# Fire rate is not applicable to passive traps (Glue Board, Bait Station).
-	if not rep.is_passive() and queue.get("fire_rate", 0) < Trap.FREE_MAX_LEVEL:
+	if not passive and queue.get("fire_rate", 0) < Trap.FREE_MAX_LEVEL:
 		result.append("fire_rate")
-	if rep.is_passive() and queue.get("duration", 0) < Trap.FREE_MAX_LEVEL:
+	if passive and queue.get("duration", 0) < Trap.FREE_MAX_LEVEL:
 		result.append("duration")
 	if queue.get("crit_chance", 0) < Trap.FREE_MAX_LEVEL:
 		result.append("crit_chance")
