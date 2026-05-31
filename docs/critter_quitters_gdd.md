@@ -1,6 +1,6 @@
 ﻿# **Critter Quitters Pest Control — Game Design Document**
 
-**Version:** Draft v0.35 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / SVG sprites **Reference:** Desktop Tower Defense
+**Version:** Draft v0.39 **Status:** Concept / Pre-production **Platform:** Mobile (iOS / Android) / Web **Art Style:** CGI cartoon / SVG sprites **Reference:** Desktop Tower Defense
 
 ---
 
@@ -46,6 +46,7 @@
 | v0.37 | Permanent upgrade tree fully specified. Two categories (Equipment and Business), 9 upgrade lines, 18 tiers total, 99 SF to fill. Equipment: Reinforced Mechanisms, Extended Range, Tuned Triggers, Wider Selection. Business: Starting Capital, Hazard Insurance, Salvage Value, Bulk Discount, Field Experience. All values are playtesting placeholders. |
 | v0.38 | Starting trap selection UI specified. Same full-screen card layout as the level-up screen; 3 trap cards offered, player picks 2; "Start Buggin'" button activates on 2 selections. Wider Selection meta upgrade scales both the offer count (3→4) and pick count (2→3). |
 | v0.33 | Balance pass: gameplay loop and progression. Starting Bug Bucks reduced from 1,000 to 75 (buys exactly 3 Snap Traps; forces immediate strategic decisions). Infestation values scaled up ~8× so wave 1 uncontested = 2× threshold (10 Gnats × 4.0 = 40 infestation, threshold = 20). Kill bounties adjusted downward for standard enemies so Bug Bucks feel ungenerous: Gnat 3, Ant 6, Cricket 10, Beetle 20, Cockroach 35, Mosquito 10, Mouse 60, Rat 20, Rat King 180. XP system decoupled from infestation: each enemy type now carries a flat `xp` value; Arena.gd reads it directly rather than deriving from infestation damage. Level-up threshold raised from 12 to 20 XP so first level-up lands mid-wave 2 (satisfies 2–4 waves target). HP scaling changed from continuous linear (wave × 1.02 + base) to a step multiplier every 5 waves (+30% per tier): waves 1–4 = 1.0×, waves 5–9 = 1.3×, waves 10–14 = 1.6×, etc. |
+| v0.39 | Phase 8 marked complete. Mouse and Rat King SVG art complete; remaining Phase 8 items (palette finalisation, procedural background) deferred to post-roadmap cleanup. Phase 9 marked in progress. |
 
 ---
 
@@ -886,27 +887,34 @@ Development is phased to front-load the highest technical risk. The pathfinding 
 
 *Goal: no implementation work begins on new content until the full roster is specified — prevents scope creep and mid-build redesigns*
 
-### **Phase 8 — SVG Art for All Assets**
+### **Phase 8 — SVG Art for All Assets** ✓ Complete
 
 All assets use the confirmed SVG-on-quad approach: QuadMesh + StandardMaterial3D (unshaded, alpha), laid flat on the XZ plane. This is the house standard for all gameplay-visible units.
 
 - ✓ SVG art for all 6 traps: Snap Trap, Zapper, Fogger, Glue Board, Fly Strip Launcher, Bait Station (2 frames each: idle + fire)
 - ✓ SVG art for all 5 boosts: Pheromone Dispenser, Compressor, Cash Register, Air Freshener, Quarantine Marker (4-frame idle cycle at 2.5 fps)
-- ✓ SVG art for 7 of 9 enemies: Ant, Gnat, Cricket, Beetle, Cockroach, Mosquito, Rat (4-frame walk cycle each)
-- SVG art for Mouse (currently using Rat frames as placeholder)
-- SVG art for Rat King (currently using Rat frames as placeholder)
-- Per-element color palette finalized across all SVGs
-- Procedural animated background system
+- ✓ SVG art for all 9 enemies: Ant, Gnat, Cricket, Beetle, Cockroach, Mosquito, Rat, Mouse, Rat King (4-frame walk cycle each)
+- ~~Per-element color palette finalized across all SVGs~~ — deferred to post-roadmap cleanup
+- ~~Procedural animated background system~~ — deferred to post-roadmap cleanup
 
 *Goal: all gameplay-visible assets use SVG-on-quad; no colored cylinders, boxes, or placeholder meshes remain*
 
-### **Phase 9 — Full Game Loop**
+### **Phase 9 — Full Game Loop** *(in progress)*
 
-Phase 9 begins with a design pass (like Phase 7) before any implementation work starts. Game structure design is written into Section 15 of the GDD before implementation begins.
+**Design deliverables (complete):**
+- Game structure confirmed — single endless mode, Service Fees = XP levels reached (see Section 15)
+- Permanent upgrade tree specified — Equipment and Business trees, 18 tiers, 99 SF total (see Section 8)
 
-**Design deliverables (before implementation):**
-- Game structure confirmed — single endless mode, Service Fees = XP levels reached (complete; see Section 15)
-- Permanent upgrade tree — what can be purchased with Service Fees (TBD)
+**Implementation deliverables (in progress):**
+- ✓ Starting trap selection — cost-weighted offer with ground-damage guarantee; player picks 2 of 3
+- ✓ Progression gating — flying enemies gated on anti-air unlock; level-up equipment cards limited to unlocked types
+- Wave composition system — complexity curve, group-based spawning, boss wave rotation
+- All 6 trap types fully implemented in gameplay
+- All 9 enemy types in the wave pool
+- The Truck hub / meta update screen
+- Arena Evolution — obstacle spawning after boss waves
+- Save file system — multiple independent run slots
+- Service Fees awarded at run end (= XP level reached)
 
 **Implementation deliverables:**
 - Wave composition system — complexity curve, group-based spawning, boss waves
