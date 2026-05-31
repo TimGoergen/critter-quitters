@@ -363,6 +363,12 @@ func _on_card_toggled(_data: Dictionary, card: UpgradeCard, slot: Dictionary) ->
 	var picked: int = _selected_traps.size() + _selected_boosts.size()
 	_start_btn.disabled = picked < _pick_count()
 	_refresh_card_states(picked)
+	# DIAGNOSTIC — update label here so it fires whenever a card actually selects,
+	# regardless of which input path handled the event.
+	if _debug_lbl:
+		_debug_lbl.text = "SELECTED picked=%d traps=%s boosts=%s" % [
+			picked, _selected_traps, _selected_boosts
+		]
 
 
 ## Updates each card's input filter based on how many picks have been made.
