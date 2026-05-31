@@ -179,6 +179,11 @@ var _icon_controls: Array[Control] = []
 # Used by _start_drag() to find the icon's screen position for the floating icon tween.
 var _icon_area_controls: Array[Control] = []
 
+# Cost label per trap/boost type — updated by _refresh_trap_selector() whenever
+# bug_bucks or placed counts change so the displayed cost stays current.
+var _trap_cost_labels:  Array[Label] = []
+var _boost_cost_labels: Array[Label] = []
+
 # Parallel arrays for the boost selector tab.
 var _boost_icon_controls:      Array[Control] = []
 var _boost_icon_area_controls: Array[Control] = []
@@ -1700,8 +1705,16 @@ func _on_unlocked_boosts_set(_types: Array[int]) -> void:
 func _refresh_trap_selector() -> void:
 	for i in range(_icon_controls.size()):
 		_icon_controls[i].modulate = Color(1, 1, 1, 1) if _can_afford(i) else COLOR_UNAFFORDABLE_MODULATE
+		if i < _trap_cost_labels.size():
+			var count := GameState.get_trap_placed_count(i)
+			_trap_cost_labels[i].text = GameState.format_bucks(
+					Trap.compute_placement_cost(i as Trap.TrapType, count))
 	for i in range(_boost_icon_controls.size()):
 		_boost_icon_controls[i].modulate = Color(1, 1, 1, 1) if _can_afford_boost(i) else COLOR_UNAFFORDABLE_MODULATE
+		if i < _boost_cost_labels.size():
+			var count := GameState.get_boost_placed_count(i)
+			_boost_cost_labels[i].text = GameState.format_bucks(
+					BoostUnit.compute_placement_cost(i as BoostUnit.BoostType, count))
 
 
 
@@ -1780,13 +1793,14 @@ func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 	cost_row.add_child(coin_icon)
 
 	var cost_lbl := Label.new()
-	cost_lbl.text                = GameState.format_bucks(Trap.STATS[type]["cost"])
+	cost_lbl.text                = GameState.format_bucks(Trap.compute_placement_cost(type as Trap.TrapType, 0))
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	cost_lbl.add_theme_font_size_override("font_size", 15)
 	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.20))
 	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
+	_trap_cost_labels.append(cost_lbl)
 
 	# Badge sits on the same row as the cost, pushed to the right edge.
 	var badge_lbl := Label.new()
@@ -1908,11 +1922,13 @@ func _build_floating_trap_icon(parent: Control, type: int) -> Control:
 
 
 func _can_afford(type: int) -> bool:
-	return GameState.bug_bucks >= Trap.STATS[type]["cost"]
+	return GameState.bug_bucks >= Trap.compute_placement_cost(
+			type as Trap.TrapType, GameState.get_trap_placed_count(type))
 
 
 func _can_afford_boost(type: int) -> bool:
-	return GameState.bug_bucks >= BoostUnit.STATS[type]["cost"]
+	return GameState.bug_bucks >= BoostUnit.compute_placement_cost(
+			type as BoostUnit.BoostType, GameState.get_boost_placed_count(type))
 
 
 # ---------------------------------------------------------------------------
@@ -2046,13 +2062,14 @@ func _build_boost_row(parent: VBoxContainer, type: int) -> Control:
 	cost_row.add_child(coin_icon)
 
 	var cost_lbl := Label.new()
-	cost_lbl.text                = GameState.format_bucks(BoostUnit.STATS[type]["cost"])
+	cost_lbl.text                = GameState.format_bucks(BoostUnit.compute_placement_cost(type as BoostUnit.BoostType, 0))
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	cost_lbl.add_theme_font_size_override("font_size", 15)
 	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.20))
 	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
+	_boost_cost_labels.append(cost_lbl)
 
 	# Badge sits on the same row as the cost, pushed to the right edge.
 	var badge_lbl := Label.new()

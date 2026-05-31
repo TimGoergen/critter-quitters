@@ -783,7 +783,20 @@ func get_boost_source_nodes() -> Array:
 	return result
 
 
-## Returns the Bug Bucks cost to place this trap.
+## Bug Bucks cost when placed_count units of this type are already on the grid.
+## Formula: base_cost × (1 + 0.2 × placed_count), rounded to nearest integer.
+## Called by Arena and HUD — keeps the formula in one place.
+static func compute_placement_cost(trap_type: TrapType, placed_count: int) -> int:
+	return roundi(float(STATS[trap_type]["cost"]) * (1.0 + 0.2 * float(placed_count)))
+
+
+## Records the Bug Bucks actually paid at placement so get_sell_value() refunds
+## the scaled cost rather than the base cost.
+func set_placement_cost(cost: int) -> void:
+	_cost = cost
+
+
+## Returns the Bug Bucks cost that was paid to place this trap.
 func get_cost() -> int:
 	return _cost
 

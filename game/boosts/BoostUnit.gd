@@ -541,6 +541,18 @@ func get_description() -> String:
 			return "Restores infestation for every kill inside its aura. Perishable — has finite capacity."
 	return ""
 
+## Bug Bucks cost when placed_count units of this type are already on the grid.
+## Formula: base_cost × (1 + 0.2 × placed_count), rounded to nearest integer.
+static func compute_placement_cost(boost_type: BoostType, placed_count: int) -> int:
+	return roundi(float(STATS[boost_type]["cost"]) * (1.0 + 0.2 * float(placed_count)))
+
+
+## Records the Bug Bucks actually paid at placement so get_sell_value() refunds
+## the scaled cost rather than the base cost.
+func set_placement_cost(cost: int) -> void:
+	_cost = cost
+
+
 func get_cost() -> int:
 	return _cost
 

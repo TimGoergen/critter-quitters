@@ -554,7 +554,8 @@ func _commit_boost_drag_place() -> void:
 	_clear_drag_preview()
 	if anchor == Vector2i(-1, -1):
 		return
-	if GameState.bug_bucks < BoostUnit.STATS[_hud_drag_boost_type]["cost"]:
+	if GameState.bug_bucks < BoostUnit.compute_placement_cost(
+			_hud_drag_boost_type, GameState.get_boost_placed_count(_hud_drag_boost_type)):
 		return
 	var cells := _get_trap_cells(anchor)
 	if not cells.is_empty() and not _footprint_overlaps_enemy(cells):
@@ -688,7 +689,10 @@ func _handle_enemy_tap(enemy: Node3D) -> void:
 
 ## Returns true if the player can afford one more trap of the currently selected type.
 func _can_afford_trap() -> bool:
-	return GameState.bug_bucks >= Trap.STATS[GameState.selected_trap_type]["cost"]
+	var cost := Trap.compute_placement_cost(
+			GameState.selected_trap_type as Trap.TrapType,
+			GameState.get_trap_placed_count(GameState.selected_trap_type))
+	return GameState.bug_bucks >= cost
 
 
 ## Returns true if any active enemy's current or target cell falls inside
@@ -898,6 +902,7 @@ func _on_sell_boost_requested(anchor: Vector2i) -> void:
 func _try_remove_trap_by_anchor(anchor: Vector2i) -> void:
 	if _trap_nodes.has(anchor):
 		var trap: Node3D = _trap_nodes[anchor]
+		GameState.on_trap_removed(trap.get_type())  # decrement supply count before refund so HUD updates
 		var sell_value: int = trap.get_sell_value()
 		GameState.add_bug_bucks(sell_value)
 		_spawn_earn_label(_camera.unproject_position(trap.global_position), sell_value)
@@ -2414,6 +2419,11 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	trap.fly_strip_fired.connect(_on_fly_strip_fired)
 	trap.initialize(GameState.selected_trap_type as Trap.TrapType, _active_enemies)
 
+	# Compute supply-priced cost BEFORE incrementing the count (current count = already-placed).
+	var trap_type := GameState.selected_trap_type as Trap.TrapType
+	var placement_cost := Trap.compute_placement_cost(trap_type, GameState.get_trap_placed_count(trap_type))
+	trap.set_placement_cost(placement_cost)
+
 	# Apply any type-wide free upgrades that were earned from previous level-ups.
 	# This ensures a newly placed trap is immediately as strong as existing traps of the same type.
 	var tq: Dictionary = GameState.type_upgrade_queue.get(trap.get_type(), {})
@@ -2424,6 +2434,7 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	# Arena is PROCESS_MODE_ALWAYS; override so traps pause with the game.
 	trap.process_mode = Node.PROCESS_MODE_PAUSABLE
 	_trap_container.add_child(trap)
+	GameState.on_trap_placed(trap_type)          # count increments before spend so HUD refreshes to N+1 cost
 	GameState.spend_bug_bucks(trap.get_cost())
 	_trap_nodes[anchor] = trap
 
@@ -2476,10 +2487,16 @@ func _try_place_boost(anchor: Vector2i, boost_type: BoostUnit.BoostType) -> bool
 	boost.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 	boost.process_mode = Node.PROCESS_MODE_PAUSABLE
 	boost.initialize(boost_type, _active_enemies, _trap_nodes)
+
+	# Compute supply-priced cost BEFORE incrementing the count.
+	var boost_placement_cost := BoostUnit.compute_placement_cost(boost_type, GameState.get_boost_placed_count(boost_type))
+	boost.set_placement_cost(boost_placement_cost)
+
 	boost.boost_depleted.connect(_try_remove_boost_by_anchor.bind(anchor))
 	add_child(boost)
 	_boost_nodes[anchor] = boost
 	_draw_boost_outline(anchor)
+	GameState.on_boost_placed(boost_type)
 	GameState.spend_bug_bucks(boost.get_cost())
 	# cell_changed from place_trap() above triggers Pathfinder recalculation automatically.
 	return true
@@ -2489,6 +2506,7 @@ func _try_place_boost(anchor: Vector2i, boost_type: BoostUnit.BoostType) -> bool
 func _try_remove_boost_by_anchor(anchor: Vector2i) -> void:
 	if _boost_nodes.has(anchor):
 		var boost: Node3D = _boost_nodes[anchor]
+		GameState.on_boost_removed(boost.get_type())  # decrement supply count before refund so HUD updates
 		GameState.add_bug_bucks(boost.get_sell_value())
 		boost.queue_free()
 		_boost_nodes.erase(anchor)

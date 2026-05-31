@@ -237,6 +237,12 @@ var unlocked_trap_types: Array[int] = []
 ## Empty until the selection is confirmed — HUD hides all boost rows until then.
 var unlocked_boost_types: Array[int] = []
 
+## Count of each trap/boost type currently placed on the grid.
+## Key is the type int (matches Trap.TrapType / BoostUnit.BoostType).
+## Used by supply pricing: each placed unit raises the cost of the next.
+var trap_placed_counts:  Dictionary = {}
+var boost_placed_counts: Dictionary = {}
+
 ## Bug Bucks awarded per second remaining when the player clicks Send Wave Early
 ## during the between-wave countdown.  Default 2; upgradeable between runs.
 var early_wave_bonus_rate: int = 2
@@ -380,7 +386,9 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 	infestation_max_bonus = 0.0
 	sell_value_bonus = 0.0
 	wider_selection_tier = 0
-	type_upgrade_queue = {}
+	type_upgrade_queue  = {}
+	trap_placed_counts  = {}
+	boost_placed_counts = {}
 	# Apply permanent upgrades on top of the clean slate. Starting Capital
 	# bonus is added here after bug_bucks is already set to STARTING_BUG_BUCKS.
 	_apply_permanent_upgrade_bonuses()
@@ -523,6 +531,36 @@ func apply_upgrade_discount(base_cost: int) -> int:
 ## All bonuses are additive — picking the same buff twice doubles the bonus.
 ## The upgrade_cost_discount is capped at 0.80 (max 80% cheaper) to prevent
 ## free upgrades.
+## Returns how many traps of the given type are currently placed on the grid.
+func get_trap_placed_count(trap_type: int) -> int:
+	return trap_placed_counts.get(trap_type, 0)
+
+
+## Returns how many boosts of the given type are currently placed on the grid.
+func get_boost_placed_count(boost_type: int) -> int:
+	return boost_placed_counts.get(boost_type, 0)
+
+
+## Called by Arena immediately after placing a trap. Increments the supply count.
+func on_trap_placed(trap_type: int) -> void:
+	trap_placed_counts[trap_type] = trap_placed_counts.get(trap_type, 0) + 1
+
+
+## Called by Arena immediately after removing a trap. Decrements the supply count.
+func on_trap_removed(trap_type: int) -> void:
+	trap_placed_counts[trap_type] = maxi(0, trap_placed_counts.get(trap_type, 0) - 1)
+
+
+## Called by Arena immediately after placing a boost.
+func on_boost_placed(boost_type: int) -> void:
+	boost_placed_counts[boost_type] = boost_placed_counts.get(boost_type, 0) + 1
+
+
+## Called by Arena immediately after removing a boost.
+func on_boost_removed(boost_type: int) -> void:
+	boost_placed_counts[boost_type] = maxi(0, boost_placed_counts.get(boost_type, 0) - 1)
+
+
 func apply_campaign_buff(buff_id: String, magnitude: float) -> void:
 	match buff_id:
 		"dmg_all":          global_damage_bonus      += magnitude
