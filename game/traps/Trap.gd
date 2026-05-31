@@ -57,6 +57,13 @@ enum TrapType { SNAP_TRAP, ZAPPER, FOGGER, GLUE_BOARD, FLY_STRIP_LAUNCHER, BAIT_
 ## Everything else is ground-only.
 const ANTI_AIR_TYPES: Array[TrapType] = [TrapType.SNAP_TRAP, TrapType.FLY_STRIP_LAUNCHER]
 
+## Trap types that deal direct HP damage to ground-based enemies.
+## Glue Board is excluded — it applies a movement slow but deals no damage.
+## Fly Strip Launcher is excluded — it targets flying enemies only.
+const GROUND_DAMAGE_TYPES: Array[TrapType] = [
+	TrapType.SNAP_TRAP, TrapType.ZAPPER, TrapType.FOGGER, TrapType.BAIT_STATION,
+]
+
 ## Per-type stat table. All numeric values are placeholders — tuned via playtesting.
 ##   damage           — HP removed from each target per shot
 ##   range            — circular detection radius in world units (1 unit = 1 cell)

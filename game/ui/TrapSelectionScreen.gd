@@ -166,11 +166,10 @@ func _build_screen() -> void:
 ## Selection is cost-weighted: weight = 1/cost, so cheaper units appear more
 ## often. Picks are without replacement so the same type cannot appear twice.
 ##
-## Ground-pest guarantee: at least one offered trap must be able to target
-## ground-based pests. The Fly Strip Launcher is the only trap that cannot
-## (it targets flying enemies only). With the current roster this guarantee
-## is trivially satisfied — only one flying-only trap exists — but it is
-## checked explicitly so it holds if the roster changes later.
+## Ground-damage guarantee: at least one offered trap must deal direct HP
+## damage to ground enemies. Glue Board (utility slow) and Fly Strip Launcher
+## (flying-only) do not qualify. The check is explicit so it holds if more
+## utility or flying-only traps are added to the roster later.
 func _generate_slots() -> Array:
 	# Build candidate lists with per-item weights.
 	var trap_candidates: Array = []
@@ -205,25 +204,26 @@ func _generate_slots() -> Array:
 		{ "category": pick3["category"], "type": pick3["type"] },
 	]
 
-	# Ground-pest guarantee: if every offered trap is flying-only, replace one
-	# with a weighted pick from the ground-capable traps.
-	var has_ground_trap := false
+	# Ground-damage guarantee: at least one offered trap must deal direct HP
+	# damage to ground enemies. Glue Board (slow only) and Fly Strip Launcher
+	# (flying-only) do not qualify. If no qualifying trap was selected, replace
+	# one non-qualifying trap slot with a weighted pick from the qualifying set.
+	var has_ground_damage_trap := false
 	for slot in slots:
-		if slot["category"] == "trap" and slot["type"] != Trap.TrapType.FLY_STRIP_LAUNCHER:
-			has_ground_trap = true
+		if slot["category"] == "trap" and slot["type"] in Trap.GROUND_DAMAGE_TYPES:
+			has_ground_damage_trap = true
 			break
 
-	if not has_ground_trap:
+	if not has_ground_damage_trap:
 		var ground_candidates: Array = []
-		for t in range(6):
-			if t != Trap.TrapType.FLY_STRIP_LAUNCHER:
-				ground_candidates.append({
-					"category": "trap", "type": t,
-					"weight": 1.0 / float(Trap.STATS[t]["cost"]),
-				})
+		for t in Trap.GROUND_DAMAGE_TYPES:
+			ground_candidates.append({
+				"category": "trap", "type": t,
+				"weight": 1.0 / float(Trap.STATS[t]["cost"]),
+			})
 		var replacement := _weighted_pick(ground_candidates)
 		for i in slots.size():
-			if slots[i]["category"] == "trap" and slots[i]["type"] == Trap.TrapType.FLY_STRIP_LAUNCHER:
+			if slots[i]["category"] == "trap" and not (slots[i]["type"] in Trap.GROUND_DAMAGE_TYPES):
 				slots[i] = { "category": "trap", "type": replacement["type"] }
 				break
 
