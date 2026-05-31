@@ -162,23 +162,94 @@ func _build_screen() -> void:
 # ---------------------------------------------------------------------------
 
 ## Builds OFFER_COUNT slots: always 2 traps, third slot is boost or trap.
+##
+## Selection is cost-weighted: weight = 1/cost, so cheaper units appear more
+## often. Picks are without replacement so the same type cannot appear twice.
+##
+## Ground-pest guarantee: at least one offered trap must be able to target
+## ground-based pests. The Fly Strip Launcher is the only trap that cannot
+## (it targets flying enemies only). With the current roster this guarantee
+## is trivially satisfied — only one flying-only trap exists — but it is
+## checked explicitly so it holds if the roster changes later.
 func _generate_slots() -> Array:
-	var trap_pool:  Array[int] = [0, 1, 2, 3, 4, 5]
-	var boost_pool: Array[int] = [0, 1, 2, 3, 4]
-	trap_pool.shuffle()
-	boost_pool.shuffle()
+	# Build candidate lists with per-item weights.
+	var trap_candidates: Array = []
+	for t in range(6):
+		trap_candidates.append({
+			"category": "trap", "type": t,
+			"weight": 1.0 / float(Trap.STATS[t]["cost"]),
+		})
 
-	var slots: Array = []
-	slots.append({ "category": "trap", "type": trap_pool[0] })
-	slots.append({ "category": "trap", "type": trap_pool[1] })
+	var boost_candidates: Array = []
+	for b in range(5):
+		boost_candidates.append({
+			"category": "boost", "type": b,
+			"weight": 1.0 / float(BoostUnit.STATS[b]["cost"]),
+		})
 
+	# Two trap slots are always filled first; picks are removed from the pool
+	# so the same type cannot appear in both slots.
+	var pick1 := _weighted_pick(trap_candidates)
+	var pick2 := _weighted_pick(trap_candidates)
+
+	# Third slot: boost or trap at the configured probability.
+	var pick3: Dictionary
 	if randf() < BOOST_SLOT_CHANCE:
-		slots.append({ "category": "boost", "type": boost_pool[0] })
+		pick3 = _weighted_pick(boost_candidates)
 	else:
-		slots.append({ "category": "trap",  "type": trap_pool[2] })
+		pick3 = _weighted_pick(trap_candidates)
+
+	var slots: Array = [
+		{ "category": pick1["category"], "type": pick1["type"] },
+		{ "category": pick2["category"], "type": pick2["type"] },
+		{ "category": pick3["category"], "type": pick3["type"] },
+	]
+
+	# Ground-pest guarantee: if every offered trap is flying-only, replace one
+	# with a weighted pick from the ground-capable traps.
+	var has_ground_trap := false
+	for slot in slots:
+		if slot["category"] == "trap" and slot["type"] != Trap.TrapType.FLY_STRIP_LAUNCHER:
+			has_ground_trap = true
+			break
+
+	if not has_ground_trap:
+		var ground_candidates: Array = []
+		for t in range(6):
+			if t != Trap.TrapType.FLY_STRIP_LAUNCHER:
+				ground_candidates.append({
+					"category": "trap", "type": t,
+					"weight": 1.0 / float(Trap.STATS[t]["cost"]),
+				})
+		var replacement := _weighted_pick(ground_candidates)
+		for i in slots.size():
+			if slots[i]["category"] == "trap" and slots[i]["type"] == Trap.TrapType.FLY_STRIP_LAUNCHER:
+				slots[i] = { "category": "trap", "type": replacement["type"] }
+				break
 
 	slots.shuffle()
 	return slots
+
+
+## Selects one candidate by weight, removes it from candidates, and returns it.
+## Weight = 1/cost means cheaper items have proportionally higher selection odds.
+## Modifies candidates in-place so the same entry cannot be chosen twice.
+func _weighted_pick(candidates: Array) -> Dictionary:
+	var total: float = 0.0
+	for item in candidates:
+		total += item["weight"]
+	var roll := randf() * total
+	var accumulated := 0.0
+	for i in candidates.size():
+		accumulated += candidates[i]["weight"]
+		if roll <= accumulated:
+			var chosen: Dictionary = candidates[i]
+			candidates.remove_at(i)
+			return chosen
+	# Floating-point safety: roll landed exactly on total — return the last entry.
+	var last: Dictionary = candidates[-1]
+	candidates.remove_at(candidates.size() - 1)
+	return last
 
 
 # ---------------------------------------------------------------------------
