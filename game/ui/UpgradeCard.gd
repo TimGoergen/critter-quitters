@@ -249,15 +249,24 @@ func _on_resized() -> void:
 # Input — entire card surface is the click target
 # ---------------------------------------------------------------------------
 
+## Handles touch in _input rather than _gui_input because on Android,
+## InputEventScreenTouch bypasses _gui_input for custom GDScript Controls —
+## but _input is called for every event on every node unconditionally.
+## Using get_global_rect() keeps the hit-test in the same coordinate space
+## as event.position (both are in the viewport's virtual-pixel space).
+func _input(event: InputEvent) -> void:
+	if not (event is InputEventScreenTouch) or not event.pressed:
+		return
+	if mouse_filter == Control.MOUSE_FILTER_IGNORE:
+		return
+	if get_global_rect().has_point(event.position):
+		_on_select_pressed()
+		get_viewport().set_input_as_handled()
+
+
 func _gui_input(event: InputEvent) -> void:
-	# accept_event() marks the event as handled so it does not propagate to
-	# _unhandled_input on any node — specifically Arena._unhandled_input(),
-	# which would interpret the same click as a trap-select or enemy-follow tap.
+	# Desktop mouse support only — touch is handled in _input above.
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
-		if event.pressed:
-			_on_select_pressed()
-		accept_event()   # consume both press and release
-	elif event is InputEventScreenTouch:
 		if event.pressed:
 			_on_select_pressed()
 		accept_event()   # consume both press and release

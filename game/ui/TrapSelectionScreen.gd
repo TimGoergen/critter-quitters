@@ -448,25 +448,17 @@ func _on_start_pressed() -> void:
 # ---------------------------------------------------------------------------
 
 func _unhandled_input(event: InputEvent) -> void:
-	# InputEventScreenTouch bypasses _gui_input for custom Controls on mobile,
-	# so we hit-test cards and the start button here as a fallback.
-	# (If _gui_input already fired and called accept_event(), this never runs.)
+	# Cards handle their own touch via UpgradeCard._input.
+	# Handle the start button here as a safety net in case Button._gui_input
+	# is also unreliable on mobile.
 	if event is InputEventScreenTouch and event.pressed:
-		var pos: Vector2 = event.position
-		for card_node in _cards:
-			var card := card_node as UpgradeCard
-			if card.mouse_filter == Control.MOUSE_FILTER_IGNORE:
-				continue
-			if Rect2(card.position, card.size).has_point(pos):
-				card.press()
-				get_viewport().set_input_as_handled()
-				return
 		if _start_btn and not _start_btn.disabled:
-			if Rect2(_start_btn.position, _start_btn.size).has_point(pos):
+			if Rect2(_start_btn.position, _start_btn.size).has_point(event.position):
 				_on_start_pressed()
 				get_viewport().set_input_as_handled()
 				return
 
+	# Swallow all pointer events so Arena never receives them while this screen is open.
 	if event is InputEventScreenTouch \
 			or event is InputEventMouseButton \
 			or event is InputEventScreenDrag \

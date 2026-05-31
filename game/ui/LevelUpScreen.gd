@@ -632,19 +632,8 @@ func _spawn_cards(cards: Array) -> void:
 ## so Godot's depth-first _unhandled_input traversal calls this method BEFORE
 ## Arena._unhandled_input() — the event is marked handled and Arena never sees it.
 func _unhandled_input(event: InputEvent) -> void:
-	# InputEventScreenTouch bypasses _gui_input for custom Controls on mobile,
-	# so we hit-test cards here as a fallback.
-	if event is InputEventScreenTouch and event.pressed:
-		var pos: Vector2 = event.position
-		for card_node in _cards:
-			var card := card_node as UpgradeCard
-			if card.mouse_filter == Control.MOUSE_FILTER_IGNORE:
-				continue
-			if Rect2(card.position, card.size).has_point(pos):
-				card.press()
-				get_viewport().set_input_as_handled()
-				return
-
+	# Cards handle their own touch via UpgradeCard._input.
+	# Swallow all remaining pointer events so Arena never receives them.
 	if event is InputEventScreenTouch \
 			or event is InputEventMouseButton \
 			or event is InputEventScreenDrag \
