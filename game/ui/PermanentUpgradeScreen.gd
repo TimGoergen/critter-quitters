@@ -37,11 +37,11 @@ const COLOR_BTN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
 const COLOR_BTN_DIS_BG  := Color(0.10, 0.10, 0.12, 0.55)
 const COLOR_BTN_DIS_BOR := Color(0.28, 0.28, 0.32, 0.55)
 
-# Close button.
-const COLOR_CLOSE_BG     := Color(0.18, 0.18, 0.22, 1.0)
-const COLOR_CLOSE_HOVER  := Color(0.26, 0.26, 0.32, 1.0)
-const COLOR_CLOSE_PRESS  := Color(0.12, 0.12, 0.16, 1.0)
-const COLOR_CLOSE_BORDER := Color(0.45, 0.45, 0.52, 1.0)
+# Done button — green, matching the "Start New Job" / "Start Buggin'" vocabulary.
+const COLOR_DONE_BG     := Color(0.04, 0.25, 0.00, 1.0)
+const COLOR_DONE_HOVER  := Color(0.07, 0.33, 0.01, 1.0)
+const COLOR_DONE_PRESS  := Color(0.02, 0.16, 0.00, 1.0)
+const COLOR_DONE_BORDER := Color(0.22, 0.60, 0.04, 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -173,24 +173,27 @@ func _build_ui() -> void:
 	var done_btn := Button.new()
 	done_btn.text        = "Done"
 	done_btn.focus_mode  = Control.FOCUS_NONE
-	done_btn.position    = Vector2(panel_w - PANEL_PAD - 120.0, y)
-	done_btn.size        = Vector2(120.0, 40.0)
+	done_btn.position    = Vector2(panel_w - PANEL_PAD - 140.0, y)
+	done_btn.size        = Vector2(140.0, 48.0)
 	done_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	done_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	done_btn.add_theme_font_size_override("font_size", 20)
+	done_btn.add_theme_font_size_override("font_size", 22)
 	done_btn.add_theme_color_override("font_color", COLOR_TEXT)
 	done_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	for state: Array in [
-		["normal",  COLOR_CLOSE_BG],
-		["hover",   COLOR_CLOSE_HOVER],
-		["pressed", COLOR_CLOSE_PRESS],
+		["normal",  COLOR_DONE_BG],
+		["hover",   COLOR_DONE_HOVER],
+		["pressed", COLOR_DONE_PRESS],
 	]:
 		var box := StyleBoxFlat.new()
-		box.bg_color     = state[1]
-		box.border_color = COLOR_CLOSE_BORDER
+		box.bg_color              = state[1]
+		box.border_color          = COLOR_DONE_BORDER
 		box.set_border_width_all(2)
-		box.set_corner_radius_all(5)
-		box.set_content_margin_all(8.0)
+		box.set_corner_radius_all(6)
+		box.content_margin_left   = 12.0
+		box.content_margin_right  = 12.0
+		box.content_margin_top    = 8.0
+		box.content_margin_bottom = 8.0
 		done_btn.add_theme_stylebox_override(state[0], box)
 	done_btn.pressed.connect(_on_done_pressed)
 	panel.add_child(done_btn)
@@ -351,7 +354,7 @@ func _apply_btn_style(btn: Button, affordable: bool, maxed: bool) -> void:
 			box.bg_color     = COLOR_BTN_DIS_BG
 			box.border_color = COLOR_BTN_DIS_BOR
 			box.set_border_width_all(1)
-			box.set_corner_radius_all(4)
+			box.set_corner_radius_all(6)
 			box.set_content_margin_all(6.0)
 			btn.add_theme_stylebox_override(state, box)
 		return
@@ -370,7 +373,7 @@ func _apply_btn_style(btn: Button, affordable: bool, maxed: bool) -> void:
 		box.bg_color     = state[1]
 		box.border_color = bor
 		box.set_border_width_all(2)
-		box.set_corner_radius_all(4)
+		box.set_corner_radius_all(6)
 		box.set_content_margin_all(6.0)
 		btn.add_theme_stylebox_override(state[0], box)
 
