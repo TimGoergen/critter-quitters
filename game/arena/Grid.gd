@@ -1,5 +1,5 @@
 ## Grid.gd
-## Represents the 31×29 arena grid.
+## Represents the 41×29 arena grid.
 ##
 ## Owns the state of every cell — what occupies it and whether it can be
 ## traversed by pests or built on by the player. Grid state is the single
@@ -20,7 +20,7 @@ extends Node
 
 ## Number of grid columns (width, along the X axis).
 ## Subject to change via playtesting — adjust here and everything scales.
-const GRID_SIZE: int = 31
+const GRID_SIZE: int = 41
 
 ## Number of grid rows (height, along the Z axis). Intentionally odd so
 ## row 14 is the exact centre — entrance and exit land there with a 3-row gap (rows 13–15).

@@ -228,11 +228,11 @@ func _ready() -> void:
 	# or upgrade panel pause) so camera pan and trap placement remain available.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
-	# Phase 1: entrance and exit are hardcoded for the prototype.
-	# Grid is 31×29; row 14 is the exact vertical centre — both gaps
+	# Entrance and exit are hardcoded on opposite wall columns.
+	# Grid is 41×29; row 14 is the exact vertical centre — both gaps
 	# land there, spanning rows 13–15 (3 rows each).
 	var entrance := Vector2i(0, 14)
-	var exit     := Vector2i(30, 14)
+	var exit     := Vector2i(40, 14)
 
 	_spawn_cell   = Vector2i(entrance.x - 1, entrance.y)
 	_despawn_cell = Vector2i(exit.x + 1, exit.y)
