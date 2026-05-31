@@ -142,24 +142,18 @@ func _build_screen() -> void:
 		card.position     = Vector2(start_x + i * (CARD_W + CARD_GAP), card_y)
 		card.size         = Vector2(CARD_W, CARD_H)
 		card.process_mode = Node.PROCESS_MODE_ALWAYS
-		card.modulate     = Color(0.65, 0.65, 0.65, 1.0)   # start dimmed until selected
 		card.card_selected.connect(_on_card_toggled.bind(card, slot))
 		add_child(card)
 		_cards.append(card)
 
 	# "Start Buggin'" button — disabled until PICK_COUNT cards are selected.
-	_start_btn = Button.new()
-	_start_btn.text                = "START BUGGIN'"
-	_start_btn.disabled            = true
-	_start_btn.focus_mode          = Control.FOCUS_NONE
-	_start_btn.custom_minimum_size = Vector2(260.0, 54.0)
-	_start_btn.process_mode        = Node.PROCESS_MODE_ALWAYS
-	_start_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_start_btn.add_theme_font_size_override("font_size", 22)
-	_start_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	# Styled and structured identically to the hub screen's Start Buggin' button.
+	_start_btn = _make_start_button()
+	_start_btn.disabled     = true
+	_start_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	_start_btn.pressed.connect(_on_start_pressed)
-	_start_btn.position = Vector2((1280.0 - 260.0) * 0.5, card_y + CARD_H + 18.0)
-	_start_btn.size     = Vector2(260.0, 54.0)
+	_start_btn.position = Vector2((1280.0 - 280.0) * 0.5, card_y + CARD_H + 18.0)
+	_start_btn.size     = Vector2(280.0, 54.0)
 	add_child(_start_btn)
 
 
@@ -268,24 +262,85 @@ func _on_card_toggled(_data: Dictionary, card: UpgradeCard, slot: Dictionary) ->
 	_refresh_card_states(picked)
 
 
-## Updates each card's visual brightness and input filter based on how many
-## picks have been made.
-##   Selected cards:            bright (1.0), input on (can deselect)
-##   Unselected, picks left:    dim (0.65),   input on (can select)
-##   Unselected, at pick limit: very dim (0.4), input off (blocked)
+## Updates each card's input filter based on how many picks have been made.
+## Selected gold ring is owned by UpgradeCard._on_select_pressed().
+##   Selected:                  full brightness, input on (can deselect)
+##   Unselected, picks left:    full brightness, input on (can select)
+##   Unselected, at pick limit: dimmed (0.4),    input off (blocked)
 func _refresh_card_states(picked: int) -> void:
 	var at_limit: bool = picked >= PICK_COUNT
 	for c in _cards:
 		var card := c as UpgradeCard
 		if card.is_card_selected():
-			card.modulate    = Color(1.0, 1.0, 1.0, 1.0)
+			card.modulate     = Color(1.0, 1.0, 1.0, 1.0)
 			card.mouse_filter = Control.MOUSE_FILTER_STOP
 		elif at_limit:
-			card.modulate    = Color(0.4, 0.4, 0.4, 1.0)
+			card.modulate     = Color(0.4, 0.4, 0.4, 1.0)
 			card.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		else:
-			card.modulate    = Color(0.65, 0.65, 0.65, 1.0)
+			card.modulate     = Color(1.0, 1.0, 1.0, 1.0)
 			card.mouse_filter = Control.MOUSE_FILTER_STOP
+
+
+# ---------------------------------------------------------------------------
+# Button factory — mirrors StartScreen._make_icon_button / _apply_green_btn_style
+# ---------------------------------------------------------------------------
+
+func _make_start_button() -> Button:
+	var btn := Button.new()
+	btn.text       = ""
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.custom_minimum_size = Vector2(280.0, 54.0)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	_apply_green_btn_style(btn)
+
+	var row := HBoxContainer.new()
+	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.alignment   = BoxContainer.ALIGNMENT_CENTER
+	row.add_theme_constant_override("separation", 6)
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(row)
+
+	var icon := TextureRect.new()
+	icon.texture             = load("res://assets/uninfested.png") as Texture2D
+	icon.custom_minimum_size = Vector2(32, 32)
+	icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	row.add_child(icon)
+
+	var lbl := Label.new()
+	lbl.text                = "Start Buggin'"
+	lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_color_override("font_color", Color(0.90, 0.90, 0.90, 1.0))
+	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(lbl)
+
+	return btn
+
+
+func _apply_green_btn_style(btn: Button) -> void:
+	const BORDER := Color(0.22, 0.60, 0.04, 1.0)
+	const BORDER_DIM := Color(0.12, 0.35, 0.02, 0.55)
+	for state: Array in [
+		["normal",   Color(0.04, 0.25, 0.00, 1.0),  BORDER],
+		["hover",    Color(0.07, 0.33, 0.01, 1.0),  BORDER],
+		["pressed",  Color(0.02, 0.16, 0.00, 1.0),  BORDER],
+		["disabled", Color(0.02, 0.12, 0.00, 0.55), BORDER_DIM],
+	]:
+		var box := StyleBoxFlat.new()
+		box.bg_color              = state[1]
+		box.border_color          = state[2]
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(6)
+		box.content_margin_left   = 16.0
+		box.content_margin_right  = 16.0
+		box.content_margin_top    = 8.0
+		box.content_margin_bottom = 8.0
+		btn.add_theme_stylebox_override(state[0], box)
 
 
 # ---------------------------------------------------------------------------

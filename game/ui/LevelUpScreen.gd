@@ -137,6 +137,11 @@ const STAT_PLAIN_TEXT: Dictionary = {
 const RARE_THRESHOLD: float = 0.01
 const PRO_THRESHOLD:  float = 0.16   # 0.01 + 0.15
 
+## When an unlock card is generated, trap unlock candidates are weighted by this
+## multiplier relative to boost candidates. At 4.0 a single trap and single boost
+## of equal cost produce an 80/20 split — traps appear far more often than boosts.
+const TRAP_CATEGORY_BIAS: float = 4.0
+
 ## Displayed percentage for equipment upgrade cards at each tier [common, pro, rare].
 ## These are shown as "+X%" on the card — a relative label, not an exact formula output,
 ## since different traps of the same type may have different absolute starting stats.
@@ -299,27 +304,70 @@ func _build_equipment_or_campaign_card(tier: int, used_ids: Array) -> Dictionary
 ## Builds an unlock card for a randomly chosen locked trap or boost type.
 ## Returns empty if all traps and boosts are already unlocked, or all
 ## eligible unlock IDs are already in used_ids.
+##
+## Selection is weighted two ways:
+##   1. Within each category, weight = 1 / cost — cheaper items appear more often.
+##   2. Between categories, the trap pool's total weight is multiplied by
+##      TRAP_CATEGORY_BIAS so traps are strongly favoured over boosts.
 func _build_unlock_card(tier: int, used_ids: Array) -> Dictionary:
-	var candidates: Array = []
+	# Build weighted candidate lists per category.
+	var trap_candidates: Array  = []
+	var boost_candidates: Array = []
 
 	for t in range(6):
 		var uid := "unlock_trap_%d" % t
 		if t not in GameState.unlocked_trap_types and uid not in used_ids:
-			candidates.append({ "category": "unlock_trap", "type": t, "uid": uid })
+			var cost: int    = Trap.STATS[t].get("cost", 1)
+			var weight: float = 1.0 / float(maxi(cost, 1))
+			trap_candidates.append({ "category": "unlock_trap",  "type": t, "uid": uid, "weight": weight })
 
 	for b in range(5):
 		var uid := "unlock_boost_%d" % b
 		if b not in GameState.unlocked_boost_types and uid not in used_ids:
-			candidates.append({ "category": "unlock_boost", "type": b, "uid": uid })
+			var cost: int    = BoostUnit.STATS[b].get("cost", 1)
+			var weight: float = 1.0 / float(maxi(cost, 1))
+			boost_candidates.append({ "category": "unlock_boost", "type": b, "uid": uid, "weight": weight })
 
-	if candidates.is_empty():
+	if trap_candidates.is_empty() and boost_candidates.is_empty():
 		return {}
 
-	candidates.shuffle()
-	var chosen: Dictionary = candidates[0]
-	var category: String   = chosen["category"]
-	var item_type: int     = chosen["type"]
-	var uid: String        = chosen["uid"]
+	# Choose category. Apply TRAP_CATEGORY_BIAS to the trap pool's total weight so
+	# traps appear far more often when both categories have locked items.
+	var chosen_pool: Array
+	if trap_candidates.is_empty():
+		chosen_pool = boost_candidates
+	elif boost_candidates.is_empty():
+		chosen_pool = trap_candidates
+	else:
+		var trap_weight: float  = 0.0
+		for c in trap_candidates:
+			trap_weight += c["weight"]
+		trap_weight *= TRAP_CATEGORY_BIAS
+
+		var boost_weight: float = 0.0
+		for c in boost_candidates:
+			boost_weight += c["weight"]
+
+		chosen_pool = trap_candidates if randf() * (trap_weight + boost_weight) < trap_weight \
+				else boost_candidates
+
+	# Weighted pick within the chosen category.
+	var pool_total: float = 0.0
+	for c in chosen_pool:
+		pool_total += c["weight"]
+
+	var roll := randf() * pool_total
+	var accumulated := 0.0
+	var chosen: Dictionary = chosen_pool[-1]   # fallback to last entry
+	for c in chosen_pool:
+		accumulated += c["weight"]
+		if roll <= accumulated:
+			chosen = c
+			break
+
+	var category: String = chosen["category"]
+	var item_type: int   = chosen["type"]
+	var uid: String      = chosen["uid"]
 
 	if category == "unlock_trap":
 		var display: Dictionary = TRAP_DISPLAY.get(item_type, {})

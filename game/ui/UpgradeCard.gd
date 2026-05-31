@@ -74,6 +74,7 @@ var _plain_lbl:  Label = null   # plain-English explanation
 
 var _upgrade_data: Dictionary = {}
 var _selected:     bool       = false
+var _card_frame:   _CardFrame = null
 
 ## When true, tapping the card toggles selection on/off rather than locking
 ## in and emitting once. Used by TrapSelectionScreen for multi-pick behaviour.
@@ -119,14 +120,14 @@ func _build_card() -> void:
 	# high saturation preserved, value pulled down to ~22% for a very dark result.
 	var bg_color := Color.from_hsv(tier_color.h, tier_color.s * 0.70, tier_color.v * 0.22, 0.95)
 
-	var frame := _CardFrame.new()
-	frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	frame.outline_color = tier_color
-	frame.bg_color      = bg_color
-	frame.bw            = BORDER_W
-	frame.cr            = CORNER_R
-	frame.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	add_child(frame)
+	_card_frame = _CardFrame.new()
+	_card_frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	_card_frame.outline_color = tier_color
+	_card_frame.bg_color      = bg_color
+	_card_frame.bw            = BORDER_W
+	_card_frame.cr            = CORNER_R
+	_card_frame.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	add_child(_card_frame)
 
 	# --- Tier name ("RARE" etc.) — top-left in tier colour ---
 	_tier_lbl = Label.new()
@@ -262,18 +263,15 @@ func _gui_input(event: InputEvent) -> void:
 		accept_event()   # consume both press and release
 
 
-## Brighten card on hover; restore on exit.
-## Gives tactile feedback without relying on a Button node.
+## Brighten card slightly on hover; restore to full brightness on exit.
+## Applies to both selected and unselected cards — on selected cards the gold
+## ring brightens with the rest of the card, signalling it can be unselected.
 func _notification(what: int) -> void:
 	match what:
 		NOTIFICATION_MOUSE_ENTER:
-			if not _selected:
-				modulate = Color(1.15, 1.15, 1.15, 1.0)
+			modulate = Color(1.1, 1.1, 1.1, 1.0)
 		NOTIFICATION_MOUSE_EXIT:
-			if not _selected:
-				# Toggleable unselected cards return to their dim resting state;
-				# single-select cards return to full brightness.
-				modulate = Color(0.65, 0.65, 0.65, 1.0) if toggleable else Color(1.0, 1.0, 1.0, 1.0)
+			modulate = Color(1.0, 1.0, 1.0, 1.0)
 
 
 # ---------------------------------------------------------------------------
@@ -282,10 +280,12 @@ func _notification(what: int) -> void:
 
 func _on_select_pressed() -> void:
 	if toggleable:
-		# Toggle mode: flip selection, update brightness, always emit so the
+		# Toggle mode: flip selection, show/hide gold ring, always emit so the
 		# parent (TrapSelectionScreen) can update its selection count.
 		_selected = not _selected
-		modulate = Color(1.0, 1.0, 1.0, 1.0) if _selected else Color(0.65, 0.65, 0.65, 1.0)
+		modulate = Color(1.0, 1.0, 1.0, 1.0)
+		if _card_frame:
+			_card_frame.show_selection = _selected
 		card_selected.emit(_upgrade_data)
 		return
 	# Single-select mode: lock in, block further input, dim, emit once.
@@ -302,7 +302,9 @@ func _on_select_pressed() -> void:
 ## third card tap must be rejected.
 func force_deselect() -> void:
 	_selected  = false
-	modulate   = Color(0.65, 0.65, 0.65, 1.0)
+	modulate   = Color(1.0, 1.0, 1.0, 1.0)
+	if _card_frame:
+		_card_frame.show_selection = false
 
 
 func is_card_selected() -> bool:
@@ -324,10 +326,19 @@ func is_card_selected() -> bool:
 # dark background. The visible gap between them forms the border ring.
 # ---------------------------------------------------------------------------
 class _CardFrame extends Control:
-	var outline_color: Color = Color.WHITE
-	var bg_color:      Color = Color.BLACK
-	var bw:            float = 6.0    # border width in pixels
-	var cr:            float = 16.0   # corner radius for all four corners
+	var outline_color:  Color = Color.WHITE
+	var bg_color:       Color = Color.BLACK
+	var bw:             float = 6.0    # border width in pixels
+	var cr:             float = 16.0   # corner radius for all four corners
+
+	## When true, draws a thin gold ring just outside the card border.
+	var show_selection: bool = false:
+		set(v):
+			show_selection = v
+			queue_redraw()
+
+	const SELECTION_COLOR:  Color = Color(1.0, 0.80, 0.10, 1.0)   # gold
+	const SELECTION_MARGIN: float = 4.0                            # px outside card edge
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_RESIZED:
@@ -338,6 +349,16 @@ class _CardFrame extends Control:
 		var h := size.y
 		if w <= 0.0 or h <= 0.0:
 			return
+
+		# Gold selection ring: drawn first so the card outline paints over the
+		# interior, leaving only the outer band (SELECTION_MARGIN px wide) visible.
+		if show_selection:
+			var sm     := SELECTION_MARGIN
+			var s_poly := _rounded_rect_poly(-sm, -sm, w + sm * 2.0, h + sm * 2.0, cr + sm, 10)
+			var sc     := PackedColorArray()
+			sc.resize(s_poly.size())
+			sc.fill(SELECTION_COLOR)
+			draw_polygon(s_poly, sc)
 
 		# Outer shape: fully-rounded rectangle in the tier/outline colour.
 		var outer := _rounded_rect_poly(0.0, 0.0, w, h, cr, 10)

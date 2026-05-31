@@ -184,8 +184,8 @@ var _boost_icon_controls:      Array[Control] = []
 var _boost_icon_area_controls: Array[Control] = []
 
 # Left-panel tab state.
-var _trap_scroll:  ScrollContainer = null
-var _boost_scroll: ScrollContainer = null
+var _trap_scroll:  Control = null
+var _boost_scroll: Control = null
 var _active_tab:   int             = 0     # 0 = Traps, 1 = Boosts
 var _tab_btns:     Array[Button]   = []
 
@@ -322,12 +322,10 @@ func _build_left_panel() -> void:
 	vbox.add_child(gap)
 
 	# --- Trap tab ---
-	_trap_scroll = ScrollContainer.new()
-	_trap_scroll.size_flags_vertical    = Control.SIZE_EXPAND_FILL
-	_trap_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	# SHOW_ALWAYS reserves the scrollbar gutter permanently so both tabs have
-	# identical content widths regardless of whether scrolling is needed.
-	_trap_scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
+	_trap_scroll = VBoxContainer.new()
+	_trap_scroll.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	_trap_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_trap_scroll.add_theme_constant_override("separation", 0)
 	vbox.add_child(_trap_scroll)
 
 	var trap_vbox := VBoxContainer.new()
@@ -345,11 +343,11 @@ func _build_left_panel() -> void:
 	GameState.unlocked_traps_set.connect(_on_unlocked_traps_set)
 
 	# --- Boost tab (hidden until Boosts tab is selected) ---
-	_boost_scroll = ScrollContainer.new()
-	_boost_scroll.size_flags_vertical    = Control.SIZE_EXPAND_FILL
-	_boost_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_boost_scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
-	_boost_scroll.visible                = false
+	_boost_scroll = VBoxContainer.new()
+	_boost_scroll.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	_boost_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_boost_scroll.add_theme_constant_override("separation", 0)
+	_boost_scroll.visible              = false
 	vbox.add_child(_boost_scroll)
 
 	var boost_vbox := VBoxContainer.new()
@@ -1691,6 +1689,7 @@ func _refresh_boost_visibility() -> void:
 
 func _on_unlocked_boosts_set(_types: Array[int]) -> void:
 	_refresh_boost_visibility()
+	_update_tab_styles()
 
 
 func _refresh_trap_selector() -> void:
@@ -1932,7 +1931,24 @@ func _on_boost_tab_pressed() -> void:
 
 
 func _update_tab_styles() -> void:
+	var has_boosts := not GameState.unlocked_boost_types.is_empty()
+	_tab_btns[1].disabled = not has_boosts
+
 	for i in range(_tab_btns.size()):
+		var is_disabled := (i == 1 and not has_boosts)
+
+		if is_disabled:
+			# Greyed-out appearance while no boosts are available.
+			for state_name in ["normal", "hover", "pressed", "disabled"]:
+				var box := StyleBoxFlat.new()
+				box.bg_color     = Color(0.08, 0.08, 0.10, 1.0)
+				box.border_color = Color(0.20, 0.20, 0.22, 1.0)
+				box.set_border_width_all(2)
+				box.set_corner_radius_all(4)
+				_tab_btns[i].add_theme_stylebox_override(state_name, box)
+			_tab_btns[i].add_theme_color_override("font_color", Color(0.28, 0.28, 0.30, 1.0))
+			continue
+
 		var is_active := (i == _active_tab)
 		# Silver theme: active tab is a medium steel-gray; inactive is near-black.
 		var bg_normal := Color(0.42, 0.44, 0.48, 1.0) if is_active else Color(0.12, 0.12, 0.14, 1.0)
