@@ -39,6 +39,12 @@ const COLOR_BTN_GOLD_HOVER  := Color(0.30, 0.22, 0.01, 1.0)
 const COLOR_BTN_GOLD_PRESS  := Color(0.14, 0.10, 0.00, 1.0)
 const COLOR_BTN_GOLD_BORDER := Color(0.75, 0.55, 0.05, 1.0)
 
+# Red button palette for Bug Out (quit the game).
+const COLOR_BTN_RED        := Color(0.22, 0.03, 0.03, 1.0)
+const COLOR_BTN_RED_HOVER  := Color(0.32, 0.05, 0.05, 1.0)
+const COLOR_BTN_RED_PRESS  := Color(0.14, 0.01, 0.01, 1.0)
+const COLOR_BTN_RED_BORDER := Color(0.80, 0.15, 0.15, 1.0)
+
 var _sf_balance_lbl: Label = null
 
 
@@ -135,10 +141,10 @@ func _build_ui() -> void:
 	panel.add_child(_sf_balance_lbl)
 	y += 52.0
 
-	# Button row: Bug-Up! | Start New Job
+	# Button row: Bug-Up! | Start New Job | Bug Out
 	const BTN_H: float = 56.0
-	const BTN_GAP: float = 16.0
-	const BTN_W: float = (PW - 32.0 - BTN_GAP) * 0.5
+	const BTN_GAP: float = 10.0
+	const BTN_W: float = (PW - 32.0 - BTN_GAP * 2.0) / 3.0
 
 	var bugup_btn := _make_button("Bug-Up!", COLOR_BTN_GOLD, COLOR_BTN_GOLD_HOVER,
 			COLOR_BTN_GOLD_PRESS, COLOR_BTN_GOLD_BORDER)
@@ -153,6 +159,13 @@ func _build_ui() -> void:
 	start_btn.size     = Vector2(BTN_W, BTN_H)
 	start_btn.pressed.connect(_on_start_pressed)
 	panel.add_child(start_btn)
+
+	var bugout_btn := _make_button("Bug Out", COLOR_BTN_RED, COLOR_BTN_RED_HOVER,
+			COLOR_BTN_RED_PRESS, COLOR_BTN_RED_BORDER)
+	bugout_btn.position = Vector2(16.0 + (BTN_W + BTN_GAP) * 2.0, y)
+	bugout_btn.size     = Vector2(BTN_W, BTN_H)
+	bugout_btn.pressed.connect(_on_bugout_pressed)
+	panel.add_child(bugout_btn)
 
 
 # ---------------------------------------------------------------------------
@@ -246,4 +259,12 @@ func _on_start_pressed() -> void:
 	AudioManager.play_ui("button")
 	GameState.service_fees_changed.disconnect(_on_fees_changed)
 	get_tree().paused = false
+	# queue_free() removes the HubScreen before the reload — without this the
+	# dialog survives because it lives on root, not inside the Arena scene.
+	queue_free()
 	get_tree().reload_current_scene()
+
+
+func _on_bugout_pressed() -> void:
+	AudioManager.play_ui("button")
+	get_tree().quit()
