@@ -1,10 +1,11 @@
 ## StartScreen.gd
 ## The game's opening screen. Displays the Critter Quitters van illustration as the
-## title graphic, a scattered pile of business cards, and two buttons:
-## "Start Buggin'" and "Bug Out".
+## title graphic, a scattered pile of business cards, and three buttons:
+## "Start Buggin'", "Bug Out", and "Start in Dev Mode".
 ##
-## When the player taps "Start Buggin'", the van accelerates left off screen while
-## exhaust puffs billow from its rear, then the scene transitions to Main.tscn.
+## "Start Buggin'" starts the game and skips the playtest config dialog.
+## "Start in Dev Mode" starts the game and shows the playtest config dialog.
+## Both launch buttons play the van exit animation before transitioning to Main.tscn.
 ##
 ## Extends CanvasLayer — same pattern as HUD.gd and DebugStartDialog.gd —
 ## so anchor-based layout resolves against the viewport.
@@ -25,6 +26,11 @@ const COLOR_RED_NORMAL  := Color(0.25, 0.04, 0.04, 1.0)
 const COLOR_RED_HOVER   := Color(0.33, 0.07, 0.07, 1.0)
 const COLOR_RED_PRESSED := Color(0.16, 0.02, 0.02, 1.0)
 const COLOR_RED_BORDER  := Color(0.65, 0.18, 0.04, 1.0)
+
+const COLOR_GRAY_NORMAL  := Color(0.18, 0.18, 0.20, 1.0)
+const COLOR_GRAY_HOVER   := Color(0.26, 0.26, 0.28, 1.0)
+const COLOR_GRAY_PRESSED := Color(0.12, 0.12, 0.14, 1.0)
+const COLOR_GRAY_BORDER  := Color(0.55, 0.55, 0.58, 1.0)
 
 # "Contain" scaling: the van is as large as possible while fully visible.
 # scale = min(screen_w / REF_W, screen_h / REF_H) — computed against the
@@ -62,6 +68,7 @@ var _van:       Sprite2D
 var _cards:     Array[Sprite2D] = []
 var _start_btn: Button
 var _quit_btn:  Button
+var _dev_btn:   Button
 
 
 func _ready() -> void:
@@ -137,24 +144,33 @@ func _build_ui() -> void:
 	_van.position = Vector2(vp.x * 0.65, vp.y * 0.40)
 	add_child(_van)
 
-	# --- Buttons: side by side, equal width, centred ---
-	# Each button shows a house icon beside its label to mirror the in-game
-	# Send Wave button aesthetic: green/uninfested for start, red/infested for quit.
+	# --- Buttons: three across, centred as a group ---
+	# Start Buggin' and Bug Out are the primary player actions (25% wide each).
+	# Start in Dev Mode is a narrower secondary button (17% wide) on the right.
+	# Layout: [0.14 ── 0.39] [0.41 ── 0.66] [0.68 ── 0.85] — centred around 0.495.
 	_start_btn = _make_icon_button("Start Buggin'", "res://assets/uninfested.png", true)
-	_start_btn.anchor_left   = 0.25
-	_start_btn.anchor_right  = 0.48
+	_start_btn.anchor_left   = 0.14
+	_start_btn.anchor_right  = 0.39
 	_start_btn.anchor_top    = 0.80
 	_start_btn.anchor_bottom = 0.90
 	_start_btn.pressed.connect(_on_start_pressed)
 	add_child(_start_btn)
 
 	_quit_btn = _make_icon_button("Bug Out", "res://assets/infestation_level.png", false)
-	_quit_btn.anchor_left   = 0.52
-	_quit_btn.anchor_right  = 0.75
+	_quit_btn.anchor_left   = 0.41
+	_quit_btn.anchor_right  = 0.66
 	_quit_btn.anchor_top    = 0.80
 	_quit_btn.anchor_bottom = 0.90
 	_quit_btn.pressed.connect(_on_quit_pressed)
 	add_child(_quit_btn)
+
+	_dev_btn = _make_dev_button()
+	_dev_btn.anchor_left   = 0.68
+	_dev_btn.anchor_right  = 0.85
+	_dev_btn.anchor_top    = 0.80
+	_dev_btn.anchor_bottom = 0.90
+	_dev_btn.pressed.connect(_on_dev_pressed)
+	add_child(_dev_btn)
 
 
 ## Creates a button with an icon+label row inside, styled green (is_green=true)
@@ -199,15 +215,27 @@ func _make_icon_button(label_text: String, icon_path: String, is_green: bool) ->
 
 
 func _on_start_pressed() -> void:
+	GameState.dev_mode  = false
 	_start_btn.disabled = true
 	_quit_btn.visible   = false
+	_dev_btn.visible    = false
 	_strip_btn_border(_start_btn, true)
+	_play_van_exit()
+
+
+func _on_dev_pressed() -> void:
+	GameState.dev_mode = true
+	_dev_btn.disabled  = true
+	_start_btn.visible = false
+	_quit_btn.visible  = false
+	_strip_btn_border(_dev_btn, false, true)
 	_play_van_exit()
 
 
 func _on_quit_pressed() -> void:
 	_quit_btn.disabled  = true
 	_start_btn.visible  = false
+	_dev_btn.visible    = false
 	_strip_btn_border(_quit_btn, false)
 	get_tree().quit()
 
@@ -339,10 +367,62 @@ func _apply_red_btn_style(btn: Button) -> void:
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
 
 
+func _apply_gray_btn_style(btn: Button) -> void:
+	for state: Array in [
+		["normal",  COLOR_GRAY_NORMAL],
+		["hover",   COLOR_GRAY_HOVER],
+		["pressed", COLOR_GRAY_PRESSED],
+	]:
+		var box := StyleBoxFlat.new()
+		box.bg_color              = state[1]
+		box.border_color          = COLOR_GRAY_BORDER
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(6)
+		box.content_margin_left   = 16.0
+		box.content_margin_right  = 16.0
+		box.content_margin_top    = 8.0
+		box.content_margin_bottom = 8.0
+		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.add_theme_color_override("font_color", COLOR_TEXT)
+
+
+## Creates the gray "Start in Dev Mode" button. Text-only (no icon) to visually
+## distinguish it as a secondary developer action, not a primary player action.
+func _make_dev_button() -> Button:
+	var btn := Button.new()
+	btn.text       = ""
+	btn.focus_mode = Control.FOCUS_NONE
+	_apply_gray_btn_style(btn)
+
+	var row := HBoxContainer.new()
+	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.alignment    = BoxContainer.ALIGNMENT_CENTER
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	btn.add_child(row)
+
+	var lbl := Label.new()
+	lbl.text                = "Start in Dev Mode"
+	lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_color_override("font_color", COLOR_TEXT)
+	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(lbl)
+
+	return btn
+
+
 ## Replaces all state styleboxes on btn with a border-free version of its base color.
 ## Applied to the clicked button so it retains its background while the outline disappears.
-func _strip_btn_border(btn: Button, is_green: bool) -> void:
-	var bg := COLOR_GREEN_NORMAL if is_green else COLOR_RED_NORMAL
+func _strip_btn_border(btn: Button, is_green: bool, is_gray: bool = false) -> void:
+	var bg: Color
+	if is_gray:
+		bg = COLOR_GRAY_NORMAL
+	elif is_green:
+		bg = COLOR_GREEN_NORMAL
+	else:
+		bg = COLOR_RED_NORMAL
 	var box := StyleBoxFlat.new()
 	box.bg_color              = bg
 	box.set_border_width_all(0)

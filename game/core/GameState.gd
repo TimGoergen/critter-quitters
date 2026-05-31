@@ -205,6 +205,10 @@ var current_wave: int = 0:
 		current_wave = value
 		wave_changed.emit(value)
 
+## Set true by the "Start in Dev Mode" button on StartScreen so Arena knows to
+## show the DebugStartDialog instead of bypassing it with default values.
+var dev_mode: bool = false
+
 ## The player's current in-run currency. Earned by killing pests;
 ## spent on traps, upgrades, and store rerolls.
 var bug_bucks: int = 0

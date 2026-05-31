@@ -1296,13 +1296,17 @@ func _handle_key(_keycode: int) -> void:
 
 
 ## Called when TrapSelectionScreen confirms the player's chosen loadout.
-## Unlocks the selected traps and boosts in GameState, then shows the debug dialog.
+## Shows the playtest config dialog when dev_mode is on; otherwise starts
+## immediately with default values so the run begins without any dialogs.
 func _on_traps_selected(trap_types: Array[int], boost_types: Array[int]) -> void:
 	GameState.set_unlocked_loadout(trap_types, boost_types)
-	var dialog := DebugStartDialog.new()
-	dialog.confirmed.connect(_on_debug_confirmed)
-	add_child(dialog)
-	_debug_dialog = dialog
+	if GameState.dev_mode:
+		var dialog := DebugStartDialog.new()
+		dialog.confirmed.connect(_on_debug_confirmed)
+		add_child(dialog)
+		_debug_dialog = dialog
+	else:
+		_on_debug_confirmed(GameState.STARTING_BUG_BUCKS, DebugStartDialog.DEFAULT_WAVE_SIZE, false, [])
 
 
 ## Receives the confirmed playtest values from DebugStartDialog and starts the run.
