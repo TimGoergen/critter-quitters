@@ -13,3 +13,8 @@ i want to build a repeatable process that will compile the game project into an 
 
 
 bz4mU9t8Em86gkrJztFb
+
+# make choose your gear screen offer smarter choices to prevent poor balance
+
+In order to make sure that the player's starting gear is useful, the following rules will be applied. 
+-one of the great options will always be a tier one trap as they are the most affordable and versatile. Your one traps include snap trap and fogger. 
