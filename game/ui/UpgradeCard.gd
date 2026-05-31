@@ -249,34 +249,18 @@ func _on_resized() -> void:
 # Input — entire card surface is the click target
 # ---------------------------------------------------------------------------
 
-## Handles touch in _input rather than _gui_input because on Android,
-## InputEventScreenTouch bypasses _gui_input for custom GDScript Controls —
-## but _input is called for every event on every node unconditionally.
-## Using get_global_rect() keeps the hit-test in the same coordinate space
-## as event.position (both are in the viewport's virtual-pixel space).
-func _input(event: InputEvent) -> void:
-	if not (event is InputEventScreenTouch) or not event.pressed:
-		return
-	if mouse_filter == Control.MOUSE_FILTER_IGNORE:
-		return
-	# DIAGNOSTIC — remove once coordinate space is confirmed.
-	var rect:   Rect2   = get_global_rect()
-	var raw:    Vector2 = (event as InputEventScreenTouch).position
-	var screen: Vector2 = get_viewport().get_screen_transform().affine_inverse() * raw
-	print("CARD_TOUCH raw=%s screen_mapped=%s global_rect=%s vp_size=%s" % [
-		raw, screen, rect, get_viewport().get_visible_rect().size
-	])
-	if rect.has_point(raw):
-		_on_select_pressed()
-		get_viewport().set_input_as_handled()
-
-
 func _gui_input(event: InputEvent) -> void:
-	# Desktop mouse support only — touch is handled in _input above.
+	# InputEventMouseButton covers both real mouse clicks (desktop) and touch
+	# taps (Android emulates a left-click via emulate_mouse_from_touch).
 	if event is InputEventMouseButton and event.button_index == MOUSE_BUTTON_LEFT:
 		if event.pressed:
 			_on_select_pressed()
-		accept_event()   # consume both press and release
+		accept_event()
+	elif event is InputEventScreenTouch:
+		# The raw touch event arrives alongside the emulated MouseButton above.
+		# Consuming it here without acting prevents any other node from seeing
+		# a second press and toggling the card back off.
+		accept_event()
 
 
 ## Brighten card slightly on hover; restore to full brightness on exit.
@@ -311,13 +295,6 @@ func _on_select_pressed() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
 	modulate = Color(0.6, 0.6, 0.6, 1.0)
 	card_selected.emit(_upgrade_data)
-
-
-## Triggers card selection as if the user tapped it.
-## Called from parent screens that do their own touch hit-testing because
-## InputEventScreenTouch bypasses _gui_input for custom Controls on mobile.
-func press() -> void:
-	_on_select_pressed()
 
 
 ## Forces the card back to an unselected visual state without emitting.
