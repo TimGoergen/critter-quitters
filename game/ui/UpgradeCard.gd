@@ -136,7 +136,7 @@ func _build_card() -> void:
 	_tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	_tier_lbl.add_theme_color_override("font_color", tier_color)
 	_tier_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_tier_lbl.add_theme_font_size_override("font_size", 12)
+	_tier_lbl.add_theme_font_size_override("font_size", 24)
 	add_child(_tier_lbl)
 
 	# --- Title — main name, large and prominent ---
@@ -147,7 +147,7 @@ func _build_card() -> void:
 	_title_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
 	_title_lbl.add_theme_color_override("font_color", Color(0.95, 0.95, 0.98, 1.0))
 	_title_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_title_lbl.add_theme_font_size_override("font_size", 19)
+	_title_lbl.add_theme_font_size_override("font_size", 38)
 	add_child(_title_lbl)
 
 	# --- Stat name (equipment only) or empty for campaign cards ---
@@ -157,7 +157,7 @@ func _build_card() -> void:
 	_stat_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_stat_lbl.add_theme_color_override("font_color", tier_color)
 	_stat_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_stat_lbl.add_theme_font_size_override("font_size", 15)
+	_stat_lbl.add_theme_font_size_override("font_size", 30)
 	add_child(_stat_lbl)
 
 	# --- Impact line — the concrete effect of this upgrade ---
@@ -173,7 +173,7 @@ func _build_card() -> void:
 	_impact_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
 	_impact_lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.20, 1.0))
 	_impact_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_impact_lbl.add_theme_font_size_override("font_size", 16)
+	_impact_lbl.add_theme_font_size_override("font_size", 32)
 	add_child(_impact_lbl)
 
 	# --- Plain-text description — fills remaining space to the card bottom ---
@@ -183,7 +183,7 @@ func _build_card() -> void:
 	_plain_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_plain_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
 	_plain_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
-	_plain_lbl.add_theme_font_size_override("font_size", 12)
+	_plain_lbl.add_theme_font_size_override("font_size", 24)
 	add_child(_plain_lbl)
 
 	resized.connect(_on_resized)
@@ -203,13 +203,13 @@ func _on_resized() -> void:
 	var px := 10.0
 	var y  := 0.0
 
-	# Row 1: tier name — top strip, 22 px tall.
+	# Row 1: tier name — taller strip for 24 pt font.
 	y = 8.0
 	if _tier_lbl:
-		_tier_lbl.position = Vector2(px + 6.0, y)   # 6 px left offset aligns with color strip
-		_tier_lbl.size     = Vector2(w - px * 2.0, 16.0)
+		_tier_lbl.position = Vector2(px + 6.0, y)
+		_tier_lbl.size     = Vector2(w - px * 2.0, 28.0)
 
-	# Divider line between header row and body (created once on first resize pass).
+	# Divider line.
 	var div: ColorRect = get_node_or_null("Divider")
 	if div == null:
 		div = ColorRect.new()
@@ -217,29 +217,29 @@ func _on_resized() -> void:
 		div.color        = Color(0.30, 0.30, 0.35, 1.0)
 		div.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(div)
-	div.position = Vector2(px, 26.0)
+	div.position = Vector2(px, 40.0)
 	div.size     = Vector2(w - px * 2.0, 1.0)
 
-	# Row 2: Title — bold, centred.
-	y = 32.0
+	# Row 2: Title.
+	y = 46.0
 	if _title_lbl:
 		_title_lbl.position = Vector2(px, y)
-		_title_lbl.size     = Vector2(w - px * 2.0, 46.0)
+		_title_lbl.size     = Vector2(w - px * 2.0, 78.0)
 
-	# Row 3: Stat name (equipment) or empty (campaign).
-	y = 80.0
+	# Row 3: Stat name.
+	y = 128.0
 	if _stat_lbl:
 		_stat_lbl.position = Vector2(px, y)
-		_stat_lbl.size     = Vector2(w - px * 2.0, 20.0)
+		_stat_lbl.size     = Vector2(w - px * 2.0, 38.0)
 
-	# Row 4: Impact line — gold, prominent.
-	y = 104.0
+	# Row 4: Impact line.
+	y = 170.0
 	if _impact_lbl:
 		_impact_lbl.position = Vector2(px, y)
-		_impact_lbl.size     = Vector2(w - px * 2.0, 44.0)
+		_impact_lbl.size     = Vector2(w - px * 2.0, 70.0)
 
-	# Row 5: Plain-text description — fills the remaining card space to the bottom.
-	y = 152.0
+	# Row 5: Plain-text description — fills remaining card space.
+	y = 244.0
 	if _plain_lbl:
 		_plain_lbl.position = Vector2(px, y)
 		_plain_lbl.size     = Vector2(w - px * 2.0, h - y - px)
@@ -338,7 +338,7 @@ class _CardFrame extends Control:
 			queue_redraw()
 
 	const SELECTION_COLOR:  Color = Color(1.0, 0.80, 0.10, 1.0)   # gold
-	const SELECTION_MARGIN: float = 4.0                            # px outside card edge
+	const SELECTION_MARGIN: float = 12.0                           # px outside card edge
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_RESIZED:

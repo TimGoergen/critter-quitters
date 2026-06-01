@@ -33,8 +33,8 @@ signal loadout_selected(trap_types: Array[int], boost_types: Array[int])
 # Layout constants — match LevelUpScreen for visual consistency
 # ---------------------------------------------------------------------------
 
-const CARD_W:   float = 190.0
-const CARD_H:   float = 310.0
+const CARD_W:   float = 332.0
+const CARD_H:   float = 370.0
 const CARD_GAP: float = 20.0
 
 ## Base offer and pick counts — scaled by the Wider Selection permanent upgrade.
@@ -137,7 +137,7 @@ func _build_screen() -> void:
 
 	# "PICK N" sub-header.
 	var sub := Label.new()
-	sub.text                 = "PICK %d" % _pick_count()
+	sub.text                 = "PICK %d DEFENSES TO START" % _pick_count()
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sub.add_theme_font_override("font", UIFonts.primary_bold())
 	sub.add_theme_font_size_override("font_size", 28)
@@ -149,16 +149,22 @@ func _build_screen() -> void:
 	add_child(sub)
 
 	# Cards.
-	var offer      := _offer_count()
-	var total_w    := CARD_W * float(offer) + CARD_GAP * float(offer - 1)
-	var start_x    := (1280.0 - total_w) * 0.5
-	var card_y     := 148.0
+	var offer := _offer_count()
+	# If more than 3 cards are offered, scale card width down so they all fit
+	# within the 1280 px virtual viewport with a 20 px margin on each side.
+	var card_w: float = CARD_W
+	if offer > 3:
+		var max_w := (1280.0 - 40.0 - CARD_GAP * float(offer - 1)) / float(offer)
+		card_w = minf(CARD_W, max_w)
+	var total_w := card_w * float(offer) + CARD_GAP * float(offer - 1)
+	var start_x := (1280.0 - total_w) * 0.5
+	var card_y  := 148.0
 
 	for i in offer:
 		var slot: Dictionary = _offered_slots[i]
 		var card := _build_card_for_slot(slot)
-		card.position     = Vector2(start_x + i * (CARD_W + CARD_GAP), card_y)
-		card.size         = Vector2(CARD_W, CARD_H)
+		card.position     = Vector2(start_x + i * (card_w + CARD_GAP), card_y)
+		card.size         = Vector2(card_w, CARD_H)
 		card.process_mode = Node.PROCESS_MODE_ALWAYS
 		card.card_selected.connect(_on_card_toggled.bind(card, slot))
 		add_child(card)
@@ -408,7 +414,7 @@ func _make_start_button() -> Button:
 	row.add_child(icon)
 
 	var lbl := Label.new()
-	lbl.text                = "Start Buggin'"
+	lbl.text                = "Start"
 	lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	lbl.add_theme_font_size_override("font_size", 22)

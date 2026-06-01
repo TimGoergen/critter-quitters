@@ -153,10 +153,10 @@ const EQUIP_DISPLAY_PCT: Array = [5, 10, 20]
 # ---------------------------------------------------------------------------
 
 ## Width of each upgrade card in virtual pixels.
-const CARD_W: float = 190.0
+const CARD_W: float = 332.0
 
 ## Height of each upgrade card in virtual pixels.
-const CARD_H: float = 310.0
+const CARD_H: float = 370.0
 
 ## Horizontal gap between cards.
 const CARD_GAP: float = 20.0
