@@ -1224,14 +1224,14 @@ func spawn_enemy_at_grid_position(grid_pos: Vector2i, enemy_type: Enemy.EnemyTyp
 func _start_exit_shake() -> void:
 	var angle := randf() * TAU
 	var dir   := Vector2(cos(angle), sin(angle))
-	const MAG: float = 0.0009   # 5% of previous value
+	const MAG: float = 0.00004   # very small — h_offset scale is larger than world-unit math suggests
 
 	if _shake_tween != null and _shake_tween.is_valid():
 		_shake_tween.kill()
 
 	_shake_offset = dir * MAG
 	_shake_tween  = create_tween()
-	_shake_tween.tween_property(self, "_shake_offset", Vector2.ZERO, 0.025) \
+	_shake_tween.tween_property(self, "_shake_offset", Vector2.ZERO, 0.015) \
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 	# Explicitly zero and refresh once the tween completes so the camera
 	# returns to exactly its original position with no floating-point residual.
