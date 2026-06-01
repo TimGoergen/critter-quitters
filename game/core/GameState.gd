@@ -223,6 +223,27 @@ const PERMANENT_UPGRADE_DEFS: Array = [
 			"+60% XP per Kill", "+70% XP per Kill", "+80% XP per Kill", "+90% XP per Kill", "+100% XP per Kill",
 		],
 	},
+	{
+		"id": "show_me", "category": "Business",
+		"name": "Show Me",
+		"desc": "Each kill earns more Bug Bucks.",
+		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
+		"tier_effects": [
+			"+5% Bucks/kill",  "+10% Bucks/kill", "+15% Bucks/kill", "+20% Bucks/kill", "+25% Bucks/kill",
+			"+30% Bucks/kill", "+35% Bucks/kill", "+40% Bucks/kill", "+45% Bucks/kill", "+50% Bucks/kill",
+		],
+	},
+	{
+		"id": "strengthen_defenses", "category": "Business",
+		"name": "Strengthen Defenses",
+		"desc": "Pests deal less infestation damage on exit.",
+		"tier_costs":   [3, 4, 5, 6, 7, 8, 10, 12, 15, 20],
+		"tier_effects": [
+			"−4% Infest/escape",  "−8% Infest/escape",  "−12% Infest/escape", "−16% Infest/escape",
+			"−20% Infest/escape", "−24% Infest/escape", "−28% Infest/escape", "−32% Infest/escape",
+			"−36% Infest/escape", "−40% Infest/escape",
+		],
+	},
 ]
 
 
@@ -364,6 +385,11 @@ var global_xp_bonus: float = 0.0
 ## e.g. 0.10 means the bar must fill 110% of INFESTATION_MAX to end the run.
 var infestation_max_bonus: float = 0.0
 
+## Fraction by which infestation damage from each escaping pest is reduced
+## (Strengthen Defenses permanent upgrade). e.g. 0.12 means each pest deals
+## 12% less infestation than its base value when it exits.
+var infestation_damage_reduction: float = 0.0
+
 ## Additive bonus to the sell refund fraction (Salvage Value).
 ## Applied on top of each unit type's base sell fraction.
 var sell_value_bonus: float = 0.0
@@ -384,12 +410,13 @@ var service_fees: int = 0
 ## Set by award_run_service_fees() so the hub screen can display it.
 var service_fees_last_run: int = 0
 
-## Purchased tier per permanent upgrade (0 = not purchased, 1 = tier 1, 2 = tier 2).
+## Purchased tier per permanent upgrade (0 = not purchased).
 ## Keys match the "id" field in PERMANENT_UPGRADE_DEFS.
 var permanent_upgrades: Dictionary = {
 	"reinforced_mechanisms": 0, "extended_range": 0, "tuned_triggers": 0,
 	"wider_selection": 0, "starting_capital": 0, "hazard_insurance": 0,
 	"salvage_value": 0, "bulk_discount": 0, "field_experience": 0,
+	"show_me": 0, "strengthen_defenses": 0,
 }
 
 
@@ -425,6 +452,7 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 	upgrade_cost_discount = 0.0
 	global_xp_bonus = 0.0
 	infestation_max_bonus = 0.0
+	infestation_damage_reduction = 0.0
 	sell_value_bonus = 0.0
 	wider_selection_tier = 0
 	type_upgrade_queue  = {}
@@ -511,7 +539,9 @@ func set_countdown(seconds: int) -> void:
 ## Calls end_run() if the level reaches 1.0.
 func add_infestation(points: float) -> void:
 	var effective_max := float(INFESTATION_MAX) * (1.0 + infestation_max_bonus)
-	infestation_level = clampf(infestation_level + points / effective_max, 0.0, 1.0)
+	# Strengthen Defenses reduces how much infestation each escaping pest contributes.
+	var reduced := points * (1.0 - infestation_damage_reduction)
+	infestation_level = clampf(infestation_level + reduced / effective_max, 0.0, 1.0)
 	infestation_changed.emit(infestation_level)
 	if infestation_level >= 1.0:
 		end_run()
@@ -705,6 +735,12 @@ func _apply_permanent_upgrade_bonuses() -> void:
 
 	t = permanent_upgrades.get("field_experience", 0)
 	global_xp_bonus        = t * 0.10   # +10% per tier → +100% at tier 10
+
+	t = permanent_upgrades.get("show_me", 0)
+	global_bucks_bonus     = t * 0.05   # +5% per tier → +50% at tier 10 (campaign buffs add on top)
+
+	t = permanent_upgrades.get("strengthen_defenses", 0)
+	infestation_damage_reduction = t * 0.04   # −4% per tier → −40% at tier 10
 
 
 func _save_persistent() -> void:
