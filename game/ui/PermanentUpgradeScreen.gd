@@ -109,8 +109,8 @@ func _build_ui() -> void:
 	var scroll := ScrollContainer.new()
 	scroll.position                  = Vector2(0.0, scroll_top)
 	scroll.size                      = Vector2(1280.0, 600.0 - scroll_top)
-	scroll.scroll_horizontal_enabled = false
-	scroll.scroll_vertical_enabled   = true
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_AUTO
 	scroll.process_mode              = Node.PROCESS_MODE_ALWAYS
 	add_child(scroll)
 
