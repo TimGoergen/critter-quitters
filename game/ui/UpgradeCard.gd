@@ -210,9 +210,9 @@ func _on_resized() -> void:
 	var h  := size.y
 	var px := 10.0
 
-	# Row 1: tier name strip — compact to reduce top padding.
+	# Row 1: tier name strip — minimal top padding.
 	if _tier_lbl:
-		_tier_lbl.position = Vector2(px + 6.0, 6.0)
+		_tier_lbl.position = Vector2(px + 6.0, 4.0)
 		_tier_lbl.size     = Vector2(w - px * 2.0, 22.0)
 
 	# Divider line between tier strip and body.
@@ -223,28 +223,28 @@ func _on_resized() -> void:
 		div.color        = Color(0.30, 0.30, 0.35, 1.0)
 		div.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(div)
-	div.position = Vector2(px, 31.0)
+	div.position = Vector2(px, 28.0)
 	div.size     = Vector2(w - px * 2.0, 1.0)
 
 	# Row 2: Title.
 	if _title_lbl:
-		_title_lbl.position = Vector2(px, 36.0)
-		_title_lbl.size     = Vector2(w - px * 2.0, 64.0)
+		_title_lbl.position = Vector2(px, 32.0)
+		_title_lbl.size     = Vector2(w - px * 2.0, 62.0)
 
 	# Row 3: Stat name (equipment) or empty (campaign).
 	if _stat_lbl:
-		_stat_lbl.position = Vector2(px, 104.0)
-		_stat_lbl.size     = Vector2(w - px * 2.0, 30.0)
+		_stat_lbl.position = Vector2(px, 97.0)
+		_stat_lbl.size     = Vector2(w - px * 2.0, 28.0)
 
 	# Row 4: Impact line.
 	if _impact_lbl:
-		_impact_lbl.position = Vector2(px, 138.0)
-		_impact_lbl.size     = Vector2(w - px * 2.0, 56.0)
+		_impact_lbl.position = Vector2(px, 128.0)
+		_impact_lbl.size     = Vector2(w - px * 2.0, 54.0)
 
-	# Row 5: Plain-text description — fills remaining card space to the bottom.
+	# Row 5: Plain-text description — fills all remaining space to the card bottom.
 	if _plain_lbl:
-		_plain_lbl.position = Vector2(px, 198.0)
-		_plain_lbl.size     = Vector2(w - px * 2.0, h - 208.0)
+		_plain_lbl.position = Vector2(px, 185.0)
+		_plain_lbl.size     = Vector2(w - px * 2.0, h - 195.0)
 
 
 # ---------------------------------------------------------------------------

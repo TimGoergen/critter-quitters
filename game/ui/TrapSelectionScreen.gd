@@ -33,8 +33,8 @@ signal loadout_selected(trap_types: Array[int], boost_types: Array[int])
 # Layout constants — match LevelUpScreen for visual consistency
 # ---------------------------------------------------------------------------
 
-const CARD_W:   float = 310.0
-const CARD_H:   float = 252.0
+const CARD_W:   float = 372.0   # 310 × 1.20
+const CARD_H:   float = 277.0   # 252 × 1.10
 const CARD_GAP: float = 20.0
 
 ## Base offer and pick counts — scaled by the Wider Selection permanent upgrade.
@@ -176,7 +176,7 @@ func _build_screen() -> void:
 	_start_btn.disabled     = true
 	_start_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	_start_btn.pressed.connect(_on_start_pressed)
-	_start_btn.position = Vector2((1280.0 - 392.0) * 0.5, card_y + CARD_H + 8.0)
+	_start_btn.position = Vector2((1280.0 - 392.0) * 0.5, card_y + CARD_H + 24.0)
 	# store offer count for use in _on_card_toggled
 	_offered_count = offer
 	_start_btn.size     = Vector2(392.0, 76.0)
