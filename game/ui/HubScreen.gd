@@ -1,10 +1,10 @@
 ## HubScreen.gd
 ## Full-screen hub overlay shown between runs.
 ##
-## Appears after the INFESTED! flash fades. Shows the run summary (wave
-## reached and Service Fees earned) alongside the player's total SF balance,
-## a "Bug-Up!" button that opens the permanent upgrade screen, and a
-## "Start New Job" button that begins a fresh run.
+## Appears after the INFESTED! flash fades. Shows the wave reached, a "Service
+## Fees" header, and the player's total SF balance (with "+n" appended when fees
+## were earned this run). Buttons: Bug-Up! (permanent upgrades), Start New Job,
+## and Quit.
 ##
 ## Sits on CanvasLayer 15, above the HUD (layer 1) and the INFESTED overlay.
 ## PROCESS_MODE_ALWAYS so it stays interactive while the game tree is paused.
@@ -107,50 +107,27 @@ func _build_ui() -> void:
 	panel.add_child(wave_lbl)
 	y += 58.0
 
-	# Fees earned this run — font doubled from 18 to 36.
-	var earned_lbl := Label.new()
-	var earned: int = GameState.service_fees_last_run
-	earned_lbl.text                 = "Service Fees earned: +%d" % earned
-	earned_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	earned_lbl.position             = Vector2(PAD, y)
-	earned_lbl.size                 = Vector2(inner_w, 46.0)
-	earned_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	earned_lbl.add_theme_font_size_override("font_size", 36)
-	earned_lbl.add_theme_color_override("font_color", COLOR_GOLD)
-	earned_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(earned_lbl)
-	y += 54.0
-
-	# Divider.
-	var divider := ColorRect.new()
-	divider.color        = COLOR_DIVIDER
-	divider.position     = Vector2(PAD, y)
-	divider.size         = Vector2(inner_w, 1.0)
-	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(divider)
-	y += 20.0
-
-	# SF balance — "Service Fees" descriptor above, icon + number below.
-	# Font doubled from 13 to 26.
+	# "Service Fees" descriptor — white, larger text, immediately below Wave X.
 	var sf_desc_lbl := Label.new()
 	sf_desc_lbl.text                 = "Service Fees"
 	sf_desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	sf_desc_lbl.position             = Vector2(PAD, y)
-	sf_desc_lbl.size                 = Vector2(inner_w, 36.0)
+	sf_desc_lbl.size                 = Vector2(inner_w, 50.0)
 	sf_desc_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	sf_desc_lbl.add_theme_font_size_override("font_size", 26)
-	sf_desc_lbl.add_theme_color_override("font_color", COLOR_DIM)
+	sf_desc_lbl.add_theme_font_size_override("font_size", 40)
+	sf_desc_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	sf_desc_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(sf_desc_lbl)
-	y += 38.0
+	y += 54.0
 
-	# Icon + number row — centred in the panel.
-	# Icon and font both doubled in size.
+	# Icon + balance row — centred in the panel.
+	# Icon and font doubled from their previous sizes.
+	# Balance text format: "<total>" or "<total>  +<earned>" when fees were earned.
 	var sf_row := HBoxContainer.new()
 	sf_row.position    = Vector2(PAD, y)
-	sf_row.size        = Vector2(inner_w, 64.0)
+	sf_row.size        = Vector2(inner_w, 148.0)
 	sf_row.alignment   = BoxContainer.ALIGNMENT_CENTER
-	sf_row.add_theme_constant_override("separation", 12)
+	sf_row.add_theme_constant_override("separation", 16)
 	sf_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(sf_row)
 
@@ -158,21 +135,21 @@ func _build_ui() -> void:
 	sf_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
 	sf_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	sf_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	# Icon doubled: was (49, 32) → (98, 64), maintaining the 80:52 bill aspect ratio.
-	sf_icon.custom_minimum_size = Vector2(98, 64)
+	sf_icon.custom_minimum_size = Vector2(196, 128)   # doubled from 98×64
 	sf_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	sf_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sf_row.add_child(sf_icon)
 
+	var earned: int = GameState.service_fees_last_run
 	_sf_balance_lbl = Label.new()
-	_sf_balance_lbl.text                 = "%d" % GameState.service_fees
+	_sf_balance_lbl.text = _format_sf_label(GameState.service_fees, earned)
 	_sf_balance_lbl.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
 	_sf_balance_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_sf_balance_lbl.add_theme_font_size_override("font_size", 56)
+	_sf_balance_lbl.add_theme_font_size_override("font_size", 112)   # doubled from 56
 	_sf_balance_lbl.add_theme_color_override("font_color", COLOR_GOLD)
 	_sf_balance_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	sf_row.add_child(_sf_balance_lbl)
-	y += 70.0
+	y += 155.0
 
 	# Button row: Bug-Up! | Start New Job | Quit
 	# Buttons sized to fill the panel width; font doubled from 22 to 44.
@@ -279,9 +256,19 @@ func _unhandled_input(event: InputEvent) -> void:
 # Handlers
 # ---------------------------------------------------------------------------
 
+## Returns the formatted Service Fees balance string.
+## Shows "<total>" alone, or "<total>  +<earned>" when the player earned
+## fees this run — giving them clear visibility of both their running total
+## and this run's contribution on the same line.
+func _format_sf_label(total: int, earned: int) -> String:
+	if earned > 0:
+		return "%d  +%d" % [total, earned]
+	return "%d" % total
+
+
 func _on_fees_changed(new_amount: int) -> void:
 	if _sf_balance_lbl != null:
-		_sf_balance_lbl.text = "%d" % new_amount
+		_sf_balance_lbl.text = _format_sf_label(new_amount, GameState.service_fees_last_run)
 
 
 func _on_bugup_pressed() -> void:
