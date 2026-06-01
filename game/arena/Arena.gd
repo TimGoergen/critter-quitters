@@ -203,11 +203,16 @@ var _pan_world_pos:         Vector2  = Vector2.ZERO   # current camera XZ pan of
 var _arena_world_half:      float    = 0.0   # half the grid world width (X); used for pan clamping
 var _arena_world_half_z:    float    = 0.0   # half the grid world height (Z); used for pan clamping
 
-# Camera shake — a brief shudder triggered when a pest reaches the exit.
-# _shake_offset is added on top of the normal pan offset in _apply_pan.
-# The offset is set instantly then tweened back to zero over 60 ms.
+# Camera shake — a brief vibration triggered when a pest reaches the exit.
+# A sine-wave oscillator runs in _process for SHAKE_DURATION seconds, creating
+# rapid back-and-forth movement that reads as a physical shudder.
 var _shake_offset: Vector2 = Vector2.ZERO
-var _shake_tween:  Tween   = null
+var _shake_timer:  float   = 0.0    # counts down; > 0 while shaking
+var _shake_axis:   Vector2 = Vector2.ZERO   # random unit vector for vibration direction
+
+const SHAKE_DURATION: float = 0.20    # total vibration time in seconds
+const SHAKE_FREQ:     float = 40.0    # oscillations per second (cycles/s)
+const SHAKE_MAG:      float = 0.00003 # peak displacement in camera h_offset units
 var _followed_enemy:        Node3D   = null  # non-null while enemy-follow mode is active
 var _enemy_stats_panel:    Node     = null  # EnemyStatsPanel instance
 var _floor_mi:           MeshInstance3D = null  # floor mesh; material_override swapped on zoom
@@ -1218,27 +1223,14 @@ func spawn_enemy_at_grid_position(grid_pos: Vector2i, enemy_type: Enemy.EnemyTyp
 	_spawn_enemy(path, enemy_type)
 
 
-## Triggers a brief camera shudder — a tactile signal that the infestation bar
-## just ticked up.  Displacement is intentionally tiny so the effect is felt
-## rather than seen.  Direction is randomised so repeated escapes feel distinct.
+## Starts a brief camera vibration — a tactile signal that the infestation bar
+## just ticked up.  The shake is driven by a sine-wave oscillator in _process,
+## so the camera moves rapidly back and forth rather than in a single sweep.
+## Direction is randomised so repeated escapes feel distinct.
 func _start_exit_shake() -> void:
-	var angle := randf() * TAU
-	var dir   := Vector2(cos(angle), sin(angle))
-	const MAG: float = 0.00004   # very small — h_offset scale is larger than world-unit math suggests
-
-	if _shake_tween != null and _shake_tween.is_valid():
-		_shake_tween.kill()
-
-	_shake_offset = dir * MAG
-	_shake_tween  = create_tween()
-	_shake_tween.tween_property(self, "_shake_offset", Vector2.ZERO, 0.015) \
-		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
-	# Explicitly zero and refresh once the tween completes so the camera
-	# returns to exactly its original position with no floating-point residual.
-	_shake_tween.tween_callback(func() -> void:
-		_shake_offset = Vector2.ZERO
-		_apply_pan(_pan_world_pos)
-	)
+	var angle    := randf() * TAU
+	_shake_axis   = Vector2(cos(angle), sin(angle))
+	_shake_timer  = SHAKE_DURATION
 
 
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
@@ -2654,10 +2646,21 @@ func _process(delta: float) -> void:
 		var p := _followed_enemy.global_position
 		_apply_pan(Vector2(p.x, p.z))
 
-	# When a camera shake is active and the followed-enemy path isn't already
-	# calling _apply_pan every frame, refresh manually so the tween is visible.
-	if _shake_offset != Vector2.ZERO and _followed_enemy == null:
-		_apply_pan(_pan_world_pos)
+	# Drive the sine-wave camera shake oscillator.
+	# elapsed counts up from 0 so sin() starts at 0 (no initial snap).
+	# Amplitude decays linearly to zero so the vibration fades out naturally.
+	if _shake_timer > 0.0:
+		_shake_timer -= delta
+		if _shake_timer <= 0.0:
+			_shake_timer  = 0.0
+			_shake_offset = Vector2.ZERO
+		else:
+			var elapsed := SHAKE_DURATION - _shake_timer
+			var decay   := _shake_timer / SHAKE_DURATION   # 1.0 → 0.0
+			_shake_offset = _shake_axis * sin(elapsed * SHAKE_FREQ * TAU) * SHAKE_MAG * decay
+		# Always refresh camera when shaking, even without an enemy being followed.
+		if _followed_enemy == null:
+			_apply_pan(_pan_world_pos)
 
 	# Pan toward whichever arena edge the drag ghost is approaching.
 	if _hud_drag_active and _zoom_state == ZoomState.ZOOMED_IN:
