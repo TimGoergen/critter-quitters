@@ -97,29 +97,33 @@ func _build_ui() -> void:
 		else:
 			biz_defs.append(def)
 
-	# Panel dimensions — sized to fit the taller column.
-	# Business now has 7 rows; ROW_H is reduced to keep the panel within the
-	# ~560 px effective viewport height on a Pixel 10 Pro XL in landscape.
-	var max_rows: int = maxi(equip_defs.size(), biz_defs.size())
+	# Content dimensions — used to vertically centre everything in the viewport.
+	var max_rows: int    = maxi(equip_defs.size(), biz_defs.size())
 	var content_h: float = SEC_H + float(max_rows) * ROW_H + float(max_rows - 1) * 4.0
-	var panel_w: float   = COL_W * 2.0 + COL_GAP + PANEL_PAD * 2.0
 	var header_h: float  = 36.0
 	var footer_h: float  = 44.0
 	var panel_h: float   = PANEL_PAD + header_h + 6.0 + content_h + 6.0 + footer_h + PANEL_PAD
 
-	var panel_x := (1280.0 - panel_w) * 0.5
-	var panel_y := (600.0  - panel_h) * 0.5
-
-	var panel := _make_panel(panel_x, panel_y, panel_w, panel_h)
+	# Full-screen container — no floating panel, no border.
+	var panel := Control.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(panel)
 
-	var y := PANEL_PAD
+	# Centre the two-column block horizontally in the 1280 px viewport.
+	var col_block_w: float = COL_W * 2.0 + COL_GAP   # 1064 px
+	var left_x  := (1280.0 - col_block_w) * 0.5      # ≈108 px
+	var right_x := left_x + COL_W + COL_GAP
+
+	# Centre the content block vertically in the 600 px viewport.
+	var y := maxf(0.0, (600.0 - panel_h) * 0.5) + PANEL_PAD
 
 	# --- Header: title left, SF balance right ---
 	var title_lbl := Label.new()
 	title_lbl.text      = "PERMANENT UPGRADES"
-	title_lbl.position  = Vector2(PANEL_PAD, y + 4.0)
-	title_lbl.size      = Vector2(panel_w - PANEL_PAD * 2.0 - 180.0, header_h)
+	title_lbl.position  = Vector2(left_x, y + 4.0)
+	title_lbl.size      = Vector2(col_block_w - 180.0, header_h)
 	title_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	title_lbl.add_theme_font_size_override("font_size", 30)
 	title_lbl.add_theme_color_override("font_color", COLOR_HEADER)
@@ -128,7 +132,7 @@ func _build_ui() -> void:
 
 	# SF balance header — icon on the left, number on the right, right-aligned as a pair.
 	var sf_hdr_row := HBoxContainer.new()
-	sf_hdr_row.position    = Vector2(panel_w - PANEL_PAD - 180.0, y + 4.0)
+	sf_hdr_row.position    = Vector2(left_x + col_block_w - 180.0, y + 4.0)
 	sf_hdr_row.size        = Vector2(180.0, header_h)
 	sf_hdr_row.alignment   = BoxContainer.ALIGNMENT_END
 	sf_hdr_row.add_theme_constant_override("separation", 5)
@@ -139,7 +143,6 @@ func _build_ui() -> void:
 	sf_hdr_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
 	sf_hdr_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	sf_hdr_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	# Height matches the font size; width from the 80:52 bill aspect ratio.
 	sf_hdr_icon.custom_minimum_size = Vector2(40, 26)
 	sf_hdr_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	sf_hdr_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
@@ -158,22 +161,19 @@ func _build_ui() -> void:
 	# Divider below header.
 	var hdr_div := ColorRect.new()
 	hdr_div.color        = COLOR_DIVIDER
-	hdr_div.position     = Vector2(PANEL_PAD, y - 6.0)
-	hdr_div.size         = Vector2(panel_w - PANEL_PAD * 2.0, 1.0)
+	hdr_div.position     = Vector2(left_x, y - 6.0)
+	hdr_div.size         = Vector2(col_block_w, 1.0)
 	hdr_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(hdr_div)
 
 	# --- Two columns ---
-	var left_x  := PANEL_PAD
-	var right_x := PANEL_PAD + COL_W + COL_GAP
-
 	_build_column(panel, equip_defs,  left_x,  y, "EQUIPMENT")
 	_build_column(panel, biz_defs,    right_x, y, "BUSINESS")
 
 	# Vertical divider between columns.
 	var col_div := ColorRect.new()
 	col_div.color        = COLOR_DIVIDER
-	col_div.position     = Vector2(PANEL_PAD + COL_W + COL_GAP * 0.5 - 0.5, y)
+	col_div.position     = Vector2(left_x + COL_W + COL_GAP * 0.5 - 0.5, y)
 	col_div.size         = Vector2(1.0, content_h)
 	col_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(col_div)
@@ -183,8 +183,8 @@ func _build_ui() -> void:
 	# --- Footer divider + Done button ---
 	var ftr_div := ColorRect.new()
 	ftr_div.color        = COLOR_DIVIDER
-	ftr_div.position     = Vector2(PANEL_PAD, y)
-	ftr_div.size         = Vector2(panel_w - PANEL_PAD * 2.0, 1.0)
+	ftr_div.position     = Vector2(left_x, y)
+	ftr_div.size         = Vector2(col_block_w, 1.0)
 	ftr_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(ftr_div)
 	y += 10.0
@@ -192,7 +192,7 @@ func _build_ui() -> void:
 	var done_btn := Button.new()
 	done_btn.text        = "Done"
 	done_btn.focus_mode  = Control.FOCUS_NONE
-	done_btn.position    = Vector2(panel_w - PANEL_PAD - 140.0, y)
+	done_btn.position    = Vector2(left_x + col_block_w - 140.0, y)
 	done_btn.size        = Vector2(140.0, 48.0)
 	done_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	done_btn.add_theme_font_override("font", UIFonts.primary_bold())

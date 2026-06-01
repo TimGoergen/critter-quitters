@@ -60,25 +60,36 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
-	# Full-screen dim.
+	# Background illustration — fills the entire screen.
+	# Save the artwork as res://assets/infested_bg.png to activate this.
+	var bg_tex := load("res://assets/infested_bg.png") as Texture2D
+	if bg_tex != null:
+		var bg_img := TextureRect.new()
+		bg_img.texture      = bg_tex
+		bg_img.expand_mode  = TextureRect.EXPAND_IGNORE_SIZE
+		bg_img.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+		bg_img.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		bg_img.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+		bg_img.process_mode  = Node.PROCESS_MODE_ALWAYS
+		add_child(bg_img)
+
+	# Semi-transparent dark overlay — keeps text legible against the busy illustration.
 	var dim := ColorRect.new()
-	dim.color        = Color(0.0, 0.0, 0.0, 0.82)
+	dim.color        = Color(0.0, 0.0, 0.0, 0.60)
 	dim.process_mode = Node.PROCESS_MODE_ALWAYS
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
 
-	# Large centred panel — roughly 2× the original 560×340 size, capped to fit
-	# the 1280×600 mobile viewport with comfortable top/bottom margins.
-	const PW: float = 1200.0
-	const PH: float = 530.0
-	var panel_x := (1280.0 - PW) * 0.5
-	var panel_y := (600.0  - PH) * 0.5
-
-	var panel := _make_panel(panel_x, panel_y, PW, PH)
+	# Full-screen content container — no border, fills the viewport.
+	var panel := Control.new()
+	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(panel)
 
-	const PAD: float = 24.0            # horizontal padding each side (was 16)
-	var inner_w := PW - PAD * 2.0      # 1152 px usable width
+	const PW: float  = 1280.0
+	const PAD: float = 24.0
+	var inner_w := PW - PAD * 2.0      # 1232 px usable width
 	var y       := 24.0
 
 	# "INFESTED!" title — font doubled from 54 to 108.
