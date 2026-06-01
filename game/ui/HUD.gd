@@ -217,7 +217,7 @@ const DRAG_ICON_SIZE: float = 90.0
 const DRAG_ICON_DISPLAY: float = 45.0
 # Offset from the cursor/finger to the placement-zone center sent to Arena.
 # Above-and-left so the ghost preview is not hidden under the finger.
-const DRAG_OFFSET: Vector2 = Vector2(-15.0, -47.5)
+const DRAG_OFFSET: Vector2 = Vector2(-26.25, -83.125)
 # Additional offset applied only to the floating icon's screen position, not to Arena.
 # Shifts the opaque cursor image further up-left so the ghost preview behind it stays readable.
 const DRAG_ICON_EXTRA_OFFSET: Vector2 = Vector2(-15.0, -15.0)
