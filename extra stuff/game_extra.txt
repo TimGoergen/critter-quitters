@@ -1,4 +1,4 @@
-The Play/Pause button should have equal height for all values that it displays, and the gamespeed button should ahve the same height.  
+9The Play/Pause button should have equal height for all values that it displays, and the gamespeed button should ahve the same height.  
 
 the gamespeed button is being improved to better communicate with the player what would happen if they click it.  When the game starts, teh button defaults to showing a single triangle pointed to the right, left aligned, equal in height to the standard.
   right-aligned on the button will be the current gamespeed multiplier, communicated as "1X" or "2X" at the same height as all other text on this button.  If the user clicks this button, the gamespeed will
@@ -18,3 +18,11 @@ bz4mU9t8Em86gkrJztFb
 
 In order to make sure that the player's starting gear is useful, the following rules will be applied. 
 -one of the great options will always be a tier one trap as they are the most affordable and versatile. Your one traps include snap trap and fogger. 
+
+# slight camera shadow when enemy reaches exit
+
+# make button labels less silly, more consistent
+
+# for level up screen, possibility of any item being a new trap or boost should be low, and decrease as the number of traps and boosts that the player has unlocked increases
+
+# on permanent upgrade screen, each item should have 10 tiers, not two. Currently there are two gold dots that represent the level. This should change to a large bright gold star with the level number in gold next to it. The star should be dark gray when the level is zero. The star will be inside a panel that has a dark gray outline when the level is 9 or lower, bright gold when the level is 10.  The service fee icon and text should be twice as large. The description text should be bold, larger and white to be easier to read on mobile. 
