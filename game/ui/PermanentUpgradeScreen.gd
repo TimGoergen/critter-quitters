@@ -1,11 +1,8 @@
 ## PermanentUpgradeScreen.gd
-## Full-screen overlay for spending Service Fees on permanent upgrades.
+## Full-screen tabbed overlay for spending Service Fees on permanent upgrades.
 ##
-## Shows two side-by-side columns: Equipment (4 upgrades) on the left,
-## Business (5 upgrades) on the right. Each row displays the upgrade name,
-## its current tier as filled/empty dots, a short effect label, and a
-## buy button showing the SF cost. The button is disabled when the player
-## cannot afford it or the upgrade is already fully purchased.
+## Two tabs — EQUIPMENT and BUSINESS — each showing its upgrades as a
+## full-width scrollable list.  Only the active tab's items are displayed.
 ##
 ## Sits on CanvasLayer 20, above HubScreen (layer 15).
 ## PROCESS_MODE_ALWAYS so it stays interactive while the game tree is paused.
@@ -19,17 +16,20 @@ const UIFonts = preload("res://ui/UIFonts.gd")
 # Colours
 # ---------------------------------------------------------------------------
 
-const COLOR_PANEL      := Color(0.02, 0.10, 0.01, 1.0)   # dark green background, fully opaque
-const COLOR_BORDER     := Color(0.32, 0.32, 0.38, 1.0)
+const COLOR_PANEL      := Color(0.02, 0.10, 0.01, 1.0)
 const COLOR_DIVIDER    := Color(0.20, 0.20, 0.24, 1.0)
 const COLOR_HEADER     := Color(1.00, 0.82, 0.10, 1.0)   # gold
 const COLOR_TEXT       := Color(0.90, 0.90, 0.90, 1.0)
+const COLOR_DOT_OFF    := Color(0.30, 0.30, 0.35, 1.0)
+const COLOR_MAX        := Color(0.85, 0.62, 0.00, 1.0)
+const COLOR_BORDER     := Color(0.32, 0.32, 0.38, 1.0)
 const COLOR_DIM        := Color(0.50, 0.50, 0.56, 1.0)
-const COLOR_DOT_ON     := Color(1.00, 0.82, 0.10, 1.0)   # filled tier — gold
-const COLOR_DOT_OFF    := Color(0.30, 0.30, 0.35, 1.0)   # empty tier
-const COLOR_MAX        := Color(0.85, 0.62, 0.00, 1.0)   # max label — dark gold
 
-# Buy button.
+const COLOR_TAB_ACTIVE_BG  := Color(0.04, 0.18, 0.01, 1.0)
+const COLOR_TAB_IDLE_BG    := Color(0.01, 0.06, 0.00, 1.0)
+const COLOR_TAB_ACTIVE_TXT := Color(1.00, 0.82, 0.10, 1.0)
+const COLOR_TAB_IDLE_TXT   := Color(0.50, 0.50, 0.56, 1.0)
+
 const COLOR_BTN_BG      := Color(0.05, 0.20, 0.02, 1.0)
 const COLOR_BTN_HOVER   := Color(0.08, 0.28, 0.03, 1.0)
 const COLOR_BTN_PRESS   := Color(0.03, 0.12, 0.01, 1.0)
@@ -37,7 +37,6 @@ const COLOR_BTN_BORDER  := Color(0.22, 0.60, 0.04, 1.0)
 const COLOR_BTN_DIS_BG  := Color(0.10, 0.10, 0.12, 0.55)
 const COLOR_BTN_DIS_BOR := Color(0.28, 0.28, 0.32, 0.55)
 
-# Done button — green, matching the "Start New Job" / "Start Buggin'" vocabulary.
 const COLOR_DONE_BG     := Color(0.04, 0.25, 0.00, 1.0)
 const COLOR_DONE_HOVER  := Color(0.07, 0.33, 0.01, 1.0)
 const COLOR_DONE_PRESS  := Color(0.02, 0.16, 0.00, 1.0)
@@ -48,25 +47,24 @@ const COLOR_DONE_BORDER := Color(0.22, 0.60, 0.04, 1.0)
 # Layout
 # ---------------------------------------------------------------------------
 
-const ROW_H:     float = 57.0   # height of each upgrade row (reduced to fit 7 business rows)
-const COL_W:     float = 520.0  # width of each column
-const COL_GAP:   float = 24.0
-const PANEL_PAD: float = 8.0
-
-# Upgrade section header height — taller to fit the 50%-larger 24 pt font.
-const SEC_H: float = 28.0
-
-# Buy button dimensions within each row.
-const BTN_W: float = 110.0
-const BTN_H: float = 50.0
+const PADDING:  float = 24.0   # horizontal inset used consistently throughout
+const HEADER_H: float = 44.0   # header bar (title + SF balance + Done)
+const TAB_H:    float = 50.0   # tab button row
+const ROW_H:    float = 76.0   # height of each upgrade item in the scroll list
+const BTN_W:    float = 120.0
+const BTN_H:    float = 50.0
 
 
 # ---------------------------------------------------------------------------
 # State
 # ---------------------------------------------------------------------------
 
-var _sf_lbl:   Label  = null   # the number Label inside the SF balance HBoxContainer
-var _buy_btns: Array  = []   # Array of { "id": String, "btn": Button, "cost_lbl": Label, "cost_icon": TextureRect }
+var _active_tab: String        = "Equipment"
+var _sf_lbl:     Label         = null
+var _tab_equip:  Button        = null
+var _tab_biz:    Button        = null
+var _vbox:       VBoxContainer = null
+var _buy_btns:   Array         = []   # Array of { "id", "btn", "cost_lbl", "cost_icon" }
 
 
 # ---------------------------------------------------------------------------
@@ -81,122 +79,74 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
-	# Full-screen dim.
-	var dim := ColorRect.new()
-	dim.color        = Color(0.02, 0.10, 0.01, 1.0)   # fully opaque — matches COLOR_PANEL
-	dim.process_mode = Node.PROCESS_MODE_ALWAYS
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	add_child(dim)
+	# Fully opaque background.
+	var bg := ColorRect.new()
+	bg.color        = COLOR_PANEL
+	bg.process_mode = Node.PROCESS_MODE_ALWAYS
+	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(bg)
 
-	# Split upgrades into Equipment and Business columns.
-	var equip_defs: Array = []
-	var biz_defs:   Array = []
-	for def: Dictionary in GameState.PERMANENT_UPGRADE_DEFS:
-		if def["category"] == "Equipment":
-			equip_defs.append(def)
-		else:
-			biz_defs.append(def)
+	_build_header()
 
-	# Content dimensions — used to vertically centre everything in the viewport.
-	var max_rows: int    = maxi(equip_defs.size(), biz_defs.size())
-	var content_h: float = SEC_H + float(max_rows) * ROW_H + float(max_rows - 1) * 4.0
-	var header_h: float  = 36.0
-	var footer_h: float  = 44.0
-	var panel_h: float   = PANEL_PAD + header_h + 6.0 + content_h + 6.0 + footer_h + PANEL_PAD
-
-	# Full-screen container — no floating panel, no border.
-	var panel := Control.new()
-	panel.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(panel)
-
-	# Centre the two-column block horizontally in the 1280 px viewport.
-	var col_block_w: float = COL_W * 2.0 + COL_GAP   # 1064 px
-	var left_x  := (1280.0 - col_block_w) * 0.5      # ≈108 px
-	var right_x := left_x + COL_W + COL_GAP
-
-	# Centre the content block vertically in the 600 px viewport.
-	var y := maxf(0.0, (600.0 - panel_h) * 0.5) + PANEL_PAD
-
-	# --- Header: title left, SF balance right ---
-	var title_lbl := Label.new()
-	title_lbl.text      = "PERMANENT UPGRADES"
-	title_lbl.position  = Vector2(left_x, y + 4.0)
-	title_lbl.size      = Vector2(col_block_w - 180.0, header_h)
-	title_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	title_lbl.add_theme_font_size_override("font_size", 30)
-	title_lbl.add_theme_color_override("font_color", COLOR_HEADER)
-	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(title_lbl)
-
-	# SF balance header — icon on the left, number on the right, right-aligned as a pair.
-	var sf_hdr_row := HBoxContainer.new()
-	sf_hdr_row.position    = Vector2(left_x + col_block_w - 180.0, y + 4.0)
-	sf_hdr_row.size        = Vector2(180.0, header_h)
-	sf_hdr_row.alignment   = BoxContainer.ALIGNMENT_END
-	sf_hdr_row.add_theme_constant_override("separation", 5)
-	sf_hdr_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(sf_hdr_row)
-
-	var sf_hdr_icon := TextureRect.new()
-	sf_hdr_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
-	sf_hdr_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
-	sf_hdr_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	sf_hdr_icon.custom_minimum_size = Vector2(40, 26)
-	sf_hdr_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	sf_hdr_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	sf_hdr_row.add_child(sf_hdr_icon)
-
-	_sf_lbl = Label.new()
-	_sf_lbl.text                 = "%d" % GameState.service_fees
-	_sf_lbl.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
-	_sf_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_sf_lbl.add_theme_font_size_override("font_size", 30)
-	_sf_lbl.add_theme_color_override("font_color", COLOR_HEADER)
-	_sf_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	sf_hdr_row.add_child(_sf_lbl)
-	y += header_h + 6.0
-
-	# Divider below header.
 	var hdr_div := ColorRect.new()
 	hdr_div.color        = COLOR_DIVIDER
-	hdr_div.position     = Vector2(left_x, y - 6.0)
-	hdr_div.size         = Vector2(col_block_w, 1.0)
+	hdr_div.position     = Vector2(0.0, HEADER_H)
+	hdr_div.size         = Vector2(1280.0, 1.0)
 	hdr_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(hdr_div)
+	add_child(hdr_div)
 
-	# --- Two columns ---
-	_build_column(panel, equip_defs,  left_x,  y, "EQUIPMENT")
-	_build_column(panel, biz_defs,    right_x, y, "BUSINESS")
+	_build_tab_bar()
 
-	# Vertical divider between columns.
-	var col_div := ColorRect.new()
-	col_div.color        = COLOR_DIVIDER
-	col_div.position     = Vector2(left_x + COL_W + COL_GAP * 0.5 - 0.5, y)
-	col_div.size         = Vector2(1.0, content_h)
-	col_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(col_div)
+	var tab_div := ColorRect.new()
+	tab_div.color        = COLOR_DIVIDER
+	tab_div.position     = Vector2(0.0, HEADER_H + 1.0 + TAB_H)
+	tab_div.size         = Vector2(1280.0, 1.0)
+	tab_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(tab_div)
 
-	y += content_h + 6.0
+	# Scrollable list — fills the remaining height below the tab bar.
+	var scroll_top := HEADER_H + 1.0 + TAB_H + 1.0
+	var scroll := ScrollContainer.new()
+	scroll.position                  = Vector2(0.0, scroll_top)
+	scroll.size                      = Vector2(1280.0, 600.0 - scroll_top)
+	scroll.scroll_horizontal_enabled = false
+	scroll.scroll_vertical_enabled   = true
+	scroll.process_mode              = Node.PROCESS_MODE_ALWAYS
+	add_child(scroll)
 
-	# --- Footer divider + Done button ---
-	var ftr_div := ColorRect.new()
-	ftr_div.color        = COLOR_DIVIDER
-	ftr_div.position     = Vector2(left_x, y)
-	ftr_div.size         = Vector2(col_block_w, 1.0)
-	ftr_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(ftr_div)
-	y += 10.0
+	_vbox = VBoxContainer.new()
+	_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_vbox.add_theme_constant_override("separation", 0)
+	scroll.add_child(_vbox)
 
+	_populate_tab(_active_tab)
+
+
+# ---------------------------------------------------------------------------
+# Header
+# ---------------------------------------------------------------------------
+
+func _build_header() -> void:
+	var title := Label.new()
+	title.text               = "PERMANENT UPGRADES"
+	title.position           = Vector2(PADDING, 0.0)
+	title.size               = Vector2(500.0, HEADER_H)
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title.add_theme_font_override("font", UIFonts.primary_bold())
+	title.add_theme_font_size_override("font_size", 26)
+	title.add_theme_color_override("font_color", COLOR_HEADER)
+	title.mouse_filter       = Control.MOUSE_FILTER_IGNORE
+	add_child(title)
+
+	# Done button — sits right of centre.
 	var done_btn := Button.new()
-	done_btn.text        = "Done"
-	done_btn.focus_mode  = Control.FOCUS_NONE
-	done_btn.position    = Vector2(left_x + col_block_w - 140.0, y)
-	done_btn.size        = Vector2(140.0, 48.0)
+	done_btn.text         = "Done"
+	done_btn.focus_mode   = Control.FOCUS_NONE
+	done_btn.position     = Vector2(1280.0 - PADDING - 160.0 - 108.0, (HEADER_H - 32.0) * 0.5)
+	done_btn.size         = Vector2(98.0, 32.0)
 	done_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	done_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	done_btn.add_theme_font_size_override("font_size", 25)
+	done_btn.add_theme_font_size_override("font_size", 17)
 	done_btn.add_theme_color_override("font_color", COLOR_TEXT)
 	done_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	for state: Array in [
@@ -205,45 +155,157 @@ func _build_ui() -> void:
 		["pressed", COLOR_DONE_PRESS],
 	]:
 		var box := StyleBoxFlat.new()
-		box.bg_color              = state[1]
-		box.border_color          = COLOR_DONE_BORDER
+		box.bg_color     = state[1]
+		box.border_color = COLOR_DONE_BORDER
 		box.set_border_width_all(2)
 		box.set_corner_radius_all(6)
-		box.content_margin_left   = 12.0
-		box.content_margin_right  = 12.0
-		box.content_margin_top    = 8.0
-		box.content_margin_bottom = 8.0
+		box.set_content_margin_all(6.0)
 		done_btn.add_theme_stylebox_override(state[0], box)
 	done_btn.pressed.connect(_on_done_pressed)
-	panel.add_child(done_btn)
+	add_child(done_btn)
+
+	# SF balance: icon + number, right-aligned.
+	var sf_row := HBoxContainer.new()
+	sf_row.position    = Vector2(1280.0 - PADDING - 160.0, 4.0)
+	sf_row.size        = Vector2(160.0, HEADER_H - 8.0)
+	sf_row.alignment   = BoxContainer.ALIGNMENT_END
+	sf_row.add_theme_constant_override("separation", 5)
+	sf_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(sf_row)
+
+	var sf_icon := TextureRect.new()
+	sf_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
+	sf_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+	sf_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	sf_icon.custom_minimum_size = Vector2(36, 24)
+	sf_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sf_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	sf_row.add_child(sf_icon)
+
+	_sf_lbl = Label.new()
+	_sf_lbl.text                = "%d" % GameState.service_fees
+	_sf_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_sf_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	_sf_lbl.add_theme_font_size_override("font_size", 26)
+	_sf_lbl.add_theme_color_override("font_color", COLOR_HEADER)
+	_sf_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	sf_row.add_child(_sf_lbl)
+
+
+# ---------------------------------------------------------------------------
+# Tab bar
+# ---------------------------------------------------------------------------
+
+func _build_tab_bar() -> void:
+	var tab_y := HEADER_H + 1.0
+	var half  := 640.0   # half of 1280
+
+	_tab_equip = _make_tab_button("EQUIPMENT")
+	_tab_equip.position = Vector2(0.0, tab_y)
+	_tab_equip.size     = Vector2(half, TAB_H)
+	_tab_equip.pressed.connect(func() -> void: _switch_tab("Equipment"))
+	add_child(_tab_equip)
+
+	var v_div := ColorRect.new()
+	v_div.color        = COLOR_DIVIDER
+	v_div.position     = Vector2(half - 0.5, tab_y + 6.0)
+	v_div.size         = Vector2(1.0, TAB_H - 12.0)
+	v_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(v_div)
+
+	_tab_biz = _make_tab_button("BUSINESS")
+	_tab_biz.position = Vector2(half, tab_y)
+	_tab_biz.size     = Vector2(half, TAB_H)
+	_tab_biz.pressed.connect(func() -> void: _switch_tab("Business"))
+	add_child(_tab_biz)
+
+	_refresh_tab_styles()
+
+
+func _make_tab_button(label_text: String) -> Button:
+	var btn := Button.new()
+	btn.text         = label_text
+	btn.focus_mode   = Control.FOCUS_NONE
+	btn.process_mode = Node.PROCESS_MODE_ALWAYS
+	btn.add_theme_font_override("font", UIFonts.primary_bold())
+	btn.add_theme_font_size_override("font_size", 22)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	return btn
+
+
+func _refresh_tab_styles() -> void:
+	_apply_tab_style(_tab_equip, _active_tab == "Equipment")
+	_apply_tab_style(_tab_biz,   _active_tab == "Business")
+
+
+func _apply_tab_style(btn: Button, active: bool) -> void:
+	btn.add_theme_color_override("font_color",
+		COLOR_TAB_ACTIVE_TXT if active else COLOR_TAB_IDLE_TXT)
+	for state: String in ["normal", "hover", "pressed"]:
+		var bg := COLOR_TAB_ACTIVE_BG if active else COLOR_TAB_IDLE_BG
+		if state == "hover":
+			bg = bg.lightened(0.06)
+		var box := StyleBoxFlat.new()
+		box.bg_color = bg
+		if active:
+			# Gold underline marks the active tab.
+			box.border_color        = COLOR_HEADER
+			box.border_width_bottom = 3
+			box.border_width_top    = 0
+			box.border_width_left   = 0
+			box.border_width_right  = 0
+		else:
+			box.set_border_width_all(0)
+		box.content_margin_left   = 6.0
+		box.content_margin_right  = 6.0
+		box.content_margin_top    = 4.0
+		box.content_margin_bottom = 4.0
+		btn.add_theme_stylebox_override(state, box)
+
+
+# ---------------------------------------------------------------------------
+# Tab content
+# ---------------------------------------------------------------------------
+
+func _switch_tab(tab_name: String) -> void:
+	if _active_tab == tab_name:
+		return
+	_active_tab = tab_name
+	_refresh_tab_styles()
+	_buy_btns.clear()
+	for child in _vbox.get_children():
+		child.queue_free()
+	_populate_tab(_active_tab)
+
+
+func _populate_tab(tab_name: String) -> void:
+	var defs: Array = []
+	for def: Dictionary in GameState.PERMANENT_UPGRADE_DEFS:
+		if def["category"] == tab_name:
+			defs.append(def)
+
+	for i in defs.size():
+		_build_upgrade_row(defs[i])
+		# 1 px divider between rows (not after the last one).
+		if i < defs.size() - 1:
+			var div := ColorRect.new()
+			div.custom_minimum_size   = Vector2(0.0, 1.0)
+			div.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			div.color        = COLOR_DIVIDER
+			div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_vbox.add_child(div)
 
 	_refresh_all_buttons()
 
 
-## Builds one column of upgrade rows below a section header label.
-## Section headers are 50% larger (24 pt) and 25% brighter than COLOR_DIM.
-func _build_column(parent: Control, defs: Array,
-		col_x: float, col_y: float, header: String) -> void:
-	const COLOR_SECTION_HEADER := Color(0.69, 0.69, 0.74, 1.0)   # COLOR_DIM lightened ~25%
-	var hdr := Label.new()
-	hdr.text          = header
-	hdr.position      = Vector2(col_x, col_y)
-	hdr.size          = Vector2(COL_W, SEC_H)
-	hdr.add_theme_font_override("font", UIFonts.primary_bold())
-	hdr.add_theme_font_size_override("font_size", 24)   # 50% larger than previous 16 pt
-	hdr.add_theme_color_override("font_color", COLOR_SECTION_HEADER)
-	hdr.mouse_filter  = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(hdr)
+# ---------------------------------------------------------------------------
+# Upgrade row
+# ---------------------------------------------------------------------------
 
-	var row_y := col_y + SEC_H
-	for def: Dictionary in defs:
-		_build_upgrade_row(parent, def, col_x, row_y)
-		row_y += ROW_H + 4.0
-
-
-## Returns the effect label string for a given upgrade at its current tier.
-## Shows "current_value → next_value" when the player has already purchased tiers,
-## just "next_value" at tier 0, and "MAX" when fully upgraded.
+## Returns the effect label string for a given upgrade at its current tier:
+##   tier 0       → first tier label (what you'll get)
+##   tier 1–9     → "previous → next" so the player sees what changes
+##   tier == max  → "MAX"
 func _effect_text(def: Dictionary, tier: int) -> String:
 	var max_tiers: int = def["tier_costs"].size()
 	if tier >= max_tiers:
@@ -253,33 +315,36 @@ func _effect_text(def: Dictionary, tier: int) -> String:
 	return def["tier_effects"][tier - 1] + " → " + def["tier_effects"][tier]
 
 
-## Builds one upgrade row with a two-row layout:
-##   Row 1 (left side): [★ tier]  [upgrade name]  [current → next effect]
-##   Row 2 (left side): [description]
-##   Right side:        [buy button — spans full row height]
-func _build_upgrade_row(parent: Control, def: Dictionary,
-		rx: float, ry: float) -> void:
-	var row := Control.new()
-	row.position     = Vector2(rx, ry)
-	row.size         = Vector2(COL_W, ROW_H)
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	parent.add_child(row)
-
+## Builds a single upgrade row and appends it to _vbox.
+##
+## Layout (ROW_H = 76 px):
+##   Row 1 (y=12): [★ tier | name (large) | effect text]     ← title is dominant
+##   Row 2 (y=42): [description (smaller, dimmer)]
+##   Right column: buy button, vertically centred
+func _build_upgrade_row(def: Dictionary) -> void:
 	var upgrade_id: String = def["id"]
 	var tier: int          = GameState.get_upgrade_tier(upgrade_id)
 	var max_tiers: int     = def["tier_costs"].size()
 
-	var content_w: float = COL_W - BTN_W - 6.0   # left-side width
+	# Full-width row container; height is fixed, width expands to fill VBoxContainer.
+	var row := Control.new()
+	row.custom_minimum_size   = Vector2(0.0, ROW_H)
+	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	row.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	_vbox.add_child(row)
 
-	# ── Row 1: [★ N] | [name] | [effect] ─────────────────────────────────────
+	# Vertical positions within the row — two content rows centred in ROW_H.
+	var row1_y: float = 12.0   # (ROW_H - 26 - 4 - 24) / 2 = 12
+	var row2_y: float = 42.0   # row1_y + 26 + 4
 
+	# ── Star-level panel ──────────────────────────────────────────────────────
+	# Gold border when fully maxed at tier 10; dark gray otherwise.
 	var star_panel := Panel.new()
-	star_panel.position     = Vector2(0.0, 3.0)
-	star_panel.size         = Vector2(46.0, 22.0)
+	star_panel.position     = Vector2(PADDING, row1_y)
+	star_panel.size         = Vector2(56.0, 26.0)
 	star_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var star_sty            := StyleBoxFlat.new()
 	star_sty.bg_color     = Color(0.04, 0.04, 0.06, 0.60)
-	# Gold border at max tier (10) to mark full investment; dark gray otherwise.
 	star_sty.border_color = COLOR_HEADER if tier >= max_tiers else COLOR_BORDER
 	star_sty.set_border_width_all(1)
 	star_sty.set_corner_radius_all(3)
@@ -288,24 +353,25 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 
 	var star_lbl := Label.new()
 	star_lbl.text               = "★ %d" % tier
-	star_lbl.position           = Vector2(4.0, 2.0)
-	star_lbl.size               = Vector2(38.0, 18.0)
+	star_lbl.position           = Vector2(4.0, 4.0)
+	star_lbl.size               = Vector2(48.0, 18.0)
 	star_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	star_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	star_lbl.add_theme_font_size_override("font_size", 12)
+	star_lbl.add_theme_font_size_override("font_size", 13)
 	star_lbl.add_theme_color_override("font_color",
 		COLOR_HEADER if tier > 0 else COLOR_DOT_OFF)
 	star_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	star_panel.add_child(star_lbl)
 
+	# ── Row 1: name (large title) + effect text ───────────────────────────────
 	var name_lbl := Label.new()
 	name_lbl.text         = def["name"]
-	name_lbl.position     = Vector2(50.0, 3.0)
-	name_lbl.size         = Vector2(160.0, 22.0)
+	name_lbl.position     = Vector2(PADDING + 64.0, row1_y)
+	name_lbl.size         = Vector2(300.0, 26.0)
 	name_lbl.clip_text    = true
 	name_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	name_lbl.add_theme_font_size_override("font_size", 13)
-	name_lbl.add_theme_color_override("font_color", COLOR_TEXT)
+	name_lbl.add_theme_font_size_override("font_size", 18)   # title — larger
+	name_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(name_lbl)
 
@@ -313,33 +379,31 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	effect_lbl.text = _effect_text(def, tier)
 	effect_lbl.add_theme_color_override("font_color",
 		COLOR_MAX if tier >= max_tiers else COLOR_HEADER)
-	effect_lbl.position     = Vector2(214.0, 3.0)
-	effect_lbl.size         = Vector2(content_w - 214.0, 22.0)
+	effect_lbl.position     = Vector2(PADDING + 64.0 + 300.0 + 16.0, row1_y)
+	effect_lbl.size         = Vector2(660.0, 26.0)
 	effect_lbl.clip_text    = true
 	effect_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	effect_lbl.add_theme_font_size_override("font_size", 11)
+	effect_lbl.add_theme_font_size_override("font_size", 15)
 	effect_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(effect_lbl)
 
-	# ── Row 2: description ───────────────────────────────────────────────────
-
+	# ── Row 2: description (smaller, so it reads as subordinate to the title) ──
 	var desc_lbl := Label.new()
 	desc_lbl.text         = def["desc"]
-	desc_lbl.position     = Vector2(0.0, 29.0)
-	desc_lbl.size         = Vector2(content_w, 26.0)
+	desc_lbl.position     = Vector2(PADDING + 64.0, row2_y)
+	desc_lbl.size         = Vector2(1000.0, 24.0)
 	desc_lbl.clip_text    = true
 	desc_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	desc_lbl.add_theme_font_size_override("font_size", 13)
-	desc_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
+	desc_lbl.add_theme_font_size_override("font_size", 14)   # description — clearly smaller than name
+	desc_lbl.add_theme_color_override("font_color", Color(0.72, 0.72, 0.77, 1.0))
 	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(desc_lbl)
 
-	# ── Buy button ──────────────────────────────────────────────────────────
-
+	# ── Buy button — right-aligned, vertically centred ────────────────────────
 	var btn := Button.new()
 	btn.focus_mode   = Control.FOCUS_NONE
 	btn.process_mode = Node.PROCESS_MODE_ALWAYS
-	btn.position     = Vector2(COL_W - BTN_W, (ROW_H - BTN_H) * 0.5)
+	btn.position     = Vector2(1280.0 - PADDING - BTN_W, (ROW_H - BTN_H) * 0.5)
 	btn.size         = Vector2(BTN_W, BTN_H)
 	btn.add_theme_font_override("font", UIFonts.primary_bold())
 	btn.add_theme_font_size_override("font_size", 20)
@@ -374,7 +438,10 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	_buy_btns.append({ "id": upgrade_id, "btn": btn, "cost_lbl": cost_lbl, "cost_icon": cost_icon })
 
 
-## Rebuilds all buy button states and cost labels from current GameState.
+# ---------------------------------------------------------------------------
+# Button state management
+# ---------------------------------------------------------------------------
+
 func _refresh_all_buttons() -> void:
 	for entry: Dictionary in _buy_btns:
 		var upgrade_id: String     = entry["id"]
@@ -389,18 +456,18 @@ func _refresh_all_buttons() -> void:
 		btn.disabled = maxed or not can_buy
 
 		if maxed:
-			cost_icon.visible = false   # hide the bill icon when showing "MAX"
-			cost_lbl.text = "MAX"
+			cost_icon.visible = false
+			cost_lbl.text     = "MAX"
 			cost_lbl.add_theme_color_override("font_color", COLOR_MAX)
 			_apply_btn_style(btn, false, true)
 		elif can_buy:
 			cost_icon.visible = true
-			cost_lbl.text = "%d" % def["tier_costs"][tier]
+			cost_lbl.text     = "%d" % def["tier_costs"][tier]
 			cost_lbl.add_theme_color_override("font_color", COLOR_HEADER)
 			_apply_btn_style(btn, true, false)
 		else:
 			cost_icon.visible = true
-			cost_lbl.text = "%d" % def["tier_costs"][tier]
+			cost_lbl.text     = "%d" % def["tier_costs"][tier]
 			cost_lbl.add_theme_color_override("font_color", COLOR_DIM)
 			_apply_btn_style(btn, false, false)
 
@@ -424,10 +491,10 @@ func _apply_btn_style(btn: Button, affordable: bool, maxed: bool) -> void:
 			btn.add_theme_stylebox_override(state, box)
 		return
 
-	var bg_n  := COLOR_BTN_BG      if affordable else COLOR_BTN_DIS_BG
-	var bg_h  := COLOR_BTN_HOVER   if affordable else COLOR_BTN_DIS_BG
-	var bg_p  := COLOR_BTN_PRESS   if affordable else COLOR_BTN_DIS_BG
-	var bor   := COLOR_BTN_BORDER  if affordable else COLOR_BTN_DIS_BOR
+	var bg_n := COLOR_BTN_BG    if affordable else COLOR_BTN_DIS_BG
+	var bg_h := COLOR_BTN_HOVER if affordable else COLOR_BTN_DIS_BG
+	var bg_p := COLOR_BTN_PRESS if affordable else COLOR_BTN_DIS_BG
+	var bor  := COLOR_BTN_BORDER if affordable else COLOR_BTN_DIS_BOR
 	for state: Array in [
 		["normal",   bg_n],
 		["hover",    bg_h],
@@ -444,41 +511,13 @@ func _apply_btn_style(btn: Button, affordable: bool, maxed: bool) -> void:
 
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-func _make_panel(px: float, py: float, pw: float, ph: float) -> Control:
-	var ctrl := Control.new()
-	ctrl.position     = Vector2(px, py)
-	ctrl.size         = Vector2(pw, ph)
-	ctrl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	ctrl.process_mode = Node.PROCESS_MODE_ALWAYS
-
-	var bg := ColorRect.new()
-	bg.color        = COLOR_PANEL
-	bg.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	bg.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	ctrl.add_child(bg)
-
-	var border := Panel.new()
-	border.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	border.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	var sty := StyleBoxFlat.new()
-	sty.bg_color     = Color.TRANSPARENT
-	sty.border_color = COLOR_BORDER
-	sty.set_border_width_all(2)
-	sty.set_corner_radius_all(8)
-	border.add_theme_stylebox_override("panel", sty)
-	ctrl.add_child(border)
-
-	return ctrl
-
-
-# ---------------------------------------------------------------------------
 # Input blocking
 # ---------------------------------------------------------------------------
 
 func _unhandled_input(event: InputEvent) -> void:
+	# Swallow pointer events so the arena behind the screen never receives them.
+	# The ScrollContainer's _gui_input handles drag-to-scroll before this fires,
+	# so vertical scrolling still works correctly.
 	if event is InputEventScreenTouch \
 			or event is InputEventMouseButton \
 			or event is InputEventScreenDrag \
@@ -499,13 +538,12 @@ func _on_fees_changed(_new_amount: int) -> void:
 func _on_buy_pressed(upgrade_id: String) -> void:
 	if GameState.purchase_upgrade(upgrade_id):
 		AudioManager.play_ui("upgrade")
-		# Rebuild the screen so tier dots and effect labels update immediately.
-		# Simpler than patching individual nodes in place.
-		for child in get_children():
-			child.queue_free()
+		# Repopulate the active tab in place so the scroll position is preserved
+		# and only the affected column needs to rebuild.
 		_buy_btns.clear()
-		_sf_lbl = null
-		_build_ui()
+		for child in _vbox.get_children():
+			child.queue_free()
+		_populate_tab(_active_tab)
 
 
 func _on_done_pressed() -> void:
