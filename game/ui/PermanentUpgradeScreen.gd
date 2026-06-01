@@ -48,7 +48,7 @@ const COLOR_DONE_BORDER := Color(0.22, 0.60, 0.04, 1.0)
 # ---------------------------------------------------------------------------
 
 const PADDING:  float = 24.0   # horizontal inset used consistently throughout
-const HEADER_H: float = 44.0   # header bar (title + SF balance + Done)
+const HEADER_H: float = 66.0   # header bar (title + SF balance + Close) — 50% larger than original 44
 const TAB_H:    float = 50.0   # tab button row
 const ROW_H:    float = 76.0   # height of each upgrade item in the scroll list
 const BTN_W:    float = 120.0
@@ -127,26 +127,54 @@ func _build_ui() -> void:
 # ---------------------------------------------------------------------------
 
 func _build_header() -> void:
+	# Title — 50% larger than original (26→39 pt).
 	var title := Label.new()
 	title.text               = "PERMANENT UPGRADES"
 	title.position           = Vector2(PADDING, 0.0)
-	title.size               = Vector2(500.0, HEADER_H)
+	title.size               = Vector2(700.0, HEADER_H)
 	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	title.add_theme_font_override("font", UIFonts.primary_bold())
-	title.add_theme_font_size_override("font_size", 26)
+	title.add_theme_font_size_override("font_size", 39)
 	title.add_theme_color_override("font_color", COLOR_HEADER)
 	title.mouse_filter       = Control.MOUSE_FILTER_IGNORE
 	add_child(title)
 
-	# Done button — sits right of centre.
+	# SF balance: icon + number, right-aligned — 50% larger (icon 36×24→54×36, font 26→39 pt).
+	var sf_row := HBoxContainer.new()
+	sf_row.position    = Vector2(1280.0 - PADDING - 200.0, 4.0)
+	sf_row.size        = Vector2(200.0, HEADER_H - 8.0)
+	sf_row.alignment   = BoxContainer.ALIGNMENT_END
+	sf_row.add_theme_constant_override("separation", 6)
+	sf_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(sf_row)
+
+	var sf_icon := TextureRect.new()
+	sf_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
+	sf_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+	sf_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	sf_icon.custom_minimum_size = Vector2(54, 36)   # 50% larger than 36×24
+	sf_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	sf_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	sf_row.add_child(sf_icon)
+
+	_sf_lbl = Label.new()
+	_sf_lbl.text                = "%d" % GameState.service_fees
+	_sf_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_sf_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	_sf_lbl.add_theme_font_size_override("font_size", 39)   # 50% larger than 26
+	_sf_lbl.add_theme_color_override("font_color", COLOR_HEADER)
+	_sf_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	sf_row.add_child(_sf_lbl)
+
+	# Close button — 50% larger (font 17→26 pt, size 98×32→130×44), relabelled from "Done".
 	var done_btn := Button.new()
-	done_btn.text         = "Done"
+	done_btn.text         = "Close"
 	done_btn.focus_mode   = Control.FOCUS_NONE
-	done_btn.position     = Vector2(1280.0 - PADDING - 160.0 - 108.0, (HEADER_H - 32.0) * 0.5)
-	done_btn.size         = Vector2(98.0, 32.0)
+	done_btn.position     = Vector2(1280.0 - PADDING - 200.0 - 130.0 - 12.0, (HEADER_H - 44.0) * 0.5)
+	done_btn.size         = Vector2(130.0, 44.0)
 	done_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	done_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	done_btn.add_theme_font_size_override("font_size", 17)
+	done_btn.add_theme_font_size_override("font_size", 26)
 	done_btn.add_theme_color_override("font_color", COLOR_TEXT)
 	done_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	for state: Array in [
@@ -163,33 +191,6 @@ func _build_header() -> void:
 		done_btn.add_theme_stylebox_override(state[0], box)
 	done_btn.pressed.connect(_on_done_pressed)
 	add_child(done_btn)
-
-	# SF balance: icon + number, right-aligned.
-	var sf_row := HBoxContainer.new()
-	sf_row.position    = Vector2(1280.0 - PADDING - 160.0, 4.0)
-	sf_row.size        = Vector2(160.0, HEADER_H - 8.0)
-	sf_row.alignment   = BoxContainer.ALIGNMENT_END
-	sf_row.add_theme_constant_override("separation", 5)
-	sf_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	add_child(sf_row)
-
-	var sf_icon := TextureRect.new()
-	sf_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
-	sf_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
-	sf_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	sf_icon.custom_minimum_size = Vector2(36, 24)
-	sf_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	sf_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	sf_row.add_child(sf_icon)
-
-	_sf_lbl = Label.new()
-	_sf_lbl.text                = "%d" % GameState.service_fees
-	_sf_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_sf_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_sf_lbl.add_theme_font_size_override("font_size", 26)
-	_sf_lbl.add_theme_color_override("font_color", COLOR_HEADER)
-	_sf_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	sf_row.add_child(_sf_lbl)
 
 
 # ---------------------------------------------------------------------------
@@ -337,11 +338,13 @@ func _build_upgrade_row(def: Dictionary) -> void:
 	var row1_y: float = 12.0   # (ROW_H - 26 - 4 - 24) / 2 = 12
 	var row2_y: float = 42.0   # row1_y + 26 + 4
 
-	# ── Star-level panel ──────────────────────────────────────────────────────
-	# Gold border when fully maxed at tier 10; dark gray otherwise.
-	var star_panel := Panel.new()
-	star_panel.position     = Vector2(PADDING, row1_y)
-	star_panel.size         = Vector2(56.0, 26.0)
+	# ── Star-level panel — spans the full row height ─────────────────────────
+	# Gold border when fully maxed; dark gray otherwise.
+	# The star glyph fills the upper portion; the tier number is centred below.
+	var star_color: Color   = COLOR_HEADER if tier > 0 else COLOR_DOT_OFF
+	var star_panel          := Panel.new()
+	star_panel.position     = Vector2(PADDING, 0.0)
+	star_panel.size         = Vector2(56.0, ROW_H)
 	star_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var star_sty            := StyleBoxFlat.new()
 	star_sty.bg_color     = Color(0.04, 0.04, 0.06, 0.60)
@@ -351,17 +354,31 @@ func _build_upgrade_row(def: Dictionary) -> void:
 	star_panel.add_theme_stylebox_override("panel", star_sty)
 	row.add_child(star_panel)
 
-	var star_lbl := Label.new()
-	star_lbl.text               = "★ %d" % tier
-	star_lbl.position           = Vector2(4.0, 4.0)
-	star_lbl.size               = Vector2(48.0, 18.0)
-	star_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-	star_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	star_lbl.add_theme_font_size_override("font_size", 13)
-	star_lbl.add_theme_color_override("font_color",
-		COLOR_HEADER if tier > 0 else COLOR_DOT_OFF)
-	star_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	star_panel.add_child(star_lbl)
+	# Star glyph — large, fills the upper ~60% of the panel.
+	var star_sym := Label.new()
+	star_sym.text                 = "★"
+	star_sym.position             = Vector2(0.0, 2.0)
+	star_sym.size                 = Vector2(56.0, 46.0)
+	star_sym.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	star_sym.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	star_sym.add_theme_font_override("font", UIFonts.primary_bold())
+	star_sym.add_theme_font_size_override("font_size", 32)
+	star_sym.add_theme_color_override("font_color", star_color)
+	star_sym.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	star_panel.add_child(star_sym)
+
+	# Tier number — centred in the lower ~30% of the panel.
+	var tier_num := Label.new()
+	tier_num.text                 = "%d" % tier
+	tier_num.position             = Vector2(0.0, 50.0)
+	tier_num.size                 = Vector2(56.0, 24.0)
+	tier_num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	tier_num.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	tier_num.add_theme_font_override("font", UIFonts.primary_bold())
+	tier_num.add_theme_font_size_override("font_size", 16)
+	tier_num.add_theme_color_override("font_color", star_color)
+	tier_num.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	star_panel.add_child(tier_num)
 
 	# ── Row 1: name (large title) + effect text ───────────────────────────────
 	var name_lbl := Label.new()

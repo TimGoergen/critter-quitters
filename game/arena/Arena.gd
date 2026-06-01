@@ -2743,11 +2743,18 @@ func _apply_edge_scroll(delta: float) -> void:
 	_apply_pan(_pan_world_pos + Vector2(scroll_x, scroll_z) * EDGE_SCROLL_MAX_SPEED * delta)
 
 
-## Resets camera to overview when a run ends.
+## Called when a run ends.  Cancels any active shake and releases enemy follow,
+## but deliberately does NOT reset h_offset/v_offset: the HubScreen appears over
+## the arena immediately, so snapping the camera to the overview centre would
+## produce a jarring flash of movement just before the overlay covers the view.
 func _on_run_ended_camera() -> void:
+	_shake_timer  = 0.0
+	_shake_offset = Vector2.ZERO
 	_set_followed_enemy(null)
+	# Keep the internal zoom-state consistent for the next run without moving the camera.
 	if _zoom_state == ZoomState.ZOOMED_IN:
-		_toggle_zoom()
+		_zoom_state  = ZoomState.OVERVIEW
+		_camera.size = _overview_camera_size
 
 
 ## Called when the player accumulates enough XP to advance a level.

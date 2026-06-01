@@ -97,16 +97,16 @@ func _build_ui() -> void:
 	title.text                 = "INFESTED!"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.position             = Vector2(PAD, y)
-	title.size                 = Vector2(inner_w, 140.0)
+	title.size                 = Vector2(inner_w, 168.0)   # 140 × 1.20
 	title.add_theme_font_override("font", UIFonts.header())
-	title.add_theme_font_size_override("font_size", 160)
+	title.add_theme_font_size_override("font_size", 192)   # 160 × 1.20
 	title.add_theme_color_override("font_color", COLOR_TITLE)
 	title.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
 	title.add_theme_constant_override("shadow_offset_x", 4)
 	title.add_theme_constant_override("shadow_offset_y", 4)
 	title.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(title)
-	y += 148.0
+	y += 178.0
 
 	# Wave reached — font doubled from 22 to 44.
 	var wave_lbl := Label.new()
@@ -117,6 +117,9 @@ func _build_ui() -> void:
 	wave_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	wave_lbl.add_theme_font_size_override("font_size", 44)
 	wave_lbl.add_theme_color_override("font_color", COLOR_TEXT)
+	wave_lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
+	wave_lbl.add_theme_constant_override("shadow_offset_x", 2)
+	wave_lbl.add_theme_constant_override("shadow_offset_y", 2)
 	wave_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(wave_lbl)
 	y += 58.0
@@ -147,6 +150,9 @@ func _build_ui() -> void:
 	_sf_balance_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	_sf_balance_lbl.add_theme_font_size_override("font_size", 112)
 	_sf_balance_lbl.add_theme_color_override("font_color", COLOR_GOLD)
+	_sf_balance_lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
+	_sf_balance_lbl.add_theme_constant_override("shadow_offset_x", 3)
+	_sf_balance_lbl.add_theme_constant_override("shadow_offset_y", 3)
 	_sf_balance_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sf_row.add_child(_sf_balance_lbl)
 	y += 155.0
