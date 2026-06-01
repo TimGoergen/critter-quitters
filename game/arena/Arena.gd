@@ -205,7 +205,7 @@ var _arena_world_half_z:    float    = 0.0   # half the grid world height (Z); u
 
 # Camera shake — a brief shudder triggered when a pest reaches the exit.
 # _shake_offset is added on top of the normal pan offset in _apply_pan.
-# The tween animates the offset through a few oscillations then back to zero.
+# The offset is set instantly then tweened back to zero over 60 ms.
 var _shake_offset: Vector2 = Vector2.ZERO
 var _shake_tween:  Tween   = null
 var _followed_enemy:        Node3D   = null  # non-null while enemy-follow mode is active
@@ -1219,21 +1219,21 @@ func spawn_enemy_at_grid_position(grid_pos: Vector2i, enemy_type: Enemy.EnemyTyp
 
 
 ## Triggers a brief camera shudder — a tactile signal that the infestation bar
-## just ticked up.  Three rapid oscillations over ~0.23 seconds, damping to zero.
-## Direction is randomised so repeated escapes feel distinct.
+## just ticked up.  The camera snaps to a displaced position instantly then
+## returns to centre over 60 ms with an ease-out, giving a sharp physical-impact
+## feel.  Direction is randomised so repeated escapes feel distinct.
 func _start_exit_shake() -> void:
 	var angle := randf() * TAU
 	var dir   := Vector2(cos(angle), sin(angle))
-	const MAG: float = 0.09   # world units; noticeable but not jarring at both zoom levels
+	const MAG: float = 0.10   # world units; slightly larger to compensate for shorter duration
 
 	if _shake_tween != null and _shake_tween.is_valid():
 		_shake_tween.kill()
 
-	_shake_tween = create_tween()
-	_shake_tween.tween_property(self, "_shake_offset",  dir * MAG,        0.04)
-	_shake_tween.tween_property(self, "_shake_offset", -dir * MAG * 0.55, 0.06)
-	_shake_tween.tween_property(self, "_shake_offset",  dir * MAG * 0.25, 0.05)
-	_shake_tween.tween_property(self, "_shake_offset",  Vector2.ZERO,     0.08)
+	_shake_offset = dir * MAG   # instant displacement — no wind-up
+	_shake_tween  = create_tween()
+	_shake_tween.tween_property(self, "_shake_offset", Vector2.ZERO, 0.06) \
+		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
 
 
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
