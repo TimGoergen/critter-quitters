@@ -19,7 +19,7 @@ const UIFonts = preload("res://ui/UIFonts.gd")
 # Colours
 # ---------------------------------------------------------------------------
 
-const COLOR_PANEL      := Color(0.06, 0.06, 0.08, 0.96)
+const COLOR_PANEL      := Color(0.02, 0.10, 0.01, 0.96)   # dark green background
 const COLOR_BORDER     := Color(0.32, 0.32, 0.38, 1.0)
 const COLOR_DIVIDER    := Color(0.20, 0.20, 0.24, 1.0)
 const COLOR_HEADER     := Color(1.00, 0.82, 0.10, 1.0)   # gold
@@ -119,7 +119,7 @@ func _build_ui() -> void:
 	title_lbl.position  = Vector2(PANEL_PAD, y + 4.0)
 	title_lbl.size      = Vector2(panel_w - PANEL_PAD * 2.0 - 180.0, header_h)
 	title_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	title_lbl.add_theme_font_size_override("font_size", 26)
+	title_lbl.add_theme_font_size_override("font_size", 30)
 	title_lbl.add_theme_color_override("font_color", COLOR_HEADER)
 	title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(title_lbl)
@@ -147,7 +147,7 @@ func _build_ui() -> void:
 	_sf_lbl.text                 = "%d" % GameState.service_fees
 	_sf_lbl.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
 	_sf_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_sf_lbl.add_theme_font_size_override("font_size", 26)
+	_sf_lbl.add_theme_font_size_override("font_size", 30)
 	_sf_lbl.add_theme_color_override("font_color", COLOR_HEADER)
 	_sf_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	sf_hdr_row.add_child(_sf_lbl)
@@ -194,7 +194,7 @@ func _build_ui() -> void:
 	done_btn.size        = Vector2(140.0, 48.0)
 	done_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	done_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	done_btn.add_theme_font_size_override("font_size", 22)
+	done_btn.add_theme_font_size_override("font_size", 25)
 	done_btn.add_theme_color_override("font_color", COLOR_TEXT)
 	done_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	for state: Array in [
@@ -227,7 +227,7 @@ func _build_column(parent: Control, defs: Array,
 	hdr.position      = Vector2(col_x, col_y)
 	hdr.size          = Vector2(COL_W, SEC_H)
 	hdr.add_theme_font_override("font", UIFonts.primary_bold())
-	hdr.add_theme_font_size_override("font_size", 14)
+	hdr.add_theme_font_size_override("font_size", 16)
 	hdr.add_theme_color_override("font_color", COLOR_DIM)
 	hdr.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	parent.add_child(hdr)
@@ -258,7 +258,7 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	name_lbl.size         = Vector2(COL_W - BTN_W - 10.0, 24.0)
 	name_lbl.clip_text    = true
 	name_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	name_lbl.add_theme_font_size_override("font_size", 16)
+	name_lbl.add_theme_font_size_override("font_size", 18)
 	name_lbl.add_theme_color_override("font_color", COLOR_TEXT)
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(name_lbl)
@@ -272,7 +272,7 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	dots_lbl.position     = Vector2(0.0, 26.0)
 	dots_lbl.size         = Vector2(60.0, 20.0)
 	dots_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	dots_lbl.add_theme_font_size_override("font_size", 14)
+	dots_lbl.add_theme_font_size_override("font_size", 16)
 	dots_lbl.add_theme_color_override("font_color", COLOR_DOT_ON if tier > 0 else COLOR_DOT_OFF)
 	dots_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(dots_lbl)
@@ -288,7 +288,7 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	effect_lbl.position     = Vector2(62.0, 26.0)
 	effect_lbl.size         = Vector2(COL_W - BTN_W - 72.0, 20.0)
 	effect_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	effect_lbl.add_theme_font_size_override("font_size", 13)
+	effect_lbl.add_theme_font_size_override("font_size", 15)
 	effect_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(effect_lbl)
 
@@ -299,7 +299,7 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	desc_lbl.size         = Vector2(COL_W - BTN_W - 10.0, 22.0)
 	desc_lbl.clip_text    = true
 	desc_lbl.add_theme_font_override("font", UIFonts.primary())
-	desc_lbl.add_theme_font_size_override("font_size", 11)
+	desc_lbl.add_theme_font_size_override("font_size", 13)
 	desc_lbl.add_theme_color_override("font_color", COLOR_DIM)
 	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(desc_lbl)
@@ -311,7 +311,7 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	btn.position     = Vector2(COL_W - BTN_W, (ROW_H - BTN_H) * 0.5)
 	btn.size         = Vector2(BTN_W, BTN_H)
 	btn.add_theme_font_override("font", UIFonts.primary_bold())
-	btn.add_theme_font_size_override("font_size", 15)
+	btn.add_theme_font_size_override("font_size", 17)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.pressed.connect(_on_buy_pressed.bind(upgrade_id))
 	row.add_child(btn)
@@ -338,7 +338,7 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	cost_lbl.vertical_alignment  = VERTICAL_ALIGNMENT_CENTER
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	cost_lbl.add_theme_font_size_override("font_size", 15)
+	cost_lbl.add_theme_font_size_override("font_size", 17)
 	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
 

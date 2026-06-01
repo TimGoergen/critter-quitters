@@ -210,6 +210,9 @@ var _floor_mat_zoomed:   ShaderMaterial  = null  # grid lines visible (zoomed in
 
 # Reference to the playtest setup dialog while it is open; null after it confirms.
 var _debug_dialog: Node = null
+# Stores playtest config from DebugStartDialog when it runs before TrapSelectionScreen.
+# Populated in _on_debug_pre_confirmed; consumed in _on_traps_selected.
+var _dev_config: Dictionary = {}
 
 # Outside-wall reference positions (x only matters; y is chosen per enemy).
 var _spawn_cell: Vector2i = Vector2i.ZERO    # centre spawn cell (used for x and gap centre)
@@ -322,11 +325,16 @@ func _ready() -> void:
 	_fit_camera_to_grid()
 	get_viewport().size_changed.connect(_fit_camera_to_grid)
 
-	# Show trap selection first so the player picks their starting traps,
-	# then hand off to the playtest debug dialog which calls _start_wave().
-	var selection := TrapSelectionScreen.new()
-	selection.loadout_selected.connect(_on_traps_selected)
-	add_child(selection)
+	# In dev mode, playtest setup runs first so the player configures wave
+	# parameters before committing to a gear loadout. In normal mode the trap
+	# selection screen opens immediately.
+	if GameState.dev_mode:
+		var dialog := DebugStartDialog.new()
+		dialog.confirmed.connect(_on_debug_pre_confirmed)
+		add_child(dialog)
+		_debug_dialog = dialog
+	else:
+		_show_trap_selection()
 
 
 # ---------------------------------------------------------------------------
@@ -1300,16 +1308,38 @@ func _handle_key(_keycode: int) -> void:
 	pass
 
 
+## Spawns the trap selection screen. Called directly on normal starts, or after
+## DebugStartDialog confirms in dev mode so the playtest config comes first.
+func _show_trap_selection() -> void:
+	var selection := TrapSelectionScreen.new()
+	selection.loadout_selected.connect(_on_traps_selected)
+	add_child(selection)
+
+
+## Called when DebugStartDialog confirms in dev mode, before TrapSelectionScreen.
+## Stashes the config values then shows the gear selection screen.
+func _on_debug_pre_confirmed(bug_bucks: int, wave_size: int,
+		static_enemies: bool, allowed_types: Array) -> void:
+	_dev_config = {
+		"bug_bucks":     bug_bucks,
+		"wave_size":     wave_size,
+		"static_enemies": static_enemies,
+		"allowed_types":  allowed_types,
+	}
+	_show_trap_selection()
+
+
 ## Called when TrapSelectionScreen confirms the player's chosen loadout.
-## Shows the playtest config dialog when dev_mode is on; otherwise starts
-## immediately with default values so the run begins without any dialogs.
+## Uses the previously stashed dev config in dev mode, or defaults otherwise.
 func _on_traps_selected(trap_types: Array[int], boost_types: Array[int]) -> void:
 	GameState.set_unlocked_loadout(trap_types, boost_types)
 	if GameState.dev_mode:
-		var dialog := DebugStartDialog.new()
-		dialog.confirmed.connect(_on_debug_confirmed)
-		add_child(dialog)
-		_debug_dialog = dialog
+		_on_debug_confirmed(
+			_dev_config.get("bug_bucks",      GameState.STARTING_BUG_BUCKS),
+			_dev_config.get("wave_size",      DebugStartDialog.DEFAULT_WAVE_SIZE),
+			_dev_config.get("static_enemies", false),
+			_dev_config.get("allowed_types",  [])
+		)
 	else:
 		_on_debug_confirmed(GameState.STARTING_BUG_BUCKS, DebugStartDialog.DEFAULT_WAVE_SIZE, false, [])
 

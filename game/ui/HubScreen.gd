@@ -67,86 +67,90 @@ func _build_ui() -> void:
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
 
-	# Centred panel.
-	const PW: float = 560.0
-	const PH: float = 340.0
+	# Large centred panel — roughly 2× the original 560×340 size, capped to fit
+	# the 1280×600 mobile viewport with comfortable top/bottom margins.
+	const PW: float = 1200.0
+	const PH: float = 480.0
 	var panel_x := (1280.0 - PW) * 0.5
 	var panel_y := (600.0  - PH) * 0.5
 
 	var panel := _make_panel(panel_x, panel_y, PW, PH)
 	add_child(panel)
 
-	var inner_w := PW - 32.0   # 16 px padding each side
-	var y       := 20.0
+	const PAD: float = 24.0            # horizontal padding each side (was 16)
+	var inner_w := PW - PAD * 2.0      # 1152 px usable width
+	var y       := 24.0
 
-	# "INFESTED!" title.
+	# "INFESTED!" title — font doubled from 54 to 108.
 	var title := Label.new()
 	title.text                 = "INFESTED!"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.position             = Vector2(16.0, y)
-	title.size                 = Vector2(inner_w, 60.0)
+	title.position             = Vector2(PAD, y)
+	title.size                 = Vector2(inner_w, 90.0)
 	title.add_theme_font_override("font", UIFonts.header())
-	title.add_theme_font_size_override("font_size", 54)
+	title.add_theme_font_size_override("font_size", 108)
 	title.add_theme_color_override("font_color", COLOR_TITLE)
 	title.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(title)
-	y += 64.0
+	y += 98.0
 
-	# Wave reached.
+	# Wave reached — font doubled from 22 to 44.
 	var wave_lbl := Label.new()
 	wave_lbl.text                 = "Wave %d reached" % GameState.current_wave
 	wave_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	wave_lbl.position             = Vector2(16.0, y)
-	wave_lbl.size                 = Vector2(inner_w, 28.0)
+	wave_lbl.position             = Vector2(PAD, y)
+	wave_lbl.size                 = Vector2(inner_w, 50.0)
 	wave_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	wave_lbl.add_theme_font_size_override("font_size", 22)
+	wave_lbl.add_theme_font_size_override("font_size", 44)
 	wave_lbl.add_theme_color_override("font_color", COLOR_TEXT)
 	wave_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(wave_lbl)
-	y += 32.0
+	y += 58.0
 
-	# Fees earned this run.
+	# Fees earned this run — font doubled from 18 to 36.
 	var earned_lbl := Label.new()
 	var earned: int = GameState.service_fees_last_run
 	earned_lbl.text                 = "Service Fees earned: +%d" % earned
 	earned_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	earned_lbl.position             = Vector2(16.0, y)
-	earned_lbl.size                 = Vector2(inner_w, 26.0)
+	earned_lbl.position             = Vector2(PAD, y)
+	earned_lbl.size                 = Vector2(inner_w, 46.0)
 	earned_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	earned_lbl.add_theme_font_size_override("font_size", 18)
+	earned_lbl.add_theme_font_size_override("font_size", 36)
 	earned_lbl.add_theme_color_override("font_color", COLOR_GOLD)
 	earned_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(earned_lbl)
-	y += 36.0
+	y += 54.0
 
 	# Divider.
 	var divider := ColorRect.new()
 	divider.color        = COLOR_DIVIDER
-	divider.position     = Vector2(16.0, y)
+	divider.position     = Vector2(PAD, y)
 	divider.size         = Vector2(inner_w, 1.0)
 	divider.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(divider)
-	y += 16.0
+	y += 20.0
 
 	# SF balance — "Service Fees" descriptor above, icon + number below.
+	# Font doubled from 13 to 26.
 	var sf_desc_lbl := Label.new()
 	sf_desc_lbl.text                 = "Service Fees"
 	sf_desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sf_desc_lbl.position             = Vector2(16.0, y)
-	sf_desc_lbl.size                 = Vector2(inner_w, 20.0)
+	sf_desc_lbl.position             = Vector2(PAD, y)
+	sf_desc_lbl.size                 = Vector2(inner_w, 36.0)
 	sf_desc_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	sf_desc_lbl.add_theme_font_size_override("font_size", 13)
+	sf_desc_lbl.add_theme_font_size_override("font_size", 26)
 	sf_desc_lbl.add_theme_color_override("font_color", COLOR_DIM)
 	sf_desc_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(sf_desc_lbl)
-	y += 20.0
+	y += 38.0
 
 	# Icon + number row — centred in the panel.
+	# Icon and font both doubled in size.
 	var sf_row := HBoxContainer.new()
-	sf_row.position    = Vector2(16.0, y)
-	sf_row.size        = Vector2(inner_w, 32.0)
+	sf_row.position    = Vector2(PAD, y)
+	sf_row.size        = Vector2(inner_w, 64.0)
 	sf_row.alignment   = BoxContainer.ALIGNMENT_CENTER
-	sf_row.add_theme_constant_override("separation", 6)
+	sf_row.add_theme_constant_override("separation", 12)
 	sf_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(sf_row)
 
@@ -154,8 +158,8 @@ func _build_ui() -> void:
 	sf_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
 	sf_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	sf_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	# Height matches the label; width derives from the 80:52 bill aspect ratio.
-	sf_icon.custom_minimum_size = Vector2(49, 32)
+	# Icon doubled: was (49, 32) → (98, 64), maintaining the 80:52 bill aspect ratio.
+	sf_icon.custom_minimum_size = Vector2(98, 64)
 	sf_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	sf_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sf_row.add_child(sf_icon)
@@ -164,37 +168,39 @@ func _build_ui() -> void:
 	_sf_balance_lbl.text                 = "%d" % GameState.service_fees
 	_sf_balance_lbl.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
 	_sf_balance_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_sf_balance_lbl.add_theme_font_size_override("font_size", 28)
+	_sf_balance_lbl.add_theme_font_size_override("font_size", 56)
 	_sf_balance_lbl.add_theme_color_override("font_color", COLOR_GOLD)
 	_sf_balance_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	sf_row.add_child(_sf_balance_lbl)
-	y += 32.0
+	y += 70.0
 
-	# Button row: Bug-Up! | Start New Job | Bug Out
-	const BTN_H: float = 56.0
-	const BTN_GAP: float = 10.0
-	const BTN_W: float = (PW - 32.0 - BTN_GAP * 2.0) / 3.0
+	# Button row: Bug-Up! | Start New Job | Quit
+	# Buttons sized to fill the panel width; font doubled from 22 to 44.
+	const BTN_H: float   = 80.0
+	const BTN_GAP: float = 14.0
+	const BTN_W: float   = (PW - PAD * 2.0 - BTN_GAP * 2.0) / 3.0
 
 	var bugup_btn := _make_button("Bug-Up!", COLOR_BTN_GOLD, COLOR_BTN_GOLD_HOVER,
 			COLOR_BTN_GOLD_PRESS, COLOR_BTN_GOLD_BORDER)
-	bugup_btn.position = Vector2(16.0, y)
+	bugup_btn.position = Vector2(PAD, y)
 	bugup_btn.size     = Vector2(BTN_W, BTN_H)
 	bugup_btn.pressed.connect(_on_bugup_pressed)
 	panel.add_child(bugup_btn)
 
 	var start_btn := _make_button("Start New Job", COLOR_BTN_GREEN, COLOR_BTN_GREEN_HOVER,
 			COLOR_BTN_GREEN_PRESS, COLOR_BTN_GREEN_BORDER)
-	start_btn.position = Vector2(16.0 + BTN_W + BTN_GAP, y)
+	start_btn.position = Vector2(PAD + BTN_W + BTN_GAP, y)
 	start_btn.size     = Vector2(BTN_W, BTN_H)
 	start_btn.pressed.connect(_on_start_pressed)
 	panel.add_child(start_btn)
 
-	var bugout_btn := _make_button("Bug Out", COLOR_BTN_RED, COLOR_BTN_RED_HOVER,
+	# "Quit" is the plain-language equivalent of the old "Bug Out" label.
+	var quit_btn := _make_button("Quit", COLOR_BTN_RED, COLOR_BTN_RED_HOVER,
 			COLOR_BTN_RED_PRESS, COLOR_BTN_RED_BORDER)
-	bugout_btn.position = Vector2(16.0 + (BTN_W + BTN_GAP) * 2.0, y)
-	bugout_btn.size     = Vector2(BTN_W, BTN_H)
-	bugout_btn.pressed.connect(_on_bugout_pressed)
-	panel.add_child(bugout_btn)
+	quit_btn.position = Vector2(PAD + (BTN_W + BTN_GAP) * 2.0, y)
+	quit_btn.size     = Vector2(BTN_W, BTN_H)
+	quit_btn.pressed.connect(_on_bugout_pressed)
+	panel.add_child(quit_btn)
 
 
 # ---------------------------------------------------------------------------
@@ -235,7 +241,7 @@ func _make_button(label: String,
 	btn.text       = label
 	btn.focus_mode = Control.FOCUS_NONE
 	btn.add_theme_font_override("font", UIFonts.primary_bold())
-	btn.add_theme_font_size_override("font_size", 22)
+	btn.add_theme_font_size_override("font_size", 44)
 	btn.add_theme_color_override("font_color", Color(0.92, 0.92, 0.92, 1.0))
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.process_mode = Node.PROCESS_MODE_ALWAYS

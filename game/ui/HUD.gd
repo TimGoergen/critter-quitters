@@ -131,7 +131,6 @@ var _reward_bar_container:    Control          # bottom-third container; used to
 var _reward_bar_overlay:      HBoxContainer    # coin icon + label drawn over the green bar
 var _max_countdown_seconds:   int = 0         # first seconds_remaining of the countdown; bar denominator
 var _early_bonus_particles:   CPUParticles2D
-var _run_over_overlay:        Control
 var _wave_multiplier:        int = 1   # current send-wave multiplier; cycles 1 → 5 → 10 → 1
 var _last_countdown_seconds: int = 0   # last received countdown value; used to refresh reward text when multiplier changes
 var _current_wave_reward:    int = 0   # last value from early_send_reward_changed; drives the reward label
@@ -250,7 +249,6 @@ func _build_ui() -> void:
 	_build_right_panel()
 	_build_incoming_overlay()  # arena overlay; drawn above panels, below dialogs
 	_build_settings_dialog()   # must be after right panel so it draws on top
-	_build_run_over_overlay()
 	_build_panel_borders()     # drawn last so borders appear on top of all panel content
 	_build_pause_banner()      # drawn after borders so it slides over the top edge
 	_build_experience_bar()    # overlaid on the arena zone, above all panel content
@@ -959,71 +957,6 @@ func _show_incoming_banner(visible_state: bool) -> void:
 
 
 # ---------------------------------------------------------------------------
-# Run-over overlay
-# ---------------------------------------------------------------------------
-
-func _build_run_over_overlay() -> void:
-	_run_over_overlay = Control.new()
-	_run_over_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_run_over_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
-	_run_over_overlay.visible      = false
-	add_child(_run_over_overlay)
-
-	var bg := ColorRect.new()
-	bg.color = COLOR_OVERLAY_BG
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_run_over_overlay.add_child(bg)
-
-	var infested_label := Label.new()
-	infested_label.text                 = "INFESTED!"
-	infested_label.anchor_right         = 1.0
-	infested_label.anchor_top           = 0.30
-	infested_label.anchor_bottom        = 0.55
-	infested_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	infested_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	infested_label.add_theme_font_size_override("font_size", 144)
-	infested_label.add_theme_color_override("font_color", COLOR_INFESTED)
-	infested_label.add_theme_font_override("font", UIFonts.header())
-	_run_over_overlay.add_child(infested_label)
-
-	var btn := Button.new()
-	btn.text         = ""
-	btn.anchor_left  = 0.30
-	btn.anchor_right = 0.70
-	btn.anchor_top   = 0.70
-	btn.anchor_bottom = 0.80
-	btn.process_mode = Node.PROCESS_MODE_ALWAYS
-	_apply_send_wave_btn_style(btn)
-	btn.pressed.connect(_on_restart_pressed)
-	_run_over_overlay.add_child(btn)
-
-	# Inner layout mirrors the Send Next Wave button: icon + label in an HBox.
-	var btn_hbox := HBoxContainer.new()
-	btn_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	btn_hbox.alignment   = BoxContainer.ALIGNMENT_CENTER
-	btn_hbox.add_theme_constant_override("separation", 5)
-	btn_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn.add_child(btn_hbox)
-
-	var restart_icon := TextureRect.new()
-	restart_icon.texture             = load("res://assets/uninfested.png") as Texture2D
-	restart_icon.custom_minimum_size = Vector2(36, 36)
-	restart_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	restart_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	restart_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	restart_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	btn_hbox.add_child(restart_icon)
-
-	var restart_label := Label.new()
-	restart_label.text         = "Restart"
-	restart_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	restart_label.add_theme_font_override("font", UIFonts.primary_bold())
-	restart_label.add_theme_font_size_override("font_size", 24)
-	restart_label.add_theme_color_override("font_color", COLOR_TEXT)
-	btn_hbox.add_child(restart_label)
-
-
-# ---------------------------------------------------------------------------
 # Panel borders
 # ---------------------------------------------------------------------------
 
@@ -1654,14 +1587,10 @@ func _on_run_ended() -> void:
 	_pause_btn.text   = ""
 	_pause_bar_icon.show()
 	_show_pause_banner(false)
-	_run_over_overlay.visible = true
 	get_tree().paused = true
-	# After a brief INFESTED! flash, replace the overlay with the hub screen.
-	get_tree().create_timer(1.5).timeout.connect(func() -> void:
-		_run_over_overlay.visible = false
-		var hub: Node = load("res://ui/HubScreen.gd").new()
-		get_tree().root.add_child(hub)
-	)
+	# Open the infested dialog immediately — no interstitial overlay.
+	var hub: Node = load("res://ui/HubScreen.gd").new()
+	get_tree().root.add_child(hub)
 
 
 func _on_restart_pressed() -> void:
