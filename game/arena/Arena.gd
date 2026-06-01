@@ -212,7 +212,7 @@ var _shake_axis:   Vector2 = Vector2.ZERO   # random unit vector for vibration d
 
 const SHAKE_DURATION: float = 0.20    # total vibration time in seconds
 const SHAKE_FREQ:     float = 40.0    # oscillations per second (cycles/s)
-const SHAKE_MAG:      float = 0.00003 # peak displacement in camera h_offset units
+const SHAKE_MAG:      float = 0.000006 # calibrated: 0.00003 produced ~2.5 cells; target 0.3–0.8
 var _followed_enemy:        Node3D   = null  # non-null while enemy-follow mode is active
 var _enemy_stats_panel:    Node     = null  # EnemyStatsPanel instance
 var _floor_mi:           MeshInstance3D = null  # floor mesh; material_override swapped on zoom
