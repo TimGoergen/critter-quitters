@@ -101,6 +101,9 @@ func _build_ui() -> void:
 	title.add_theme_font_override("font", UIFonts.header())
 	title.add_theme_font_size_override("font_size", 160)
 	title.add_theme_color_override("font_color", COLOR_TITLE)
+	title.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.85))
+	title.add_theme_constant_override("shadow_offset_x", 4)
+	title.add_theme_constant_override("shadow_offset_y", 4)
 	title.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(title)
 	y += 148.0
@@ -118,27 +121,13 @@ func _build_ui() -> void:
 	panel.add_child(wave_lbl)
 	y += 58.0
 
-	# "Service Fees" descriptor — white, larger text, immediately below Wave X.
-	var sf_desc_lbl := Label.new()
-	sf_desc_lbl.text                 = "Service Fees"
-	sf_desc_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	sf_desc_lbl.position             = Vector2(PAD, y)
-	sf_desc_lbl.size                 = Vector2(inner_w, 50.0)
-	sf_desc_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	sf_desc_lbl.add_theme_font_size_override("font_size", 40)
-	sf_desc_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
-	sf_desc_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(sf_desc_lbl)
-	y += 54.0
-
-	# Icon + balance row — centred in the panel.
-	# Icon and font doubled from their previous sizes.
-	# Balance text format: "<total>" or "<total>  +<earned>" when fees were earned.
+	# Single row: "Service Fees"  [bill icon]  [balance number]
+	# All three elements share one HBoxContainer, centred horizontally.
 	var sf_row := HBoxContainer.new()
 	sf_row.position    = Vector2(PAD, y)
 	sf_row.size        = Vector2(inner_w, 148.0)
 	sf_row.alignment   = BoxContainer.ALIGNMENT_CENTER
-	sf_row.add_theme_constant_override("separation", 16)
+	sf_row.add_theme_constant_override("separation", 24)
 	sf_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(sf_row)
 
@@ -146,19 +135,19 @@ func _build_ui() -> void:
 	sf_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
 	sf_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	sf_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	sf_icon.custom_minimum_size = Vector2(196, 128)   # doubled from 98×64
+	sf_icon.custom_minimum_size = Vector2(196, 128)
 	sf_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	sf_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sf_row.add_child(sf_icon)
 
 	var earned: int = GameState.service_fees_last_run
 	_sf_balance_lbl = Label.new()
-	_sf_balance_lbl.text = _format_sf_label(GameState.service_fees, earned)
-	_sf_balance_lbl.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
+	_sf_balance_lbl.text                = _format_sf_label(GameState.service_fees, earned)
+	_sf_balance_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_sf_balance_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_sf_balance_lbl.add_theme_font_size_override("font_size", 112)   # doubled from 56
+	_sf_balance_lbl.add_theme_font_size_override("font_size", 112)
 	_sf_balance_lbl.add_theme_color_override("font_color", COLOR_GOLD)
-	_sf_balance_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	_sf_balance_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sf_row.add_child(_sf_balance_lbl)
 	y += 155.0
 

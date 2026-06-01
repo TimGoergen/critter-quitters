@@ -140,6 +140,7 @@ func _build_card() -> void:
 	_tier_lbl.text                 = _upgrade_data.get("tier_label", TIER_NAMES[tier] + " UPGRADE")
 	_tier_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	_tier_lbl.clip_text            = true
 	_tier_lbl.add_theme_color_override("font_color", tier_color)
 	_tier_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	_tier_lbl.add_theme_font_size_override("font_size", roundi(24.0 * font_scale))
@@ -161,6 +162,7 @@ func _build_card() -> void:
 	_stat_lbl.text                 = _upgrade_data.get("stat_name", "")
 	_stat_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_stat_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_stat_lbl.clip_text            = true
 	_stat_lbl.add_theme_color_override("font_color", tier_color)
 	_stat_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	_stat_lbl.add_theme_font_size_override("font_size", roundi(30.0 * font_scale))
