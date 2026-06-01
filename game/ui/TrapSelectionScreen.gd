@@ -176,10 +176,10 @@ func _build_screen() -> void:
 	_start_btn.disabled     = true
 	_start_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	_start_btn.pressed.connect(_on_start_pressed)
-	_start_btn.position = Vector2((1280.0 - 280.0) * 0.5, card_y + CARD_H + 18.0)
+	_start_btn.position = Vector2((1280.0 - 392.0) * 0.5, card_y + CARD_H + 8.0)
 	# store offer count for use in _on_card_toggled
 	_offered_count = offer
-	_start_btn.size     = Vector2(280.0, 54.0)
+	_start_btn.size     = Vector2(392.0, 76.0)
 	add_child(_start_btn)
 
 
@@ -309,6 +309,7 @@ func _build_trap_card(trap_type: int) -> UpgradeCard:
 	var card := UpgradeCard.new()
 	card.toggleable   = true
 	card.custom_color = Trap.STATS[trap_type].get("color", Color.WHITE)
+	card.font_scale   = 0.65   # reduce by 35% — gear cards are read at a glance, not studied
 	card.setup(data)
 	return card
 
@@ -328,6 +329,7 @@ func _build_boost_card(boost_type: int) -> UpgradeCard:
 	var card := UpgradeCard.new()
 	card.toggleable   = true
 	card.custom_color = BoostUnit.GLOW_COLORS[boost_type]
+	card.font_scale   = 0.65
 	card.setup(data)
 	return card
 
@@ -393,7 +395,7 @@ func _make_start_button() -> Button:
 	var btn := Button.new()
 	btn.text       = ""
 	btn.focus_mode = Control.FOCUS_NONE
-	btn.custom_minimum_size = Vector2(280.0, 54.0)
+	btn.custom_minimum_size = Vector2(392.0, 76.0)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	_apply_green_btn_style(btn)
 
@@ -406,7 +408,7 @@ func _make_start_button() -> Button:
 
 	var icon := TextureRect.new()
 	icon.texture             = load("res://assets/uninfested.png") as Texture2D
-	icon.custom_minimum_size = Vector2(32, 32)
+	icon.custom_minimum_size = Vector2(45, 45)
 	icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
@@ -417,7 +419,7 @@ func _make_start_button() -> Button:
 	lbl.text                = "Start"
 	lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_font_size_override("font_size", 31)
 	lbl.add_theme_color_override("font_color", Color(0.90, 0.90, 0.90, 1.0))
 	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	row.add_child(lbl)
