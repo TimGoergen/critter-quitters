@@ -33,8 +33,8 @@ signal loadout_selected(trap_types: Array[int], boost_types: Array[int])
 # Layout constants — match LevelUpScreen for visual consistency
 # ---------------------------------------------------------------------------
 
-const CARD_W:   float = 282.0
-const CARD_H:   float = 315.0
+const CARD_W:   float = 226.0
+const CARD_H:   float = 252.0
 const CARD_GAP: float = 20.0
 
 ## Base offer and pick counts — scaled by the Wider Selection permanent upgrade.

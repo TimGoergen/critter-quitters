@@ -338,7 +338,7 @@ class _CardFrame extends Control:
 			queue_redraw()
 
 	const SELECTION_COLOR:  Color = Color(1.0, 0.80, 0.10, 1.0)   # gold
-	const SELECTION_MARGIN: float = 12.0                           # px outside card edge
+	const SELECTION_MARGIN: float = 8.0                           # px outside card edge
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_RESIZED:
