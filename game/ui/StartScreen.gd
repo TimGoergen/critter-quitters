@@ -148,7 +148,7 @@ func _build_ui() -> void:
 	# Start Buggin' and Bug Out are the primary player actions (25% wide each).
 	# Start in Dev Mode is a narrower secondary button (17% wide) on the right.
 	# Layout: [0.14 ── 0.39] [0.41 ── 0.66] [0.68 ── 0.85] — centred around 0.495.
-	_start_btn = _make_icon_button("Start Buggin'", "res://assets/uninfested.png", true)
+	_start_btn = _make_icon_button("Start New Service Contract", "res://assets/uninfested.png", true)
 	_start_btn.anchor_left   = 0.14
 	_start_btn.anchor_right  = 0.39
 	_start_btn.anchor_top    = 0.80
@@ -156,7 +156,7 @@ func _build_ui() -> void:
 	_start_btn.pressed.connect(_on_start_pressed)
 	add_child(_start_btn)
 
-	_quit_btn = _make_icon_button("Bug Out", "res://assets/infestation_level.png", false)
+	_quit_btn = _make_icon_button("Exit", "res://assets/infestation_level.png", false)
 	_quit_btn.anchor_left   = 0.41
 	_quit_btn.anchor_right  = 0.66
 	_quit_btn.anchor_top    = 0.80

@@ -70,7 +70,7 @@ func _build_ui() -> void:
 	# Large centred panel — roughly 2× the original 560×340 size, capped to fit
 	# the 1280×600 mobile viewport with comfortable top/bottom margins.
 	const PW: float = 1200.0
-	const PH: float = 480.0
+	const PH: float = 530.0
 	var panel_x := (1280.0 - PW) * 0.5
 	var panel_y := (600.0  - PH) * 0.5
 
@@ -86,13 +86,13 @@ func _build_ui() -> void:
 	title.text                 = "INFESTED!"
 	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	title.position             = Vector2(PAD, y)
-	title.size                 = Vector2(inner_w, 90.0)
+	title.size                 = Vector2(inner_w, 140.0)
 	title.add_theme_font_override("font", UIFonts.header())
-	title.add_theme_font_size_override("font_size", 108)
+	title.add_theme_font_size_override("font_size", 160)
 	title.add_theme_color_override("font_color", COLOR_TITLE)
 	title.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(title)
-	y += 98.0
+	y += 148.0
 
 	# Wave reached — font doubled from 22 to 44.
 	var wave_lbl := Label.new()
@@ -157,7 +157,7 @@ func _build_ui() -> void:
 	const BTN_GAP: float = 14.0
 	const BTN_W: float   = (PW - PAD * 2.0 - BTN_GAP * 2.0) / 3.0
 
-	var bugup_btn := _make_button("Bug-Up!", COLOR_BTN_GOLD, COLOR_BTN_GOLD_HOVER,
+	var bugup_btn := _make_button("Company Upgrades", COLOR_BTN_GOLD, COLOR_BTN_GOLD_HOVER,
 			COLOR_BTN_GOLD_PRESS, COLOR_BTN_GOLD_BORDER)
 	bugup_btn.position = Vector2(PAD, y)
 	bugup_btn.size     = Vector2(BTN_W, BTN_H)
