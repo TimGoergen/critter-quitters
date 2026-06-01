@@ -1219,21 +1219,26 @@ func spawn_enemy_at_grid_position(grid_pos: Vector2i, enemy_type: Enemy.EnemyTyp
 
 
 ## Triggers a brief camera shudder — a tactile signal that the infestation bar
-## just ticked up.  The camera snaps to a displaced position instantly then
-## returns to centre over 60 ms with an ease-out, giving a sharp physical-impact
-## feel.  Direction is randomised so repeated escapes feel distinct.
+## just ticked up.  Displacement is intentionally tiny so the effect is felt
+## rather than seen.  Direction is randomised so repeated escapes feel distinct.
 func _start_exit_shake() -> void:
 	var angle := randf() * TAU
 	var dir   := Vector2(cos(angle), sin(angle))
-	const MAG: float = 0.10   # world units; slightly larger to compensate for shorter duration
+	const MAG: float = 0.018   # very small world-unit displacement
 
 	if _shake_tween != null and _shake_tween.is_valid():
 		_shake_tween.kill()
 
-	_shake_offset = dir * MAG   # instant displacement — no wind-up
+	_shake_offset = dir * MAG
 	_shake_tween  = create_tween()
 	_shake_tween.tween_property(self, "_shake_offset", Vector2.ZERO, 0.06) \
 		.set_ease(Tween.EASE_OUT).set_trans(Tween.TRANS_SINE)
+	# Explicitly zero and refresh once the tween completes so the camera
+	# returns to exactly its original position with no floating-point residual.
+	_shake_tween.tween_callback(func() -> void:
+		_shake_offset = Vector2.ZERO
+		_apply_pan(_pan_world_pos)
+	)
 
 
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
