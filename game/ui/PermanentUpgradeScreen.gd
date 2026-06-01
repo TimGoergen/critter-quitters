@@ -19,7 +19,7 @@ const UIFonts = preload("res://ui/UIFonts.gd")
 # Colours
 # ---------------------------------------------------------------------------
 
-const COLOR_PANEL      := Color(0.02, 0.10, 0.01, 0.96)   # dark green background
+const COLOR_PANEL      := Color(0.02, 0.10, 0.01, 1.0)   # dark green background, fully opaque
 const COLOR_BORDER     := Color(0.32, 0.32, 0.38, 1.0)
 const COLOR_DIVIDER    := Color(0.20, 0.20, 0.24, 1.0)
 const COLOR_HEADER     := Color(1.00, 0.82, 0.10, 1.0)   # gold
@@ -83,7 +83,7 @@ func _ready() -> void:
 func _build_ui() -> void:
 	# Full-screen dim.
 	var dim := ColorRect.new()
-	dim.color        = Color(0.0, 0.0, 0.0, 0.75)
+	dim.color        = Color(0.02, 0.10, 0.01, 1.0)   # fully opaque — matches COLOR_PANEL
 	dim.process_mode = Node.PROCESS_MODE_ALWAYS
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
