@@ -202,6 +202,12 @@ var _v_center_offset_px:   float     = 0.0   # arena-zone vertical centre minus 
 var _pan_world_pos:         Vector2  = Vector2.ZERO   # current camera XZ pan offset (world units)
 var _arena_world_half:      float    = 0.0   # half the grid world width (X); used for pan clamping
 var _arena_world_half_z:    float    = 0.0   # half the grid world height (Z); used for pan clamping
+
+# Camera shake — a brief shudder triggered when a pest reaches the exit.
+# _shake_offset is added on top of the normal pan offset in _apply_pan.
+# The tween animates the offset through a few oscillations then back to zero.
+var _shake_offset: Vector2 = Vector2.ZERO
+var _shake_tween:  Tween   = null
 var _followed_enemy:        Node3D   = null  # non-null while enemy-follow mode is active
 var _enemy_stats_panel:    Node     = null  # EnemyStatsPanel instance
 var _floor_mi:           MeshInstance3D = null  # floor mesh; material_override swapped on zoom
@@ -1212,6 +1218,24 @@ func spawn_enemy_at_grid_position(grid_pos: Vector2i, enemy_type: Enemy.EnemyTyp
 	_spawn_enemy(path, enemy_type)
 
 
+## Triggers a brief camera shudder — a tactile signal that the infestation bar
+## just ticked up.  Three rapid oscillations over ~0.23 seconds, damping to zero.
+## Direction is randomised so repeated escapes feel distinct.
+func _start_exit_shake() -> void:
+	var angle := randf() * TAU
+	var dir   := Vector2(cos(angle), sin(angle))
+	const MAG: float = 0.09   # world units; noticeable but not jarring at both zoom levels
+
+	if _shake_tween != null and _shake_tween.is_valid():
+		_shake_tween.kill()
+
+	_shake_tween = create_tween()
+	_shake_tween.tween_property(self, "_shake_offset",  dir * MAG,        0.04)
+	_shake_tween.tween_property(self, "_shake_offset", -dir * MAG * 0.55, 0.06)
+	_shake_tween.tween_property(self, "_shake_offset",  dir * MAG * 0.25, 0.05)
+	_shake_tween.tween_property(self, "_shake_offset",  Vector2.ZERO,     0.08)
+
+
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
 	# Air Freshener Boosts may absorb a fraction of the infestation — pass the full
 	# amount through each Boost in sequence, with each returning its unabsorbed remainder.
@@ -1220,6 +1244,7 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 		if is_instance_valid(boost):
 			infestation = boost.absorb_infestation(infestation, enemy.global_position)
 	GameState.add_infestation(infestation)
+	_start_exit_shake()
 	# Mouse steals Bug Bucks from the player in addition to adding infestation.
 	if enemy.get_enemy_type() == Enemy.EnemyType.MOUSE:
 		GameState.add_bug_bucks(-enemy.get_bug_bucks_steal())
@@ -2624,6 +2649,11 @@ func _process(delta: float) -> void:
 		var p := _followed_enemy.global_position
 		_apply_pan(Vector2(p.x, p.z))
 
+	# When a camera shake is active and the followed-enemy path isn't already
+	# calling _apply_pan every frame, refresh manually so the tween is visible.
+	if _shake_offset != Vector2.ZERO and _followed_enemy == null:
+		_apply_pan(_pan_world_pos)
+
 	# Pan toward whichever arena edge the drag ghost is approaching.
 	if _hud_drag_active and _zoom_state == ZoomState.ZOOMED_IN:
 		_apply_edge_scroll(delta)
@@ -2663,10 +2693,10 @@ func _apply_pan(pos: Vector2) -> void:
 	var cx := clampf(pos.x, -_arena_world_half   + visible_half_w, _arena_world_half   - visible_half_w)
 	var cz := clampf(pos.y, -_arena_world_half_z + visible_half_h, _arena_world_half_z - visible_half_h)
 	_pan_world_pos   = Vector2(cx, cz)
-	_camera.h_offset = _camera_base_h_offset + cx
+	_camera.h_offset = _camera_base_h_offset + cx + _shake_offset.x
 	# _v_center_offset_px is converted to world units using the CURRENT camera size
 	# so the pixel-space centering stays correct at both overview and zoomed-in levels.
-	_camera.v_offset = _v_center_offset_px * world_per_px - cz
+	_camera.v_offset = _v_center_offset_px * world_per_px - cz + _shake_offset.y
 
 
 ## Scrolls the camera based on how far the drag ghost has entered the edge bands.

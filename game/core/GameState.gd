@@ -123,64 +123,105 @@ const STARTING_BUG_BUCKS: int = 100
 const INFESTATION_MAX: int = 20
 
 ## All permanent upgrades available for purchase with Service Fees.
-## tier_costs: SF cost to buy tier 1, then tier 2 (independent, not cumulative).
-## tier_effects: short label shown on each tier's purchase button.
+## Each upgrade line has 10 tiers.  tier_costs[i] is the SF cost to buy tier i+1.
+## tier_effects[i] is the short label shown on the buy button for that tier.
+## All numeric values are playtesting placeholders — scale linearly per tier.
 const PERMANENT_UPGRADE_DEFS: Array = [
 	# --- Equipment ---
 	{
 		"id": "reinforced_mechanisms", "category": "Equipment",
 		"name": "Reinforced Mechanisms",
 		"desc": "All traps start each run with bonus base damage.",
-		"tier_costs": [4, 8], "tier_effects": ["+15% Damage", "+30% Damage"],
+		"tier_costs":   [2, 3, 4, 5, 6, 7, 9, 11, 14, 18],
+		"tier_effects": [
+			"+5% Damage",  "+10% Damage", "+15% Damage", "+20% Damage", "+25% Damage",
+			"+30% Damage", "+35% Damage", "+40% Damage", "+45% Damage", "+50% Damage",
+		],
 	},
 	{
 		"id": "extended_range", "category": "Equipment",
 		"name": "Extended Range",
 		"desc": "All traps start each run with a wider targeting radius.",
-		"tier_costs": [3, 6], "tier_effects": ["+10% Range", "+20% Range"],
+		"tier_costs":   [2, 2, 3, 4, 5, 5, 6, 7, 9, 12],
+		"tier_effects": [
+			"+4% Range",  "+8% Range",  "+12% Range", "+16% Range", "+20% Range",
+			"+24% Range", "+28% Range", "+32% Range", "+36% Range", "+40% Range",
+		],
 	},
 	{
 		"id": "tuned_triggers", "category": "Equipment",
 		"name": "Tuned Triggers",
 		"desc": "Active traps start each run firing more often.",
-		"tier_costs": [3, 6], "tier_effects": ["+10% Fire Rate", "+20% Fire Rate"],
+		"tier_costs":   [2, 2, 3, 4, 5, 5, 6, 7, 9, 12],
+		"tier_effects": [
+			"+4% Fire Rate",  "+8% Fire Rate",  "+12% Fire Rate", "+16% Fire Rate", "+20% Fire Rate",
+			"+24% Fire Rate", "+28% Fire Rate", "+32% Fire Rate", "+36% Fire Rate", "+40% Fire Rate",
+		],
 	},
 	{
 		"id": "wider_selection", "category": "Equipment",
 		"name": "Wider Selection",
-		"desc": "Gear selection at run start offers more options.",
-		"tier_costs": [5, 10], "tier_effects": ["4 offered, pick 2", "4 offered, pick 3"],
+		"desc": "Gear selection at run start offers more options to choose from.",
+		"tier_costs":   [3, 4, 5, 6, 7, 8, 10, 12, 15, 20],
+		"tier_effects": [
+			"4 offered, pick 2", "4 offered, pick 3",
+			"5 offered, pick 3", "5 offered, pick 4",
+			"6 offered, pick 4", "6 offered, pick 5",
+			"7 offered, pick 5", "7 offered, pick 6",
+			"8 offered, pick 6", "8 offered, pick 7",
+		],
 	},
 	# --- Business ---
 	{
 		"id": "starting_capital", "category": "Business",
 		"name": "Starting Capital",
 		"desc": "Begin each run with more Bug Bucks.",
-		"tier_costs": [4, 8], "tier_effects": ["+25 Bug Bucks", "+50 Bug Bucks"],
+		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
+		"tier_effects": [
+			"+25 Bug Bucks",  "+50 Bug Bucks",  "+75 Bug Bucks",  "+100 Bug Bucks", "+125 Bug Bucks",
+			"+150 Bug Bucks", "+175 Bug Bucks", "+200 Bug Bucks", "+225 Bug Bucks", "+250 Bug Bucks",
+		],
 	},
 	{
 		"id": "hazard_insurance", "category": "Business",
 		"name": "Hazard Insurance",
 		"desc": "The infestation threshold is higher before the run ends.",
-		"tier_costs": [5, 10], "tier_effects": ["+10% Threshold", "+20% Threshold"],
+		"tier_costs":   [3, 4, 5, 6, 7, 8, 10, 12, 15, 20],
+		"tier_effects": [
+			"+5% Threshold",  "+10% Threshold", "+15% Threshold", "+20% Threshold", "+25% Threshold",
+			"+30% Threshold", "+35% Threshold", "+40% Threshold", "+45% Threshold", "+50% Threshold",
+		],
 	},
 	{
 		"id": "salvage_value", "category": "Business",
 		"name": "Salvage Value",
 		"desc": "Selling placed units returns a higher refund.",
-		"tier_costs": [4, 8], "tier_effects": ["+5% Sell Value", "+10% Sell Value"],
+		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 9, 11, 14],
+		"tier_effects": [
+			"+3% Sell Value",  "+6% Sell Value",  "+9% Sell Value",  "+12% Sell Value", "+15% Sell Value",
+			"+18% Sell Value", "+21% Sell Value", "+24% Sell Value", "+27% Sell Value", "+30% Sell Value",
+		],
 	},
 	{
 		"id": "bulk_discount", "category": "Business",
 		"name": "Bulk Discount",
 		"desc": "All Bug Bucks upgrade costs are reduced.",
-		"tier_costs": [5, 10], "tier_effects": ["−5% Upgrade Costs", "−10% Upgrade Costs"],
+		"tier_costs":   [3, 4, 5, 6, 7, 8, 9, 10, 12, 15],
+		"tier_effects": [
+			"−3% Upgrade Costs",  "−6% Upgrade Costs",  "−9% Upgrade Costs",  "−12% Upgrade Costs",
+			"−15% Upgrade Costs", "−18% Upgrade Costs", "−21% Upgrade Costs", "−24% Upgrade Costs",
+			"−27% Upgrade Costs", "−30% Upgrade Costs",
+		],
 	},
 	{
 		"id": "field_experience", "category": "Business",
 		"name": "Field Experience",
 		"desc": "Earn more XP per kill, reaching level-ups faster.",
-		"tier_costs": [4, 8], "tier_effects": ["+15% XP per Kill", "+30% XP per Kill"],
+		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
+		"tier_effects": [
+			"+10% XP per Kill", "+20% XP per Kill", "+30% XP per Kill", "+40% XP per Kill",  "+50% XP per Kill",
+			"+60% XP per Kill", "+70% XP per Kill", "+80% XP per Kill", "+90% XP per Kill", "+100% XP per Kill",
+		],
 	},
 ]
 
@@ -605,10 +646,11 @@ func get_upgrade_tier(upgrade_id: String) -> int:
 ## Returns true if the player can afford the next tier of the given upgrade.
 func can_purchase_upgrade(upgrade_id: String) -> bool:
 	var tier := get_upgrade_tier(upgrade_id)
-	if tier >= 2:
-		return false
 	for def: Dictionary in PERMANENT_UPGRADE_DEFS:
 		if def["id"] == upgrade_id:
+			# Max tier is determined by how many cost entries the def has (10 for all lines).
+			if tier >= def["tier_costs"].size():
+				return false
 			return service_fees >= def["tier_costs"][tier]
 	return false
 
@@ -632,34 +674,37 @@ func purchase_upgrade(upgrade_id: String) -> bool:
 ## Applies all purchased permanent upgrade effects to run-scoped state.
 ## Called at the end of start_run() after all vars are reset to zero, so
 ## permanent bonuses form the baseline that campaign cards then stack on top of.
+##
+## All stats now scale linearly per tier (10 tiers max).
+## The multipliers below match the per-tier increments defined in PERMANENT_UPGRADE_DEFS.
 func _apply_permanent_upgrade_bonuses() -> void:
 	var t: int
 
 	t = permanent_upgrades.get("reinforced_mechanisms", 0)
-	global_damage_bonus    = ([0.0, 0.15, 0.30] as Array)[t]
+	global_damage_bonus    = t * 0.05   # +5% per tier → +50% at tier 10
 
 	t = permanent_upgrades.get("extended_range", 0)
-	global_range_bonus     = ([0.0, 0.10, 0.20] as Array)[t]
+	global_range_bonus     = t * 0.04   # +4% per tier → +40% at tier 10
 
 	t = permanent_upgrades.get("tuned_triggers", 0)
-	global_fire_rate_bonus = ([0.0, 0.10, 0.20] as Array)[t]
+	global_fire_rate_bonus = t * 0.04   # +4% per tier → +40% at tier 10
 
 	wider_selection_tier   = permanent_upgrades.get("wider_selection", 0)
 
 	t = permanent_upgrades.get("starting_capital", 0)
-	bug_bucks             += ([0, 25, 50] as Array)[t]
+	bug_bucks             += t * 25     # +25 BB per tier → +250 BB at tier 10
 
 	t = permanent_upgrades.get("hazard_insurance", 0)
-	infestation_max_bonus  = ([0.0, 0.10, 0.20] as Array)[t]
+	infestation_max_bonus  = t * 0.05   # +5% per tier → +50% at tier 10
 
 	t = permanent_upgrades.get("salvage_value", 0)
-	sell_value_bonus       = ([0.0, 0.05, 0.10] as Array)[t]
+	sell_value_bonus       = t * 0.03   # +3% per tier → +30% at tier 10
 
 	t = permanent_upgrades.get("bulk_discount", 0)
-	upgrade_cost_discount  = ([0.0, 0.05, 0.10] as Array)[t]
+	upgrade_cost_discount  = minf(t * 0.03, 0.80)  # +3% per tier, hard cap at 80%
 
 	t = permanent_upgrades.get("field_experience", 0)
-	global_xp_bonus        = ([0.0, 0.15, 0.30] as Array)[t]
+	global_xp_bonus        = t * 0.10   # +10% per tier → +100% at tier 10
 
 
 func _save_persistent() -> void:

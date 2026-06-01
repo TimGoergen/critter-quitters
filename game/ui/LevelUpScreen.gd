@@ -236,24 +236,50 @@ func _build_screen(new_level: int) -> void:
 # ---------------------------------------------------------------------------
 
 ## Generates 3 unique upgrade card data Dictionaries.
-## One slot is always reserved for an unlock card when locked units exist;
-## the remaining slots are equipment or campaign cards. All three positions
-## are shuffled so the unlock card doesn't always appear in the same spot.
+##
+## Unlock cards (new trap or boost) appear with a probability that starts low
+## and decreases as the player already has more items unlocked.  This means
+## they are a pleasant surprise rather than a guaranteed outcome every level-up.
+##
+## The probability per slot is:
+##   BASE_UNLOCK_CHANCE × (locked_count / TOTAL_UNLOCKABLE)
+## At maximum lock (all 11 items locked) this equals BASE_UNLOCK_CHANCE (~25%).
+## As the player accumulates unlocks the chance falls proportionally toward zero.
 func _generate_cards() -> Array:
-	var result: Array = []
+	var result:   Array = []
 	var used_ids: Array = []
 
-	# Always try to fill one slot with an unlock card first.
-	var unlock_tier := _roll_tier()
-	var unlock_card := _build_unlock_card(unlock_tier, used_ids)
-	if not unlock_card.is_empty():
-		result.append(unlock_card)
-		used_ids.append(unlock_card.get("id", ""))
+	# Count how many traps and boosts are still locked for this run.
+	var locked_traps: int = 0
+	for t in range(6):
+		if t not in GameState.unlocked_trap_types:
+			locked_traps += 1
+	var locked_boosts: int = 0
+	for b in range(5):
+		if b not in GameState.unlocked_boost_types:
+			locked_boosts += 1
+	var locked_total: int = locked_traps + locked_boosts
 
-	# Fill remaining slots with equipment or campaign cards.
+	# 6 trap types + 5 boost types = 11 total unlockable items.
+	const TOTAL_UNLOCKABLE:    int   = 11
+	const BASE_UNLOCK_CHANCE: float = 0.25
+
+	var unlock_chance: float = BASE_UNLOCK_CHANCE * float(locked_total) / float(TOTAL_UNLOCKABLE)
+
 	while result.size() < 3:
 		var tier := _roll_tier()
-		var card := _build_equipment_or_campaign_card(tier, used_ids)
+		var card:  Dictionary
+
+		if locked_total > 0 and randf() < unlock_chance:
+			var unlock_card := _build_unlock_card(tier, used_ids)
+			# Fall back to a stat card if no distinct unlock candidate could be found.
+			if not unlock_card.is_empty():
+				card = unlock_card
+			else:
+				card = _build_equipment_or_campaign_card(tier, used_ids)
+		else:
+			card = _build_equipment_or_campaign_card(tier, used_ids)
+
 		result.append(card)
 		used_ids.append(card.get("id", ""))
 

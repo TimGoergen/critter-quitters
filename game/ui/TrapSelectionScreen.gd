@@ -49,11 +49,17 @@ const TIER_ONE_TRAP_TYPES: Array[int] = [0, 2]
 const BOOST_SLOT_CHANCE: float = 0.20
 
 
+## Returns how many trap/boost cards to display at run start.
+## Wider Selection tiers 1-10 progressively increase the offer count (3→8)
+## and pick count (2→7) in paired steps: each even tier adds one more pick,
+## each odd tier adds one more offer.
 func _offer_count() -> int:
-	return 4 if GameState.wider_selection_tier >= 1 else BASE_OFFER_COUNT
+	var t := GameState.wider_selection_tier
+	return 3 + (t + 1) / 2   # t=0→3, t=1→4, t=2→4, t=3→5, t=4→5, … t=9→8, t=10→8
 
 func _pick_count() -> int:
-	return 3 if GameState.wider_selection_tier >= 2 else BASE_PICK_COUNT
+	var t := GameState.wider_selection_tier
+	return 2 + t / 2   # t=0→2, t=1→2, t=2→3, t=3→3, t=4→4, … t=9→6, t=10→7
 
 
 # ---------------------------------------------------------------------------

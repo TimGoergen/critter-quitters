@@ -51,14 +51,16 @@ const COLOR_DONE_BORDER := Color(0.22, 0.60, 0.04, 1.0)
 const ROW_H:     float = 72.0   # height of each upgrade row
 const COL_W:     float = 520.0  # width of each column
 const COL_GAP:   float = 24.0
-const PANEL_PAD: float = 18.0
+const PANEL_PAD: float = 14.0   # reduced to keep the taller content within the 600 px viewport
 
 # Upgrade section header height.
-const SEC_H: float = 28.0
+const SEC_H: float = 24.0
 
-# Button dimensions within each row.
-const BTN_W: float = 100.0
-const BTN_H: float = 44.0
+# Buy button dimensions within each row.
+# BTN_H is 60 so the doubled service-fee icon (30 px) and font (26 pt) fit
+# comfortably with the 6 px content margin built into the button style.
+const BTN_W: float = 120.0
+const BTN_H: float = 60.0
 
 
 # ---------------------------------------------------------------------------
@@ -98,12 +100,14 @@ func _build_ui() -> void:
 			biz_defs.append(def)
 
 	# Panel dimensions — sized to fit the taller column (Business: 5 items).
+	# header_h and inner_gap are reduced so the panel stays within 575 virtual px
+	# (the effective viewport height on a Pixel 10 Pro XL in landscape).
 	var max_rows: int = maxi(equip_defs.size(), biz_defs.size())
 	var content_h: float = SEC_H + float(max_rows) * ROW_H + float(max_rows - 1) * 6.0
 	var panel_w: float   = COL_W * 2.0 + COL_GAP + PANEL_PAD * 2.0
-	var header_h: float  = 52.0   # SF balance row
+	var header_h: float  = 44.0   # SF balance row
 	var footer_h: float  = 56.0   # Done button row
-	var panel_h: float   = PANEL_PAD + header_h + 12.0 + content_h + 12.0 + footer_h + PANEL_PAD
+	var panel_h: float   = PANEL_PAD + header_h + 8.0 + content_h + 8.0 + footer_h + PANEL_PAD
 
 	var panel_x := (1280.0 - panel_w) * 0.5
 	var panel_y := (600.0  - panel_h) * 0.5
@@ -151,7 +155,7 @@ func _build_ui() -> void:
 	_sf_lbl.add_theme_color_override("font_color", COLOR_HEADER)
 	_sf_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	sf_hdr_row.add_child(_sf_lbl)
-	y += header_h + 12.0
+	y += header_h + 8.0
 
 	# Divider below header.
 	var hdr_div := ColorRect.new()
@@ -176,7 +180,7 @@ func _build_ui() -> void:
 	col_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(col_div)
 
-	y += content_h + 12.0
+	y += content_h + 8.0
 
 	# --- Footer divider + Done button ---
 	var ftr_div := ColorRect.new()
@@ -238,7 +242,14 @@ func _build_column(parent: Control, defs: Array,
 		row_y += ROW_H + 6.0
 
 
-## Builds one upgrade row: name + dots | effect label | cost | buy button.
+## Builds one upgrade row: name | star-level panel | effect label | description | buy button.
+##
+## The star panel shows a ★ character and the current tier number (0–10).
+## The star is gold for tier > 0, dark gray for tier 0.
+## The panel border is bright gold at tier 10 (max), dark gray otherwise.
+##
+## The buy button cost content (SF icon + number) is approximately twice the
+## size of what was used in the old two-tier design for better mobile readability.
 func _build_upgrade_row(parent: Control, def: Dictionary,
 		rx: float, ry: float) -> void:
 	var row := Control.new()
@@ -251,11 +262,11 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	var tier: int          = GameState.get_upgrade_tier(upgrade_id)
 	var max_tiers: int     = def["tier_costs"].size()
 
-	# Name label.
+	# --- Name label ---
 	var name_lbl := Label.new()
 	name_lbl.text         = def["name"]
-	name_lbl.position     = Vector2(0.0, 2.0)
-	name_lbl.size         = Vector2(COL_W - BTN_W - 10.0, 24.0)
+	name_lbl.position     = Vector2(0.0, 1.0)
+	name_lbl.size         = Vector2(COL_W - BTN_W - 8.0, 22.0)
 	name_lbl.clip_text    = true
 	name_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	name_lbl.add_theme_font_size_override("font_size", 18)
@@ -263,21 +274,37 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	name_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(name_lbl)
 
-	# Tier dots — one filled circle per purchased tier, one empty per remaining.
-	var dots_lbl := Label.new()
-	var dots_text := ""
-	for i in max_tiers:
-		dots_text += ("●" if i < tier else "○") + (" " if i < max_tiers - 1 else "")
-	dots_lbl.text         = dots_text
-	dots_lbl.position     = Vector2(0.0, 26.0)
-	dots_lbl.size         = Vector2(60.0, 20.0)
-	dots_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	dots_lbl.add_theme_font_size_override("font_size", 16)
-	dots_lbl.add_theme_color_override("font_color", COLOR_DOT_ON if tier > 0 else COLOR_DOT_OFF)
-	dots_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	row.add_child(dots_lbl)
+	# --- Star-level panel (replaces tier dots) ---
+	# A small bordered box containing "★ N" where N is the tier (0–10).
+	# Border turns gold when the upgrade is fully maxed (tier == max_tiers).
+	var star_panel := Panel.new()
+	star_panel.position     = Vector2(0.0, 25.0)
+	star_panel.size         = Vector2(62.0, 24.0)
+	star_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var star_sty            := StyleBoxFlat.new()
+	star_sty.bg_color        = Color(0.04, 0.04, 0.06, 0.60)
+	# Gold border signals a fully-invested (tier 10) upgrade line.
+	star_sty.border_color    = COLOR_HEADER if tier >= max_tiers else COLOR_BORDER
+	star_sty.set_border_width_all(1)
+	star_sty.set_corner_radius_all(3)
+	star_panel.add_theme_stylebox_override("panel", star_sty)
+	row.add_child(star_panel)
 
-	# Effect label — shows the tier being unlocked, or "MAX" when complete.
+	var star_lbl := Label.new()
+	# U+2605 ★ filled-star character followed by the tier number.
+	star_lbl.text               = "★ %d" % tier
+	star_lbl.position           = Vector2(5.0, 3.0)
+	star_lbl.size               = Vector2(52.0, 18.0)
+	star_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	star_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	star_lbl.add_theme_font_size_override("font_size", 14)
+	# Gold when any tiers are purchased; dark gray at tier 0.
+	star_lbl.add_theme_color_override("font_color",
+		COLOR_HEADER if tier > 0 else COLOR_DOT_OFF)
+	star_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	star_panel.add_child(star_lbl)
+
+	# --- Effect label — what the next tier unlocks, or "MAX" ---
 	var effect_lbl := Label.new()
 	if tier >= max_tiers:
 		effect_lbl.text = "MAX"
@@ -285,43 +312,45 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	else:
 		effect_lbl.text = def["tier_effects"][tier]
 		effect_lbl.add_theme_color_override("font_color", COLOR_HEADER)
-	effect_lbl.position     = Vector2(62.0, 26.0)
-	effect_lbl.size         = Vector2(COL_W - BTN_W - 72.0, 20.0)
+	effect_lbl.position     = Vector2(68.0, 25.0)
+	effect_lbl.size         = Vector2(COL_W - BTN_W - 74.0, 24.0)
 	effect_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	effect_lbl.add_theme_font_size_override("font_size", 15)
+	effect_lbl.add_theme_font_size_override("font_size", 14)
 	effect_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(effect_lbl)
 
-	# Description.
+	# --- Description — bold and white for mobile readability ---
 	var desc_lbl := Label.new()
 	desc_lbl.text         = def["desc"]
-	desc_lbl.position     = Vector2(0.0, 48.0)
-	desc_lbl.size         = Vector2(COL_W - BTN_W - 10.0, 22.0)
+	desc_lbl.position     = Vector2(0.0, 50.0)
+	desc_lbl.size         = Vector2(COL_W - BTN_W - 8.0, 22.0)
 	desc_lbl.clip_text    = true
-	desc_lbl.add_theme_font_override("font", UIFonts.primary())
-	desc_lbl.add_theme_font_size_override("font_size", 13)
-	desc_lbl.add_theme_color_override("font_color", COLOR_DIM)
+	desc_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	desc_lbl.add_theme_font_size_override("font_size", 15)
+	desc_lbl.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(desc_lbl)
 
-	# Buy button — right-aligned in the row.
+	# --- Buy button — right-aligned in the row ---
 	var btn := Button.new()
 	btn.focus_mode   = Control.FOCUS_NONE
 	btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	btn.position     = Vector2(COL_W - BTN_W, (ROW_H - BTN_H) * 0.5)
 	btn.size         = Vector2(BTN_W, BTN_H)
 	btn.add_theme_font_override("font", UIFonts.primary_bold())
-	btn.add_theme_font_size_override("font_size", 17)
+	btn.add_theme_font_size_override("font_size", 26)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.pressed.connect(_on_buy_pressed.bind(upgrade_id))
 	row.add_child(btn)
 
-	# Cost content inside the button — icon + number, centred.
-	# The HBoxContainer fills the button face; the icon is hidden when "MAX" is shown.
+	# Cost content inside the button — SF icon + number, centred.
+	# Icon and font are approximately twice the size of the previous two-tier design
+	# so the cost is immediately legible on a phone-sized screen.
+	# The icon is hidden and "MAX" is shown when the upgrade is fully purchased.
 	var cost_row := HBoxContainer.new()
 	cost_row.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	cost_row.alignment   = BoxContainer.ALIGNMENT_CENTER
-	cost_row.add_theme_constant_override("separation", 3)
+	cost_row.alignment    = BoxContainer.ALIGNMENT_CENTER
+	cost_row.add_theme_constant_override("separation", 4)
 	cost_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	btn.add_child(cost_row)
 
@@ -329,7 +358,7 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	cost_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
 	cost_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	cost_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	cost_icon.custom_minimum_size = Vector2(23, 15)
+	cost_icon.custom_minimum_size = Vector2(46, 30)   # 2× the previous 23×15
 	cost_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_icon)
@@ -338,7 +367,7 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 	cost_lbl.vertical_alignment  = VERTICAL_ALIGNMENT_CENTER
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	cost_lbl.add_theme_font_size_override("font_size", 17)
+	cost_lbl.add_theme_font_size_override("font_size", 26)   # 2× the previous 13 pt
 	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
 
@@ -348,13 +377,14 @@ func _build_upgrade_row(parent: Control, def: Dictionary,
 ## Rebuilds all buy button states and cost labels from current GameState.
 func _refresh_all_buttons() -> void:
 	for entry: Dictionary in _buy_btns:
-		var upgrade_id: String   = entry["id"]
-		var btn: Button          = entry["btn"]
-		var cost_lbl: Label      = entry["cost_lbl"]
+		var upgrade_id: String     = entry["id"]
+		var btn: Button            = entry["btn"]
+		var cost_lbl: Label        = entry["cost_lbl"]
 		var cost_icon: TextureRect = entry["cost_icon"]
-		var tier: int            = GameState.get_upgrade_tier(upgrade_id)
-		var maxed: bool          = tier >= 2
-		var can_buy: bool        = GameState.can_purchase_upgrade(upgrade_id)
+		var def: Dictionary        = _def_for(upgrade_id)
+		var tier: int              = GameState.get_upgrade_tier(upgrade_id)
+		var maxed: bool            = tier >= def["tier_costs"].size()
+		var can_buy: bool          = GameState.can_purchase_upgrade(upgrade_id)
 
 		btn.disabled = maxed or not can_buy
 
@@ -365,13 +395,11 @@ func _refresh_all_buttons() -> void:
 			_apply_btn_style(btn, false, true)
 		elif can_buy:
 			cost_icon.visible = true
-			var def := _def_for(upgrade_id)
 			cost_lbl.text = "%d" % def["tier_costs"][tier]
 			cost_lbl.add_theme_color_override("font_color", COLOR_HEADER)
 			_apply_btn_style(btn, true, false)
 		else:
 			cost_icon.visible = true
-			var def := _def_for(upgrade_id)
 			cost_lbl.text = "%d" % def["tier_costs"][tier]
 			cost_lbl.add_theme_color_override("font_color", COLOR_DIM)
 			_apply_btn_style(btn, false, false)
