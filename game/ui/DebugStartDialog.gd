@@ -19,7 +19,7 @@ const DEFAULT_WAVE_SIZE:  int = 10
 ## the enemy-type selector (visible only when Static Enemies is on).
 ## The panel is fixed size — it never resizes after build.
 const PANEL_W: float = 820.0
-const PANEL_H: float = 380.0
+const PANEL_H: float = 432.0   # 380 + one ROW_H_CTRL (52) for the Service Fees row
 const PADDING: float = 24.0
 const COL_GAP: float = 24.0   # gap between the left and right columns
 
@@ -89,6 +89,7 @@ const ENEMY_TYPE_NAMES: Dictionary = {
 
 var _field_bucks:  LineEdit = null
 var _field_waves:  LineEdit = null
+var _field_sf:     LineEdit = null
 var _check_static: Button   = null   # toggle-mode button; text = "✓" when pressed
 var _panel_rect:   Rect2    = Rect2()
 
@@ -157,6 +158,12 @@ func _build_ui() -> void:
 
 	_field_waves = _add_field_row(bg, PADDING, y, LEFT_COL_W, ROW_H_CTRL,
 			"Wave Size", str(DEFAULT_WAVE_SIZE), 10, 1)
+	y += ROW_H_CTRL
+
+	# Service Fees — pre-filled with the current persistent balance so the
+	# playtest starts with whatever the player already has unless overridden.
+	_field_sf = _add_field_row(bg, PADDING, y, LEFT_COL_W, ROW_H_CTRL,
+			"Service Fees", str(GameState.service_fees), 10, 0)
 	y += ROW_H_CTRL
 
 	_add_divider(bg, y)
@@ -459,6 +466,12 @@ func _on_start_pressed() -> void:
 	var waves := int(_field_waves.text) if _field_waves.text.is_valid_int() else DEFAULT_WAVE_SIZE
 	bucks = maxi(bucks, 0)
 	waves = maxi(waves, 1)
+
+	# Apply the Service Fees override directly — it is persistent state, so
+	# setting it here lets the Permanent Upgrades screen reflect the playtest value.
+	var sf := int(_field_sf.text) if _field_sf.text.is_valid_int() else GameState.service_fees
+	GameState.service_fees = maxi(sf, 0)
+	GameState.service_fees_changed.emit(GameState.service_fees)
 
 	# Collect the checked enemy types — only relevant when static mode is on.
 	# An empty array passed to Arena means "use all types".
