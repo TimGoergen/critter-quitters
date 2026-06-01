@@ -207,15 +207,13 @@ func _on_resized() -> void:
 	var w  := size.x
 	var h  := size.y
 	var px := 10.0
-	var y  := 0.0
 
-	# Row 1: tier name — taller strip for 24 pt font.
-	y = 8.0
+	# Row 1: tier name strip — compact to reduce top padding.
 	if _tier_lbl:
-		_tier_lbl.position = Vector2(px + 6.0, y)
-		_tier_lbl.size     = Vector2(w - px * 2.0, 28.0)
+		_tier_lbl.position = Vector2(px + 6.0, 6.0)
+		_tier_lbl.size     = Vector2(w - px * 2.0, 22.0)
 
-	# Divider line.
+	# Divider line between tier strip and body.
 	var div: ColorRect = get_node_or_null("Divider")
 	if div == null:
 		div = ColorRect.new()
@@ -223,32 +221,28 @@ func _on_resized() -> void:
 		div.color        = Color(0.30, 0.30, 0.35, 1.0)
 		div.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		add_child(div)
-	div.position = Vector2(px, 40.0)
+	div.position = Vector2(px, 31.0)
 	div.size     = Vector2(w - px * 2.0, 1.0)
 
 	# Row 2: Title.
-	y = 46.0
 	if _title_lbl:
-		_title_lbl.position = Vector2(px, y)
-		_title_lbl.size     = Vector2(w - px * 2.0, 78.0)
+		_title_lbl.position = Vector2(px, 36.0)
+		_title_lbl.size     = Vector2(w - px * 2.0, 64.0)
 
-	# Row 3: Stat name.
-	y = 128.0
+	# Row 3: Stat name (equipment) or empty (campaign).
 	if _stat_lbl:
-		_stat_lbl.position = Vector2(px, y)
-		_stat_lbl.size     = Vector2(w - px * 2.0, 38.0)
+		_stat_lbl.position = Vector2(px, 104.0)
+		_stat_lbl.size     = Vector2(w - px * 2.0, 30.0)
 
 	# Row 4: Impact line.
-	y = 170.0
 	if _impact_lbl:
-		_impact_lbl.position = Vector2(px, y)
-		_impact_lbl.size     = Vector2(w - px * 2.0, 70.0)
+		_impact_lbl.position = Vector2(px, 138.0)
+		_impact_lbl.size     = Vector2(w - px * 2.0, 56.0)
 
-	# Row 5: Plain-text description — fills remaining card space.
-	y = 244.0
+	# Row 5: Plain-text description — fills remaining card space to the bottom.
 	if _plain_lbl:
-		_plain_lbl.position = Vector2(px, y)
-		_plain_lbl.size     = Vector2(w - px * 2.0, h - y - px)
+		_plain_lbl.position = Vector2(px, 198.0)
+		_plain_lbl.size     = Vector2(w - px * 2.0, h - 208.0)
 
 
 # ---------------------------------------------------------------------------
