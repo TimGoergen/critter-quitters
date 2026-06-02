@@ -21,6 +21,7 @@ const PermanentUpgradeScreen = preload("res://ui/PermanentUpgradeScreen.gd")
 
 const COLOR_TITLE   := Color(0.85, 0.10, 0.10, 1.0)   # red — matches INFESTED palette
 const COLOR_GOLD    := Color(1.00, 0.82, 0.10, 1.0)
+const COLOR_SILVER  := Color(0.75, 0.75, 0.80, 1.0)   # delta earned — subordinate to gold balance
 const COLOR_TEXT    := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_DIM     := Color(0.55, 0.55, 0.60, 1.0)
 const COLOR_PANEL   := Color(0.07, 0.07, 0.09, 0.94)
@@ -46,6 +47,7 @@ const COLOR_BTN_RED_PRESS  := Color(0.14, 0.01, 0.01, 1.0)
 const COLOR_BTN_RED_BORDER := Color(0.80, 0.15, 0.15, 1.0)
 
 var _sf_balance_lbl: Label = null
+var _sf_earned_lbl:  Label = null
 
 
 # ---------------------------------------------------------------------------
@@ -124,8 +126,10 @@ func _build_ui() -> void:
 	panel.add_child(wave_lbl)
 	y += 58.0
 
-	# Single row: "Service Fees"  [bill icon]  [balance number]
-	# All three elements share one HBoxContainer, centred horizontally.
+	# Currency row: [icon]  [balance]  [+earned]
+	# Icon and balance are one visual unit (gold). The delta sits to the right
+	# at 65% the balance size in silver — clearly subordinate context, not the headline.
+	# The delta label is hidden entirely when nothing was earned this run.
 	var sf_row := HBoxContainer.new()
 	sf_row.position    = Vector2(PAD, y)
 	sf_row.size        = Vector2(inner_w, 148.0)
@@ -138,14 +142,13 @@ func _build_ui() -> void:
 	sf_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
 	sf_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	sf_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	sf_icon.custom_minimum_size = Vector2(196, 128)
+	sf_icon.custom_minimum_size = Vector2(196, 128)   # sized to match 112pt cap-height
 	sf_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	sf_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sf_row.add_child(sf_icon)
 
-	var earned: int = GameState.service_fees_last_run
 	_sf_balance_lbl = Label.new()
-	_sf_balance_lbl.text                = _format_sf_label(GameState.service_fees, earned)
+	_sf_balance_lbl.text                = "%d" % GameState.service_fees
 	_sf_balance_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	_sf_balance_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	_sf_balance_lbl.add_theme_font_size_override("font_size", 112)
@@ -155,6 +158,20 @@ func _build_ui() -> void:
 	_sf_balance_lbl.add_theme_constant_override("shadow_offset_y", 3)
 	_sf_balance_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sf_row.add_child(_sf_balance_lbl)
+
+	var earned: int = GameState.service_fees_last_run
+	_sf_earned_lbl = Label.new()
+	_sf_earned_lbl.text                = "+%d" % earned
+	_sf_earned_lbl.visible             = earned > 0   # takes no row space when hidden
+	_sf_earned_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_sf_earned_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	_sf_earned_lbl.add_theme_font_size_override("font_size", 72)   # 65% of 112pt balance
+	_sf_earned_lbl.add_theme_color_override("font_color", COLOR_SILVER)
+	_sf_earned_lbl.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.70))
+	_sf_earned_lbl.add_theme_constant_override("shadow_offset_x", 2)
+	_sf_earned_lbl.add_theme_constant_override("shadow_offset_y", 2)
+	_sf_earned_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	sf_row.add_child(_sf_earned_lbl)
 	y += 155.0
 
 	# Button row: Bug-Up! | Start New Job | Quit
@@ -262,19 +279,13 @@ func _unhandled_input(event: InputEvent) -> void:
 # Handlers
 # ---------------------------------------------------------------------------
 
-## Returns the formatted Service Fees balance string.
-## Shows "<total>" alone, or "<total>  +<earned>" when the player earned
-## fees this run — giving them clear visibility of both their running total
-## and this run's contribution on the same line.
-func _format_sf_label(total: int, earned: int) -> String:
-	if earned > 0:
-		return "%d  +%d" % [total, earned]
-	return "%d" % total
-
-
 func _on_fees_changed(new_amount: int) -> void:
 	if _sf_balance_lbl != null:
-		_sf_balance_lbl.text = _format_sf_label(new_amount, GameState.service_fees_last_run)
+		_sf_balance_lbl.text = "%d" % new_amount
+	if _sf_earned_lbl != null:
+		var earned: int        = GameState.service_fees_last_run
+		_sf_earned_lbl.text    = "+%d" % earned
+		_sf_earned_lbl.visible = earned > 0
 
 
 func _on_bugup_pressed() -> void:
