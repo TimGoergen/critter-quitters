@@ -206,9 +206,8 @@ func _build_ui() -> void:
 	const BTN_W:     float = (LEFT_COL_W_NEW - BTN_GAP) / 2.0   # 224px each
 	const BTN_FONT:  int   = 26   # 26pt — slightly smaller than old 30pt to fit narrower buttons
 
-	# The buttons fill all remaining vertical space down to the screen bottom,
-	# leaving CONTENT_PAD_V breathing room at the bottom.
-	var btn_h := 600.0 - y - CONTENT_PAD_V
+	# Standard button height — matches ROW_H_CTRL used by the input rows above.
+	var btn_h := ROW_H_CTRL
 
 	var exit_btn := Button.new()
 	exit_btn.text                = "Exit Dev Mode"
