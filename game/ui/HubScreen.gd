@@ -62,7 +62,7 @@ func _ready() -> void:
 func _build_ui() -> void:
 	# Background illustration — fills the entire screen.
 	# Save the artwork as res://assets/infested_bg.png to activate this.
-	var bg_tex := load("res://assets/infested_bg.png") as Texture2D
+	var bg_tex := load("res://assets/infested_bg.PNG") as Texture2D
 	if bg_tex != null:
 		var bg_img := TextureRect.new()
 		bg_img.texture      = bg_tex
