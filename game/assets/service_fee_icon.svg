@@ -23,9 +23,9 @@
      inkscape:pageopacity="0.0"
      inkscape:pagecheckerboard="0"
      inkscape:deskcolor="#d1d1d1"
-     inkscape:zoom="15.519231"
-     inkscape:cx="35.826518"
-     inkscape:cy="24.517968"
+     inkscape:zoom="10.973753"
+     inkscape:cx="22.872757"
+     inkscape:cy="15.08144"
      inkscape:window-width="1920"
      inkscape:window-height="1009"
      inkscape:window-x="-8"
@@ -53,18 +53,20 @@
      stroke="#0a2e0a"
      stroke-width="1.95574"
      id="rect2"
-     ry="3.9999998" />
+     ry="3.9999998"
+     style="stroke:#258925;stroke-opacity:1" />
   <rect
-     x="14"
-     y="4"
-     width="62"
-     height="36"
+     x="13.983741"
+     y="5.1435924"
+     width="61.259285"
+     height="34.872665"
      rx="2"
      fill="none"
      stroke="#2e8c2e"
-     stroke-width="1.5"
+     stroke-width="1.46749"
      id="rect3"
-     style="stroke:#1c671c;stroke-opacity:1" />
+     style="stroke:#1c671c;stroke-opacity:1"
+     ry="2" />
   <!-- Front bill -->
   <rect
      x="0.96654278"
@@ -75,7 +77,16 @@
      fill="#2b8a2b"
      id="rect4"
      ry="4"
-     style="stroke-width:0.980654" />
+     style="stroke-width:0.980654;stroke:#50cf50;stroke-opacity:1" />
+  <ellipse
+     cx="36.935783"
+     cy="6.233665"
+     rx="24.147123"
+     ry="1.4058241"
+     fill="#ffffff"
+     opacity="0.15"
+     id="ellipse1"
+     style="opacity:0.24;stroke-width:1.17711" />
   <rect
      x="1.168857"
      y="7.9767876"
@@ -86,7 +97,8 @@
      stroke="#1a5c1a"
      stroke-width="1.95357"
      id="rect5"
-     ry="3.9999998" />
+     ry="3.9999998"
+     style="stroke-width:1.954;stroke-dasharray:none;stroke:#3de23d;stroke-opacity:1" />
   <rect
      x="4"
      y="12"
@@ -135,12 +147,12 @@
      style="stroke:#edff00;stroke-opacity:1" />
   <!-- Specular highlight on the front bill (top-left corner) -->
   <ellipse
-     cx="13.935564"
-     cy="13.164808"
-     rx="10.350681"
-     ry="1.5024784"
+     cx="27.732006"
+     cy="13.068154"
+     rx="24.147123"
+     ry="1.4058241"
      fill="#ffffff"
      opacity="0.15"
      id="ellipse7"
-     style="stroke-width:0.796723;opacity:0.35" />
+     style="opacity:0.35;stroke-width:1.17711" />
 </svg>

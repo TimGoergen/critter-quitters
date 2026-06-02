@@ -138,8 +138,8 @@ var _current_wave_reward:    int = 0   # last value from early_send_reward_chang
 const SEND_WAVE_COOLDOWN_SEC: float = 1.0
 var _send_wave_cooldown: float = 0.0   # seconds remaining before the send-wave button is usable again
 
-var _speed_btn:      Button
-var _speed_icon_lbl: Label   # ">>" icon; black at 1×, bright gold at 2×
+var _speed_btn:  Button
+var _speed_icon: _SpeedIcon   # procedural right-pointing triangle icon; state 0=black, 1/2=gold
 var _pause_btn:      Button
 var _pause_bar_icon: Control
 var _pause_banner:       Control = null
@@ -874,7 +874,7 @@ void fragment() {
 	_pause_bar_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_pause_btn.add_child(_pause_bar_icon)
 
-	# Speed button — always shows "▶▶"; black at 1× speed, bright gold at 2×.
+	# Speed button — procedural right-pointing triangles; 1 black at 1×, 2/3 gold at 2×/3×.
 	_speed_btn = Button.new()
 	_speed_btn.text = ""
 	_apply_gold_button_style(_speed_btn)
@@ -884,16 +884,11 @@ void fragment() {
 	_speed_btn.pressed.connect(_on_speed_btn_pressed)
 	bottom_row.add_child(_speed_btn)
 
-	_speed_icon_lbl = Label.new()
-	_speed_icon_lbl.text                 = "◄"   # single triangle at base speed
-	_speed_icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_speed_icon_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_speed_icon_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_speed_icon_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_speed_icon_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_speed_icon_lbl.add_theme_font_size_override("font_size", 26)
-	_speed_icon_lbl.add_theme_color_override("font_color", Color.BLACK)  # black at 1× speed
-	_speed_btn.add_child(_speed_icon_lbl)
+	_speed_icon = _SpeedIcon.new()
+	_speed_icon.speed_state = 0
+	_speed_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_speed_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_speed_btn.add_child(_speed_icon)
 
 
 # ---------------------------------------------------------------------------
@@ -1503,18 +1498,11 @@ func _on_speed_btn_pressed() -> void:
 ## Called on press and on run end (to restore 1× without pressing the button).
 func _update_speed_visuals() -> void:
 	match _speed_state:
-		0:
-			Engine.time_scale = 1.0
-			_speed_icon_lbl.text = "◄"
-			_speed_icon_lbl.add_theme_color_override("font_color", Color.BLACK)
-		1:
-			Engine.time_scale = 2.0
-			_speed_icon_lbl.text = "◄◄"
-			_speed_icon_lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
-		2:
-			Engine.time_scale = 3.0
-			_speed_icon_lbl.text = "◄◄◄"
-			_speed_icon_lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
+		0:   Engine.time_scale = 1.0
+		1:   Engine.time_scale = 2.0
+		2:   Engine.time_scale = 3.0
+	_speed_icon.speed_state = _speed_state
+	_speed_icon.queue_redraw()
 
 
 func _on_pause_btn_pressed() -> void:
@@ -2570,6 +2558,48 @@ class _ZoomIcon extends Control:
 		draw_line(Vector2(cx - arm, cy), Vector2(cx + arm, cy), icon_color, line)
 		if show_plus:
 			draw_line(Vector2(cx, cy - arm), Vector2(cx, cy + arm), icon_color, line)
+
+
+## Right-pointing solid triangles drawn inside the speed button.
+##
+## State 0 (1×): one black triangle centered in the button.
+## State 1 (2×): two gold triangles side by side.
+## State 2 (3×): three gold triangles side by side.
+##
+## Each triangle points to the right (vertex on the right, flat side on the left),
+## matching the conventional "play" direction. Size and spacing are chosen so
+## three triangles fit comfortably in the ~62×52 px button area.
+class _SpeedIcon extends Control:
+	const TRIANGLE_W: float = 15.0   # horizontal extent of each triangle (base to tip)
+	const TRIANGLE_H: float = 28.0   # vertical extent (top corner to bottom corner)
+	const GAP:        float = 4.0    # horizontal gap between adjacent triangles
+
+	const COLOR_BASE: Color = Color(0.08, 0.05, 0.00, 1.0)   # near-black (matches gold button text)
+	const COLOR_FAST: Color = Color(1.00, 0.84, 0.00, 1.0)   # bright gold at 2× and 3×
+
+	var speed_state: int = 0   # 0=1×, 1=2×, 2=3×
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	func _draw() -> void:
+		var count := speed_state + 1   # 1, 2, or 3 triangles
+		var total_w := count * TRIANGLE_W + (count - 1) * GAP
+		var x_start := (size.x - total_w) * 0.5
+		var y_top   := (size.y - TRIANGLE_H) * 0.5
+		var y_bot   := y_top + TRIANGLE_H
+		var y_mid   := size.y * 0.5
+		var color   := COLOR_BASE if speed_state == 0 else COLOR_FAST
+
+		for i in count:
+			var x := x_start + i * (TRIANGLE_W + GAP)
+			# Right-pointing triangle: left edge is vertical, right vertex is the tip.
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(x,                y_top),
+				Vector2(x,                y_bot),
+				Vector2(x + TRIANGLE_W,   y_mid),
+			]), color)
 
 
 ## Draws the outer progress ring on the Send Next Wave button.

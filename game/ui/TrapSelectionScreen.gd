@@ -33,8 +33,8 @@ signal loadout_selected(trap_types: Array[int], boost_types: Array[int])
 # Layout constants — match LevelUpScreen for visual consistency
 # ---------------------------------------------------------------------------
 
-const CARD_W:   float = 372.0   # 310 × 1.20
-const CARD_H:   float = 277.0   # 252 × 1.10
+const CARD_W:   float = 372.0
+const CARD_H:   float = 330.0   # tall enough to hold title + image + cost + description
 const CARD_GAP: float = 20.0
 
 ## Base offer and pick counts — scaled by the Wider Selection permanent upgrade.
@@ -299,20 +299,21 @@ func _build_trap_card(trap_type: int) -> UpgradeCard:
 	var data := {
 		"id":          "trap_%d" % trap_type,
 		"category":    "trap",
+		"item_type":   trap_type,   # enables the SVG preview image in UpgradeCard
 		"tier":        UpgradeCard.Tier.COMMON,
 		"tier_label":  display.get("name", "Trap").to_upper(),
 		"title":       display.get("name", "Trap"),
-		"stat_name":   "TRAP",
+		"stat_name":   "",          # no stat label — saves layout space for the image
 		"impact_line": "Cost: %d Bug Bucks" % Trap.STATS[trap_type].get("cost", 0),
 		"plain_text":  display.get("desc", ""),
 	}
 	var card := UpgradeCard.new()
 	card.toggleable           = true
 	card.custom_color         = Trap.STATS[trap_type].get("color", Color.WHITE)
-	card.font_scale           = 0.65   # reduce by 35% — gear cards are read at a glance, not studied
-	card.title_font_scale     = 1.75   # trap name is the primary info; make it dominant
-	card.use_identity_outline = true   # border matches trap brand colour, not rarity tier
-	card.show_tier_badge      = false  # gear cards have no rarity
+	card.font_scale           = 0.65
+	card.title_font_scale     = 1.5    # prominent name without squeezing the image out
+	card.use_identity_outline = true
+	card.show_tier_badge      = false
 	card.setup(data)
 	return card
 
@@ -322,10 +323,11 @@ func _build_boost_card(boost_type: int) -> UpgradeCard:
 	var data := {
 		"id":          "boost_%d" % boost_type,
 		"category":    "boost",
+		"item_type":   boost_type,  # enables the SVG preview image in UpgradeCard
 		"tier":        UpgradeCard.Tier.COMMON,
 		"tier_label":  display.get("name", "Boost").to_upper(),
 		"title":       display.get("name", "Boost"),
-		"stat_name":   "BOOST",
+		"stat_name":   "",          # no stat label — saves layout space for the image
 		"impact_line": "Cost: %d Bug Bucks" % BoostUnit.STATS[boost_type].get("cost", 0),
 		"plain_text":  display.get("desc", ""),
 	}
@@ -333,7 +335,7 @@ func _build_boost_card(boost_type: int) -> UpgradeCard:
 	card.toggleable           = true
 	card.custom_color         = BoostUnit.GLOW_COLORS[boost_type]
 	card.font_scale           = 0.65
-	card.title_font_scale     = 1.75
+	card.title_font_scale     = 1.5
 	card.use_identity_outline = true
 	card.show_tier_badge      = false
 	card.setup(data)

@@ -116,7 +116,8 @@ const UPGRADE_CRIT_DAMAGE_PER_LEVEL: float = 0.25   # +25% per level
 ## Values are slow factors: 0.0 = no slow, 1.0 = fully stopped.
 ## Defined as an explicit table because the intended values don't fit the shared
 ## UPGRADE_DAMAGE_FACTOR formula.
-const GLUE_ADHESION_LEVELS: Array[float] = [0.20, 0.30, 0.40, 0.50]
+## Values start at 0.45 (45% speed reduction) so the slow is immediately noticeable.
+const GLUE_ADHESION_LEVELS: Array[float] = [0.45, 0.55, 0.65, 0.75]
 
 ## Glue Board slow duration (seconds) at each duration upgrade level (index = _duration_level).
 ## How long the slow persists on an enemy after it leaves the board's radius.

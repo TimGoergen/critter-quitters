@@ -156,7 +156,7 @@ const EQUIP_DISPLAY_PCT: Array = [5, 10, 20]
 const CARD_W: float = 372.0
 
 ## Height of each upgrade card in virtual pixels.
-const CARD_H: float = 277.0   # 252 × 1.10
+const CARD_H: float = 295.0   # tall enough for unlock cards with image + description
 
 ## Horizontal gap between cards.
 const CARD_GAP: float = 20.0
@@ -642,43 +642,78 @@ func _spawn_cards(cards: Array) -> void:
 		_cards.append(card_ctrl)
 
 	# Tag panels for unlock cards — drawn in a second pass so they render on top of all cards.
-	# Each tag is a small amber banner that sits just above the card border, identifying
-	# unlock cards as "NEW EQUIPMENT" without the tag being part of the card itself.
-	const TAG_H:         float = 22.0
-	const TAG_W:         float = 250.0   # narrower than CARD_W so it reads as a label, not a header
+	# Each tag is a raised amber banner sitting just above the card border.
+	# A drop shadow behind and highlight/shadow edge strips simulate a 3D pressed-in label.
+	const TAG_H:         float = 30.0    # taller than the old 22px to fit the larger font
+	const TAG_W:         float = 260.0   # slightly wider to accommodate the larger text
 	const CARD_BORDER_W: float = 6.0     # matches UpgradeCard.BORDER_W
-	const TAG_BG:        Color = Color(0.30, 0.19, 0.01, 1.0)   # dark amber
+	const TAG_BG:        Color = Color(0.30, 0.19, 0.01, 1.0)   # dark amber body
 	const TAG_FG:        Color = Color(0.83, 0.52, 0.04, 1.0)   # amber text
+	const TAG_HI:        Color = Color(0.62, 0.40, 0.05, 0.90)  # top-edge highlight (lighter)
+	const TAG_DK:        Color = Color(0.10, 0.05, 0.00, 1.00)  # bottom-edge shadow (darker)
+	const TAG_SHADOW:    Color = Color(0.00, 0.00, 0.00, 0.55)  # drop shadow behind the tag
+	const BEVEL:         float = 2.5     # thickness of the top/bottom bevel strips in px
+	const FONT_SIZE:     int   = 18      # 13 × 1.4 ≈ 18 — 40% larger than previous
 
 	for i in 3:
 		var cat: String = cards[i].get("category", "")
 		if cat != "unlock_trap" and cat != "unlock_boost":
 			continue
 
-		var cx: float = start_x + i * (CARD_W + CARD_GAP)
+		var cx: float  = start_x + i * (CARD_W + CARD_GAP)
+		var tag_x: float = cx + (CARD_W - TAG_W) * 0.5
 		# Vertically: the tag overlaps the top border of the card — bottom of tag
 		# aligns with the bottom of the border ring so content starts flush below.
 		var tag_y: float = card_y - TAG_H + CARD_BORDER_W
 
+		# Drop shadow — offset 3px right and 3px down; drawn first so every
+		# tag layer paints over it.
+		var shadow := ColorRect.new()
+		shadow.color        = TAG_SHADOW
+		shadow.position     = Vector2(tag_x + 3.0, tag_y + 3.0)
+		shadow.size         = Vector2(TAG_W, TAG_H)
+		shadow.z_index      = 1
+		shadow.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(shadow)
+
+		# Main amber body.
 		var tag_bg := ColorRect.new()
 		tag_bg.color        = TAG_BG
-		tag_bg.position     = Vector2(cx + (CARD_W - TAG_W) * 0.5, tag_y)
+		tag_bg.position     = Vector2(tag_x, tag_y)
 		tag_bg.size         = Vector2(TAG_W, TAG_H)
 		tag_bg.z_index      = 2
 		tag_bg.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(tag_bg)
 
+		# Top highlight strip — simulates light catching the upper face.
+		var hi := ColorRect.new()
+		hi.color        = TAG_HI
+		hi.position     = Vector2(tag_x, tag_y)
+		hi.size         = Vector2(TAG_W, BEVEL)
+		hi.z_index      = 3
+		hi.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(hi)
+
+		# Bottom shadow strip — simulates the underside receding into shadow.
+		var dk := ColorRect.new()
+		dk.color        = TAG_DK
+		dk.position     = Vector2(tag_x, tag_y + TAG_H - BEVEL)
+		dk.size         = Vector2(TAG_W, BEVEL)
+		dk.z_index      = 3
+		dk.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(dk)
+
 		var tag_lbl := Label.new()
 		tag_lbl.text                 = "★  NEW EQUIPMENT"
-		tag_lbl.position             = Vector2(cx + (CARD_W - TAG_W) * 0.5, tag_y)
+		tag_lbl.position             = Vector2(tag_x, tag_y)
 		tag_lbl.size                 = Vector2(TAG_W, TAG_H)
 		tag_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		tag_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 		tag_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 		tag_lbl.add_theme_color_override("font_color", TAG_FG)
 		tag_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-		tag_lbl.add_theme_font_size_override("font_size", 13)
-		tag_lbl.z_index              = 3
+		tag_lbl.add_theme_font_size_override("font_size", FONT_SIZE)
+		tag_lbl.z_index              = 4
 		tag_lbl.process_mode         = Node.PROCESS_MODE_ALWAYS
 		add_child(tag_lbl)
 

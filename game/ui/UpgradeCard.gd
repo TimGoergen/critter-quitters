@@ -190,8 +190,9 @@ func _build_card() -> void:
 	# Make the entire card surface catch input so any tap/click selects it.
 	mouse_filter               = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
-	# Clip all child text and graphics so they cannot render outside the card boundary.
-	clip_contents              = true
+	# Do NOT clip children — the selection ring (_CardFrame) is drawn 8 px
+	# outside the card boundary and must not be clipped to a square.
+	# Labels are sized to stay within the card, so no visual overflow occurs.
 
 	# --- Outline: identity colour when requested (gear screen), rarity tier otherwise ---
 	var outline_color: Color
@@ -250,17 +251,15 @@ func _build_card() -> void:
 	_title_lbl.add_theme_font_size_override("font_size", roundi(38.0 * font_scale * title_font_scale))
 	add_child(_title_lbl)
 
-	# --- Trap/boost image (unlock cards only) ---
-	# Shows the player a preview of the unit they are unlocking.
-	# The TextureRect is kept null on all other card types so _on_resized() can
-	# skip the image row without needing to know the card category.
+	# --- Trap/boost image — shown on unlock cards and gear-selection cards ---
+	# "unlock_trap"/"unlock_boost" are used by LevelUpScreen; "trap"/"boost" are
+	# used by TrapSelectionScreen. Both contexts display the unit's SVG preview.
 	var item_type: int = _upgrade_data.get("item_type", -1)
-	if (category == "unlock_trap" or category == "unlock_boost") and item_type >= 0:
-		var tex_path: String = ""
-		if category == "unlock_trap":
-			tex_path = TRAP_TEXTURE_PATHS.get(item_type, "")
-		else:
-			tex_path = BOOST_TEXTURE_PATHS.get(item_type, "")
+	var is_trap_img:  bool = (category == "unlock_trap"  or category == "trap")  and item_type >= 0
+	var is_boost_img: bool = (category == "unlock_boost" or category == "boost") and item_type >= 0
+	if is_trap_img or is_boost_img:
+		var tex_path: String = TRAP_TEXTURE_PATHS.get(item_type, "") if is_trap_img \
+				else BOOST_TEXTURE_PATHS.get(item_type, "")
 		if tex_path != "" and ResourceLoader.exists(tex_path):
 			_image_rect = TextureRect.new()
 			_image_rect.texture      = load(tex_path)
@@ -341,19 +340,24 @@ func _on_resized() -> void:
 	# Cursor tracks where the next row starts below the title.
 	var cursor := 6.0 + title_h + 4.0
 
-	# Row 2 (unlock cards only): trap/boost preview image, 80px tall.
-	# Scales to fit its height while preserving the SVG's aspect ratio.
-	const IMAGE_H: float = 80.0
+	# Row 2 (unlock/gear cards): trap/boost preview image.
+	# Sized to match the trap icon height used in TrapUpgradePanel's header row (~58px),
+	# which is roughly a 1:1 square at the upgrade panel's icon dimensions.
+	const IMAGE_H: float = 70.0
 	if _image_rect:
 		_image_rect.position = Vector2(px, cursor)
 		_image_rect.size     = Vector2(w - px * 2.0, IMAGE_H)
 		cursor += IMAGE_H + 4.0
 
+	# Skip the stat row height when stat_name is empty (unlock and gear cards).
+	# Equipment and campaign cards carry a stat label ("Fire Rate", "Damage", etc.)
+	# that needs the space; unlock/gear cards set stat_name="" to keep layout compact.
+	var has_stat: bool = _stat_lbl != null and not _stat_lbl.text.is_empty()
 	var stat_y   := cursor
-	var impact_y := stat_y + 30.0 + 4.0
+	var impact_y := stat_y + (34.0 if has_stat else 0.0)   # 30px label + 4px gap
 	var plain_y  := impact_y + 54.0 + 4.0
 
-	# Stat name row (equipment) or empty (campaign / unlock).
+	# Stat name row (equipment/campaign) or skipped when empty (unlock/gear).
 	if _stat_lbl:
 		_stat_lbl.position = Vector2(px, stat_y)
 		_stat_lbl.size     = Vector2(w - px * 2.0, 30.0)
@@ -479,21 +483,28 @@ class _CardFrame extends Control:
 		if w <= 0.0 or h <= 0.0:
 			return
 
-		# --- 1. Drop shadow ---
-		# Two layered polygons create a soft gradient toward the edges:
-		# the outer halo extends beyond the main shadow at low alpha so the
-		# shadow boundary dissolves rather than cutting off sharply.
-		var halo_pts := _rounded_rect_poly(0.0, 2.0, w + 10.0, h + 10.0, cr + 5.0, 10)
-		var halo_c   := PackedColorArray()
-		halo_c.resize(halo_pts.size())
-		halo_c.fill(Color(0.0, 0.0, 0.0, 0.12))
-		draw_polygon(halo_pts, halo_c)
+		# --- 1. Drop shadow — three concentric layers, outermost drawn first ---
+		# Drawing outer→inner means each successive layer paints on top, so the
+		# alpha values accumulate toward the card edge, producing a soft gradient:
+		# barely visible at the outer halo, slightly more opaque at the core.
+		# Overall alpha is intentionally low to keep the shadow subtle.
+		var outer_halo_pts := _rounded_rect_poly(-2.0, 1.0, w + 16.0, h + 16.0, cr + 8.0, 10)
+		var outer_halo_c   := PackedColorArray()
+		outer_halo_c.resize(outer_halo_pts.size())
+		outer_halo_c.fill(Color(0.0, 0.0, 0.0, 0.05))
+		draw_polygon(outer_halo_pts, outer_halo_c)
 
-		var shadow_pts := _rounded_rect_poly(4.0, 6.0, w, h, cr, 10)
-		var shadow_c   := PackedColorArray()
-		shadow_c.resize(shadow_pts.size())
-		shadow_c.fill(Color(0.0, 0.0, 0.0, 0.22))
-		draw_polygon(shadow_pts, shadow_c)
+		var mid_halo_pts := _rounded_rect_poly(1.0, 3.0, w + 8.0, h + 8.0, cr + 4.0, 10)
+		var mid_halo_c   := PackedColorArray()
+		mid_halo_c.resize(mid_halo_pts.size())
+		mid_halo_c.fill(Color(0.0, 0.0, 0.0, 0.08))
+		draw_polygon(mid_halo_pts, mid_halo_c)
+
+		var core_pts := _rounded_rect_poly(3.0, 5.0, w, h, cr, 10)
+		var core_c   := PackedColorArray()
+		core_c.resize(core_pts.size())
+		core_c.fill(Color(0.0, 0.0, 0.0, 0.13))
+		draw_polygon(core_pts, core_c)
 
 		# --- 2. Gold selection ring ---
 		# Drawn before the card outline so the outline clips its interior,
@@ -506,25 +517,13 @@ class _CardFrame extends Control:
 			sc.fill(SELECTION_COLOR)
 			draw_polygon(s_poly, sc)
 
-		# --- 3. Outer border ring — bevel gradient ---
-		# Per-vertex colors interpolate from a brightened tier color at the top-left
-		# to a darkened one at the bottom-right, simulating directional light from
-		# the top-left. The inner polygon drawn next covers the interior, leaving
-		# only the border ring where the gradient is visible.
+		# --- 3. Outer border ring — flat fill ---
+		# The tier/identity colour is used as-is; no per-vertex gradient so the
+		# card background reads as a flat tinted surface rather than a lit one.
 		var outer := _rounded_rect_poly(0.0, 0.0, w, h, cr, 10)
 		var oc    := PackedColorArray()
 		oc.resize(outer.size())
-		var bevel_light := Color(
-			minf(outline_color.r * 1.45, 1.0),
-			minf(outline_color.g * 1.45, 1.0),
-			minf(outline_color.b * 1.45, 1.0), 1.0)
-		var bevel_dark := Color(
-			outline_color.r * 0.45,
-			outline_color.g * 0.45,
-			outline_color.b * 0.45, 1.0)
-		for i in outer.size():
-			var t := (outer[i].x / w + outer[i].y / h) * 0.5   # 0 = top-left, 1 = bottom-right
-			oc[i] = bevel_light.lerp(bevel_dark, t)
+		oc.fill(outline_color)
 		draw_polygon(outer, oc)
 
 		# --- 4. Inner background ---
