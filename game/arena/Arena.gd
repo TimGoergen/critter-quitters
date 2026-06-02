@@ -212,7 +212,7 @@ var _shake_axis:   Vector2 = Vector2.ZERO   # random unit vector for vibration d
 
 const SHAKE_DURATION: float = 0.35    # total vibration time in seconds
 const SHAKE_FREQ:     float = 10.0    # oscillations per second — low enough for smooth oscillation at 60 fps
-const SHAKE_MAG_PX:   float = 12.0   # peak displacement in screen pixels; converted to world units at runtime
+const SHAKE_MAG_PX:   float = 10.2   # peak displacement in screen pixels; converted to world units at runtime
 var _followed_enemy:        Node3D   = null  # non-null while enemy-follow mode is active
 var _enemy_stats_panel:    Node     = null  # EnemyStatsPanel instance
 var _floor_mi:           MeshInstance3D = null  # floor mesh; material_override swapped on zoom
@@ -2489,6 +2489,9 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	GameState.on_trap_placed(trap_type)          # count increments before spend so HUD refreshes to N+1 cost
 	GameState.spend_bug_bucks(trap.get_cost())
 	_trap_nodes[anchor] = trap
+	# Apply any pre-conditioning bonus (permanent upgrade) — free upgrade levels
+	# given to this trap type at run start, applied once at placement.
+	_apply_starting_star_bonus_to_trap(trap, trap_type)
 
 
 func _on_trap_fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, trap_type: int) -> void:
@@ -2550,6 +2553,9 @@ func _try_place_boost(anchor: Vector2i, boost_type: BoostUnit.BoostType) -> bool
 	_draw_boost_outline(anchor)
 	GameState.on_boost_placed(boost_type)
 	GameState.spend_bug_bucks(boost.get_cost())
+	# Apply any pre-conditioning bonus (permanent upgrade) — free upgrade levels
+	# given to this boost type at run start, applied once at placement.
+	_apply_starting_star_bonus_to_boost(boost, boost_type)
 	# cell_changed from place_trap() above triggers Pathfinder recalculation automatically.
 	return true
 
@@ -2862,6 +2868,35 @@ func _apply_free_equipment_upgrade(trap: Node3D, stat: String) -> void:
 		"duration":    trap.apply_free_duration_upgrade()
 		"crit_chance": trap.apply_free_crit_chance_upgrade()
 		"crit_dmg":    trap.apply_free_crit_dmg_upgrade()
+
+
+## Applies the pre-conditioning bonus to a newly placed trap.
+## Passive traps (Glue Board, Bait Station) advance their duration stat because they
+## have no fire cycle — duration is their primary effectiveness lever.
+## All other traps advance damage, which is the most universally impactful stat.
+## The free-upgrade pool caps at FREE_MAX_LEVEL (3), matching the 3-tier bonus max.
+func _apply_starting_star_bonus_to_trap(trap: Node3D, trap_type: int) -> void:
+	var bonus: int = GameState.starting_star_bonus_traps.get(trap_type, 0)
+	if bonus <= 0 or not is_instance_valid(trap):
+		return
+	# Passive traps have no fire cycle, so duration is their most meaningful stat.
+	# Active traps use damage — universally useful regardless of targeting mode.
+	var stat := "duration" if trap.is_passive() else "damage"
+	for _i in bonus:
+		_apply_free_equipment_upgrade(trap, stat)
+
+
+## Applies the pre-conditioning bonus to a newly placed boost.
+## Advances stat B (the primary bonus stat) N times — this is the signature effect
+## for every boost type (damage bonus, fire-rate bonus, income, reduction, restore).
+## BoostUnit has no separate free-upgrade pool; apply_stat_b_upgrade() modifies
+## the live stat directly without deducting Bug Bucks.
+func _apply_starting_star_bonus_to_boost(boost: Node3D, boost_type: int) -> void:
+	var bonus: int = GameState.starting_star_bonus_boosts.get(boost_type, 0)
+	if bonus <= 0 or not is_instance_valid(boost):
+		return
+	for _i in bonus:
+		boost.apply_stat_b_upgrade()
 
 
 ## Plays phase-transition audio cues.

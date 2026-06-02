@@ -17,8 +17,10 @@
 ##   │                          │      │                          │
 ##   └──────────────────────────┘      └──────────────────────────┘
 ##
-## Each card now has a TYPE STRIP at the top (colored band identifying the card
-## category) and a tier badge at the bottom-right (quality: Common/Pro/Rare).
+## The card outline always uses the rarity tier color.
+## The background derives from the trap/boost identity color when available,
+## uses a flat dark gray for campaign cards, and falls back to the tier color otherwise.
+## A tier badge sits at the bottom-right (quality: Common/Pro/Rare).
 ##
 ## Type strips:  NEW EQUIPMENT = amber    FIELD BULLETIN = teal    MAINTENANCE ORDER = burnt orange
 ## Tier colors:  Common = green           Professional = blue      Rare = purple
@@ -62,6 +64,7 @@ const TYPE_STRIP_HEIGHT: float = 22.0
 
 ## Dark background fill for the type strip, keyed by upgrade category.
 ## Derived from each accent color darkened to complement the card's dark atmosphere.
+## Retained here because LevelUpScreen uses these values for the external tag panels.
 const TYPE_STRIP_BG_COLORS: Dictionary = {
 	"unlock_trap":  Color(0.30, 0.19, 0.01, 1.0),   # dark amber
 	"unlock_boost": Color(0.30, 0.19, 0.01, 1.0),   # dark amber
@@ -70,6 +73,7 @@ const TYPE_STRIP_BG_COLORS: Dictionary = {
 }
 
 ## Bright accent color used for the type-strip label text, keyed by upgrade category.
+## Retained here because LevelUpScreen uses these values for the external tag panels.
 const TYPE_STRIP_ACCENT_COLORS: Dictionary = {
 	"unlock_trap":  Color(0.83, 0.52, 0.04, 1.0),   # amber
 	"unlock_boost": Color(0.83, 0.52, 0.04, 1.0),   # amber
@@ -78,6 +82,7 @@ const TYPE_STRIP_ACCENT_COLORS: Dictionary = {
 }
 
 ## Text shown in the type strip for each upgrade category.
+## Retained here because LevelUpScreen uses these values for the external tag panels.
 const TYPE_STRIP_LABELS: Dictionary = {
 	"unlock_trap":  "★  NEW EQUIPMENT",
 	"unlock_boost": "★  NEW EQUIPMENT",
@@ -99,12 +104,11 @@ signal card_selected(upgrade: Dictionary)
 # Child nodes (set in _build_card, used in _on_resized)
 # ---------------------------------------------------------------------------
 
-var _type_strip_lbl: Label = null   # "★ NEW EQUIPMENT" / "◉ FIELD BULLETIN" / "⚙ MAINTENANCE ORDER"
-var _tier_lbl:       Label = null   # "COMMON" / "PROFESSIONAL" / "RARE" — bottom-right badge
-var _title_lbl:      Label = null   # buff name or trap name
-var _stat_lbl:       Label = null   # stat name (equipment only)
-var _impact_lbl:     Label = null   # "+10% fire rate" or "+5% Fire Rate"
-var _plain_lbl:      Label = null   # plain-English explanation
+var _tier_lbl:   Label = null   # "COMMON" / "PROFESSIONAL" / "RARE" — bottom-right badge
+var _title_lbl:  Label = null   # buff name or trap name
+var _stat_lbl:   Label = null   # stat name (equipment only)
+var _impact_lbl: Label = null   # "+10% fire rate" or "+5% Fire Rate"
+var _plain_lbl:  Label = null   # plain-English explanation
 
 var _upgrade_data: Dictionary = {}
 var _selected:     bool       = false
@@ -114,7 +118,7 @@ var _card_frame:   _CardFrame = null
 ## in and emitting once. Used by TrapSelectionScreen for multi-pick behaviour.
 var toggleable: bool = false
 
-## Optional colour override for the card border and bg tint. When alpha > 0
+## Optional colour override for the card bg tint. When alpha > 0
 ## this replaces the tier colour, allowing trap-identity colours on trap cards.
 var custom_color: Color = Color.TRANSPARENT
 
@@ -144,46 +148,39 @@ func setup(upgrade: Dictionary) -> void:
 
 
 func _build_card() -> void:
-	var tier: int         = _upgrade_data.get("tier", Tier.COMMON)
-	var tier_color: Color = custom_color if custom_color.a > 0.0 else TIER_COLORS[tier]
-	var px               := 10.0   # horizontal padding used throughout
+	var tier: int = _upgrade_data.get("tier", Tier.COMMON)
+	var px       := 10.0   # horizontal padding used throughout
 
 	# Make the entire card surface catch input so any tap/click selects it.
 	mouse_filter               = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
-	# --- _CardFrame: rounded border ring + tinted dark background ---
-	# Derives the background colour from the tier hue, mirroring how TrapUpgradePanel
-	# derives its background from the trap identity colour. This gives each tier a
-	# subtly different atmosphere (greenish dark / bluish dark / purplish dark)
-	# rather than a flat neutral. The same HSV approach as TrapUpgradePanel is used:
-	# high saturation preserved, value pulled down to ~22% for a very dark result.
-	var bg_color := Color.from_hsv(tier_color.h, tier_color.s * 0.70, tier_color.v * 0.22, 0.95)
+	# --- Outline always uses the rarity tier color ---
+	var outline_color: Color = TIER_COLORS[tier]
 
+	# --- Background color ---
+	# If a trap/boost identity color is supplied, derive the bg from it so the
+	# card feels "owned" by that unit type. Campaign cards use a neutral dark gray
+	# rather than a tier-tinted dark, since campaign buffs are type-agnostic.
+	# All other cards (generic equipment) fall back to a tier-hued dark bg.
+	var bg_color: Color
+	var category: String = _upgrade_data.get("category", "")
+	if custom_color.a > 0.0:
+		bg_color = Color.from_hsv(custom_color.h, custom_color.s * 0.70, custom_color.v * 0.22, 0.95)
+	elif category == "campaign":
+		bg_color = Color(0.10, 0.10, 0.12, 0.95)   # flat dark gray — campaign buffs are type-agnostic
+	else:
+		bg_color = Color.from_hsv(outline_color.h, outline_color.s * 0.70, outline_color.v * 0.22, 0.95)
+
+	# --- _CardFrame: rounded border ring + tinted dark background ---
 	_card_frame = _CardFrame.new()
 	_card_frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_card_frame.outline_color      = tier_color
-	_card_frame.bg_color           = bg_color
-	_card_frame.bw                 = BORDER_W
-	_card_frame.cr                 = CORNER_R
-	_card_frame.mouse_filter       = Control.MOUSE_FILTER_IGNORE
-	# Type strip — colored band identifies the card category (new unlock / field bulletin / maintenance).
-	var category: String           = _upgrade_data.get("category", "")
-	_card_frame.type_strip_color   = TYPE_STRIP_BG_COLORS.get(category, Color.TRANSPARENT)
-	_card_frame.type_strip_height  = TYPE_STRIP_HEIGHT
+	_card_frame.outline_color = outline_color
+	_card_frame.bg_color      = bg_color
+	_card_frame.bw            = BORDER_W
+	_card_frame.cr            = CORNER_R
+	_card_frame.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	add_child(_card_frame)
-
-	# --- Type strip label — "★ NEW EQUIPMENT" / "◉ FIELD BULLETIN" / "⚙ MAINTENANCE ORDER" ---
-	# Sits inside the colored band at the top of the card.
-	_type_strip_lbl = Label.new()
-	_type_strip_lbl.text                 = TYPE_STRIP_LABELS.get(category, "")
-	_type_strip_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_type_strip_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
-	_type_strip_lbl.clip_text            = true
-	_type_strip_lbl.add_theme_color_override("font_color", TYPE_STRIP_ACCENT_COLORS.get(category, tier_color))
-	_type_strip_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_type_strip_lbl.add_theme_font_size_override("font_size", roundi(20.0 * font_scale))
-	add_child(_type_strip_lbl)
 
 	# --- Tier badge — bottom-right corner, dimmed to serve as secondary info ---
 	# Shows "COMMON" / "PROFESSIONAL" / "RARE" — quality indicator, not category.
@@ -192,7 +189,7 @@ func _build_card() -> void:
 	_tier_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_tier_lbl.clip_text            = true
-	_tier_lbl.add_theme_color_override("font_color", Color(tier_color.r, tier_color.g, tier_color.b, 0.70))
+	_tier_lbl.add_theme_color_override("font_color", Color(outline_color.r, outline_color.g, outline_color.b, 0.70))
 	_tier_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	_tier_lbl.add_theme_font_size_override("font_size", roundi(20.0 * font_scale))
 	add_child(_tier_lbl)
@@ -209,12 +206,15 @@ func _build_card() -> void:
 	add_child(_title_lbl)
 
 	# --- Stat name (equipment only) or empty for campaign cards ---
+	# Uses custom_color when available so the label matches the trap/boost identity;
+	# falls back to the tier color as a neutral quality indicator.
+	var stat_color: Color = custom_color if custom_color.a > 0.0 else TIER_COLORS[tier]
 	_stat_lbl = Label.new()
 	_stat_lbl.text                 = _upgrade_data.get("stat_name", "")
 	_stat_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_stat_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_stat_lbl.clip_text            = true
-	_stat_lbl.add_theme_color_override("font_color", tier_color)
+	_stat_lbl.add_theme_color_override("font_color", stat_color)
 	_stat_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	_stat_lbl.add_theme_font_size_override("font_size", roundi(30.0 * font_scale))
 	add_child(_stat_lbl)
@@ -261,41 +261,25 @@ func _on_resized() -> void:
 	var h  := size.y
 	var px := 10.0
 
-	# Row 1: type strip label — sits inside the colored band drawn by _CardFrame.
-	if _type_strip_lbl:
-		_type_strip_lbl.position = Vector2(px + 6.0, 4.0)
-		_type_strip_lbl.size     = Vector2(w - px * 2.0, 22.0)
-
-	# Divider line between type strip and body.
-	var div: ColorRect = get_node_or_null("Divider")
-	if div == null:
-		div = ColorRect.new()
-		div.name         = "Divider"
-		div.color        = Color(0.30, 0.30, 0.35, 1.0)
-		div.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		add_child(div)
-	div.position = Vector2(px, 28.0)
-	div.size     = Vector2(w - px * 2.0, 1.0)
-
-	# Row 2: Title.
+	# Row 1: Title — starts at the top of the card body (no type strip above it).
 	if _title_lbl:
-		_title_lbl.position = Vector2(px, 32.0)
-		_title_lbl.size     = Vector2(w - px * 2.0, 62.0)
+		_title_lbl.position = Vector2(px, 6.0)
+		_title_lbl.size     = Vector2(w - px * 2.0, 68.0)
 
-	# Row 3: Stat name (equipment) or empty (campaign).
+	# Row 2: Stat name (equipment) or empty (campaign).
 	if _stat_lbl:
-		_stat_lbl.position = Vector2(px, 97.0)
-		_stat_lbl.size     = Vector2(w - px * 2.0, 28.0)
+		_stat_lbl.position = Vector2(px, 78.0)
+		_stat_lbl.size     = Vector2(w - px * 2.0, 30.0)
 
-	# Row 4: Impact line.
+	# Row 3: Impact line.
 	if _impact_lbl:
-		_impact_lbl.position = Vector2(px, 128.0)
+		_impact_lbl.position = Vector2(px, 112.0)
 		_impact_lbl.size     = Vector2(w - px * 2.0, 54.0)
 
-	# Row 5: Plain-text description — fills space above the tier badge.
+	# Row 4: Plain-text description — fills space above the tier badge.
 	if _plain_lbl:
-		_plain_lbl.position = Vector2(px, 185.0)
-		_plain_lbl.size     = Vector2(w - px * 2.0, h - 210.0)
+		_plain_lbl.position = Vector2(px, 170.0)
+		_plain_lbl.size     = Vector2(w - px * 2.0, h - 192.0)
 
 	# Tier badge — bottom-right corner, below the plain text.
 	if _tier_lbl:
@@ -389,19 +373,6 @@ class _CardFrame extends Control:
 	var bw:             float = 6.0    # border width in pixels
 	var cr:             float = 16.0   # corner radius for all four corners
 
-	## Background color for the type-strip band at the top of the card interior.
-	## When alpha == 0, no strip is drawn.
-	var type_strip_color: Color = Color.TRANSPARENT:
-		set(v):
-			type_strip_color = v
-			queue_redraw()
-
-	## Height of the type-strip band in card-local pixels.
-	var type_strip_height: float = 0.0:
-		set(v):
-			type_strip_height = v
-			queue_redraw()
-
 	## When true, draws a thin gold ring just outside the card border.
 	var show_selection: bool = false:
 		set(v):
@@ -472,29 +443,7 @@ class _CardFrame extends Control:
 		ic.fill(bg_color)
 		draw_polygon(inner, ic)
 
-		# --- 5. Recessed content tray ---
-		# Dark overlay on the body below the type strip. Makes text content appear
-		# inset relative to the raised strip above it — like engraving on a plate.
-		if type_strip_height > 0.0 and type_strip_color.a > 0.0:
-			var tray_y := bw + type_strip_height
-			var tray_h := h - bw - tray_y
-			if tray_h > 0.0:
-				var tray := _rounded_bottom_rect_poly(bw, tray_y, w - bw * 2.0, tray_h, cr - bw, 10)
-				var tc   := PackedColorArray()
-				tc.resize(tray.size())
-				tc.fill(Color(0.0, 0.0, 0.0, 0.15))
-				draw_polygon(tray, tc)
-
-		# --- 6. Type strip ---
-		# Drawn after the tray so it sits cleanly on top of the darkened body.
-		if type_strip_height > 0.0 and type_strip_color.a > 0.0:
-			var strip := _rounded_top_rect_poly(bw, bw, w - bw * 2.0, type_strip_height, cr - bw, 10)
-			var sc    := PackedColorArray()
-			sc.resize(strip.size())
-			sc.fill(type_strip_color)
-			draw_polygon(strip, sc)
-
-		# --- 7. Surface sheen ---
+		# --- 5. Surface sheen ---
 		# Semi-transparent white gradient fading from the top of the inner area downward.
 		# Simulates specular light catching the upper surface of the card.
 		var inner_h   := h - bw * 2.0
@@ -508,29 +457,9 @@ class _CardFrame extends Control:
 			sheen_c[i] = Color(1.0, 1.0, 1.0, lerpf(0.09, 0.0, t))
 		draw_polygon(sheen_pts, sheen_c)
 
-		# --- 8. Embossed strip edges ---
-		# A bright hairline at the top of the strip and a dark one at the bottom
-		# make the strip read as stamped/raised metal rather than flat paint.
-		if type_strip_height > 0.0 and type_strip_color.a > 0.0:
-			var inner_cr       := cr - bw
-			var strip_top_y    := bw
-			var strip_bottom_y := bw + type_strip_height
-			# Top highlight — begins past the corner arcs where the edge is horizontal
-			draw_line(Vector2(bw + inner_cr, strip_top_y + 0.5),
-					  Vector2(w - bw - inner_cr, strip_top_y + 0.5),
-					  Color(1.0, 1.0, 1.0, 0.22), 1.5, true)
-			# Bottom shadow — full width of the inner area
-			draw_line(Vector2(bw, strip_bottom_y),
-					  Vector2(w - bw, strip_bottom_y),
-					  Color(0.0, 0.0, 0.0, 0.40), 1.5, true)
-			# Secondary reflection line just below — subtle double-line emboss
-			draw_line(Vector2(bw, strip_bottom_y + 1.5),
-					  Vector2(w - bw, strip_bottom_y + 1.5),
-					  Color(1.0, 1.0, 1.0, 0.06), 1.0, true)
-
 	## Builds a polygon for a rectangle with only the top two corners rounded.
-	## Used for the type-strip band that sits at the very top of the card interior.
-	## The bottom two corners are square so the strip blends into the flat body below.
+	## Used for the surface sheen gradient that covers the upper portion of the card interior.
+	## The bottom two corners are square so the sheen blends into the flat body below.
 	static func _rounded_top_rect_poly(
 		x: float, y: float, w: float, h: float, r: float, segs: int
 	) -> PackedVector2Array:
@@ -552,34 +481,6 @@ class _CardFrame extends Control:
 
 		# Bottom-left: square corner
 		pts.append(Vector2(x, y + h))
-
-		return pts
-
-
-	## Builds a polygon for a rectangle with only the bottom two corners rounded.
-	## Used for the recessed content tray that sits below the type strip.
-	## The top two corners are square so the tray sits flush against the strip bottom.
-	static func _rounded_bottom_rect_poly(
-		x: float, y: float, w: float, h: float, r: float, segs: int
-	) -> PackedVector2Array:
-		var pts  := PackedVector2Array()
-		var step := (PI * 0.5) / float(segs)
-
-		# Top-left: square corner
-		pts.append(Vector2(x, y))
-
-		# Top-right: square corner
-		pts.append(Vector2(x + w, y))
-
-		# Bottom-right arc: centre (x+w-r, y+h-r), sweeping 0°→90°
-		for i in segs + 1:
-			var a := step * float(i)
-			pts.append(Vector2(x + w - r + cos(a) * r, y + h - r + sin(a) * r))
-
-		# Bottom-left arc: centre (x+r, y+h-r), sweeping 90°→180°
-		for i in segs + 1:
-			var a := PI * 0.5 + step * float(i)
-			pts.append(Vector2(x + r + cos(a) * r, y + h - r + sin(a) * r))
 
 		return pts
 

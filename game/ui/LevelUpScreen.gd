@@ -500,8 +500,9 @@ func _build_equipment_card(tier: int, used_ids: Array) -> Dictionary:
 		"stat_name": stat_name,
 		# Relative label — different traps of the same type may have different base stats,
 		# so "+X%" is shown rather than an absolute current-to-after delta.
-		"impact_line": "+%d%% %s" % [display_pct, stat_name],
-		"plain_text":  plain_text,
+		"impact_line":  "+%d%% %s" % [display_pct, stat_name],
+		"plain_text":   plain_text,
+		"custom_color": Trap.STATS.get(trap_type, {}).get("color", Color.TRANSPARENT),
 		"current_val": "",
 		"after_val":   "",
 		"magnitude":   0.0,
@@ -624,8 +625,8 @@ func _build_campaign_card(tier: int, used_ids: Array) -> Dictionary:
 func _spawn_cards(cards: Array) -> void:
 	var total_w := CARD_W * 3.0 + CARD_GAP * 2.0
 	var start_x := (1280.0 - total_w) * 0.5   # centred in 1280px virtual width
-	# Pushed down to clear the taller 128pt header + 32pt sub-header.
-	var card_y  := 213.0
+	# Pushed down 27px extra to leave room for the "NEW EQUIPMENT" tag panels above unlock cards.
+	var card_y  := 240.0
 
 	for i in 3:
 		var card_ctrl := UpgradeCard.new()
@@ -639,6 +640,47 @@ func _spawn_cards(cards: Array) -> void:
 		card_ctrl.card_selected.connect(_on_card_selected)
 		add_child(card_ctrl)
 		_cards.append(card_ctrl)
+
+	# Tag panels for unlock cards — drawn in a second pass so they render on top of all cards.
+	# Each tag is a small amber banner that sits just above the card border, identifying
+	# unlock cards as "NEW EQUIPMENT" without the tag being part of the card itself.
+	const TAG_H:         float = 22.0
+	const TAG_W:         float = 250.0   # narrower than CARD_W so it reads as a label, not a header
+	const CARD_BORDER_W: float = 6.0     # matches UpgradeCard.BORDER_W
+	const TAG_BG:        Color = Color(0.30, 0.19, 0.01, 1.0)   # dark amber
+	const TAG_FG:        Color = Color(0.83, 0.52, 0.04, 1.0)   # amber text
+
+	for i in 3:
+		var cat: String = cards[i].get("category", "")
+		if cat != "unlock_trap" and cat != "unlock_boost":
+			continue
+
+		var cx: float = start_x + i * (CARD_W + CARD_GAP)
+		# Vertically: the tag overlaps the top border of the card — bottom of tag
+		# aligns with the bottom of the border ring so content starts flush below.
+		var tag_y: float = card_y - TAG_H + CARD_BORDER_W
+
+		var tag_bg := ColorRect.new()
+		tag_bg.color        = TAG_BG
+		tag_bg.position     = Vector2(cx + (CARD_W - TAG_W) * 0.5, tag_y)
+		tag_bg.size         = Vector2(TAG_W, TAG_H)
+		tag_bg.z_index      = 2
+		tag_bg.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(tag_bg)
+
+		var tag_lbl := Label.new()
+		tag_lbl.text                 = "★  NEW EQUIPMENT"
+		tag_lbl.position             = Vector2(cx + (CARD_W - TAG_W) * 0.5, tag_y)
+		tag_lbl.size                 = Vector2(TAG_W, TAG_H)
+		tag_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tag_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+		tag_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+		tag_lbl.add_theme_color_override("font_color", TAG_FG)
+		tag_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+		tag_lbl.add_theme_font_size_override("font_size", 13)
+		tag_lbl.z_index              = 3
+		tag_lbl.process_mode         = Node.PROCESS_MODE_ALWAYS
+		add_child(tag_lbl)
 
 
 # ---------------------------------------------------------------------------

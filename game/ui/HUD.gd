@@ -1324,6 +1324,12 @@ func _on_wave_spawn_progress_changed(spawned: int, total: int) -> void:
 
 
 func _process(delta: float) -> void:
+	# If the game pauses while a drag is in progress (e.g. a level-up screen appears),
+	# cancel the drag immediately so the trap is not silently committed on resume.
+	if _drag_active and get_tree().paused:
+		_arena.cancel_hud_drag()
+		_end_drag()
+
 	# Keep the floating drag icon centred above the cursor each frame.
 	# We do this in _process (rather than only in _input) so the icon stays
 	# locked to position even when the cursor is stationary.
@@ -1533,6 +1539,13 @@ func _refresh_reward_label() -> void:
 
 func _on_send_wave_pressed() -> void:
 	AudioManager.play_ui("button")
+	# Clicking send-wave while manually paused resumes play first, then sends the wave.
+	if _is_paused:
+		_is_paused = false
+		get_tree().paused = false
+		_pause_btn.text = ""
+		_pause_bar_icon.show()
+		_show_pause_banner(false)
 	if _wave_multiplier > 1:
 		GameState.wave_skip_multi_requested.emit(_wave_multiplier)
 	else:
