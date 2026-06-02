@@ -90,6 +90,27 @@ const TYPE_STRIP_LABELS: Dictionary = {
 	"equipment":    "⚙  MAINTENANCE ORDER",
 }
 
+## SVG idle-frame path for each trap type (index = trap type int from Trap.gd).
+## Shown on unlock cards so the player can see what they're unlocking.
+const TRAP_TEXTURE_PATHS: Dictionary = {
+	0: "res://assets/snap_trap_idle.svg",
+	1: "res://assets/zapper_idle.svg",
+	2: "res://assets/fogger_idle.svg",
+	3: "res://assets/glue_board_idle.svg",
+	4: "res://assets/fly_strip_idle.svg",
+	5: "res://assets/bait_station_idle.svg",
+}
+
+## SVG frame-1 path for each boost type (index = boost type int from BoostUnit.gd).
+## Shown on unlock cards so the player can see what they're unlocking.
+const BOOST_TEXTURE_PATHS: Dictionary = {
+	0: "res://assets/pheromone_dispenser_1.svg",
+	1: "res://assets/compressor_1.svg",
+	2: "res://assets/cash_register_1.svg",
+	3: "res://assets/air_freshener_1.svg",
+	4: "res://assets/quarantine_marker_1.svg",
+}
+
 
 # ---------------------------------------------------------------------------
 # Signal
@@ -104,11 +125,12 @@ signal card_selected(upgrade: Dictionary)
 # Child nodes (set in _build_card, used in _on_resized)
 # ---------------------------------------------------------------------------
 
-var _tier_lbl:   Label = null   # "COMMON" / "PROFESSIONAL" / "RARE" — bottom-right badge
-var _title_lbl:  Label = null   # buff name or trap name
-var _stat_lbl:   Label = null   # stat name (equipment only)
-var _impact_lbl: Label = null   # "+10% fire rate" or "+5% Fire Rate"
-var _plain_lbl:  Label = null   # plain-English explanation
+var _tier_lbl:   Label       = null   # "COMMON" / "PROFESSIONAL" / "RARE" — bottom-right badge
+var _title_lbl:  Label       = null   # buff name or trap name
+var _image_rect: TextureRect = null   # trap/boost SVG image (unlock cards only)
+var _stat_lbl:   Label       = null   # stat name (equipment only)
+var _impact_lbl: Label       = null   # "+10% fire rate" or "+5% Fire Rate"
+var _plain_lbl:  Label       = null   # plain-English explanation
 
 var _upgrade_data: Dictionary = {}
 var _selected:     bool       = false
@@ -168,6 +190,8 @@ func _build_card() -> void:
 	# Make the entire card surface catch input so any tap/click selects it.
 	mouse_filter               = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
+	# Clip all child text and graphics so they cannot render outside the card boundary.
+	clip_contents              = true
 
 	# --- Outline: identity colour when requested (gear screen), rarity tier otherwise ---
 	var outline_color: Color
@@ -181,14 +205,16 @@ func _build_card() -> void:
 	# card feels "owned" by that unit type. Campaign cards use a neutral dark gray
 	# rather than a tier-tinted dark, since campaign buffs are type-agnostic.
 	# All other cards (generic equipment) fall back to a tier-hued dark bg.
+	# v * 0.35 keeps the background dark but visibly in tune with the unit's color theme;
+	# the previous 0.22 was noticeably darker than the type strip accent colors.
 	var bg_color: Color
 	var category: String = _upgrade_data.get("category", "")
 	if custom_color.a > 0.0:
-		bg_color = Color.from_hsv(custom_color.h, custom_color.s * 0.70, custom_color.v * 0.22, 0.95)
+		bg_color = Color.from_hsv(custom_color.h, custom_color.s * 0.65, custom_color.v * 0.35, 0.95)
 	elif category == "campaign":
 		bg_color = Color(0.10, 0.10, 0.12, 0.95)   # flat dark gray — campaign buffs are type-agnostic
 	else:
-		bg_color = Color.from_hsv(outline_color.h, outline_color.s * 0.70, outline_color.v * 0.22, 0.95)
+		bg_color = Color.from_hsv(outline_color.h, outline_color.s * 0.65, outline_color.v * 0.35, 0.95)
 
 	# --- _CardFrame: rounded border ring + tinted dark background ---
 	_card_frame = _CardFrame.new()
@@ -223,6 +249,25 @@ func _build_card() -> void:
 	_title_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	_title_lbl.add_theme_font_size_override("font_size", roundi(38.0 * font_scale * title_font_scale))
 	add_child(_title_lbl)
+
+	# --- Trap/boost image (unlock cards only) ---
+	# Shows the player a preview of the unit they are unlocking.
+	# The TextureRect is kept null on all other card types so _on_resized() can
+	# skip the image row without needing to know the card category.
+	var item_type: int = _upgrade_data.get("item_type", -1)
+	if (category == "unlock_trap" or category == "unlock_boost") and item_type >= 0:
+		var tex_path: String = ""
+		if category == "unlock_trap":
+			tex_path = TRAP_TEXTURE_PATHS.get(item_type, "")
+		else:
+			tex_path = BOOST_TEXTURE_PATHS.get(item_type, "")
+		if tex_path != "" and ResourceLoader.exists(tex_path):
+			_image_rect = TextureRect.new()
+			_image_rect.texture      = load(tex_path)
+			_image_rect.expand_mode  = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
+			_image_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			_image_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			add_child(_image_rect)
 
 	# --- Stat name (equipment only) or empty for campaign cards ---
 	# Uses custom_color when available so the label matches the trap/boost identity;
@@ -288,26 +333,37 @@ func _on_resized() -> void:
 	# Space reserved at the bottom for the tier badge (0 when badge is hidden).
 	var badge_reserve := 26.0 if show_tier_badge else 0.0
 
-	var stat_y   := 6.0 + title_h + 4.0
-	var impact_y := stat_y + 30.0 + 4.0
-	var plain_y  := impact_y + 54.0 + 4.0
-
 	# Row 1: Title.
 	if _title_lbl:
 		_title_lbl.position = Vector2(px, 6.0)
 		_title_lbl.size     = Vector2(w - px * 2.0, title_h)
 
-	# Row 2: Stat name (equipment) or empty (campaign).
+	# Cursor tracks where the next row starts below the title.
+	var cursor := 6.0 + title_h + 4.0
+
+	# Row 2 (unlock cards only): trap/boost preview image, 80px tall.
+	# Scales to fit its height while preserving the SVG's aspect ratio.
+	const IMAGE_H: float = 80.0
+	if _image_rect:
+		_image_rect.position = Vector2(px, cursor)
+		_image_rect.size     = Vector2(w - px * 2.0, IMAGE_H)
+		cursor += IMAGE_H + 4.0
+
+	var stat_y   := cursor
+	var impact_y := stat_y + 30.0 + 4.0
+	var plain_y  := impact_y + 54.0 + 4.0
+
+	# Stat name row (equipment) or empty (campaign / unlock).
 	if _stat_lbl:
 		_stat_lbl.position = Vector2(px, stat_y)
 		_stat_lbl.size     = Vector2(w - px * 2.0, 30.0)
 
-	# Row 3: Impact line.
+	# Impact line.
 	if _impact_lbl:
 		_impact_lbl.position = Vector2(px, impact_y)
 		_impact_lbl.size     = Vector2(w - px * 2.0, 54.0)
 
-	# Row 4: Plain-text description — fills remaining space above the badge area.
+	# Plain-text description — fills remaining space above the badge area.
 	if _plain_lbl:
 		_plain_lbl.position = Vector2(px, plain_y)
 		_plain_lbl.size     = Vector2(w - px * 2.0, h - plain_y - badge_reserve)
@@ -424,12 +480,19 @@ class _CardFrame extends Control:
 			return
 
 		# --- 1. Drop shadow ---
-		# Drawn first so every card layer paints over it.
-		# Offset (4 right, 6 down) gives cards physical lift off the background.
+		# Two layered polygons create a soft gradient toward the edges:
+		# the outer halo extends beyond the main shadow at low alpha so the
+		# shadow boundary dissolves rather than cutting off sharply.
+		var halo_pts := _rounded_rect_poly(0.0, 2.0, w + 10.0, h + 10.0, cr + 5.0, 10)
+		var halo_c   := PackedColorArray()
+		halo_c.resize(halo_pts.size())
+		halo_c.fill(Color(0.0, 0.0, 0.0, 0.12))
+		draw_polygon(halo_pts, halo_c)
+
 		var shadow_pts := _rounded_rect_poly(4.0, 6.0, w, h, cr, 10)
 		var shadow_c   := PackedColorArray()
 		shadow_c.resize(shadow_pts.size())
-		shadow_c.fill(Color(0.0, 0.0, 0.0, 0.55))
+		shadow_c.fill(Color(0.0, 0.0, 0.0, 0.22))
 		draw_polygon(shadow_pts, shadow_c)
 
 		# --- 2. Gold selection ring ---
@@ -474,19 +537,6 @@ class _CardFrame extends Control:
 		ic.fill(bg_color)
 		draw_polygon(inner, ic)
 
-		# --- 5. Surface sheen ---
-		# Semi-transparent white gradient fading from the top of the inner area downward.
-		# Simulates specular light catching the upper surface of the card.
-		var inner_h   := h - bw * 2.0
-		var sheen_h   := inner_h * 0.38   # highlight covers the top 38% of the card interior
-		var sheen_pts := _rounded_top_rect_poly(bw, bw, w - bw * 2.0, sheen_h, cr - bw, 10)
-		var sheen_c   := PackedColorArray()
-		sheen_c.resize(sheen_pts.size())
-		for i in sheen_pts.size():
-			var vert_y := sheen_pts[i].y - bw
-			var t      := clampf(vert_y / sheen_h, 0.0, 1.0)
-			sheen_c[i] = Color(1.0, 1.0, 1.0, lerpf(0.09, 0.0, t))
-		draw_polygon(sheen_pts, sheen_c)
 
 	## Builds a polygon for a rectangle with only the top two corners rounded.
 	## Used for the surface sheen gradient that covers the upper portion of the card interior.

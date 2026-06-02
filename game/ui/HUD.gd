@@ -154,7 +154,7 @@ var _bucks_label:       Label
 var _infestation_fill:  Panel
 var _infestation_label: Label
 
-var _is_fast:        bool = false
+var _speed_state:    int  = 0   # 0 = 1×, 1 = 2×, 2 = 3×
 var _is_paused:      bool = false
 var _countdown_active: bool = false
 
@@ -885,7 +885,7 @@ void fragment() {
 	bottom_row.add_child(_speed_btn)
 
 	_speed_icon_lbl = Label.new()
-	_speed_icon_lbl.text                 = "▶▶"
+	_speed_icon_lbl.text                 = "◄"   # single triangle at base speed
 	_speed_icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_speed_icon_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_speed_icon_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
@@ -1487,18 +1487,34 @@ func _on_viewport_resized() -> void:
 func _on_speed_btn_pressed() -> void:
 	AudioManager.play_ui("button")
 	if _is_paused:
-		# Clicking >> while paused resumes play; handle visuals directly to avoid
-		# playing the button sound a second time through _on_pause_btn_pressed().
+		# Clicking the speed button while paused resumes play; handle visuals directly
+		# to avoid playing the button sound a second time through _on_pause_btn_pressed().
 		_is_paused = false
 		get_tree().paused = false
 		_pause_btn.text = ""
 		_pause_bar_icon.show()
 		_show_pause_banner(false)
-	_is_fast = not _is_fast
-	Engine.time_scale = 2.0 if _is_fast else 1.0
-	# Icon colour signals the active speed: bright gold for 2×, black for 1×.
-	_speed_icon_lbl.add_theme_color_override("font_color",
-		COLOR_HAZARD_YELLOW if _is_fast else Color.BLACK)
+	# Cycle 1× → 2× → 3× → 1× …
+	_speed_state = (_speed_state + 1) % 3
+	_update_speed_visuals()
+
+
+## Applies time scale and icon appearance for the current _speed_state.
+## Called on press and on run end (to restore 1× without pressing the button).
+func _update_speed_visuals() -> void:
+	match _speed_state:
+		0:
+			Engine.time_scale = 1.0
+			_speed_icon_lbl.text = "◄"
+			_speed_icon_lbl.add_theme_color_override("font_color", Color.BLACK)
+		1:
+			Engine.time_scale = 2.0
+			_speed_icon_lbl.text = "◄◄"
+			_speed_icon_lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
+		2:
+			Engine.time_scale = 3.0
+			_speed_icon_lbl.text = "◄◄◄"
+			_speed_icon_lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
 
 
 func _on_pause_btn_pressed() -> void:
@@ -1595,9 +1611,10 @@ func _on_early_send_reward_changed(amount: int) -> void:
 
 
 func _on_run_ended() -> void:
-	Engine.time_scale = 1.0
-	_is_paused        = false
-	_pause_btn.text   = ""
+	_speed_state = 0
+	_update_speed_visuals()   # resets Engine.time_scale and icon to 1× state
+	_is_paused   = false
+	_pause_btn.text = ""
 	_pause_bar_icon.show()
 	_show_pause_banner(false)
 	get_tree().paused = true
