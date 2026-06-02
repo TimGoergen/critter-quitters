@@ -421,8 +421,18 @@ class _CardFrame extends Control:
 		if w <= 0.0 or h <= 0.0:
 			return
 
-		# Gold selection ring: drawn first so the card outline paints over the
-		# interior, leaving only the outer band (SELECTION_MARGIN px wide) visible.
+		# --- 1. Drop shadow ---
+		# Drawn first so every card layer paints over it.
+		# Offset (4 right, 6 down) gives cards physical lift off the background.
+		var shadow_pts := _rounded_rect_poly(4.0, 6.0, w, h, cr, 10)
+		var shadow_c   := PackedColorArray()
+		shadow_c.resize(shadow_pts.size())
+		shadow_c.fill(Color(0.0, 0.0, 0.0, 0.55))
+		draw_polygon(shadow_pts, shadow_c)
+
+		# --- 2. Gold selection ring ---
+		# Drawn before the card outline so the outline clips its interior,
+		# leaving only the outer band (SELECTION_MARGIN px wide) visible.
 		if show_selection:
 			var sm     := SELECTION_MARGIN
 			var s_poly := _rounded_rect_poly(-sm, -sm, w + sm * 2.0, h + sm * 2.0, cr + sm, 10)
@@ -431,14 +441,28 @@ class _CardFrame extends Control:
 			sc.fill(SELECTION_COLOR)
 			draw_polygon(s_poly, sc)
 
-		# Outer shape: fully-rounded rectangle in the tier/outline colour.
+		# --- 3. Outer border ring — bevel gradient ---
+		# Per-vertex colors interpolate from a brightened tier color at the top-left
+		# to a darkened one at the bottom-right, simulating directional light from
+		# the top-left. The inner polygon drawn next covers the interior, leaving
+		# only the border ring where the gradient is visible.
 		var outer := _rounded_rect_poly(0.0, 0.0, w, h, cr, 10)
 		var oc    := PackedColorArray()
 		oc.resize(outer.size())
-		oc.fill(outline_color)
+		var bevel_light := Color(
+			minf(outline_color.r * 1.45, 1.0),
+			minf(outline_color.g * 1.45, 1.0),
+			minf(outline_color.b * 1.45, 1.0), 1.0)
+		var bevel_dark := Color(
+			outline_color.r * 0.45,
+			outline_color.g * 0.45,
+			outline_color.b * 0.45, 1.0)
+		for i in outer.size():
+			var t := (outer[i].x / w + outer[i].y / h) * 0.5   # 0 = top-left, 1 = bottom-right
+			oc[i] = bevel_light.lerp(bevel_dark, t)
 		draw_polygon(outer, oc)
 
-		# Inner shape: background colour, inset by border width on all sides.
+		# --- 4. Inner background ---
 		# Rounded corners (radius = cr - bw) keep the border ring uniform thickness
 		# all the way into the corners; a plain draw_rect() would cut straight across
 		# the curve and make the inner edge look square where the outer edge rounds.
@@ -448,15 +472,61 @@ class _CardFrame extends Control:
 		ic.fill(bg_color)
 		draw_polygon(inner, ic)
 
-		# Type strip: a top-rounded colored band just inside the top border.
-		# Drawn after the inner background so it paints over it cleanly.
-		# The top-rounded polygon ensures the strip corners follow the card's inner curve.
+		# --- 5. Recessed content tray ---
+		# Dark overlay on the body below the type strip. Makes text content appear
+		# inset relative to the raised strip above it — like engraving on a plate.
+		if type_strip_height > 0.0 and type_strip_color.a > 0.0:
+			var tray_y := bw + type_strip_height
+			var tray_h := h - bw - tray_y
+			if tray_h > 0.0:
+				var tray := _rounded_bottom_rect_poly(bw, tray_y, w - bw * 2.0, tray_h, cr - bw, 10)
+				var tc   := PackedColorArray()
+				tc.resize(tray.size())
+				tc.fill(Color(0.0, 0.0, 0.0, 0.15))
+				draw_polygon(tray, tc)
+
+		# --- 6. Type strip ---
+		# Drawn after the tray so it sits cleanly on top of the darkened body.
 		if type_strip_height > 0.0 and type_strip_color.a > 0.0:
 			var strip := _rounded_top_rect_poly(bw, bw, w - bw * 2.0, type_strip_height, cr - bw, 10)
 			var sc    := PackedColorArray()
 			sc.resize(strip.size())
 			sc.fill(type_strip_color)
 			draw_polygon(strip, sc)
+
+		# --- 7. Surface sheen ---
+		# Semi-transparent white gradient fading from the top of the inner area downward.
+		# Simulates specular light catching the upper surface of the card.
+		var inner_h   := h - bw * 2.0
+		var sheen_h   := inner_h * 0.38   # highlight covers the top 38% of the card interior
+		var sheen_pts := _rounded_top_rect_poly(bw, bw, w - bw * 2.0, sheen_h, cr - bw, 10)
+		var sheen_c   := PackedColorArray()
+		sheen_c.resize(sheen_pts.size())
+		for i in sheen_pts.size():
+			var vert_y := sheen_pts[i].y - bw
+			var t      := clampf(vert_y / sheen_h, 0.0, 1.0)
+			sheen_c[i] = Color(1.0, 1.0, 1.0, lerpf(0.09, 0.0, t))
+		draw_polygon(sheen_pts, sheen_c)
+
+		# --- 8. Embossed strip edges ---
+		# A bright hairline at the top of the strip and a dark one at the bottom
+		# make the strip read as stamped/raised metal rather than flat paint.
+		if type_strip_height > 0.0 and type_strip_color.a > 0.0:
+			var inner_cr       := cr - bw
+			var strip_top_y    := bw
+			var strip_bottom_y := bw + type_strip_height
+			# Top highlight — begins past the corner arcs where the edge is horizontal
+			draw_line(Vector2(bw + inner_cr, strip_top_y + 0.5),
+					  Vector2(w - bw - inner_cr, strip_top_y + 0.5),
+					  Color(1.0, 1.0, 1.0, 0.22), 1.5, true)
+			# Bottom shadow — full width of the inner area
+			draw_line(Vector2(bw, strip_bottom_y),
+					  Vector2(w - bw, strip_bottom_y),
+					  Color(0.0, 0.0, 0.0, 0.40), 1.5, true)
+			# Secondary reflection line just below — subtle double-line emboss
+			draw_line(Vector2(bw, strip_bottom_y + 1.5),
+					  Vector2(w - bw, strip_bottom_y + 1.5),
+					  Color(1.0, 1.0, 1.0, 0.06), 1.0, true)
 
 	## Builds a polygon for a rectangle with only the top two corners rounded.
 	## Used for the type-strip band that sits at the very top of the card interior.
@@ -482,6 +552,34 @@ class _CardFrame extends Control:
 
 		# Bottom-left: square corner
 		pts.append(Vector2(x, y + h))
+
+		return pts
+
+
+	## Builds a polygon for a rectangle with only the bottom two corners rounded.
+	## Used for the recessed content tray that sits below the type strip.
+	## The top two corners are square so the tray sits flush against the strip bottom.
+	static func _rounded_bottom_rect_poly(
+		x: float, y: float, w: float, h: float, r: float, segs: int
+	) -> PackedVector2Array:
+		var pts  := PackedVector2Array()
+		var step := (PI * 0.5) / float(segs)
+
+		# Top-left: square corner
+		pts.append(Vector2(x, y))
+
+		# Top-right: square corner
+		pts.append(Vector2(x + w, y))
+
+		# Bottom-right arc: centre (x+w-r, y+h-r), sweeping 0°→90°
+		for i in segs + 1:
+			var a := step * float(i)
+			pts.append(Vector2(x + w - r + cos(a) * r, y + h - r + sin(a) * r))
+
+		# Bottom-left arc: centre (x+r, y+h-r), sweeping 90°→180°
+		for i in segs + 1:
+			var a := PI * 0.5 + step * float(i)
+			pts.append(Vector2(x + r + cos(a) * r, y + h - r + sin(a) * r))
 
 		return pts
 
