@@ -262,10 +262,16 @@ func _build_card() -> void:
 				else BOOST_TEXTURE_PATHS.get(item_type, "")
 		if tex_path != "" and ResourceLoader.exists(tex_path):
 			_image_rect = TextureRect.new()
-			_image_rect.texture      = load(tex_path)
-			_image_rect.expand_mode  = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
-			_image_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			_image_rect.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			_image_rect.texture             = load(tex_path)
+			# EXPAND_IGNORE_SIZE keeps minimum_size at 0×0 so the TextureRect never
+			# tries to grow beyond the size we assign in _on_resized().  The alternative
+			# EXPAND_FIT_HEIGHT_PROPORTIONAL inflates minimum_size to match the SVG's
+			# natural dimensions (which include large transparent padding), causing the
+			# image to expand to fill the entire card when clip_contents is off.
+			_image_rect.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+			_image_rect.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			_image_rect.custom_minimum_size = Vector2.ZERO
+			_image_rect.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 			add_child(_image_rect)
 
 	# --- Stat name (equipment only) or empty for campaign cards ---
@@ -341,9 +347,10 @@ func _on_resized() -> void:
 	var cursor := 6.0 + title_h + 4.0
 
 	# Row 2 (unlock/gear cards): trap/boost preview image.
-	# Sized to match the trap icon height used in TrapUpgradePanel's header row (~58px),
-	# which is roughly a 1:1 square at the upgrade panel's icon dimensions.
-	const IMAGE_H: float = 70.0
+	# Target height = 3 lines of description text.  Description font is 24 × 0.65 ≈ 15.6 px;
+	# one line ≈ 21 px (1.35× em), three lines ≈ 63 px.  58 px keeps it compact and also
+	# matches HEADER_ICON_DISPLAY in TrapUpgradePanel for consistent visual weight.
+	const IMAGE_H: float = 58.0
 	if _image_rect:
 		_image_rect.position = Vector2(px, cursor)
 		_image_rect.size     = Vector2(w - px * 2.0, IMAGE_H)
