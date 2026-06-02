@@ -210,9 +210,9 @@ var _shake_offset: Vector2 = Vector2.ZERO
 var _shake_timer:  float   = 0.0    # counts down; > 0 while shaking
 var _shake_axis:   Vector2 = Vector2.ZERO   # random unit vector for vibration direction
 
-const SHAKE_DURATION: float = 0.20    # total vibration time in seconds
-const SHAKE_FREQ:     float = 40.0    # oscillations per second (cycles/s)
-const SHAKE_MAG:      float = 0.000006 # calibrated: 0.00003 produced ~2.5 cells; target 0.3–0.8
+const SHAKE_DURATION: float = 0.35    # total vibration time in seconds
+const SHAKE_FREQ:     float = 10.0    # oscillations per second — low enough for smooth oscillation at 60 fps
+const SHAKE_MAG_PX:   float = 12.0   # peak displacement in screen pixels; converted to world units at runtime
 var _followed_enemy:        Node3D   = null  # non-null while enemy-follow mode is active
 var _enemy_stats_panel:    Node     = null  # EnemyStatsPanel instance
 var _floor_mi:           MeshInstance3D = null  # floor mesh; material_override swapped on zoom
@@ -2649,18 +2649,29 @@ func _process(delta: float) -> void:
 	# Drive the sine-wave camera shake oscillator.
 	# elapsed counts up from 0 so sin() starts at 0 (no initial snap).
 	# Amplitude decays linearly to zero so the vibration fades out naturally.
+	# Shake is expressed in screen pixels, converted to world units at the current zoom
+	# level so the visible displacement is the same whether zoomed in or out.
+	# _apply_pan is called to establish the clean base position; shake is then layered
+	# directly onto the camera offsets below, bypassing the pan clamp entirely.
 	if _shake_timer > 0.0:
 		_shake_timer -= delta
 		if _shake_timer <= 0.0:
 			_shake_timer  = 0.0
 			_shake_offset = Vector2.ZERO
 		else:
-			var elapsed := SHAKE_DURATION - _shake_timer
-			var decay   := _shake_timer / SHAKE_DURATION   # 1.0 → 0.0
-			_shake_offset = _shake_axis * sin(elapsed * SHAKE_FREQ * TAU) * SHAKE_MAG * decay
-		# Always refresh camera when shaking, even without an enemy being followed.
+			var elapsed      := SHAKE_DURATION - _shake_timer
+			var decay        := _shake_timer / SHAKE_DURATION   # 1.0 → 0.0
+			var world_per_px := _camera.size / get_viewport().get_visible_rect().size.y
+			var mag_px       := sin(elapsed * SHAKE_FREQ * TAU) * SHAKE_MAG_PX * decay
+			_shake_offset     = _shake_axis * mag_px * world_per_px
+		# Re-establish the clean base camera position so shake can be applied on top.
 		if _followed_enemy == null:
 			_apply_pan(_pan_world_pos)
+
+	# Apply the shake offset directly to camera offsets — separate from the clamped pan
+	# so the shake works at all zoom levels and never gets caught in the overview clamp.
+	_camera.h_offset += _shake_offset.x
+	_camera.v_offset += _shake_offset.y
 
 	# Pan toward whichever arena edge the drag ghost is approaching.
 	if _hud_drag_active and _zoom_state == ZoomState.ZOOMED_IN:
@@ -2691,6 +2702,7 @@ func _toggle_zoom(center_pos: Vector2 = Vector2.ZERO) -> void:
 
 
 ## Pans the camera to pos (world XZ), clamped so the arena never scrolls off-screen.
+## Does NOT apply shake — shake is layered on top by _process after this call.
 func _apply_pan(pos: Vector2) -> void:
 	var vp            := get_viewport().get_visible_rect().size
 	var world_per_px  := _camera.size / vp.y
@@ -2698,13 +2710,22 @@ func _apply_pan(pos: Vector2) -> void:
 	# Arena zone height below the experience bar; used for pan clamping so the
 	# camera cannot scroll arena content entirely behind the XP bar or off-screen.
 	var visible_half_h := (vp.y - ExperienceBar.PANEL_H - HUD.SCREEN_EDGE_MARGIN) * world_per_px * 0.5
-	var cx := clampf(pos.x, -_arena_world_half   + visible_half_w, _arena_world_half   - visible_half_w)
-	var cz := clampf(pos.y, -_arena_world_half_z + visible_half_h, _arena_world_half_z - visible_half_h)
+
+	# In overview the visible area is larger than the arena, so the clamp range would
+	# be inverted (min > max). Guard against this: if the arena fits completely in view
+	# on an axis, that axis cannot be panned — lock it to 0.
+	var cx := 0.0
+	if visible_half_w < _arena_world_half:
+		cx = clampf(pos.x, -_arena_world_half + visible_half_w, _arena_world_half - visible_half_w)
+	var cz := 0.0
+	if visible_half_h < _arena_world_half_z:
+		cz = clampf(pos.y, -_arena_world_half_z + visible_half_h, _arena_world_half_z - visible_half_h)
+
 	_pan_world_pos   = Vector2(cx, cz)
-	_camera.h_offset = _camera_base_h_offset + cx + _shake_offset.x
+	_camera.h_offset = _camera_base_h_offset + cx
 	# _v_center_offset_px is converted to world units using the CURRENT camera size
 	# so the pixel-space centering stays correct at both overview and zoomed-in levels.
-	_camera.v_offset = _v_center_offset_px * world_per_px - cz + _shake_offset.y
+	_camera.v_offset = _v_center_offset_px * world_per_px - cz
 
 
 ## Scrolls the camera based on how far the drag ghost has entered the edge bands.

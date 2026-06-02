@@ -50,8 +50,8 @@ const COLOR_DONE_BORDER := Color(0.22, 0.60, 0.04, 1.0)
 const PADDING:  float = 24.0   # horizontal inset used consistently throughout
 const HEADER_H: float = 66.0   # header bar (title + SF balance + Close) — 50% larger than original 44
 const TAB_H:    float = 50.0   # tab button row
-const ROW_H:    float = 76.0   # height of each upgrade item in the scroll list
-const BTN_W:    float = 120.0
+const ROW_H:    float = 64.0   # height of each upgrade item in the scroll list
+const BTN_W:    float = 160.0
 const BTN_H:    float = 50.0
 
 
@@ -139,11 +139,11 @@ func _build_header() -> void:
 	title.mouse_filter       = Control.MOUSE_FILTER_IGNORE
 	add_child(title)
 
-	# SF balance: icon + number, right-aligned — 50% larger (icon 36×24→54×36, font 26→39 pt).
+	# SF balance: icon + number, centred in the header.
 	var sf_row := HBoxContainer.new()
-	sf_row.position    = Vector2(1280.0 - PADDING - 200.0, 4.0)
-	sf_row.size        = Vector2(200.0, HEADER_H - 8.0)
-	sf_row.alignment   = BoxContainer.ALIGNMENT_END
+	sf_row.position    = Vector2(640.0 - 120.0, 4.0)
+	sf_row.size        = Vector2(240.0, HEADER_H - 8.0)
+	sf_row.alignment   = BoxContainer.ALIGNMENT_CENTER
 	sf_row.add_theme_constant_override("separation", 6)
 	sf_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(sf_row)
@@ -166,11 +166,11 @@ func _build_header() -> void:
 	_sf_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sf_row.add_child(_sf_lbl)
 
-	# Close button — 50% larger (font 17→26 pt, size 98×32→130×44), relabelled from "Done".
+	# Close button — right-aligned in the header.
 	var done_btn := Button.new()
 	done_btn.text         = "Close"
 	done_btn.focus_mode   = Control.FOCUS_NONE
-	done_btn.position     = Vector2(1280.0 - PADDING - 200.0 - 130.0 - 12.0, (HEADER_H - 44.0) * 0.5)
+	done_btn.position     = Vector2(1280.0 - PADDING - 130.0, (HEADER_H - 44.0) * 0.5)
 	done_btn.size         = Vector2(130.0, 44.0)
 	done_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	done_btn.add_theme_font_override("font", UIFonts.primary_bold())
@@ -318,9 +318,9 @@ func _effect_text(def: Dictionary, tier: int) -> String:
 
 ## Builds a single upgrade row and appends it to _vbox.
 ##
-## Layout (ROW_H = 76 px):
-##   Row 1 (y=12): [★ tier | name (large) | effect text]     ← title is dominant
-##   Row 2 (y=42): [description (smaller, dimmer)]
+## Layout (ROW_H = 64 px):
+##   Row 1 (y=8):  [★ tier | name (large) | effect text]     ← title is dominant
+##   Row 2 (y=37): [description (smaller, dimmer)]
 ##   Right column: buy button, vertically centred
 func _build_upgrade_row(def: Dictionary) -> void:
 	var upgrade_id: String = def["id"]
@@ -335,8 +335,8 @@ func _build_upgrade_row(def: Dictionary) -> void:
 	_vbox.add_child(row)
 
 	# Vertical positions within the row — two content rows centred in ROW_H.
-	var row1_y: float = 12.0   # (ROW_H - 26 - 4 - 24) / 2 = 12
-	var row2_y: float = 42.0   # row1_y + 26 + 4
+	var row1_y: float = 8.0    # top label row, inset slightly from the top edge
+	var row2_y: float = 37.0   # description row below
 
 	# ── Star-level panel — spans the full row height ─────────────────────────
 	# Gold border when fully maxed; dark gray otherwise.
@@ -344,7 +344,7 @@ func _build_upgrade_row(def: Dictionary) -> void:
 	var star_color: Color   = COLOR_HEADER if tier > 0 else COLOR_DOT_OFF
 	var star_panel          := Panel.new()
 	star_panel.position     = Vector2(PADDING, 0.0)
-	star_panel.size         = Vector2(56.0, ROW_H)
+	star_panel.size         = Vector2(88.0, ROW_H)
 	star_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var star_sty            := StyleBoxFlat.new()
 	star_sty.bg_color     = Color(0.04, 0.04, 0.06, 0.60)
@@ -354,43 +354,45 @@ func _build_upgrade_row(def: Dictionary) -> void:
 	star_panel.add_theme_stylebox_override("panel", star_sty)
 	row.add_child(star_panel)
 
-	# VBoxContainer fills the panel so star and number together span the full row height.
-	var star_vbox := VBoxContainer.new()
+	# HBoxContainer fills the panel: star glyph on the left, tier number on the right.
+	var star_vbox := HBoxContainer.new()
 	star_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	star_vbox.add_theme_constant_override("separation", 0)
 	star_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	star_panel.add_child(star_vbox)
 
-	# Star glyph — expands to fill the upper ~65% of the panel; centred in both axes.
+	# Star glyph — takes an equal share of the panel width; centred vertically.
 	var star_sym := Label.new()
-	star_sym.text                     = "★"
-	star_sym.size_flags_vertical      = Control.SIZE_EXPAND_FILL
-	star_sym.size_flags_stretch_ratio = 2.0   # takes 2/3 of available height
-	star_sym.horizontal_alignment     = HORIZONTAL_ALIGNMENT_CENTER
-	star_sym.vertical_alignment       = VERTICAL_ALIGNMENT_CENTER
+	star_sym.text                      = "★"
+	star_sym.size_flags_horizontal     = Control.SIZE_EXPAND_FILL
+	star_sym.size_flags_stretch_ratio  = 1.0
+	star_sym.size_flags_vertical       = Control.SIZE_SHRINK_CENTER
+	star_sym.horizontal_alignment      = HORIZONTAL_ALIGNMENT_CENTER
+	star_sym.vertical_alignment        = VERTICAL_ALIGNMENT_CENTER
 	star_sym.add_theme_font_override("font", UIFonts.primary_bold())
-	star_sym.add_theme_font_size_override("font_size", 36)
+	star_sym.add_theme_font_size_override("font_size", 46)   # ~85% of 64px row height
 	star_sym.add_theme_color_override("font_color", star_color)
-	star_sym.mouse_filter             = Control.MOUSE_FILTER_IGNORE
+	star_sym.mouse_filter              = Control.MOUSE_FILTER_IGNORE
 	star_vbox.add_child(star_sym)
 
-	# Tier number — expands to fill the lower ~35% of the panel; centred in both axes.
+	# Tier number — takes an equal share of the panel width; centred vertically.
 	var tier_num := Label.new()
-	tier_num.text                     = "%d" % tier
-	tier_num.size_flags_vertical      = Control.SIZE_EXPAND_FILL
-	tier_num.size_flags_stretch_ratio = 1.0   # takes 1/3 of available height
-	tier_num.horizontal_alignment     = HORIZONTAL_ALIGNMENT_CENTER
-	tier_num.vertical_alignment       = VERTICAL_ALIGNMENT_CENTER
+	tier_num.text                      = "%d" % tier
+	tier_num.size_flags_horizontal     = Control.SIZE_EXPAND_FILL
+	tier_num.size_flags_stretch_ratio  = 1.0
+	tier_num.size_flags_vertical       = Control.SIZE_SHRINK_CENTER
+	tier_num.horizontal_alignment      = HORIZONTAL_ALIGNMENT_CENTER
+	tier_num.vertical_alignment        = VERTICAL_ALIGNMENT_CENTER
 	tier_num.add_theme_font_override("font", UIFonts.primary_bold())
-	tier_num.add_theme_font_size_override("font_size", 18)
+	tier_num.add_theme_font_size_override("font_size", 32)
 	tier_num.add_theme_color_override("font_color", star_color)
-	tier_num.mouse_filter             = Control.MOUSE_FILTER_IGNORE
+	tier_num.mouse_filter              = Control.MOUSE_FILTER_IGNORE
 	star_vbox.add_child(tier_num)
 
 	# ── Row 1: name (large title) + effect text ───────────────────────────────
 	var name_lbl := Label.new()
 	name_lbl.text         = def["name"]
-	name_lbl.position     = Vector2(PADDING + 64.0, row1_y)
+	name_lbl.position     = Vector2(PADDING + 96.0, row1_y)
 	name_lbl.size         = Vector2(300.0, 26.0)
 	name_lbl.clip_text    = true
 	name_lbl.add_theme_font_override("font", UIFonts.primary_bold())
@@ -403,22 +405,22 @@ func _build_upgrade_row(def: Dictionary) -> void:
 	effect_lbl.text = _effect_text(def, tier)
 	effect_lbl.add_theme_color_override("font_color",
 		COLOR_MAX if tier >= max_tiers else COLOR_HEADER)
-	effect_lbl.position     = Vector2(PADDING + 64.0 + 300.0 + 16.0, row1_y)
+	effect_lbl.position     = Vector2(PADDING + 96.0 + 300.0 + 16.0, row1_y)
 	effect_lbl.size         = Vector2(660.0, 26.0)
 	effect_lbl.clip_text    = true
 	effect_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	effect_lbl.add_theme_font_size_override("font_size", 15)
+	effect_lbl.add_theme_font_size_override("font_size", 23)
 	effect_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(effect_lbl)
 
 	# ── Row 2: description (smaller, so it reads as subordinate to the title) ──
 	var desc_lbl := Label.new()
 	desc_lbl.text         = def["desc"]
-	desc_lbl.position     = Vector2(PADDING + 64.0, row2_y)
+	desc_lbl.position     = Vector2(PADDING + 96.0, row2_y)
 	desc_lbl.size         = Vector2(1000.0, 24.0)
 	desc_lbl.clip_text    = true
 	desc_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	desc_lbl.add_theme_font_size_override("font_size", 14)   # description — clearly smaller than name
+	desc_lbl.add_theme_font_size_override("font_size", 21)   # description — clearly smaller than name
 	desc_lbl.add_theme_color_override("font_color", Color(0.72, 0.72, 0.77, 1.0))
 	desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	row.add_child(desc_lbl)
@@ -446,7 +448,7 @@ func _build_upgrade_row(def: Dictionary) -> void:
 	cost_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
 	cost_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	cost_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	cost_icon.custom_minimum_size = Vector2(30, 20)
+	cost_icon.custom_minimum_size = Vector2(64, 43)   # 3:2 aspect ratio at 43px (85% of BTN_H 50)
 	cost_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_icon)
@@ -455,7 +457,7 @@ func _build_upgrade_row(def: Dictionary) -> void:
 	cost_lbl.vertical_alignment  = VERTICAL_ALIGNMENT_CENTER
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	cost_lbl.add_theme_font_size_override("font_size", 20)
+	cost_lbl.add_theme_font_size_override("font_size", 36)
 	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
 

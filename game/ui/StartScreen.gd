@@ -151,24 +151,24 @@ func _build_ui() -> void:
 	_start_btn = _make_icon_button("Start New Service Contract", "res://assets/uninfested.png", true)
 	_start_btn.anchor_left   = 0.14
 	_start_btn.anchor_right  = 0.39
-	_start_btn.anchor_top    = 0.80
-	_start_btn.anchor_bottom = 0.90
+	_start_btn.anchor_top    = 0.82
+	_start_btn.anchor_bottom = 0.93
 	_start_btn.pressed.connect(_on_start_pressed)
 	add_child(_start_btn)
 
 	_quit_btn = _make_icon_button("Exit", "res://assets/infestation_level.png", false)
 	_quit_btn.anchor_left   = 0.41
 	_quit_btn.anchor_right  = 0.66
-	_quit_btn.anchor_top    = 0.80
-	_quit_btn.anchor_bottom = 0.90
+	_quit_btn.anchor_top    = 0.82
+	_quit_btn.anchor_bottom = 0.93
 	_quit_btn.pressed.connect(_on_quit_pressed)
 	add_child(_quit_btn)
 
 	_dev_btn = _make_dev_button()
 	_dev_btn.anchor_left   = 0.68
 	_dev_btn.anchor_right  = 0.85
-	_dev_btn.anchor_top    = 0.80
-	_dev_btn.anchor_bottom = 0.90
+	_dev_btn.anchor_top    = 0.82
+	_dev_btn.anchor_bottom = 0.93
 	_dev_btn.pressed.connect(_on_dev_pressed)
 	add_child(_dev_btn)
 
