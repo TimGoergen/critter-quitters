@@ -1319,9 +1319,11 @@ func _on_wave_spawn_progress_changed(spawned: int, total: int) -> void:
 
 
 func _process(delta: float) -> void:
-	# If the game pauses while a drag is in progress (e.g. a level-up screen appears),
-	# cancel the drag immediately so the trap is not silently committed on resume.
-	if _drag_active and get_tree().paused:
+	# If the game pauses while a drag is in progress due to a system event (e.g. a
+	# level-up screen appears), cancel the drag so the trap is not silently committed
+	# on resume.  Player-initiated pauses (_is_paused) must NOT cancel: the design
+	# allows placing traps while the player has manually paused to inspect the arena.
+	if _drag_active and get_tree().paused and not _is_paused:
 		_arena.cancel_hud_drag()
 		_end_drag()
 
