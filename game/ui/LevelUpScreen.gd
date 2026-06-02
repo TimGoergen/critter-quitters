@@ -152,8 +152,8 @@ const EQUIP_DISPLAY_PCT: Array = [5, 10, 20]
 # Layout constants
 # ---------------------------------------------------------------------------
 
-## Width of each upgrade card in virtual pixels.
-const CARD_W: float = 271.0   # 226 × 1.20
+## Width of each upgrade card in virtual pixels — matches TrapSelectionScreen.
+const CARD_W: float = 372.0
 
 ## Height of each upgrade card in virtual pixels.
 const CARD_H: float = 277.0   # 252 × 1.10
@@ -631,6 +631,7 @@ func _spawn_cards(cards: Array) -> void:
 		var card_ctrl := UpgradeCard.new()
 		# Apply identity colour for unlock cards before setup() reads it.
 		card_ctrl.custom_color = cards[i].get("custom_color", Color.TRANSPARENT)
+		card_ctrl.font_scale   = 0.65   # match TrapSelectionScreen text density
 		card_ctrl.setup(cards[i])
 		card_ctrl.position    = Vector2(start_x + i * (CARD_W + CARD_GAP), card_y)
 		card_ctrl.size        = Vector2(CARD_W, CARD_H)
