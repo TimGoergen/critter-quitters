@@ -26,3 +26,7 @@ In order to make sure that the player's starting gear is useful, the following r
 # for level up screen, possibility of any item being a new trap or boost should be low, and decrease as the number of traps and boosts that the player has unlocked increases
 
 # on permanent upgrade screen, each item should have 10 tiers, not two. Currently there are two gold dots that represent the level. This should change to a large bright gold star with the level number in gold next to it. The star should be dark gray when the level is zero. The star will be inside a panel that has a dark gray outline when the level is 9 or lower, bright gold when the level is 10.  The service fee icon and text should be twice as large. The description text should be bold, larger and white to be easier to read on mobile. 
+
+
+
+#in the arena, you can no longer place traps or boosts while the game is paused
