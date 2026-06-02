@@ -354,31 +354,38 @@ func _build_upgrade_row(def: Dictionary) -> void:
 	star_panel.add_theme_stylebox_override("panel", star_sty)
 	row.add_child(star_panel)
 
-	# Star glyph — large, fills the upper ~60% of the panel.
-	var star_sym := Label.new()
-	star_sym.text                 = "★"
-	star_sym.position             = Vector2(0.0, 2.0)
-	star_sym.size                 = Vector2(56.0, 46.0)
-	star_sym.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	star_sym.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	star_sym.add_theme_font_override("font", UIFonts.primary_bold())
-	star_sym.add_theme_font_size_override("font_size", 32)
-	star_sym.add_theme_color_override("font_color", star_color)
-	star_sym.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	star_panel.add_child(star_sym)
+	# VBoxContainer fills the panel so star and number together span the full row height.
+	var star_vbox := VBoxContainer.new()
+	star_vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	star_vbox.add_theme_constant_override("separation", 0)
+	star_vbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	star_panel.add_child(star_vbox)
 
-	# Tier number — centred in the lower ~30% of the panel.
+	# Star glyph — expands to fill the upper ~65% of the panel; centred in both axes.
+	var star_sym := Label.new()
+	star_sym.text                     = "★"
+	star_sym.size_flags_vertical      = Control.SIZE_EXPAND_FILL
+	star_sym.size_flags_stretch_ratio = 2.0   # takes 2/3 of available height
+	star_sym.horizontal_alignment     = HORIZONTAL_ALIGNMENT_CENTER
+	star_sym.vertical_alignment       = VERTICAL_ALIGNMENT_CENTER
+	star_sym.add_theme_font_override("font", UIFonts.primary_bold())
+	star_sym.add_theme_font_size_override("font_size", 36)
+	star_sym.add_theme_color_override("font_color", star_color)
+	star_sym.mouse_filter             = Control.MOUSE_FILTER_IGNORE
+	star_vbox.add_child(star_sym)
+
+	# Tier number — expands to fill the lower ~35% of the panel; centred in both axes.
 	var tier_num := Label.new()
-	tier_num.text                 = "%d" % tier
-	tier_num.position             = Vector2(0.0, 50.0)
-	tier_num.size                 = Vector2(56.0, 24.0)
-	tier_num.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	tier_num.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	tier_num.text                     = "%d" % tier
+	tier_num.size_flags_vertical      = Control.SIZE_EXPAND_FILL
+	tier_num.size_flags_stretch_ratio = 1.0   # takes 1/3 of available height
+	tier_num.horizontal_alignment     = HORIZONTAL_ALIGNMENT_CENTER
+	tier_num.vertical_alignment       = VERTICAL_ALIGNMENT_CENTER
 	tier_num.add_theme_font_override("font", UIFonts.primary_bold())
-	tier_num.add_theme_font_size_override("font_size", 16)
+	tier_num.add_theme_font_size_override("font_size", 18)
 	tier_num.add_theme_color_override("font_color", star_color)
-	tier_num.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	star_panel.add_child(tier_num)
+	tier_num.mouse_filter             = Control.MOUSE_FILTER_IGNORE
+	star_vbox.add_child(tier_num)
 
 	# ── Row 1: name (large title) + effect text ───────────────────────────────
 	var name_lbl := Label.new()
