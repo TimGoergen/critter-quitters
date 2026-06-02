@@ -307,9 +307,12 @@ func _build_trap_card(trap_type: int) -> UpgradeCard:
 		"plain_text":  display.get("desc", ""),
 	}
 	var card := UpgradeCard.new()
-	card.toggleable   = true
-	card.custom_color = Trap.STATS[trap_type].get("color", Color.WHITE)
-	card.font_scale   = 0.65   # reduce by 35% — gear cards are read at a glance, not studied
+	card.toggleable           = true
+	card.custom_color         = Trap.STATS[trap_type].get("color", Color.WHITE)
+	card.font_scale           = 0.65   # reduce by 35% — gear cards are read at a glance, not studied
+	card.title_font_scale     = 1.75   # trap name is the primary info; make it dominant
+	card.use_identity_outline = true   # border matches trap brand colour, not rarity tier
+	card.show_tier_badge      = false  # gear cards have no rarity
 	card.setup(data)
 	return card
 
@@ -327,9 +330,12 @@ func _build_boost_card(boost_type: int) -> UpgradeCard:
 		"plain_text":  display.get("desc", ""),
 	}
 	var card := UpgradeCard.new()
-	card.toggleable   = true
-	card.custom_color = BoostUnit.GLOW_COLORS[boost_type]
-	card.font_scale   = 0.65
+	card.toggleable           = true
+	card.custom_color         = BoostUnit.GLOW_COLORS[boost_type]
+	card.font_scale           = 0.65
+	card.title_font_scale     = 1.75
+	card.use_identity_outline = true
+	card.show_tier_badge      = false
 	card.setup(data)
 	return card
 

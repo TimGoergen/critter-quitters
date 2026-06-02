@@ -128,6 +128,20 @@ var custom_color: Color = Color.TRANSPARENT
 ## leaves it at the default 1.0.
 var font_scale: float = 1.0
 
+## Additional multiplier applied only to the title label. Used by
+## TrapSelectionScreen to make trap/boost names dominate the card visually
+## without scaling all other text (stats, descriptions) by the same amount.
+var title_font_scale: float = 1.0
+
+## When true the card border uses custom_color (trap/boost identity colour)
+## rather than the rarity tier colour. Set by TrapSelectionScreen, where cards
+## represent unit types rather than rarity-tiered rewards.
+var use_identity_outline: bool = false
+
+## When false the tier badge ("COMMON" / "PROFESSIONAL" / "RARE") at the
+## card bottom is not created. TrapSelectionScreen cards have no rarity.
+var show_tier_badge: bool = true
+
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -155,8 +169,12 @@ func _build_card() -> void:
 	mouse_filter               = Control.MOUSE_FILTER_STOP
 	mouse_default_cursor_shape = Control.CURSOR_POINTING_HAND
 
-	# --- Outline always uses the rarity tier color ---
-	var outline_color: Color = TIER_COLORS[tier]
+	# --- Outline: identity colour when requested (gear screen), rarity tier otherwise ---
+	var outline_color: Color
+	if use_identity_outline and custom_color.a > 0.0:
+		outline_color = custom_color
+	else:
+		outline_color = TIER_COLORS[tier]
 
 	# --- Background color ---
 	# If a trap/boost identity color is supplied, derive the bg from it so the
@@ -182,17 +200,18 @@ func _build_card() -> void:
 	_card_frame.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	add_child(_card_frame)
 
-	# --- Tier badge — bottom-right corner, dimmed to serve as secondary info ---
-	# Shows "COMMON" / "PROFESSIONAL" / "RARE" — quality indicator, not category.
-	_tier_lbl = Label.new()
-	_tier_lbl.text                 = TIER_NAMES[tier]
-	_tier_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_tier_lbl.clip_text            = true
-	_tier_lbl.add_theme_color_override("font_color", Color(outline_color.r, outline_color.g, outline_color.b, 0.70))
-	_tier_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_tier_lbl.add_theme_font_size_override("font_size", roundi(20.0 * font_scale))
-	add_child(_tier_lbl)
+	# --- Tier badge — bottom-right corner (omitted on gear-selection cards) ---
+	# show_tier_badge = false on TrapSelectionScreen because gear has no rarity.
+	if show_tier_badge:
+		_tier_lbl = Label.new()
+		_tier_lbl.text                 = TIER_NAMES[tier]
+		_tier_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+		_tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		_tier_lbl.clip_text            = true
+		_tier_lbl.add_theme_color_override("font_color", Color(outline_color.r, outline_color.g, outline_color.b, 0.70))
+		_tier_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+		_tier_lbl.add_theme_font_size_override("font_size", roundi(20.0 * font_scale))
+		add_child(_tier_lbl)
 
 	# --- Title — main name, large and prominent ---
 	_title_lbl = Label.new()
@@ -202,7 +221,7 @@ func _build_card() -> void:
 	_title_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
 	_title_lbl.add_theme_color_override("font_color", Color(0.95, 0.95, 0.98, 1.0))
 	_title_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_title_lbl.add_theme_font_size_override("font_size", roundi(38.0 * font_scale))
+	_title_lbl.add_theme_font_size_override("font_size", roundi(38.0 * font_scale * title_font_scale))
 	add_child(_title_lbl)
 
 	# --- Stat name (equipment only) or empty for campaign cards ---
@@ -261,27 +280,39 @@ func _on_resized() -> void:
 	var h  := size.y
 	var px := 10.0
 
-	# Row 1: Title — starts at the top of the card body (no type strip above it).
+	# Title height grows proportionally with title_font_scale so two-line names
+	# (e.g. "Fly Strip Launcher" at 1.75×) still render fully without clipping.
+	# At 1.0 this evaluates to 68px — unchanged from the original fixed value.
+	var title_h := 68.0 + (title_font_scale - 1.0) * 80.0
+
+	# Space reserved at the bottom for the tier badge (0 when badge is hidden).
+	var badge_reserve := 26.0 if show_tier_badge else 0.0
+
+	var stat_y   := 6.0 + title_h + 4.0
+	var impact_y := stat_y + 30.0 + 4.0
+	var plain_y  := impact_y + 54.0 + 4.0
+
+	# Row 1: Title.
 	if _title_lbl:
 		_title_lbl.position = Vector2(px, 6.0)
-		_title_lbl.size     = Vector2(w - px * 2.0, 68.0)
+		_title_lbl.size     = Vector2(w - px * 2.0, title_h)
 
 	# Row 2: Stat name (equipment) or empty (campaign).
 	if _stat_lbl:
-		_stat_lbl.position = Vector2(px, 78.0)
+		_stat_lbl.position = Vector2(px, stat_y)
 		_stat_lbl.size     = Vector2(w - px * 2.0, 30.0)
 
 	# Row 3: Impact line.
 	if _impact_lbl:
-		_impact_lbl.position = Vector2(px, 112.0)
+		_impact_lbl.position = Vector2(px, impact_y)
 		_impact_lbl.size     = Vector2(w - px * 2.0, 54.0)
 
-	# Row 4: Plain-text description — fills space above the tier badge.
+	# Row 4: Plain-text description — fills remaining space above the badge area.
 	if _plain_lbl:
-		_plain_lbl.position = Vector2(px, 170.0)
-		_plain_lbl.size     = Vector2(w - px * 2.0, h - 192.0)
+		_plain_lbl.position = Vector2(px, plain_y)
+		_plain_lbl.size     = Vector2(w - px * 2.0, h - plain_y - badge_reserve)
 
-	# Tier badge — bottom-right corner, below the plain text.
+	# Tier badge — bottom-right corner (null when show_tier_badge = false).
 	if _tier_lbl:
 		_tier_lbl.position = Vector2(px, h - 22.0)
 		_tier_lbl.size     = Vector2(w - px * 2.0 - 6.0, 18.0)
