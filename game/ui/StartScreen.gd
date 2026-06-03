@@ -153,6 +153,7 @@ func _build_ui() -> void:
 	_start_btn.anchor_right  = 0.39
 	_start_btn.anchor_top    = 0.82
 	_start_btn.anchor_bottom = 0.93
+	_start_btn.z_index       = 2   # above van (z=1) and exhaust puffs (z=0)
 	_start_btn.pressed.connect(_on_start_pressed)
 	add_child(_start_btn)
 
@@ -161,6 +162,7 @@ func _build_ui() -> void:
 	_quit_btn.anchor_right  = 0.66
 	_quit_btn.anchor_top    = 0.82
 	_quit_btn.anchor_bottom = 0.93
+	_quit_btn.z_index       = 2
 	_quit_btn.pressed.connect(_on_quit_pressed)
 	add_child(_quit_btn)
 
@@ -169,6 +171,7 @@ func _build_ui() -> void:
 	_dev_btn.anchor_right  = 0.85
 	_dev_btn.anchor_top    = 0.82
 	_dev_btn.anchor_bottom = 0.93
+	_dev_btn.z_index       = 2
 	_dev_btn.pressed.connect(_on_dev_pressed)
 	add_child(_dev_btn)
 
