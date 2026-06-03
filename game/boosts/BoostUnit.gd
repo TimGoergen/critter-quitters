@@ -958,7 +958,6 @@ func _update_star_display() -> void:
 			_bar_fill_mi.position.x = -BAR_HALF_W * (1.0 - frac)
 
 	const GOLD: Color = Color(1.0, 0.82, 0.18)
-	var frac := float(maxed) / float(get_total_upgradeable_stats())
 
 	var tint := _base_color.lerp(GOLD, frac)
 	for mat: StandardMaterial3D in _outline_mats:

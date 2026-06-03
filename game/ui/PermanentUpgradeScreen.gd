@@ -310,7 +310,7 @@ func _populate_tab(tab_name: String) -> void:
 func _effect_text(def: Dictionary, tier: int) -> String:
 	var max_tiers: int = def["tier_costs"].size()
 	if tier >= max_tiers:
-		return "MAX"
+		return "MAX  " + def["tier_effects"][max_tiers - 1]
 	if tier == 0:
 		return def["tier_effects"][0]
 	return def["tier_effects"][tier - 1] + " → " + def["tier_effects"][tier]
