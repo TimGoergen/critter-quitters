@@ -712,6 +712,44 @@ func purchase_upgrade(upgrade_id: String) -> bool:
 ##
 ## All stats now scale linearly per tier (10 tiers max).
 ## The multipliers below match the per-tier increments defined in PERMANENT_UPGRADE_DEFS.
+## Re-reads permanent_upgrades and updates all upgrade-driven runtime variables.
+## Does NOT touch bug_bucks — _apply_permanent_upgrade_bonuses() handles that
+## at run start; _on_debug_confirmed() then overwrites it with the dev override.
+## Called by DebugStartDialog after Min/Max All Upgrades so the TrapSelectionScreen
+## sees the correct wider_selection_tier before start_run() reruns.
+func sync_upgrade_bonuses() -> void:
+	var t: int
+
+	t = permanent_upgrades.get("reinforced_mechanisms", 0)
+	global_damage_bonus    = t * 0.05
+
+	t = permanent_upgrades.get("extended_range", 0)
+	global_range_bonus     = t * 0.04
+
+	t = permanent_upgrades.get("tuned_triggers", 0)
+	global_fire_rate_bonus = t * 0.04
+
+	wider_selection_tier   = permanent_upgrades.get("wider_selection", 0)
+
+	t = permanent_upgrades.get("hazard_insurance", 0)
+	infestation_max_bonus  = t * 0.05
+
+	t = permanent_upgrades.get("salvage_value", 0)
+	sell_value_bonus       = t * 0.03
+
+	t = permanent_upgrades.get("bulk_discount", 0)
+	upgrade_cost_discount  = minf(t * 0.03, 0.80)
+
+	t = permanent_upgrades.get("field_experience", 0)
+	global_xp_bonus        = t * 0.10
+
+	t = permanent_upgrades.get("show_me", 0)
+	global_bucks_bonus     = t * 0.05
+
+	t = permanent_upgrades.get("strengthen_defenses", 0)
+	infestation_damage_reduction = t * 0.04
+
+
 func _apply_permanent_upgrade_bonuses() -> void:
 	var t: int
 

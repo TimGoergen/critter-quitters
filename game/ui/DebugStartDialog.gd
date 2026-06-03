@@ -164,6 +164,7 @@ func _build_ui() -> void:
 	_field_sf = _add_field_row(self, LEFT_COL_X, y, LEFT_COL_W_NEW, ROW_H_CTRL,
 			"Service Fees", str(GameState.service_fees), 10, 0)
 	y += ROW_H_CTRL
+	y += 16.0
 
 	# Upgrade preset buttons — immediately write to the persisted permanent_upgrades
 	# dictionary so the next run (or the PermanentUpgradeScreen right now) reflects them.
@@ -521,11 +522,13 @@ func _on_start_pressed() -> void:
 func _on_max_upgrades_pressed() -> void:
 	for key: String in GameState.permanent_upgrades:
 		GameState.permanent_upgrades[key] = 10
+	GameState.sync_upgrade_bonuses()
 
 
 func _on_min_upgrades_pressed() -> void:
 	for key: String in GameState.permanent_upgrades:
 		GameState.permanent_upgrades[key] = 0
+	GameState.sync_upgrade_bonuses()
 
 
 func _style_start_button(btn: Button) -> void:
