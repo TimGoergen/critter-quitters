@@ -254,9 +254,10 @@ var _hover_area:      Area3D = null
 # When true, the indicator stays visible regardless of hover state (upgrade panel open).
 var _indicator_pinned: bool  = false
 
-# Star display — one MeshInstance3D polygon star per possible star (max 3).
-# All three meshes are pre-spawned; _update_star_display() shows/hides and repositions them.
-var _star_meshes: Array[MeshInstance3D] = []
+# Progress bar display — background strip always visible, gold fill grows left-to-right
+# as each stat category is maxed. Replaces the old floating star meshes.
+var _bar_bg_mi:   MeshInstance3D = null   # always-visible dark background strip
+var _bar_fill_mi: MeshInstance3D = null   # gold fill, scales left-to-right
 
 # Boost indicator — small diamond shown in the trap's top-right corner whenever at
 # least one boost aura is currently active on this trap.
@@ -1196,22 +1197,43 @@ func _check_full_upgrade_bonus() -> void:
 	_bonus_applied = true
 
 
-## Spawns three MeshInstance3D polygon stars to reflect how many stats are maxed.
+## Spawns the horizontal gold progress bar that shows how many stat categories are maxed.
 ## Called once from initialize() — not spawned for preview instances.
-## Slot layout:
-##   [0] = center (larger)   shown for the first maxed stat
-##   [1] = left   (smaller)  shown for the second maxed stat
-##   [2] = right  (smaller)  shown for the third maxed stat
+## Background bar is always visible; gold fill grows left-to-right as stats are maxed.
 func _spawn_star_display() -> void:
-	# Center star is larger; side stars are smaller to signal hierarchy.
-	# Outer radius in world units; inner notch = outer × 0.42 (balanced proportion).
-	var radii: Array[float] = [0.34, 0.24, 0.24]   # [center, left, right]
-	var gold := Color(1.0, 0.92, 0.30, 1.0)
-	for r: float in radii:
-		var mi := _make_star_mesh(r, gold)
-		mi.visible = false
-		add_child(mi)
-		_star_meshes.append(mi)
+	const BAR_W:      float = 1.70   # slightly less than the 2m footprint width
+	const BAR_D:      float = 0.18   # depth (Z extent) for visibility from isometric camera
+	const BAR_H:      float = 0.005  # essentially flat
+	const BAR_LOCAL_Y: float = -0.065   # just above the SVG sprite (which is at local y=-0.08)
+	const BAR_LOCAL_Z: float =  0.75    # front edge of trap footprint
+
+	# Background bar — dark charcoal, always visible.
+	var bg_box    := BoxMesh.new()
+	bg_box.size    = Vector3(BAR_W, BAR_H, BAR_D)
+	_bar_bg_mi     = MeshInstance3D.new()
+	_bar_bg_mi.mesh = bg_box
+	var bg_mat            := StandardMaterial3D.new()
+	bg_mat.albedo_color    = Color(0.12, 0.12, 0.14, 0.90)
+	bg_mat.shading_mode    = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bg_mat.transparency    = BaseMaterial3D.TRANSPARENCY_ALPHA
+	bg_mat.no_depth_test   = true
+	_bar_bg_mi.material_override = bg_mat
+	_bar_bg_mi.position    = Vector3(0.0, BAR_LOCAL_Y, BAR_LOCAL_Z)
+	add_child(_bar_bg_mi)
+
+	# Gold fill bar — same size at full scale; scaled and offset left-to-right at update time.
+	var fill_box    := BoxMesh.new()
+	fill_box.size    = Vector3(BAR_W, BAR_H, BAR_D)
+	_bar_fill_mi     = MeshInstance3D.new()
+	_bar_fill_mi.mesh = fill_box
+	var fill_mat            := StandardMaterial3D.new()
+	fill_mat.albedo_color    = Color(1.0, 0.82, 0.18, 1.0)
+	fill_mat.shading_mode    = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fill_mat.no_depth_test   = true
+	_bar_fill_mi.material_override = fill_mat
+	_bar_fill_mi.position    = Vector3(0.0, BAR_LOCAL_Y + 0.001, BAR_LOCAL_Z)   # tiny Y offset avoids Z-fight
+	_bar_fill_mi.visible     = false
+	add_child(_bar_fill_mi)
 
 
 ## Builds a flat five-pointed star as an ArrayMesh and returns it inside a
@@ -1254,32 +1276,23 @@ static func _make_star_mesh(outer_r: float, color: Color) -> MeshInstance3D:
 	return mi
 
 
-## Refreshes star meshes, tints the footprint outline toward gold, and brightens the
+## Refreshes the progress bar, tints the footprint outline toward gold, and brightens the
 ## drop shadow as stats are maxed.  The background plate keeps its base color throughout —
 ## only the border and shadow shift, so the trap’s identity color is always visible.
 func _update_star_display() -> void:
-	if _star_meshes.is_empty():
+	if _bar_bg_mi == null:
 		return
 	var maxed: int = get_maxed_stat_count()
 
-	# --- Stars ---
-	# Layout: [left-small]  [center-large]  [right-small]
-	# Stars are polygon meshes; sizes set by outer_r in _spawn_star_display().
-	# STAR_Z/STAR_Y: position the stars just above the trap’s footprint outline.
-	# SIDE_OFFSET: spacing chosen so side stars don’t overlap the center star.
-	const STAR_Z:       float = 0.45
-	const STAR_Y:       float = 0.65
-	const SIDE_OFFSET:  float = 0.42   # wide enough to clear the doubled-size star radii
-
-	# Slot 0 = center, 1 = left, 2 = right
-	var positions := [
-		Vector3(0.0,          STAR_Y, STAR_Z),
-		Vector3(-SIDE_OFFSET, STAR_Y, STAR_Z),
-		Vector3( SIDE_OFFSET, STAR_Y, STAR_Z),
-	]
-	for i in range(_star_meshes.size()):
-		_star_meshes[i].visible  = i < maxed
-		_star_meshes[i].position = positions[i]
+	# --- Gold progress bar ---
+	const BAR_HALF_W: float = 0.85   # half of 1.70m bar width
+	var frac: float = float(maxed) / float(get_total_upgradeable_stats())
+	if _bar_fill_mi != null:
+		_bar_fill_mi.visible   = frac > 0.001
+		if frac > 0.001:
+			_bar_fill_mi.scale.x   = frac
+			# Shift left so the fill always starts at the left edge of the background bar.
+			_bar_fill_mi.position.x = -BAR_HALF_W * (1.0 - frac)
 
 	const GOLD: Color = Color(1.0, 0.82, 0.18)
 	var frac := float(maxed) / float(get_total_upgradeable_stats())
