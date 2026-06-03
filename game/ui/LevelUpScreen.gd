@@ -156,7 +156,8 @@ const EQUIP_DISPLAY_PCT: Array = [5, 10, 20]
 const CARD_W: float = 372.0
 
 ## Height of each upgrade card in virtual pixels.
-const CARD_H: float = 295.0   # tall enough for unlock cards with image + description
+## Increased from 295 to 325 to accommodate the larger (87 px) trap/boost image.
+const CARD_H: float = 325.0
 
 ## Horizontal gap between cards.
 const CARD_GAP: float = 20.0

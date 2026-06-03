@@ -330,10 +330,12 @@ func _on_resized() -> void:
 	var h  := size.y
 	var px := 10.0
 
-	# Title height scales with both title_font_scale (larger names need more rows) and
-	# font_scale (cards rendered at 0.65× don't need the full 68px reserved for 1.0× text).
-	# Scaling by font_scale closes the visual gap between the title and the image below it.
-	var title_h := (68.0 + (title_font_scale - 1.0) * 80.0) * font_scale
+	# title_h must always fit a 2-line title (long names in narrow cards wrap).
+	# formula_h preserves the compact title-to-image gap when title_font_scale > 1.0;
+	# min_2line guarantees the label region is never shorter than 2 lines of title text.
+	var font_px   := 38.0 * font_scale * title_font_scale
+	var formula_h := (68.0 + (title_font_scale - 1.0) * 80.0) * font_scale
+	var title_h   := maxf(formula_h, font_px * 2.7)
 
 	# Space reserved at the bottom for the tier badge (0 when badge is hidden).
 	var badge_reserve := 26.0 if show_tier_badge else 0.0
@@ -347,12 +349,14 @@ func _on_resized() -> void:
 	var cursor := 6.0 + title_h + 2.0
 
 	# Row 2 (unlock/gear cards): trap/boost preview image.
-	# 87 px = 58 px × 1.5 — 50% larger than the original to give the image more presence.
-	const IMAGE_H: float = 87.0
+	# image_h scales proportionally with font_scale so narrow many-card layouts don't
+	# give a disproportionate fraction of card height to the image.
+	# Baseline: 87 px at font_scale 0.65 (50% larger than the original 58 px).
+	var image_h := 87.0 * font_scale / 0.65
 	if _image_rect:
 		_image_rect.position = Vector2(px, cursor)
-		_image_rect.size     = Vector2(w - px * 2.0, IMAGE_H)
-		cursor += IMAGE_H + 4.0
+		_image_rect.size     = Vector2(w - px * 2.0, image_h)
+		cursor += image_h + 4.0
 
 	# Skip the stat row height when stat_name is empty (unlock and gear cards).
 	# Equipment and campaign cards carry a stat label ("Fire Rate", "Damage", etc.)

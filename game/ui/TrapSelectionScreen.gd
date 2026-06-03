@@ -160,11 +160,20 @@ func _build_screen() -> void:
 	var start_x := (1280.0 - total_w) * 0.5
 	var card_y  := 148.0
 
+	# When Wider Selection narrows the cards, scale font density and card height
+	# proportionally so text stays legible and content fits.
+	# font_scale floors at 0.45 (minimum readable size on mobile).
+	# title_font_scale floors at 1.0 (no artificial shrink below normal size).
+	var width_ratio:      float = card_w / CARD_W
+	var card_font_scale:  float = clampf(0.65 * width_ratio, 0.45, 0.65)
+	var card_title_scale: float = clampf(1.50 * width_ratio, 1.00, 1.50)
+	var card_h:           float = CARD_H * (card_font_scale / 0.65)
+
 	for i in offer:
 		var slot: Dictionary = _offered_slots[i]
-		var card := _build_card_for_slot(slot)
+		var card := _build_card_for_slot(slot, card_font_scale, card_title_scale)
 		card.position     = Vector2(start_x + i * (card_w + CARD_GAP), card_y)
-		card.size         = Vector2(card_w, CARD_H)
+		card.size         = Vector2(card_w, card_h)
 		card.process_mode = Node.PROCESS_MODE_ALWAYS
 		card.card_selected.connect(_on_card_toggled.bind(card, slot))
 		add_child(card)
@@ -176,7 +185,7 @@ func _build_screen() -> void:
 	_start_btn.disabled     = true
 	_start_btn.process_mode = Node.PROCESS_MODE_ALWAYS
 	_start_btn.pressed.connect(_on_start_pressed)
-	_start_btn.position = Vector2((1280.0 - 392.0) * 0.5, card_y + CARD_H + 24.0)
+	_start_btn.position = Vector2((1280.0 - 392.0) * 0.5, card_y + card_h + 24.0)
 	# store offer count for use in _on_card_toggled
 	_offered_count = offer
 	_start_btn.size     = Vector2(392.0, 76.0)
@@ -288,13 +297,13 @@ func _weighted_pick(candidates: Array) -> Dictionary:
 # Card building
 # ---------------------------------------------------------------------------
 
-func _build_card_for_slot(slot: Dictionary) -> UpgradeCard:
+func _build_card_for_slot(slot: Dictionary, f_scale: float, t_scale: float) -> UpgradeCard:
 	if slot["category"] == "boost":
-		return _build_boost_card(slot["type"])
-	return _build_trap_card(slot["type"])
+		return _build_boost_card(slot["type"], f_scale, t_scale)
+	return _build_trap_card(slot["type"], f_scale, t_scale)
 
 
-func _build_trap_card(trap_type: int) -> UpgradeCard:
+func _build_trap_card(trap_type: int, f_scale: float, t_scale: float) -> UpgradeCard:
 	var display: Dictionary = TRAP_DISPLAY.get(trap_type, {})
 	var data := {
 		"id":          "trap_%d" % trap_type,
@@ -310,15 +319,15 @@ func _build_trap_card(trap_type: int) -> UpgradeCard:
 	var card := UpgradeCard.new()
 	card.toggleable           = true
 	card.custom_color         = Trap.STATS[trap_type].get("color", Color.WHITE)
-	card.font_scale           = 0.65
-	card.title_font_scale     = 1.5    # prominent name without squeezing the image out
+	card.font_scale           = f_scale
+	card.title_font_scale     = t_scale
 	card.use_identity_outline = true
 	card.show_tier_badge      = false
 	card.setup(data)
 	return card
 
 
-func _build_boost_card(boost_type: int) -> UpgradeCard:
+func _build_boost_card(boost_type: int, f_scale: float, t_scale: float) -> UpgradeCard:
 	var display: Dictionary = BOOST_DISPLAY.get(boost_type, {})
 	var data := {
 		"id":          "boost_%d" % boost_type,
@@ -334,8 +343,8 @@ func _build_boost_card(boost_type: int) -> UpgradeCard:
 	var card := UpgradeCard.new()
 	card.toggleable           = true
 	card.custom_color         = BoostUnit.GLOW_COLORS[boost_type]
-	card.font_scale           = 0.65
-	card.title_font_scale     = 1.5
+	card.font_scale           = f_scale
+	card.title_font_scale     = t_scale
 	card.use_identity_outline = true
 	card.show_tier_badge      = false
 	card.setup(data)
