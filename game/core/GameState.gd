@@ -128,118 +128,6 @@ const INFESTATION_MAX: int = 20
 ## All numeric values are playtesting placeholders — scale linearly per tier.
 const PERMANENT_UPGRADE_DEFS: Array = [
 	# --- Equipment ---
-	# Per-type pre-conditioning upgrades — each gives newly placed units a head
-	# start of up to 3 paid-equivalent upgrade levels applied at no Bug Bucks cost.
-	{
-		"id": "snap_trap_conditioning", "category": "Equipment",
-		"name": "Snap Trap — Pre-Conditioned",
-		"desc": "Snap Traps are deployed with a head start on upgrades.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
-		"tier_effects": [
-			"+1 Starting Star",  "+2 Starting Stars", "+3 Starting Stars", "+4 Starting Stars",  "+5 Starting Stars",
-			"+6 Starting Stars", "+7 Starting Stars", "+8 Starting Stars", "+9 Starting Stars",  "+10 Starting Stars",
-		],
-	},
-	{
-		"id": "zapper_conditioning", "category": "Equipment",
-		"name": "Zapper — Pre-Conditioned",
-		"desc": "Zappers are deployed with a head start on upgrades.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
-		"tier_effects": [
-			"+1 Starting Star",  "+2 Starting Stars", "+3 Starting Stars", "+4 Starting Stars",  "+5 Starting Stars",
-			"+6 Starting Stars", "+7 Starting Stars", "+8 Starting Stars", "+9 Starting Stars",  "+10 Starting Stars",
-		],
-	},
-	{
-		"id": "fogger_conditioning", "category": "Equipment",
-		"name": "Fogger — Pre-Conditioned",
-		"desc": "Foggers are deployed with a head start on upgrades.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
-		"tier_effects": [
-			"+1 Starting Star",  "+2 Starting Stars", "+3 Starting Stars", "+4 Starting Stars",  "+5 Starting Stars",
-			"+6 Starting Stars", "+7 Starting Stars", "+8 Starting Stars", "+9 Starting Stars",  "+10 Starting Stars",
-		],
-	},
-	{
-		"id": "glue_board_conditioning", "category": "Equipment",
-		"name": "Glue Board — Pre-Conditioned",
-		"desc": "Glue Boards are deployed with a head start on upgrades.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
-		"tier_effects": [
-			"+1 Starting Star",  "+2 Starting Stars", "+3 Starting Stars", "+4 Starting Stars",  "+5 Starting Stars",
-			"+6 Starting Stars", "+7 Starting Stars", "+8 Starting Stars", "+9 Starting Stars",  "+10 Starting Stars",
-		],
-	},
-	{
-		"id": "fly_strip_conditioning", "category": "Equipment",
-		"name": "Fly Strip — Pre-Conditioned",
-		"desc": "Fly Strips are deployed with a head start on upgrades.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
-		"tier_effects": [
-			"+1 Starting Star",  "+2 Starting Stars", "+3 Starting Stars", "+4 Starting Stars",  "+5 Starting Stars",
-			"+6 Starting Stars", "+7 Starting Stars", "+8 Starting Stars", "+9 Starting Stars",  "+10 Starting Stars",
-		],
-	},
-	{
-		"id": "bait_station_conditioning", "category": "Equipment",
-		"name": "Bait Station — Pre-Conditioned",
-		"desc": "Bait Stations are deployed with a head start on upgrades.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
-		"tier_effects": [
-			"+1 Starting Star",  "+2 Starting Stars", "+3 Starting Stars", "+4 Starting Stars",  "+5 Starting Stars",
-			"+6 Starting Stars", "+7 Starting Stars", "+8 Starting Stars", "+9 Starting Stars",  "+10 Starting Stars",
-		],
-	},
-	{
-		"id": "pheromone_conditioning", "category": "Equipment",
-		"name": "Pheromone Dispenser — Pre-Conditioned",
-		"desc": "Pheromone Dispensers are deployed with a head start on upgrades.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
-		"tier_effects": [
-			"+1 Starting Star",  "+2 Starting Stars", "+3 Starting Stars", "+4 Starting Stars",  "+5 Starting Stars",
-			"+6 Starting Stars", "+7 Starting Stars", "+8 Starting Stars", "+9 Starting Stars",  "+10 Starting Stars",
-		],
-	},
-	{
-		"id": "compressor_conditioning", "category": "Equipment",
-		"name": "Compressor — Pre-Conditioned",
-		"desc": "Compressors are deployed with a head start on upgrades.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
-		"tier_effects": [
-			"+1 Starting Star",  "+2 Starting Stars", "+3 Starting Stars", "+4 Starting Stars",  "+5 Starting Stars",
-			"+6 Starting Stars", "+7 Starting Stars", "+8 Starting Stars", "+9 Starting Stars",  "+10 Starting Stars",
-		],
-	},
-	{
-		"id": "cash_register_conditioning", "category": "Equipment",
-		"name": "Cash Register — Pre-Conditioned",
-		"desc": "Cash Registers are deployed with a head start on upgrades.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
-		"tier_effects": [
-			"+1 Starting Star",  "+2 Starting Stars", "+3 Starting Stars", "+4 Starting Stars",  "+5 Starting Stars",
-			"+6 Starting Stars", "+7 Starting Stars", "+8 Starting Stars", "+9 Starting Stars",  "+10 Starting Stars",
-		],
-	},
-	{
-		"id": "air_freshener_conditioning", "category": "Equipment",
-		"name": "Air Freshener — Pre-Conditioned",
-		"desc": "Air Fresheners are deployed with a head start on upgrades.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
-		"tier_effects": [
-			"+1 Starting Star",  "+2 Starting Stars", "+3 Starting Stars", "+4 Starting Stars",  "+5 Starting Stars",
-			"+6 Starting Stars", "+7 Starting Stars", "+8 Starting Stars", "+9 Starting Stars",  "+10 Starting Stars",
-		],
-	},
-	{
-		"id": "quarantine_conditioning", "category": "Equipment",
-		"name": "Quarantine Marker — Pre-Conditioned",
-		"desc": "Quarantine Markers are deployed with a head start on upgrades.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
-		"tier_effects": [
-			"+1 Starting Star",  "+2 Starting Stars", "+3 Starting Stars", "+4 Starting Stars",  "+5 Starting Stars",
-			"+6 Starting Stars", "+7 Starting Stars", "+8 Starting Stars", "+9 Starting Stars",  "+10 Starting Stars",
-		],
-	},
 	{
 		"id": "reinforced_mechanisms", "category": "Equipment",
 		"name": "Reinforced Mechanisms",
@@ -493,14 +381,7 @@ var type_upgrade_queue: Dictionary = {}
 ## from permanent upgrades.
 var global_xp_bonus: float = 0.0
 
-## Bonus starting upgrade levels per trap type, populated from pre-conditioning
-## permanent upgrades. Key = TrapType int (0–5), value = number of free upgrades
-## to apply immediately when a trap of that type is placed. Reset each run.
-var starting_star_bonus_traps: Dictionary = {}
-
-## Bonus starting upgrade levels per boost type, populated from pre-conditioning
-## permanent upgrades. Key = BoostType int (0–4), value = number of free upgrades
-## to apply immediately when a boost of that type is placed. Reset each run.
+var starting_star_bonus_traps:  Dictionary = {}
 var starting_star_bonus_boosts: Dictionary = {}
 
 ## Fraction added to the effective infestation threshold (Hazard Insurance).
@@ -539,11 +420,6 @@ var permanent_upgrades: Dictionary = {
 	"wider_selection": 0, "starting_capital": 0, "hazard_insurance": 0,
 	"salvage_value": 0, "bulk_discount": 0, "field_experience": 0,
 	"show_me": 0, "strengthen_defenses": 0,
-	# Per-type pre-conditioning — bonus starting upgrade levels for each unit type.
-	"snap_trap_conditioning": 0, "zapper_conditioning": 0, "fogger_conditioning": 0,
-	"glue_board_conditioning": 0, "fly_strip_conditioning": 0, "bait_station_conditioning": 0,
-	"pheromone_conditioning": 0, "compressor_conditioning": 0, "cash_register_conditioning": 0,
-	"air_freshener_conditioning": 0, "quarantine_conditioning": 0,
 }
 
 
@@ -870,29 +746,6 @@ func _apply_permanent_upgrade_bonuses() -> void:
 
 	t = permanent_upgrades.get("strengthen_defenses", 0)
 	infestation_damage_reduction = t * 0.04   # −4% per tier → −40% at tier 10
-
-	# Pre-conditioning — populate bonus starting star levels for each trap type.
-	# Trap type ints match TrapType enum order: SNAP_TRAP=0, ZAPPER=1, FOGGER=2,
-	# GLUE_BOARD=3, FLY_STRIP_LAUNCHER=4, BAIT_STATION=5.
-	var trap_cond_ids := [
-		"snap_trap_conditioning", "zapper_conditioning", "fogger_conditioning",
-		"glue_board_conditioning", "fly_strip_conditioning", "bait_station_conditioning",
-	]
-	for i in 6:
-		t = permanent_upgrades.get(trap_cond_ids[i], 0)
-		if t > 0:
-			starting_star_bonus_traps[i] = t
-
-	# Boost type ints match BoostType enum order: PHEROMONE_DISPENSER=0, COMPRESSOR=1,
-	# CASH_REGISTER=2, AIR_FRESHENER=3, QUARANTINE_MARKER=4.
-	var boost_cond_ids := [
-		"pheromone_conditioning", "compressor_conditioning", "cash_register_conditioning",
-		"air_freshener_conditioning", "quarantine_conditioning",
-	]
-	for i in 5:
-		t = permanent_upgrades.get(boost_cond_ids[i], 0)
-		if t > 0:
-			starting_star_bonus_boosts[i] = t
 
 
 func _save_persistent() -> void:
