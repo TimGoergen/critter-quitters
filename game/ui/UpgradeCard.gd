@@ -128,6 +128,7 @@ signal card_selected(upgrade: Dictionary)
 var _tier_lbl:   Label       = null   # "COMMON" / "PROFESSIONAL" / "RARE" — bottom-right badge
 var _title_lbl:  Label       = null   # buff name or trap name
 var _image_rect: TextureRect = null   # trap/boost SVG image (unlock cards only)
+var _thumb_rect: TextureRect = null   # small trap SVG thumbnail (equipment cards only)
 var _stat_lbl:   Label       = null   # stat name (equipment only)
 var _impact_lbl: Label       = null   # "+10% fire rate" or "+5% Fire Rate"
 var _plain_lbl:  Label       = null   # plain-English explanation
@@ -274,6 +275,20 @@ func _build_card() -> void:
 			_image_rect.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 			add_child(_image_rect)
 
+	# --- Equipment thumbnail — small trap SVG in the top-right corner ---
+	# Shows the player which trap type this card upgrades at a glance.
+	var eq_trap_type: int = _upgrade_data.get("trap_type", -1)
+	if category == "equipment" and eq_trap_type >= 0:
+		var thumb_path: String = TRAP_TEXTURE_PATHS.get(eq_trap_type, "")
+		if thumb_path != "" and ResourceLoader.exists(thumb_path):
+			_thumb_rect = TextureRect.new()
+			_thumb_rect.texture             = load(thumb_path)
+			_thumb_rect.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+			_thumb_rect.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			_thumb_rect.custom_minimum_size = Vector2.ZERO
+			_thumb_rect.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+			add_child(_thumb_rect)
+
 	# --- Stat name (equipment only) or empty for campaign cards ---
 	# Uses custom_color when available so the label matches the trap/boost identity;
 	# falls back to the tier color as a neutral quality indicator.
@@ -340,10 +355,14 @@ func _on_resized() -> void:
 	# Space reserved at the bottom for the tier badge (0 when badge is hidden).
 	var badge_reserve := 26.0 if show_tier_badge else 0.0
 
-	# Row 1: Title.
+	# Row 1: Title — narrowed when a thumbnail occupies the top-right corner.
 	if _title_lbl:
+		const THUMB_SIZE: float = 44.0
+		var title_w := w - px * 2.0
+		if _thumb_rect != null:
+			title_w -= THUMB_SIZE + 4.0   # 4 px gap between title text and thumbnail
 		_title_lbl.position = Vector2(px, 6.0)
-		_title_lbl.size     = Vector2(w - px * 2.0, title_h)
+		_title_lbl.size     = Vector2(title_w, title_h)
 
 	# Cursor tracks where the next row starts below the title.
 	var cursor := 6.0 + title_h + 2.0
@@ -380,6 +399,12 @@ func _on_resized() -> void:
 	if _plain_lbl:
 		_plain_lbl.position = Vector2(px, plain_y)
 		_plain_lbl.size     = Vector2(w - px * 2.0, h - plain_y - badge_reserve)
+
+	# Equipment thumbnail — top-right corner, centred vertically within the title row.
+	if _thumb_rect:
+		const THUMB_SZ: float = 44.0
+		_thumb_rect.position = Vector2(w - px - THUMB_SZ, 6.0 + (title_h - THUMB_SZ) * 0.5)
+		_thumb_rect.size     = Vector2(THUMB_SZ, THUMB_SZ)
 
 	# Tier badge — bottom-right corner (null when show_tier_badge = false).
 	if _tier_lbl:
