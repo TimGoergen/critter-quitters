@@ -214,7 +214,7 @@ func _build_card() -> void:
 	if custom_color.a > 0.0:
 		bg_color = Color.from_hsv(custom_color.h, custom_color.s * 0.65, custom_color.v * 0.35, 0.95)
 	elif category == "campaign":
-		bg_color = Color(0.135, 0.135, 0.162, 0.95)   # flat gray (35% lightened) — campaign buffs are type-agnostic
+		bg_color = Color(0.22, 0.22, 0.22, 0.95)   # pure neutral gray — campaign buffs are type-agnostic
 	else:
 		bg_color = Color.from_hsv(outline_color.h, outline_color.s * 0.65, outline_color.v * 0.35, 0.95)
 
