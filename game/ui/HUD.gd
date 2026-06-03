@@ -7,8 +7,8 @@
 ##   Each row: static info panel (left, brand-colored) + draggable trap icon (right).
 ##   Press the icon and move to begin drag-and-drop placement.
 ## Right panel (RIGHT_PANEL_W wide, same width as left): wave, bug bucks, infestation bar,
-##   INCOMING label, send-wave button, and a bottom row of three control buttons
-##   (zoom, pause, speed).  Exit and Restart live inside the Settings dialog.
+##   INCOMING label, send-wave button, and a bottom row of two control buttons
+##   (zoom, play/speed).  Exit and Restart live inside the Settings dialog.
 
 extends CanvasLayer
 
@@ -138,10 +138,8 @@ var _current_wave_reward:    int = 0   # last value from early_send_reward_chang
 const SEND_WAVE_COOLDOWN_SEC: float = 1.0
 var _send_wave_cooldown: float = 0.0   # seconds remaining before the send-wave button is usable again
 
-var _speed_btn:  Button
-var _speed_icon: _SpeedIcon   # procedural right-pointing triangle icon; state 0=black, 1/2=gold
-var _pause_btn:      Button
-var _pause_bar_icon: Control
+var _play_speed_btn:  Button
+var _play_speed_icon: _PlaySpeedIcon  # procedural icon: pause bars at state 0, triangles at 1/2/3
 var _pause_banner:       Control = null
 var _pause_banner_tween: Tween   = null
 var _exit_btn:       Button
@@ -154,8 +152,9 @@ var _bucks_label:       Label
 var _infestation_fill:  Panel
 var _infestation_label: Label
 
-var _speed_state:    int  = 0   # 0 = 1×, 1 = 2×, 2 = 3×
-var _is_paused:      bool = false
+## Combined play/speed state: 0=paused, 1=play 1×, 2=play 2×, 3=play 3×.
+## Replaces the old separate _is_paused and _speed_state fields.
+var _play_speed_state: int  = 1
 var _countdown_active: bool = false
 
 var _music_slider: HSlider
@@ -833,8 +832,8 @@ void fragment() {
 	send_spacer_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(send_spacer_bottom)
 
-	# --- Bottom 3-button row: Zoom | Pause | Speed ---
-	# Three equal-width gold buttons at a fixed height.
+	# --- Bottom 2-button row: Zoom | PlaySpeed ---
+	# Two equal-width gold buttons at a fixed height.
 	var bottom_row := HBoxContainer.new()
 	bottom_row.add_theme_constant_override("separation", 4)
 	bottom_row.size_flags_vertical = Control.SIZE_SHRINK_END
@@ -856,39 +855,22 @@ void fragment() {
 	_zoom_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_zoom_btn.add_child(_zoom_icon)
 
-	# Pause button — procedural pause bars when playing, ▶ text when paused.
-	_pause_btn = Button.new()
-	_pause_btn.text = ""
-	_pause_btn.add_theme_font_size_override("font_size", 26)
-	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_pause_btn)
-	_pause_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_pause_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_pause_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_pause_btn.pressed.connect(_on_pause_btn_pressed)
-	bottom_row.add_child(_pause_btn)
+	# Play/speed button — cycles through paused / 1× / 2× / 3× on each tap.
+	# The procedural icon shows two pause bars at state 0 and 1–3 triangles for 1×–3×.
+	_play_speed_btn = Button.new()
+	_play_speed_btn.text = ""
+	_apply_gold_button_style(_play_speed_btn)
+	_play_speed_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_play_speed_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_play_speed_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
+	_play_speed_btn.pressed.connect(_on_play_speed_btn_pressed)
+	bottom_row.add_child(_play_speed_btn)
 
-	_pause_bar_icon = _PauseBarIcon.new()
-	_pause_bar_icon.target_height = UIFonts.primary_bold().get_ascent(26)
-	_pause_bar_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_pause_bar_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pause_btn.add_child(_pause_bar_icon)
-
-	# Speed button — procedural right-pointing triangles; 1 black at 1×, 2/3 gold at 2×/3×.
-	_speed_btn = Button.new()
-	_speed_btn.text = ""
-	_apply_gold_button_style(_speed_btn)
-	_speed_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_speed_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_speed_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_speed_btn.pressed.connect(_on_speed_btn_pressed)
-	bottom_row.add_child(_speed_btn)
-
-	_speed_icon = _SpeedIcon.new()
-	_speed_icon.speed_state = 0
-	_speed_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_speed_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_speed_btn.add_child(_speed_icon)
+	_play_speed_icon = _PlaySpeedIcon.new()
+	_play_speed_icon.play_speed_state = _play_speed_state
+	_play_speed_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_play_speed_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_play_speed_btn.add_child(_play_speed_icon)
 
 
 # ---------------------------------------------------------------------------
@@ -1321,9 +1303,9 @@ func _on_wave_spawn_progress_changed(spawned: int, total: int) -> void:
 func _process(delta: float) -> void:
 	# If the game pauses while a drag is in progress due to a system event (e.g. a
 	# level-up screen appears), cancel the drag so the trap is not silently committed
-	# on resume.  Player-initiated pauses (_is_paused) must NOT cancel: the design
-	# allows placing traps while the player has manually paused to inspect the arena.
-	if _drag_active and get_tree().paused and not _is_paused:
+	# on resume.  Player-initiated pauses (_play_speed_state == 0) must NOT cancel:
+	# the design allows placing traps while the player has manually paused to inspect the arena.
+	if _drag_active and get_tree().paused and _play_speed_state != 0:
 		_arena.cancel_hud_drag()
 		_end_drag()
 
@@ -1349,10 +1331,11 @@ func _process(delta: float) -> void:
 ## Intercepts mouse/touch events when a drag is in progress, preventing them
 ## from reaching the arena's own input handlers.
 func _input(event: InputEvent) -> void:
-	# Spacebar toggles pause regardless of drag state.
+	# Spacebar toggles between paused and play-1× regardless of drag state.
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE:
-			_on_pause_btn_pressed()
+			_play_speed_state = 1 if _play_speed_state == 0 else 0
+			_apply_play_speed_state()
 			get_viewport().set_input_as_handled()
 			return
 
@@ -1481,44 +1464,34 @@ func _on_viewport_resized() -> void:
 	pass
 
 
-func _on_speed_btn_pressed() -> void:
+func _on_play_speed_btn_pressed() -> void:
 	AudioManager.play_ui("button")
-	if _is_paused:
-		# Clicking the speed button while paused resumes play; handle visuals directly
-		# to avoid playing the button sound a second time through _on_pause_btn_pressed().
-		_is_paused = false
-		get_tree().paused = false
-		_pause_btn.text = ""
-		_pause_bar_icon.show()
-		_show_pause_banner(false)
-	# Cycle 1× → 2× → 3× → 1× …
-	_speed_state = (_speed_state + 1) % 3
-	_update_speed_visuals()
+	# Cycle: paused (0) → play 1× (1) → play 2× (2) → play 3× (3) → paused (0) → …
+	_play_speed_state = (_play_speed_state + 1) % 4
+	_apply_play_speed_state()
 
 
-## Applies time scale and icon appearance for the current _speed_state.
-## Called on press and on run end (to restore 1× without pressing the button).
-func _update_speed_visuals() -> void:
-	match _speed_state:
-		0:   Engine.time_scale = 1.0
-		1:   Engine.time_scale = 2.0
-		2:   Engine.time_scale = 3.0
-	_speed_icon.speed_state = _speed_state
-	_speed_icon.queue_redraw()
-
-
-func _on_pause_btn_pressed() -> void:
-	AudioManager.play_ui("button")
-	_is_paused = not _is_paused
-	get_tree().paused = _is_paused
-	if _is_paused:
-		_pause_btn.text = "▶"
-		_pause_bar_icon.hide()
-		_show_pause_banner(true)
-	else:
-		_pause_btn.text = ""
-		_pause_bar_icon.show()
-		_show_pause_banner(false)
+## Applies Engine.time_scale, tree pause, and banner visibility for the current _play_speed_state.
+## Called on button press, spacebar toggle, send-wave resume, and run end.
+func _apply_play_speed_state() -> void:
+	match _play_speed_state:
+		0:  # paused
+			get_tree().paused = true
+			_show_pause_banner(true)
+		1:  # play 1×
+			Engine.time_scale = 1.0
+			get_tree().paused = false
+			_show_pause_banner(false)
+		2:  # play 2×
+			Engine.time_scale = 2.0
+			get_tree().paused = false
+			_show_pause_banner(false)
+		3:  # play 3×
+			Engine.time_scale = 3.0
+			get_tree().paused = false
+			_show_pause_banner(false)
+	_play_speed_icon.play_speed_state = _play_speed_state
+	_play_speed_icon.queue_redraw()
 
 
 func _on_multiplier_btn_pressed() -> void:
@@ -1545,13 +1518,10 @@ func _refresh_reward_label() -> void:
 
 func _on_send_wave_pressed() -> void:
 	AudioManager.play_ui("button")
-	# Clicking send-wave while manually paused resumes play first, then sends the wave.
-	if _is_paused:
-		_is_paused = false
-		get_tree().paused = false
-		_pause_btn.text = ""
-		_pause_bar_icon.show()
-		_show_pause_banner(false)
+	# Clicking send-wave while paused resumes play at 1× first, then sends the wave.
+	if _play_speed_state == 0:
+		_play_speed_state = 1
+		_apply_play_speed_state()
 	if _wave_multiplier > 1:
 		GameState.wave_skip_multi_requested.emit(_wave_multiplier)
 	else:
@@ -1601,11 +1571,12 @@ func _on_early_send_reward_changed(amount: int) -> void:
 
 
 func _on_run_ended() -> void:
-	_speed_state = 0
-	_update_speed_visuals()   # resets Engine.time_scale and icon to 1× state
-	_is_paused   = false
-	_pause_btn.text = ""
-	_pause_bar_icon.show()
+	# Reset button to play-1× appearance without calling _apply_play_speed_state,
+	# because the line below immediately pauses the tree for the run-over state.
+	_play_speed_state = 1
+	Engine.time_scale = 1.0
+	_play_speed_icon.play_speed_state = _play_speed_state
+	_play_speed_icon.queue_redraw()
 	_show_pause_banner(false)
 	get_tree().paused = true
 	# Open the infested dialog immediately — no interstitial overlay.
@@ -2510,23 +2481,51 @@ class _IncomingBannerShape extends Control:
 		]), color_fill)
 
 
-## Two vertical bars drawn at the correct cap height for the pause button.
-class _PauseBarIcon extends Control:
-	var target_height: float = 0.0
+## Combined play/speed icon for the bottom-right control button.
+##
+## State 0 (paused): two vertical pause bars.
+## State 1 (play 1×): one black right-pointing triangle.
+## State 2 (play 2×): two gold right-pointing triangles.
+## State 3 (play 3×): three gold right-pointing triangles.
+class _PlaySpeedIcon extends Control:
+	const TRIANGLE_W: float = 15.0
+	const TRIANGLE_H: float = 28.0
+	const GAP:        float = 4.0
+	const COLOR_BASE: Color = Color(0.08, 0.05, 0.00, 1.0)  # near-black (gold button text)
+	const COLOR_FAST: Color = Color(1.00, 0.84, 0.00, 1.0)  # bright gold at 2× and 3×
+
+	var play_speed_state: int = 1  # 0=paused, 1=play 1×, 2=play 2×, 3=play 3×
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_RESIZED:
 			queue_redraw()
 
 	func _draw() -> void:
-		var bar_w := size.x * 0.13
-		var gap   := size.x * 0.091
-		var bar_h := target_height if target_height > 0.0 else size.y * 0.52
-		var x0    := (size.x - bar_w * 2.0 - gap) * 0.5
-		var y0    := (size.y - bar_h) * 0.5
-		var color := Color(0.08, 0.05, 0.00)
-		draw_rect(Rect2(x0,               y0, bar_w, bar_h), color)
-		draw_rect(Rect2(x0 + bar_w + gap, y0, bar_w, bar_h), color)
+		if play_speed_state == 0:
+			# Two vertical pause bars — same proportions as the old _PauseBarIcon.
+			var bar_w := size.x * 0.13
+			var gap   := size.x * 0.091
+			var bar_h := size.y * 0.52
+			var x0    := (size.x - bar_w * 2.0 - gap) * 0.5
+			var y0    := (size.y - bar_h) * 0.5
+			draw_rect(Rect2(x0,               y0, bar_w, bar_h), COLOR_BASE)
+			draw_rect(Rect2(x0 + bar_w + gap, y0, bar_w, bar_h), COLOR_BASE)
+		else:
+			# 1–3 right-pointing triangles — same geometry as the old _SpeedIcon.
+			var count   := play_speed_state  # 1, 2, or 3 triangles
+			var total_w := count * TRIANGLE_W + (count - 1) * GAP
+			var x_start := (size.x - total_w) * 0.5
+			var y_top   := (size.y - TRIANGLE_H) * 0.5
+			var y_bot   := y_top + TRIANGLE_H
+			var y_mid   := size.y * 0.5
+			var color   := COLOR_BASE if play_speed_state == 1 else COLOR_FAST
+			for i in count:
+				var x := x_start + i * (TRIANGLE_W + GAP)
+				draw_colored_polygon(PackedVector2Array([
+					Vector2(x,              y_top),
+					Vector2(x,              y_bot),
+					Vector2(x + TRIANGLE_W, y_mid),
+				]), color)
 
 
 ## Magnifying glass with a + (zoom-in) or − (zoom-out) symbol in the lens.
@@ -2561,47 +2560,6 @@ class _ZoomIcon extends Control:
 		if show_plus:
 			draw_line(Vector2(cx, cy - arm), Vector2(cx, cy + arm), icon_color, line)
 
-
-## Right-pointing solid triangles drawn inside the speed button.
-##
-## State 0 (1×): one black triangle centered in the button.
-## State 1 (2×): two gold triangles side by side.
-## State 2 (3×): three gold triangles side by side.
-##
-## Each triangle points to the right (vertex on the right, flat side on the left),
-## matching the conventional "play" direction. Size and spacing are chosen so
-## three triangles fit comfortably in the ~62×52 px button area.
-class _SpeedIcon extends Control:
-	const TRIANGLE_W: float = 15.0   # horizontal extent of each triangle (base to tip)
-	const TRIANGLE_H: float = 28.0   # vertical extent (top corner to bottom corner)
-	const GAP:        float = 4.0    # horizontal gap between adjacent triangles
-
-	const COLOR_BASE: Color = Color(0.08, 0.05, 0.00, 1.0)   # near-black (matches gold button text)
-	const COLOR_FAST: Color = Color(1.00, 0.84, 0.00, 1.0)   # bright gold at 2× and 3×
-
-	var speed_state: int = 0   # 0=1×, 1=2×, 2=3×
-
-	func _notification(what: int) -> void:
-		if what == NOTIFICATION_RESIZED:
-			queue_redraw()
-
-	func _draw() -> void:
-		var count := speed_state + 1   # 1, 2, or 3 triangles
-		var total_w := count * TRIANGLE_W + (count - 1) * GAP
-		var x_start := (size.x - total_w) * 0.5
-		var y_top   := (size.y - TRIANGLE_H) * 0.5
-		var y_bot   := y_top + TRIANGLE_H
-		var y_mid   := size.y * 0.5
-		var color   := COLOR_BASE if speed_state == 0 else COLOR_FAST
-
-		for i in count:
-			var x := x_start + i * (TRIANGLE_W + GAP)
-			# Right-pointing triangle: left edge is vertical, right vertex is the tip.
-			draw_colored_polygon(PackedVector2Array([
-				Vector2(x,                y_top),
-				Vector2(x,                y_bot),
-				Vector2(x + TRIANGLE_W,   y_mid),
-			]), color)
 
 
 ## Draws the outer progress ring on the Send Next Wave button.
