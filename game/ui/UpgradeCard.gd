@@ -195,9 +195,18 @@ func _build_card() -> void:
 	# outside the card boundary and must not be clipped to a square.
 	# Labels are sized to stay within the card, so no visual overflow occurs.
 
-	# --- Outline: identity colour when requested (gear screen), rarity tier otherwise ---
+	var category: String = _upgrade_data.get("category", "")
+	var is_unlock: bool  = category == "unlock_trap" or category == "unlock_boost"
+
+	# --- Outline ---
+	# Unlock cards (new equipment reveal) use white — visually distinct from
+	# rarity-coloured equipment upgrades and trap-identity-coloured gear cards.
+	# Gear screen cards use the trap/boost identity colour (use_identity_outline).
+	# All other cards use the rarity tier colour.
 	var outline_color: Color
-	if use_identity_outline and custom_color.a > 0.0:
+	if is_unlock:
+		outline_color = Color.WHITE
+	elif use_identity_outline and custom_color.a > 0.0:
 		outline_color = custom_color
 	else:
 		outline_color = TIER_COLORS[tier]
@@ -210,7 +219,6 @@ func _build_card() -> void:
 	# v * 0.35 keeps the background dark but visibly in tune with the unit's color theme;
 	# the previous 0.22 was noticeably darker than the type strip accent colors.
 	var bg_color: Color
-	var category: String = _upgrade_data.get("category", "")
 	if custom_color.a > 0.0:
 		bg_color = Color.from_hsv(custom_color.h, custom_color.s * 0.65, custom_color.v * 0.35, 0.95)
 	elif category == "campaign":
