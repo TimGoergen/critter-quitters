@@ -160,14 +160,22 @@ func _build_screen() -> void:
 	var start_x := (1280.0 - total_w) * 0.5
 	var card_y  := 148.0
 
-	# When Wider Selection narrows the cards, scale font density and card height
-	# proportionally so text stays legible and content fits.
+	# When Wider Selection narrows the cards, scale font density proportionally
+	# so text stays legible in narrower columns.
 	# font_scale floors at 0.45 (minimum readable size on mobile).
 	# title_font_scale floors at 1.0 (no artificial shrink below normal size).
 	var width_ratio:      float = card_w / CARD_W
 	var card_font_scale:  float = clampf(0.65 * width_ratio, 0.45, 0.65)
 	var card_title_scale: float = clampf(1.50 * width_ratio, 1.00, 1.50)
-	var card_h:           float = CARD_H * (card_font_scale / 0.65)
+
+	# Card height fills all available vertical space regardless of how many cards
+	# are shown. The narrow-card formula (CARD_H * font_scale/0.65) used to shrink
+	# card_h when Wider Selection added more cards, leaving empty space below the
+	# Start button and truncating the description text. Instead, fit the card
+	# from card_y down to the button, with a 24 px gap and a 16 px bottom margin.
+	# cap at CARD_H so the default 3-card layout keeps its original proportions.
+	#   600 - 148(card_y) - 24(gap) - 76(button) - 16(margin) = 336 px available
+	var card_h: float = minf(600.0 - card_y - 24.0 - 76.0 - 16.0, CARD_H)
 
 	for i in offer:
 		var slot: Dictionary = _offered_slots[i]
@@ -208,8 +216,9 @@ func _build_screen() -> void:
 ## The tier-1 guarantee in slot 1 replaces the old post-hoc ground-damage
 ## check — the structural rule is clearer and more predictable for the player.
 func _generate_slots() -> Array:
-	var slots:           Array      = []
-	var used_trap_types: Array[int] = []
+	var slots:            Array      = []
+	var used_trap_types:  Array[int] = []
+	var used_boost_types: Array[int] = []
 
 	# --- Slot 1: always a tier-1 trap ---
 	var tier1_candidates: Array = []
@@ -236,37 +245,49 @@ func _generate_slots() -> Array:
 
 	# --- Slot 3+: wildcard (boost at BOOST_SLOT_CHANCE, otherwise trap) ---
 	for _i in range(_offer_count() - 2):
-		if randf() < BOOST_SLOT_CHANCE:
-			var boost_candidates: Array = []
-			for b in range(5):
-				boost_candidates.append({
+		# Build a boost pool that excludes any boost type already offered.
+		var available_boosts: Array = []
+		for b in range(5):
+			if b not in used_boost_types:
+				available_boosts.append({
 					"category": "boost", "type": b,
 					"weight": 1.0 / float(BoostUnit.STATS[b]["cost"]),
 				})
-			var boost_pick := _weighted_pick(boost_candidates)
+
+		var remaining_traps: Array = []
+		for t in range(6):
+			if t not in used_trap_types:
+				remaining_traps.append({
+					"category": "trap", "type": t,
+					"weight": 1.0 / float(Trap.STATS[t]["cost"]),
+				})
+
+		var offer_boost := randf() < BOOST_SLOT_CHANCE and not available_boosts.is_empty()
+
+		if offer_boost:
+			var boost_pick := _weighted_pick(available_boosts)
 			slots.append({ "category": "boost", "type": boost_pick["type"] })
+			used_boost_types.append(boost_pick["type"])
+		elif not remaining_traps.is_empty():
+			var trap_pick := _weighted_pick(remaining_traps)
+			slots.append({ "category": "trap", "type": trap_pick["type"] })
+			used_trap_types.append(trap_pick["type"])
+		elif not available_boosts.is_empty():
+			# All trap types are exhausted — fall back to a unique boost.
+			var boost_pick := _weighted_pick(available_boosts)
+			slots.append({ "category": "boost", "type": boost_pick["type"] })
+			used_boost_types.append(boost_pick["type"])
 		else:
-			var remaining_traps: Array = []
-			for t in range(6):
-				if t not in used_trap_types:
-					remaining_traps.append({
-						"category": "trap", "type": t,
-						"weight": 1.0 / float(Trap.STATS[t]["cost"]),
-					})
-			if remaining_traps.is_empty():
-				# All trap types already offered — give a boost instead.
-				var boost_candidates: Array = []
-				for b in range(5):
-					boost_candidates.append({
-						"category": "boost", "type": b,
-						"weight": 1.0 / float(BoostUnit.STATS[b]["cost"]),
-					})
-				var boost_pick := _weighted_pick(boost_candidates)
-				slots.append({ "category": "boost", "type": boost_pick["type"] })
-			else:
-				var trap_pick := _weighted_pick(remaining_traps)
-				slots.append({ "category": "trap", "type": trap_pick["type"] })
-				used_trap_types.append(trap_pick["type"])
+			# All 6 traps and all 5 boosts are already offered (only possible at
+			# very high Wider Selection tiers) — repeat a boost as a last resort.
+			var fallback_candidates: Array = []
+			for b in range(5):
+				fallback_candidates.append({
+					"category": "boost", "type": b,
+					"weight": 1.0 / float(BoostUnit.STATS[b]["cost"]),
+				})
+			var boost_pick := _weighted_pick(fallback_candidates)
+			slots.append({ "category": "boost", "type": boost_pick["type"] })
 
 	slots.shuffle()
 	return slots
