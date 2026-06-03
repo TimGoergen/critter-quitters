@@ -165,6 +165,34 @@ func _build_ui() -> void:
 			"Service Fees", str(GameState.service_fees), 10, 0)
 	y += ROW_H_CTRL
 
+	# Upgrade preset buttons — immediately write to the persisted permanent_upgrades
+	# dictionary so the next run (or the PermanentUpgradeScreen right now) reflects them.
+	const PRESET_GAP: float = 12.0
+	const PRESET_W:   float = (LEFT_COL_W_NEW - PRESET_GAP) / 2.0
+
+	var max_btn := Button.new()
+	max_btn.text                = "Max All Upgrades"
+	max_btn.focus_mode          = Control.FOCUS_NONE
+	max_btn.position            = Vector2(LEFT_COL_X, y)
+	max_btn.custom_minimum_size = Vector2(PRESET_W, ROW_H_CTRL)
+	max_btn.add_theme_font_size_override("font_size", 20)
+	max_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	max_btn.pressed.connect(_on_max_upgrades_pressed)
+	_style_button(max_btn)
+	add_child(max_btn)
+
+	var min_btn := Button.new()
+	min_btn.text                = "Min All Upgrades"
+	min_btn.focus_mode          = Control.FOCUS_NONE
+	min_btn.position            = Vector2(LEFT_COL_X + PRESET_W + PRESET_GAP, y)
+	min_btn.custom_minimum_size = Vector2(PRESET_W, ROW_H_CTRL)
+	min_btn.add_theme_font_size_override("font_size", 20)
+	min_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	min_btn.pressed.connect(_on_min_upgrades_pressed)
+	_style_button(min_btn)
+	add_child(min_btn)
+	y += ROW_H_CTRL
+
 	_add_divider_at(y)
 	y += 14.0   # 2px line + 12px breathing room
 
@@ -488,6 +516,16 @@ func _on_start_pressed() -> void:
 
 	confirmed.emit(bucks, waves, _check_static.button_pressed, allowed)
 	queue_free()
+
+
+func _on_max_upgrades_pressed() -> void:
+	for key: String in GameState.permanent_upgrades:
+		GameState.permanent_upgrades[key] = 10
+
+
+func _on_min_upgrades_pressed() -> void:
+	for key: String in GameState.permanent_upgrades:
+		GameState.permanent_upgrades[key] = 0
 
 
 func _style_start_button(btn: Button) -> void:
