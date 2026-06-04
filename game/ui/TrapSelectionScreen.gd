@@ -112,9 +112,9 @@ func _ready() -> void:
 func _build_screen() -> void:
 	_offered_slots = _generate_slots()
 
-	# Dim overlay.
+	# Solid background — same dark color as StartScreen so the arena is fully hidden.
 	var dim := ColorRect.new()
-	dim.color        = Color(0.0, 0.0, 0.0, 0.70)
+	dim.color        = Color(0.06, 0.06, 0.10, 1.0)
 	dim.process_mode = Node.PROCESS_MODE_ALWAYS
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
