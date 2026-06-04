@@ -129,7 +129,7 @@ func _build_screen() -> void:
 	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	header.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	header.add_theme_font_override("font", UIFonts.primary_bold())
-	header.add_theme_font_size_override("font_size", 44)
+	header.add_theme_font_size_override("font_size", 48)
 	header.add_theme_color_override("font_color", Color(1.0, 0.88, 0.20, 1.0))
 	header.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
 	header.add_theme_constant_override("shadow_offset_x", 2)
@@ -145,7 +145,7 @@ func _build_screen() -> void:
 	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
 	sub.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	sub.add_theme_font_override("font", UIFonts.primary_bold())
-	sub.add_theme_font_size_override("font_size", 18)
+	sub.add_theme_font_size_override("font_size", 25)
 	sub.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	sub.process_mode         = Node.PROCESS_MODE_ALWAYS
 	sub.position             = Vector2(24.0, HEADER_H)
@@ -193,7 +193,7 @@ func _build_screen() -> void:
 
 	# "Start Buggin'" button — right edge aligned to the right edge of the rightmost panel,
 	# vertically centred in the space between the top of the screen and the top of the panels.
-	const BTN_W: float = 400.0
+	const BTN_W: float = 600.0
 	_start_btn = _make_start_button()
 	_start_btn.disabled             = true
 	_start_btn.process_mode         = Node.PROCESS_MODE_ALWAYS
