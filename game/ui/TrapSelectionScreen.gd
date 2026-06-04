@@ -168,11 +168,12 @@ func _build_screen() -> void:
 	# 24 px gap so the selection ring (8 px outset) clears the sub-header text above.
 	var card_y  := HEADER_H + SUB_H + 24.0
 
-	# When Wider Selection narrows the cards, scale font density proportionally
-	# so text stays legible in narrower columns.
+	# Font scale is doubled from the original formula so text is large enough for mobile.
+	# title_font_scale is reset to 1.0 because font_scale itself is now doubled —
+	# applying both multipliers would make the title disproportionately large.
 	var width_ratio:      float = card_w / CARD_W
-	var card_font_scale:  float = clampf(0.65 * width_ratio, 0.45, 0.65)
-	var card_title_scale: float = clampf(1.50 * width_ratio, 1.00, 1.50)
+	var card_font_scale:  float = clampf(1.30 * width_ratio, 0.90, 1.30)
+	var card_title_scale: float = 1.0
 
 	# Cards fill all remaining vertical space below the header rows.
 	var card_h: float = 600.0 - card_y - 16.0
@@ -183,13 +184,16 @@ func _build_screen() -> void:
 		card.position     = Vector2(start_x + i * (card_w + CARD_GAP), card_y)
 		card.size         = Vector2(card_w, card_h)
 		card.process_mode = Node.PROCESS_MODE_ALWAYS
+		# Cap image height at 40% above baseline so images are larger but don't
+		# crowd out the description text despite the doubled font_scale.
+		card.image_h_max  = 122.0
 		card.card_selected.connect(_on_card_toggled.bind(card, slot))
 		add_child(card)
 		_cards.append(card)
 
 	# "Start Buggin'" button — right edge aligned to the right edge of the rightmost panel,
 	# vertically centred in the space between the top of the screen and the top of the panels.
-	const BTN_W: float = 200.0
+	const BTN_W: float = 400.0
 	_start_btn = _make_start_button()
 	_start_btn.disabled             = true
 	_start_btn.process_mode         = Node.PROCESS_MODE_ALWAYS
@@ -335,7 +339,8 @@ func _build_trap_card(trap_type: int, f_scale: float, t_scale: float) -> Upgrade
 		"tier_label":  display.get("name", "Trap").to_upper(),
 		"title":       display.get("name", "Trap"),
 		"stat_name":   "",          # no stat label — saves layout space for the image
-		"impact_line": "Cost: %d Bug Bucks" % Trap.STATS[trap_type].get("cost", 0),
+		"bucks_cost":  Trap.STATS[trap_type].get("cost", 0),
+		"impact_line": "",   # cost is displayed as coin icon + number via bucks_cost
 		"plain_text":  display.get("desc", ""),
 	}
 	var card := UpgradeCard.new()
@@ -359,7 +364,8 @@ func _build_boost_card(boost_type: int, f_scale: float, t_scale: float) -> Upgra
 		"tier_label":  display.get("name", "Boost").to_upper(),
 		"title":       display.get("name", "Boost"),
 		"stat_name":   "",          # no stat label — saves layout space for the image
-		"impact_line": "Cost: %d Bug Bucks" % BoostUnit.STATS[boost_type].get("cost", 0),
+		"bucks_cost":  BoostUnit.STATS[boost_type].get("cost", 0),
+		"impact_line": "",   # cost is displayed as coin icon + number via bucks_cost
 		"plain_text":  display.get("desc", ""),
 	}
 	var card := UpgradeCard.new()

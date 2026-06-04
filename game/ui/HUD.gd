@@ -435,10 +435,11 @@ func _build_right_panel() -> void:
 	vbox.add_child(top_row)
 
 	_zoom_btn = Button.new()
-	_zoom_btn.text                  = ""
-	_zoom_btn.custom_minimum_size   = Vector2(60.0, 60.0)
-	_zoom_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
-	_zoom_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_zoom_btn.text                    = ""
+	_zoom_btn.custom_minimum_size     = Vector2(0, 60.0)
+	_zoom_btn.size_flags_horizontal   = Control.SIZE_EXPAND_FILL
+	_zoom_btn.size_flags_stretch_ratio = 3.0   # 60% of the row (3 out of 3+2 parts)
+	_zoom_btn.size_flags_vertical     = Control.SIZE_SHRINK_CENTER
 	_apply_gold_button_style(_zoom_btn)
 	_zoom_btn.pressed.connect(_on_zoom_btn_pressed)
 	top_row.add_child(_zoom_btn)
@@ -448,15 +449,12 @@ func _build_right_panel() -> void:
 	_zoom_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_zoom_btn.add_child(_zoom_icon)
 
-	var top_spacer := Control.new()
-	top_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	top_row.add_child(top_spacer)
-
 	_settings_btn = Button.new()
-	_settings_btn.text                  = ""
-	_settings_btn.custom_minimum_size   = Vector2(60.0, 60.0)
-	_settings_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
-	_settings_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_settings_btn.text                    = ""
+	_settings_btn.custom_minimum_size     = Vector2(0, 60.0)
+	_settings_btn.size_flags_horizontal   = Control.SIZE_EXPAND_FILL
+	_settings_btn.size_flags_stretch_ratio = 2.0   # 40% of the row (2 out of 3+2 parts)
+	_settings_btn.size_flags_vertical     = Control.SIZE_SHRINK_CENTER
 	_apply_gear_button_style(_settings_btn)
 	_settings_btn.pressed.connect(_on_settings_btn_pressed)
 	top_row.add_child(_settings_btn)

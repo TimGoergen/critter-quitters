@@ -133,6 +133,7 @@ var _stat_lbl:   Label       = null   # stat name (equipment only)
 var _impact_lbl: Label       = null   # "+10% fire rate" or "+5% Fire Rate"
 var _plain_lbl:  Label       = null   # plain-English explanation
 
+var _bucks_row:    HBoxContainer = null   # coin icon + cost number; replaces _impact_lbl on gear cards
 var _upgrade_data: Dictionary = {}
 var _selected:     bool       = false
 var _card_frame:   _CardFrame = null
@@ -164,6 +165,12 @@ var use_identity_outline: bool = false
 ## When false the tier badge ("COMMON" / "PROFESSIONAL" / "RARE") at the
 ## card bottom is not created. TrapSelectionScreen cards have no rarity.
 var show_tier_badge: bool = true
+
+## When >= 0, caps the image area height in _on_resized() so that a larger
+## font_scale does not inflate the image region disproportionately.
+## TrapSelectionScreen sets this to 87.0 (the baseline image height) when
+## it doubles font_scale so the layout remains balanced.
+var image_h_max: float = -1.0
 
 
 # ---------------------------------------------------------------------------
@@ -317,15 +324,43 @@ func _build_card() -> void:
 	#   Equipment: "+5% Fire Rate"
 	var impact_text: String = _upgrade_data.get("impact_line", "")
 
-	_impact_lbl = Label.new()
-	_impact_lbl.text                 = impact_text
-	_impact_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_impact_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_impact_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
-	_impact_lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.20, 1.0))
-	_impact_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_impact_lbl.add_theme_font_size_override("font_size", roundi(32.0 * font_scale))
-	add_child(_impact_lbl)
+	var bucks_cost: int = _upgrade_data.get("bucks_cost", -1)
+	if bucks_cost >= 0:
+		# Gear-selection cards show cost as a coin icon + number rather than plain text.
+		_bucks_row = HBoxContainer.new()
+		_bucks_row.alignment    = BoxContainer.ALIGNMENT_CENTER
+		_bucks_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_bucks_row.add_theme_constant_override("separation", 8)
+		add_child(_bucks_row)
+
+		var bucks_icon := TextureRect.new()
+		bucks_icon.texture             = load("res://assets/bug_buck_coin_medium.png") as Texture2D
+		bucks_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+		bucks_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		bucks_icon.custom_minimum_size = Vector2(40, 40)
+		bucks_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+		bucks_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+		_bucks_row.add_child(bucks_icon)
+
+		var bucks_lbl := Label.new()
+		bucks_lbl.text                 = "%d" % bucks_cost
+		bucks_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+		bucks_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+		bucks_lbl.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
+		bucks_lbl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.18, 1.0))
+		bucks_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+		bucks_lbl.add_theme_font_size_override("font_size", roundi(32.0 * font_scale))
+		_bucks_row.add_child(bucks_lbl)
+	else:
+		_impact_lbl = Label.new()
+		_impact_lbl.text                 = impact_text
+		_impact_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+		_impact_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_impact_lbl.autowrap_mode        = TextServer.AUTOWRAP_WORD_SMART
+		_impact_lbl.add_theme_color_override("font_color", Color(1.0, 0.88, 0.20, 1.0))
+		_impact_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+		_impact_lbl.add_theme_font_size_override("font_size", roundi(32.0 * font_scale))
+		add_child(_impact_lbl)
 
 	# --- Plain-text description — fills remaining space to the card bottom ---
 	_plain_lbl = Label.new()
@@ -351,7 +386,7 @@ func _on_resized() -> void:
 
 	var w  := size.x
 	var h  := size.y
-	var px := 10.0
+	var px := 7.0
 
 	# title_h must always fit a 2-line title (long names in narrow cards wrap).
 	# formula_h preserves the compact title-to-image gap when title_font_scale > 1.0;
@@ -369,17 +404,19 @@ func _on_resized() -> void:
 		var title_w := w - px * 2.0
 		if _thumb_rect != null:
 			title_w -= THUMB_SIZE + 4.0   # 4 px gap between title text and thumbnail
-		_title_lbl.position = Vector2(px, 6.0)
+		_title_lbl.position = Vector2(px, 7.0)
 		_title_lbl.size     = Vector2(title_w, title_h)
 
 	# Cursor tracks where the next row starts below the title.
-	var cursor := 6.0 + title_h + 2.0
+	var cursor := 7.0 + title_h + 2.0
 
 	# Row 2 (unlock/gear cards): trap/boost preview image.
 	# image_h scales proportionally with font_scale so narrow many-card layouts don't
 	# give a disproportionate fraction of card height to the image.
 	# Baseline: 87 px at font_scale 0.65 (50% larger than the original 58 px).
 	var image_h := 87.0 * font_scale / 0.65
+	if image_h_max >= 0.0:
+		image_h = minf(image_h, image_h_max)
 	if _image_rect:
 		_image_rect.position = Vector2(px, cursor)
 		_image_rect.size     = Vector2(w - px * 2.0, image_h)
@@ -398,20 +435,24 @@ func _on_resized() -> void:
 		_stat_lbl.position = Vector2(px, stat_y)
 		_stat_lbl.size     = Vector2(w - px * 2.0, 30.0)
 
-	# Impact line.
+	# Impact line (or bucks cost display for gear-selection cards).
 	if _impact_lbl:
 		_impact_lbl.position = Vector2(px, impact_y)
 		_impact_lbl.size     = Vector2(w - px * 2.0, 54.0)
+	if _bucks_row:
+		_bucks_row.position = Vector2(px, impact_y)
+		_bucks_row.size     = Vector2(w - px * 2.0, 54.0)
 
 	# Plain-text description — fills remaining space above the badge area.
+	# 7 px bottom padding matches the 7 px top offset for a symmetric feel.
 	if _plain_lbl:
 		_plain_lbl.position = Vector2(px, plain_y)
-		_plain_lbl.size     = Vector2(w - px * 2.0, h - plain_y - badge_reserve)
+		_plain_lbl.size     = Vector2(w - px * 2.0, h - plain_y - badge_reserve - 7.0)
 
 	# Equipment thumbnail — top-right corner, centred vertically within the title row.
 	if _thumb_rect:
 		const THUMB_SZ: float = 44.0
-		_thumb_rect.position = Vector2(w - px - THUMB_SZ, 6.0 + (title_h - THUMB_SZ) * 0.5)
+		_thumb_rect.position = Vector2(w - px - THUMB_SZ, 7.0 + (title_h - THUMB_SZ) * 0.5)
 		_thumb_rect.size     = Vector2(THUMB_SZ, THUMB_SZ)
 
 	# Tier badge — bottom-right corner (null when show_tier_badge = false).
