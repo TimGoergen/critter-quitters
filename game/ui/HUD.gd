@@ -139,9 +139,9 @@ const SEND_WAVE_COOLDOWN_SEC: float = 1.0
 var _send_wave_cooldown: float = 0.0   # seconds remaining before the send-wave button is usable again
 
 var _play_pause_btn:  Button          # toggles paused ↔ playing
-var _play_pause_icon: _PlaySpeedIcon  # shows pause bars when playing, play triangle when paused
+var _play_pause_icon: _PlayPauseIcon  # always shows triangle + bars; gold = what pressing will do
 var _speed_btn:       Button          # cycles 1× → 2× → 3× → 1× (no pause)
-var _speed_icon:      _PlaySpeedIcon  # shows 1–3 triangles for current speed
+var _speed_icon:      _PlaySpeedIcon  # shows 1–3 triangles + "Nx" label for current speed
 var _last_play_speed: int = 1         # remembers speed when toggling pause
 var _pause_banner:       Control = null
 var _pause_banner_tween: Tween   = null
@@ -861,9 +861,8 @@ void fragment() {
 	_play_pause_btn.pressed.connect(_on_play_pause_btn_pressed)
 	bottom_row.add_child(_play_pause_btn)
 
-	_play_pause_icon = _PlaySpeedIcon.new()
-	# State 0 = pause bars = "currently playing, press to pause"
-	_play_pause_icon.play_speed_state = 0
+	_play_pause_icon = _PlayPauseIcon.new()
+	_play_pause_icon.play_speed_state = _play_speed_state   # 1 = playing at startup
 	_play_pause_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_play_pause_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_play_pause_btn.add_child(_play_pause_icon)
@@ -880,6 +879,8 @@ void fragment() {
 
 	_speed_icon = _PlaySpeedIcon.new()
 	_speed_icon.play_speed_state = _play_speed_state
+	_speed_icon.speed_text       = "1x"
+	_speed_icon.font_ref         = UIFonts.primary_bold()
 	_speed_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_speed_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_speed_btn.add_child(_speed_icon)
@@ -1502,6 +1503,7 @@ func _on_speed_btn_pressed() -> void:
 	else:
 		# When paused, update the speed preview without unpausing.
 		_speed_icon.play_speed_state = _last_play_speed
+		_speed_icon.speed_text       = "%dx" % _last_play_speed
 		_speed_icon.queue_redraw()
 
 
@@ -1524,11 +1526,14 @@ func _apply_play_speed_state() -> void:
 			Engine.time_scale = 3.0
 			get_tree().paused = false
 			_show_pause_banner(false)
-	# Play/pause icon: shows pause bars (0) when playing, play arrow (1) when paused.
-	_play_pause_icon.play_speed_state = 1 if _play_speed_state == 0 else 0
+	# Play/pause icon: pass the game speed state directly.
+	# _PlayPauseIcon colours triangle gold when paused (press to play) and bars gold when playing.
+	_play_pause_icon.play_speed_state = _play_speed_state
 	_play_pause_icon.queue_redraw()
-	# Speed icon: shows current speed; shows _last_play_speed when paused.
-	_speed_icon.play_speed_state = _play_speed_state if _play_speed_state > 0 else _last_play_speed
+	# Speed icon: shows current speed (or last speed when paused) with "Nx" label.
+	var display_speed := _play_speed_state if _play_speed_state > 0 else _last_play_speed
+	_speed_icon.play_speed_state = display_speed
+	_speed_icon.speed_text       = "%dx" % display_speed
 	_speed_icon.queue_redraw()
 
 
@@ -1614,9 +1619,10 @@ func _on_run_ended() -> void:
 	_play_speed_state = 1
 	_last_play_speed  = 1
 	Engine.time_scale = 1.0
-	_play_pause_icon.play_speed_state = 0   # shows pause bars (game is about to resume at 1×)
+	_play_pause_icon.play_speed_state = 1   # 1 = playing; _PlayPauseIcon will colour bars gold
 	_play_pause_icon.queue_redraw()
 	_speed_icon.play_speed_state = 1
+	_speed_icon.speed_text       = "1x"
 	_speed_icon.queue_redraw()
 	_show_pause_banner(false)
 	get_tree().paused = true
@@ -2522,51 +2528,109 @@ class _IncomingBannerShape extends Control:
 		]), color_fill)
 
 
-## Combined play/speed icon for the bottom-right control button.
+## Combined speed icon for the bottom-right speed button.
 ##
-## State 0 (paused): two vertical pause bars.
-## State 1 (play 1×): one black right-pointing triangle.
-## State 2 (play 2×): two gold right-pointing triangles.
-## State 3 (play 3×): three gold right-pointing triangles.
+## State 1 (play 1×): one dark triangle.
+## State 2 (play 2×): two gold triangles.
+## State 3 (play 3×): three gold triangles.
+## When speed_text is set (e.g. "1x", "2x", "3x") and font_ref is provided,
+## the text is drawn immediately to the right of the triangles in the same colour.
 class _PlaySpeedIcon extends Control:
-	const TRIANGLE_W: float = 15.0
-	const TRIANGLE_H: float = 28.0
-	const GAP:        float = 4.0
-	const COLOR_BASE: Color = Color(0.08, 0.05, 0.00, 1.0)  # near-black (gold button text)
-	const COLOR_FAST: Color = Color(1.00, 0.84, 0.00, 1.0)  # bright gold at 2× and 3×
+	const TRIANGLE_W: float = 13.0
+	const TRIANGLE_H: float = 26.0
+	const GAP:        float = 3.0
+	const TEXT_GAP:   float = 5.0   # horizontal gap between last triangle and text
+	const TEXT_SIZE:  int   = 18
+	const COLOR_BASE: Color = Color(0.08, 0.05, 0.00, 1.0)
+	const COLOR_FAST: Color = Color(1.00, 0.84, 0.00, 1.0)
 
-	var play_speed_state: int = 1  # 0=paused, 1=play 1×, 2=play 2×, 3=play 3×
+	var play_speed_state: int  = 1
+	var speed_text:       String = ""
+	var font_ref:         Font   = null
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_RESIZED:
 			queue_redraw()
 
 	func _draw() -> void:
-		if play_speed_state == 0:
-			# Two vertical pause bars — same proportions as the old _PauseBarIcon.
-			var bar_w := size.x * 0.13
-			var gap   := size.x * 0.091
-			var bar_h := size.y * 0.52
-			var x0    := (size.x - bar_w * 2.0 - gap) * 0.5
-			var y0    := (size.y - bar_h) * 0.5
-			draw_rect(Rect2(x0,               y0, bar_w, bar_h), COLOR_BASE)
-			draw_rect(Rect2(x0 + bar_w + gap, y0, bar_w, bar_h), COLOR_BASE)
-		else:
-			# 1–3 right-pointing triangles — same geometry as the old _SpeedIcon.
-			var count   := play_speed_state  # 1, 2, or 3 triangles
-			var total_w := count * TRIANGLE_W + (count - 1) * GAP
-			var x_start := (size.x - total_w) * 0.5
-			var y_top   := (size.y - TRIANGLE_H) * 0.5
-			var y_bot   := y_top + TRIANGLE_H
-			var y_mid   := size.y * 0.5
-			var color   := COLOR_BASE if play_speed_state == 1 else COLOR_FAST
-			for i in count:
-				var x := x_start + i * (TRIANGLE_W + GAP)
-				draw_colored_polygon(PackedVector2Array([
-					Vector2(x,              y_top),
-					Vector2(x,              y_bot),
-					Vector2(x + TRIANGLE_W, y_mid),
-				]), color)
+		var count := play_speed_state   # 1, 2, or 3 triangles
+		if count < 1:
+			count = 1
+		var color := COLOR_BASE if play_speed_state == 1 else COLOR_FAST
+
+		# Measure text width so the triangle+text group can be centred as a unit.
+		var text_w := 0.0
+		if speed_text != "" and font_ref != null:
+			text_w = font_ref.get_string_size(speed_text, HORIZONTAL_ALIGNMENT_LEFT, -1, TEXT_SIZE).x
+
+		var tri_block_w := count * TRIANGLE_W + (count - 1) * GAP
+		var content_w   := tri_block_w + (TEXT_GAP + text_w if text_w > 0.0 else 0.0)
+		var x_start     := (size.x - content_w) * 0.5
+		var y_top       := (size.y - TRIANGLE_H) * 0.5
+		var y_bot       := y_top + TRIANGLE_H
+		var y_mid       := size.y * 0.5
+
+		for i in count:
+			var x := x_start + i * (TRIANGLE_W + GAP)
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(x,              y_top),
+				Vector2(x,              y_bot),
+				Vector2(x + TRIANGLE_W, y_mid),
+			]), color)
+
+		if text_w > 0.0 and font_ref != null:
+			# Vertical offset: font baseline sits ~65% of font size below the top of the glyph.
+			var text_x := x_start + tri_block_w + TEXT_GAP
+			var text_y := y_mid + TEXT_SIZE * 0.35
+			draw_string(font_ref, Vector2(text_x, text_y), speed_text,
+					HORIZONTAL_ALIGNMENT_LEFT, -1, TEXT_SIZE, color)
+
+
+## Play/pause icon for the bottom-left control button.
+## Always draws a right-pointing triangle AND two vertical pause bars side by side.
+## The symbol representing the available action is gold; the other is gray.
+##   Paused  (play_speed_state == 0): triangle is gold (press to play),  bars are gray.
+##   Playing (play_speed_state != 0): triangle is gray (current state),  bars are gold (press to pause).
+class _PlayPauseIcon extends Control:
+	const TRI_W:     float = 13.0
+	const TRI_H:     float = 26.0
+	const BAR_W:     float = 6.0
+	const BAR_H:     float = 26.0
+	const BAR_GAP:   float = 4.0
+	const INNER_GAP: float = 8.0   # gap between the triangle and the first pause bar
+	const COLOR_GOLD: Color = Color(1.00, 0.84, 0.00, 1.0)
+	const COLOR_GRAY: Color = Color(0.12, 0.10, 0.05, 0.45)   # muted on gold button background
+
+	var play_speed_state: int = 1   # 0 = paused, non-zero = playing
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	func _draw() -> void:
+		var is_paused  := play_speed_state == 0
+		var tri_color  := COLOR_GOLD if is_paused  else COLOR_GRAY
+		var bars_color := COLOR_GRAY if is_paused  else COLOR_GOLD
+
+		# Centre the triangle + bars group as a single unit.
+		var total_w := TRI_W + INNER_GAP + BAR_W + BAR_GAP + BAR_W
+		var x0      := (size.x - total_w) * 0.5
+		var y_mid   := size.y * 0.5
+		var y_top_t := y_mid - TRI_H * 0.5
+		var y_bot_t := y_mid + TRI_H * 0.5
+
+		# Right-pointing triangle (left side of group).
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(x0,          y_top_t),
+			Vector2(x0,          y_bot_t),
+			Vector2(x0 + TRI_W,  y_mid),
+		]), tri_color)
+
+		# Two vertical pause bars (right side of group).
+		var bar_x := x0 + TRI_W + INNER_GAP
+		var bar_y := y_mid - BAR_H * 0.5
+		draw_rect(Rect2(bar_x,                   bar_y, BAR_W, BAR_H), bars_color)
+		draw_rect(Rect2(bar_x + BAR_W + BAR_GAP, bar_y, BAR_W, BAR_H), bars_color)
 
 
 ## Magnifying glass with a + (zoom-in) or − (zoom-out) symbol in the lens.
