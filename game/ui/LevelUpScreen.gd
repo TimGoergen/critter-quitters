@@ -156,8 +156,8 @@ const EQUIP_DISPLAY_PCT: Array = [5, 10, 20]
 const CARD_W: float = 372.0
 
 ## Height of each upgrade card in virtual pixels.
-## Increased from 295 to 325 to accommodate the larger (87 px) trap/boost image.
-const CARD_H: float = 325.0
+## Increased from 325 to 407 after moving cards up to y=178, filling the screen to a 15px bottom margin.
+const CARD_H: float = 407.0
 
 ## Horizontal gap between cards.
 const CARD_GAP: float = 20.0
@@ -210,7 +210,7 @@ func _build_screen(new_level: int) -> void:
 	header.add_theme_constant_override("shadow_offset_y", 2)
 	header.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
 	header.offset_top    = 5.0
-	header.offset_bottom = 160.0   # 155px for 128pt font
+	header.offset_bottom = 125.0   # tighter bottom edge; font fits in ~120px at 128pt
 	header.process_mode  = Node.PROCESS_MODE_ALWAYS
 	add_child(header)
 
@@ -222,8 +222,8 @@ func _build_screen(new_level: int) -> void:
 	sub.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	sub.add_theme_font_size_override("font_size", 32)
 	sub.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	sub.offset_top    = 163.0
-	sub.offset_bottom = 205.0   # 42px for 32pt font
+	sub.offset_top    = 128.0
+	sub.offset_bottom = 168.0   # 40px for 32pt font
 	sub.process_mode  = Node.PROCESS_MODE_ALWAYS
 	add_child(sub)
 
@@ -626,14 +626,15 @@ func _build_campaign_card(tier: int, used_ids: Array) -> Dictionary:
 func _spawn_cards(cards: Array) -> void:
 	var total_w := CARD_W * 3.0 + CARD_GAP * 2.0
 	var start_x := (1280.0 - total_w) * 0.5   # centred in 1280px virtual width
-	# Pushed down 27px extra to leave room for the "NEW EQUIPMENT" tag panels above unlock cards.
-	var card_y  := 240.0
+	# 8px gap below the sub-header (which ends at 168px). Tag panels render above this line.
+	var card_y  := 178.0
 
 	for i in 3:
 		var card_ctrl := UpgradeCard.new()
 		# Apply identity colour for unlock cards before setup() reads it.
-		card_ctrl.custom_color = cards[i].get("custom_color", Color.TRANSPARENT)
-		card_ctrl.font_scale   = 0.65   # match TrapSelectionScreen text density
+		card_ctrl.custom_color  = cards[i].get("custom_color", Color.TRANSPARENT)
+		card_ctrl.font_scale    = 0.65   # match TrapSelectionScreen text density
+		card_ctrl.image_h_max   = 65.0   # 25% smaller than the 87px baseline
 		card_ctrl.setup(cards[i])
 		card_ctrl.position    = Vector2(start_x + i * (CARD_W + CARD_GAP), card_y)
 		card_ctrl.size        = Vector2(CARD_W, CARD_H)
