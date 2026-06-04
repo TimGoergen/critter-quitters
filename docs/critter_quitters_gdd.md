@@ -47,6 +47,7 @@
 | v0.38 | Starting trap selection UI specified. Same full-screen card layout as the level-up screen; 3 trap cards offered, player picks 2; "Start Buggin'" button activates on 2 selections. Wider Selection meta upgrade scales both the offer count (3→4) and pick count (2→3). |
 | v0.33 | Balance pass: gameplay loop and progression. Starting Bug Bucks reduced from 1,000 to 75 (buys exactly 3 Snap Traps; forces immediate strategic decisions). Infestation values scaled up ~8× so wave 1 uncontested = 2× threshold (10 Gnats × 4.0 = 40 infestation, threshold = 20). Kill bounties adjusted downward for standard enemies so Bug Bucks feel ungenerous: Gnat 3, Ant 6, Cricket 10, Beetle 20, Cockroach 35, Mosquito 10, Mouse 60, Rat 20, Rat King 180. XP system decoupled from infestation: each enemy type now carries a flat `xp` value; Arena.gd reads it directly rather than deriving from infestation damage. Level-up threshold raised from 12 to 20 XP so first level-up lands mid-wave 2 (satisfies 2–4 waves target). HP scaling changed from continuous linear (wave × 1.02 + base) to a step multiplier every 5 waves (+30% per tier): waves 1–4 = 1.0×, waves 5–9 = 1.3×, waves 10–14 = 1.6×, etc. |
 | v0.39 | Phase 8 marked complete. Mouse and Rat King SVG art complete; remaining Phase 8 items (palette finalisation, procedural background) deferred to post-roadmap cleanup. Phase 9 marked in progress. |
+| v0.40 | Phase 9 status audited against code. Wave composition system, all 6 trap types, all 9 enemy types, The Truck hub screen, and Service Fees are all fully implemented and marked complete. Phase 9b items (hub, upgrade trees, SF) folded into Phase 9 — Phase 9b removed. Two items remain open: Arena Evolution (not started) and multi-slot save system (single slot only). Known bug noted: Rat King does not appear in normal wave rotation — only Mouse spawns every 10 waves; Rat King is unreachable except via static test mode. |
 
 ---
 
@@ -902,40 +903,25 @@ All assets use the confirmed SVG-on-quad approach: QuadMesh + StandardMaterial3D
 ### **Phase 9 — Full Game Loop** *(in progress)*
 
 **Design deliverables (complete):**
-- Game structure confirmed — single endless mode, Service Fees = XP levels reached (see Section 15)
-- Permanent upgrade tree specified — Equipment and Business trees, 18 tiers, 99 SF total (see Section 8)
-
-**Implementation deliverables (in progress):**
-- ✓ Starting trap selection — cost-weighted offer with ground-damage guarantee; player picks 2 of 3
-- ✓ Progression gating — flying enemies gated on anti-air unlock; level-up equipment cards limited to unlocked types
-- Wave composition system — complexity curve, group-based spawning, boss wave rotation
-- All 6 trap types fully implemented in gameplay
-- All 9 enemy types in the wave pool
-- The Truck hub / meta update screen
-- Arena Evolution — obstacle spawning after boss waves
-- Save file system — multiple independent run slots
-- Service Fees awarded at run end (= XP level reached)
+- ✓ Game structure confirmed — single endless mode, Service Fees = XP levels reached (see Section 15)
+- ✓ Permanent upgrade tree specified — Equipment and Business trees, 18 tiers, 99 SF total (see Section 8)
 
 **Implementation deliverables:**
-- Wave composition system — complexity curve, group-based spawning, boss waves
-- All 6 trap types fully implemented in gameplay
-- All 9 enemy types in the wave pool
-- Starting trap selection — 3 offered, player picks 2
-- The Truck hub / meta update screen
-- Arena Evolution — obstacle spawning after boss waves
-- Save file system — multiple independent run slots
-- Service Fees awarded at run end (= XP level reached)
+- ✓ Starting trap selection — cost-weighted offer with ground-damage guarantee; player picks 2–5 of 3–5 (scales with Wider Selection upgrade)
+- ✓ Progression gating — flying enemies gated on anti-air unlock; level-up equipment cards limited to unlocked types
+- ✓ Wave composition system — weighted enemy pool evolving by wave number, dynamic spawn spacing, 10-wave boss cycle (Mouse)
+- ✓ All 6 trap types fully implemented — Snap Trap, Zapper, Fogger, Glue Board, Fly Strip Launcher, Bait Station all have complete damage/fire logic
+- ✓ All 9 enemy types defined and spawnable — Ant, Gnat, Cricket, Beetle, Cockroach, Mosquito, Rat, Mouse, Rat King (see known bug below)
+- ✓ The Truck hub / meta update screen — HubScreen.gd + PermanentUpgradeScreen.gd; full 11-upgrade × 10-tier tree; SF balance displayed with per-run delta
+- ✓ Service Fees awarded at run end — current_player_level (XP levels reached) added to service_fees and saved on run end
+- ✓ Save file system (single slot) — persistent meta saved to user://save.cfg: SF total and all upgrade tiers
+- ✗ Arena Evolution — obstacle spawning after boss waves; not yet started
+- ✗ Save file system (multi-slot) — single save only; multiple independent run slots not implemented
+
+**Known bug:**
+- Rat King does not appear in normal wave rotation. The boss check spawns Mouse every wave divisible by 10; Rat King is unreachable during a normal run and only appears in static test mode. The intended alternating rotation (Mouse on odd 10s, Rat King on even 20s) is not implemented.
 
 *Goal: complete playable game from run start to run end with full meta progression loop*
-
-### **Phase 9b — Meta Progression**
-- Service Fees earned at run end based on performance
-- The Truck hub screen — Start New Job, Upgrades, Stats
-- Equipment upgrade tree
-- Business upgrade tree
-- Stats tracking — pests killed, highest wave, runs completed
-
-*Goal: long-term progression loop across runs*
 
 ### **Phase 10 — Depth & Polish**
 - Full upgrade trees and DoT system (fire, ice)
