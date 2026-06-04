@@ -50,12 +50,12 @@ const BOOST_SLOT_CHANCE: float = 0.20
 
 
 ## Returns how many trap/boost cards to display at run start.
-## Wider Selection tiers 1-10 progressively increase the offer count (3→6 max)
+## Wider Selection tiers progressively increase the offer count (3→5 max)
 ## and pick count (2→4 max) in paired steps: each even tier adds one more pick,
-## each odd tier adds one more offer. Hard caps: 6 offers, 4 picks.
+## each odd tier adds one more offer. Hard caps: 5 offers, 4 picks.
 func _offer_count() -> int:
 	var t := GameState.wider_selection_tier
-	return mini(3 + (t + 1) / 2, 6)   # t=0→3, t=1→4, t=3→5, t=5+→6 (max)
+	return mini(3 + (t + 1) / 2, 5)   # t=0→3, t=1→4, t=3+→5 (max)
 
 func _pick_count() -> int:
 	var t := GameState.wider_selection_tier
@@ -282,17 +282,6 @@ func _generate_slots() -> Array:
 			var boost_pick := _weighted_pick(available_boosts)
 			slots.append({ "category": "boost", "type": boost_pick["type"] })
 			used_boost_types.append(boost_pick["type"])
-		else:
-			# All 6 traps and all 5 boosts are already offered (only possible at
-			# very high Wider Selection tiers) — repeat a boost as a last resort.
-			var fallback_candidates: Array = []
-			for b in range(5):
-				fallback_candidates.append({
-					"category": "boost", "type": b,
-					"weight": 1.0 / float(BoostUnit.STATS[b]["cost"]),
-				})
-			var boost_pick := _weighted_pick(fallback_candidates)
-			slots.append({ "category": "boost", "type": boost_pick["type"] })
 
 	slots.shuffle()
 	return slots

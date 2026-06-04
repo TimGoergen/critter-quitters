@@ -568,7 +568,7 @@ Each card represents one trap type and displays that trap's name, description, a
 
 The 2 chosen trap types are immediately available for purchase and placement. Remaining trap types are locked for the run (unlock mechanic TBD).
 
-If the Wider Selection meta upgrade (tier 1) is purchased, 4 cards are offered instead of 3. If tier 2 is purchased, the player picks 3 instead of 2.
+If the Wider Selection meta upgrade is purchased, each odd tier adds one more offer (3→4→5 max) and each even tier adds one more pick (2→3→4 max). Hard caps: 5 offers, 4 picks.
 
 **High score**
 
@@ -621,7 +621,7 @@ Meta upgrades are permanent improvements purchased with Service Fees. They persi
 | Reinforced Mechanisms | All traps start with +15% base damage | +30% base damage | 4 / 8 |
 | Extended Range | All traps start with +10% base range | +20% base range | 3 / 6 |
 | Tuned Triggers | Active traps start with +10% fire rate | +20% fire rate | 3 / 6 |
-| Wider Selection | Starting trap selection offers 4 types instead of 3 | Player picks 3 of those 4 instead of 2 | 5 / 10 |
+| Wider Selection | Offers 4 types instead of 3; picks 3 instead of 2 at tier 2 | Offers 5 types; picks 4 at tier 4 | 5 / 10 / 5 / 10 |
 
 **Business upgrades** — improvements to economy and survivability:
 
