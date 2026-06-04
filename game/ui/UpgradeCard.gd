@@ -172,6 +172,11 @@ var show_tier_badge: bool = true
 ## it doubles font_scale so the layout remains balanced.
 var image_h_max: float = -1.0
 
+## Left/right content margin inside the card border used throughout _on_resized().
+## Default 14 px gives comfortable breathing room on the level-up screen.
+## TrapSelectionScreen overrides this to 7 px for its denser card layout.
+var horizontal_padding: float = 14.0
+
 
 # ---------------------------------------------------------------------------
 # Setup
@@ -386,7 +391,7 @@ func _on_resized() -> void:
 
 	var w  := size.x
 	var h  := size.y
-	var px := 7.0
+	var px := horizontal_padding
 
 	# title_h must always fit a 2-line title (long names in narrow cards wrap).
 	# formula_h preserves the compact title-to-image gap when title_font_scale > 1.0;

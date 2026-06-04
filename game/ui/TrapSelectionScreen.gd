@@ -186,7 +186,8 @@ func _build_screen() -> void:
 		card.process_mode = Node.PROCESS_MODE_ALWAYS
 		# Cap image height at 40% above baseline so images are larger but don't
 		# crowd out the description text despite the doubled font_scale.
-		card.image_h_max  = 122.0
+		card.image_h_max         = 122.0
+		card.horizontal_padding  = 7.0   # tighter than the 14 px default used on the level-up screen
 		card.card_selected.connect(_on_card_toggled.bind(card, slot))
 		add_child(card)
 		_cards.append(card)
