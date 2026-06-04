@@ -138,8 +138,11 @@ var _current_wave_reward:    int = 0   # last value from early_send_reward_chang
 const SEND_WAVE_COOLDOWN_SEC: float = 1.0
 var _send_wave_cooldown: float = 0.0   # seconds remaining before the send-wave button is usable again
 
-var _play_speed_btn:  Button
-var _play_speed_icon: _PlaySpeedIcon  # procedural icon: pause bars at state 0, triangles at 1/2/3
+var _play_pause_btn:  Button          # toggles paused ↔ playing
+var _play_pause_icon: _PlaySpeedIcon  # shows pause bars when playing, play triangle when paused
+var _speed_btn:       Button          # cycles 1× → 2× → 3× → 1× (no pause)
+var _speed_icon:      _PlaySpeedIcon  # shows 1–3 triangles for current speed
+var _last_play_speed: int = 1         # remembers speed when toggling pause
 var _pause_banner:       Control = null
 var _pause_banner_tween: Tween   = null
 var _exit_btn:       Button
@@ -423,17 +426,31 @@ func _build_right_panel() -> void:
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
-	# --- Settings button — top-right corner, opens the Settings dialog.
-	# Standard button: gray background, silver border, SVG gear icon centered inside.
-	var settings_row := HBoxContainer.new()
-	settings_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	settings_row.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
-	vbox.add_child(settings_row)
+	# --- Top row: Zoom button on the left, Settings button on the right.
+	# Zoom is pinned to the top-left corner of the right panel, next to settings.
+	var top_row := HBoxContainer.new()
+	top_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_row.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+	top_row.add_theme_constant_override("separation", 4)
+	vbox.add_child(top_row)
 
-	# Left spacer pushes the button to the right edge of the panel.
-	var left_spacer := Control.new()
-	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	settings_row.add_child(left_spacer)
+	_zoom_btn = Button.new()
+	_zoom_btn.text                  = ""
+	_zoom_btn.custom_minimum_size   = Vector2(60.0, 60.0)
+	_zoom_btn.size_flags_horizontal = Control.SIZE_SHRINK_BEGIN
+	_zoom_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_apply_gold_button_style(_zoom_btn)
+	_zoom_btn.pressed.connect(_on_zoom_btn_pressed)
+	top_row.add_child(_zoom_btn)
+
+	_zoom_icon = _ZoomIcon.new()
+	_zoom_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_zoom_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_zoom_btn.add_child(_zoom_icon)
+
+	var top_spacer := Control.new()
+	top_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_row.add_child(top_spacer)
 
 	_settings_btn = Button.new()
 	_settings_btn.text                  = ""
@@ -442,16 +459,13 @@ func _build_right_panel() -> void:
 	_settings_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	_apply_gear_button_style(_settings_btn)
 	_settings_btn.pressed.connect(_on_settings_btn_pressed)
-	settings_row.add_child(_settings_btn)
+	top_row.add_child(_settings_btn)
 
-	# TextureRect child centers the PNG gear inside the button with equal inset on all sides.
-	# The PNG carries its own silver/gray styling and baked outline — no shader needed.
 	var gear_rect := TextureRect.new()
 	gear_rect.texture      = load("res://assets/gear_icon.png") as Texture2D
 	gear_rect.expand_mode  = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	gear_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	gear_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# 8 px inset on all sides keeps the gear clear of the button border.
 	gear_rect.offset_left   = 8.0
 	gear_rect.offset_top    = 8.0
 	gear_rect.offset_right  = -8.0
@@ -832,45 +846,45 @@ void fragment() {
 	send_spacer_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(send_spacer_bottom)
 
-	# --- Bottom 2-button row: Zoom | PlaySpeed ---
-	# Two equal-width gold buttons at a fixed height.
+	# --- Bottom 2-button row: Play/Pause | Speed ---
+	# Both buttons expand to fill equal widths.
 	var bottom_row := HBoxContainer.new()
 	bottom_row.add_theme_constant_override("separation", 4)
 	bottom_row.size_flags_vertical = Control.SIZE_SHRINK_END
 	vbox.add_child(bottom_row)
 
-	# Zoom button — magnifying glass with + (zoom in) or − (zoom out).
-	_zoom_btn = Button.new()
-	_zoom_btn.text = ""
-	_apply_gold_button_style(_zoom_btn)
-	_zoom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_zoom_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_zoom_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_zoom_btn.pressed.connect(_on_zoom_btn_pressed)
-	bottom_row.add_child(_zoom_btn)
+	# Play/pause button — shows pause bars when playing (will pause), play arrow when paused.
+	_play_pause_btn = Button.new()
+	_play_pause_btn.text = ""
+	_apply_gold_button_style(_play_pause_btn)
+	_play_pause_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_play_pause_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_play_pause_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
+	_play_pause_btn.pressed.connect(_on_play_pause_btn_pressed)
+	bottom_row.add_child(_play_pause_btn)
 
-	# _ZoomIcon fills the button face and redraws when show_plus changes.
-	_zoom_icon = _ZoomIcon.new()
-	_zoom_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_zoom_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_zoom_btn.add_child(_zoom_icon)
+	_play_pause_icon = _PlaySpeedIcon.new()
+	# State 0 = pause bars = "currently playing, press to pause"
+	_play_pause_icon.play_speed_state = 0
+	_play_pause_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_play_pause_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_play_pause_btn.add_child(_play_pause_icon)
 
-	# Play/speed button — cycles through paused / 1× / 2× / 3× on each tap.
-	# The procedural icon shows two pause bars at state 0 and 1–3 triangles for 1×–3×.
-	_play_speed_btn = Button.new()
-	_play_speed_btn.text = ""
-	_apply_gold_button_style(_play_speed_btn)
-	_play_speed_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_play_speed_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_play_speed_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_play_speed_btn.pressed.connect(_on_play_speed_btn_pressed)
-	bottom_row.add_child(_play_speed_btn)
+	# Speed button — cycles 1× → 2× → 3× → 1× (pause is handled by the separate button above).
+	_speed_btn = Button.new()
+	_speed_btn.text = ""
+	_apply_gold_button_style(_speed_btn)
+	_speed_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_speed_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_speed_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
+	_speed_btn.pressed.connect(_on_speed_btn_pressed)
+	bottom_row.add_child(_speed_btn)
 
-	_play_speed_icon = _PlaySpeedIcon.new()
-	_play_speed_icon.play_speed_state = _play_speed_state
-	_play_speed_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_play_speed_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_play_speed_btn.add_child(_play_speed_icon)
+	_speed_icon = _PlaySpeedIcon.new()
+	_speed_icon.play_speed_state = _play_speed_state
+	_speed_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_speed_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_speed_btn.add_child(_speed_icon)
 
 
 # ---------------------------------------------------------------------------
@@ -1334,7 +1348,11 @@ func _input(event: InputEvent) -> void:
 	# Spacebar toggles between paused and play-1× regardless of drag state.
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE:
-			_play_speed_state = 1 if _play_speed_state == 0 else 0
+			if _play_speed_state == 0:
+				_play_speed_state = _last_play_speed
+			else:
+				_last_play_speed  = _play_speed_state
+				_play_speed_state = 0
 			_apply_play_speed_state()
 			get_viewport().set_input_as_handled()
 			return
@@ -1464,11 +1482,29 @@ func _on_viewport_resized() -> void:
 	pass
 
 
-func _on_play_speed_btn_pressed() -> void:
+func _on_play_pause_btn_pressed() -> void:
 	AudioManager.play_ui("button")
-	# Cycle: paused (0) → play 1× (1) → play 2× (2) → play 3× (3) → paused (0) → …
-	_play_speed_state = (_play_speed_state + 1) % 4
+	if _play_speed_state == 0:
+		_play_speed_state = _last_play_speed   # resume at the last active speed
+	else:
+		_last_play_speed  = _play_speed_state  # save speed before pausing
+		_play_speed_state = 0
 	_apply_play_speed_state()
+
+
+func _on_speed_btn_pressed() -> void:
+	AudioManager.play_ui("button")
+	# Cycle 1× → 2× → 3× → 1×, based on last active speed (so cycling works while paused too).
+	var current := _play_speed_state if _play_speed_state > 0 else _last_play_speed
+	_last_play_speed = (current % 3) + 1
+	if _play_speed_state > 0:
+		# Apply immediately when not paused.
+		_play_speed_state = _last_play_speed
+		_apply_play_speed_state()
+	else:
+		# When paused, update the speed preview without unpausing.
+		_speed_icon.play_speed_state = _last_play_speed
+		_speed_icon.queue_redraw()
 
 
 ## Applies Engine.time_scale, tree pause, and banner visibility for the current _play_speed_state.
@@ -1490,8 +1526,12 @@ func _apply_play_speed_state() -> void:
 			Engine.time_scale = 3.0
 			get_tree().paused = false
 			_show_pause_banner(false)
-	_play_speed_icon.play_speed_state = _play_speed_state
-	_play_speed_icon.queue_redraw()
+	# Play/pause icon: shows pause bars (0) when playing, play arrow (1) when paused.
+	_play_pause_icon.play_speed_state = 1 if _play_speed_state == 0 else 0
+	_play_pause_icon.queue_redraw()
+	# Speed icon: shows current speed; shows _last_play_speed when paused.
+	_speed_icon.play_speed_state = _play_speed_state if _play_speed_state > 0 else _last_play_speed
+	_speed_icon.queue_redraw()
 
 
 func _on_multiplier_btn_pressed() -> void:
@@ -1520,7 +1560,7 @@ func _on_send_wave_pressed() -> void:
 	AudioManager.play_ui("button")
 	# Clicking send-wave while paused resumes play at 1× first, then sends the wave.
 	if _play_speed_state == 0:
-		_play_speed_state = 1
+		_play_speed_state = _last_play_speed
 		_apply_play_speed_state()
 	if _wave_multiplier > 1:
 		GameState.wave_skip_multi_requested.emit(_wave_multiplier)
@@ -1574,9 +1614,12 @@ func _on_run_ended() -> void:
 	# Reset button to play-1× appearance without calling _apply_play_speed_state,
 	# because the line below immediately pauses the tree for the run-over state.
 	_play_speed_state = 1
+	_last_play_speed  = 1
 	Engine.time_scale = 1.0
-	_play_speed_icon.play_speed_state = _play_speed_state
-	_play_speed_icon.queue_redraw()
+	_play_pause_icon.play_speed_state = 0   # shows pause bars (game is about to resume at 1×)
+	_play_pause_icon.queue_redraw()
+	_speed_icon.play_speed_state = 1
+	_speed_icon.queue_redraw()
 	_show_pause_banner(false)
 	get_tree().paused = true
 	# Open the infested dialog immediately — no interstitial overlay.

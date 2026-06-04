@@ -35,7 +35,7 @@ signal loadout_selected(trap_types: Array[int], boost_types: Array[int])
 
 const CARD_W:   float = 372.0
 const CARD_H:   float = 330.0   # tall enough to hold title + image + cost + description
-const CARD_GAP: float = 20.0
+const CARD_GAP: float = 10.0
 
 ## Base offer and pick counts — scaled by the Wider Selection permanent upgrade.
 ## Use _offer_count() and _pick_count() everywhere rather than these directly.
@@ -119,33 +119,37 @@ func _build_screen() -> void:
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(dim)
 
-	# Header.
+	# Header band constants — title and Start button share the same horizontal row.
+	const HEADER_H: float = 90.0   # height of the title/button band
+	const SUB_H:    float = 34.0   # height of the pick-count row below
+
+	# "CHOOSE YOUR GEAR" — left-aligned, top-left of the screen.
 	var header := Label.new()
 	header.text                 = "CHOOSE YOUR GEAR"
-	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	header.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	header.add_theme_font_override("font", UIFonts.primary_bold())
-	header.add_theme_font_size_override("font_size", 80)
+	header.add_theme_font_size_override("font_size", 68)
 	header.add_theme_color_override("font_color", Color(1.0, 0.88, 0.20, 1.0))
 	header.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
 	header.add_theme_constant_override("shadow_offset_x", 2)
 	header.add_theme_constant_override("shadow_offset_y", 2)
 	header.process_mode         = Node.PROCESS_MODE_ALWAYS
-	header.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	header.offset_top    = 5.0
-	header.offset_bottom = 100.0
+	header.position             = Vector2(24.0, 8.0)
+	header.size                 = Vector2(880.0, HEADER_H - 10.0)
 	add_child(header)
 
-	# "PICK N" sub-header.
+	# "PICK N DEFENSES TO START" — left-aligned, directly below the title.
 	var sub := Label.new()
 	sub.text                 = "PICK %d DEFENSES TO START" % _pick_count()
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	sub.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	sub.add_theme_font_override("font", UIFonts.primary_bold())
 	sub.add_theme_font_size_override("font_size", 28)
 	sub.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
 	sub.process_mode         = Node.PROCESS_MODE_ALWAYS
-	sub.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	sub.offset_top    = 103.0
-	sub.offset_bottom = 140.0
+	sub.position             = Vector2(24.0, HEADER_H)
+	sub.size                 = Vector2(880.0, SUB_H)
 	add_child(sub)
 
 	# Cards.
@@ -158,24 +162,16 @@ func _build_screen() -> void:
 		card_w = minf(CARD_W, max_w)
 	var total_w := card_w * float(offer) + CARD_GAP * float(offer - 1)
 	var start_x := (1280.0 - total_w) * 0.5
-	var card_y  := 148.0
+	var card_y  := HEADER_H + SUB_H + 4.0   # 128 px from top
 
 	# When Wider Selection narrows the cards, scale font density proportionally
 	# so text stays legible in narrower columns.
-	# font_scale floors at 0.45 (minimum readable size on mobile).
-	# title_font_scale floors at 1.0 (no artificial shrink below normal size).
 	var width_ratio:      float = card_w / CARD_W
 	var card_font_scale:  float = clampf(0.65 * width_ratio, 0.45, 0.65)
 	var card_title_scale: float = clampf(1.50 * width_ratio, 1.00, 1.50)
 
-	# Card height fills all available vertical space regardless of how many cards
-	# are shown. The narrow-card formula (CARD_H * font_scale/0.65) used to shrink
-	# card_h when Wider Selection added more cards, leaving empty space below the
-	# Start button and truncating the description text. Instead, fit the card
-	# from card_y down to the button, with a 24 px gap and a 16 px bottom margin.
-	# cap at CARD_H so the default 3-card layout keeps its original proportions.
-	#   600 - 148(card_y) - 24(gap) - 76(button) - 16(margin) = 336 px available
-	var card_h: float = minf(600.0 - card_y - 24.0 - 76.0 - 16.0, CARD_H)
+	# Cards fill all remaining vertical space below the header rows.
+	var card_h: float = 600.0 - card_y - 16.0
 
 	for i in offer:
 		var slot: Dictionary = _offered_slots[i]
@@ -187,16 +183,17 @@ func _build_screen() -> void:
 		add_child(card)
 		_cards.append(card)
 
-	# "Start Buggin'" button — disabled until PICK_COUNT cards are selected.
-	# Styled and structured identically to the hub screen's Start Buggin' button.
+	# "Start Buggin'" button — right-aligned in the header band.
+	# Disabled until PICK_COUNT cards are selected.
+	const BTN_W: float = 200.0
 	_start_btn = _make_start_button()
-	_start_btn.disabled     = true
-	_start_btn.process_mode = Node.PROCESS_MODE_ALWAYS
+	_start_btn.disabled             = true
+	_start_btn.process_mode         = Node.PROCESS_MODE_ALWAYS
+	_start_btn.custom_minimum_size  = Vector2(BTN_W, 76.0)
 	_start_btn.pressed.connect(_on_start_pressed)
-	_start_btn.position = Vector2((1280.0 - 392.0) * 0.5, card_y + card_h + 24.0)
-	# store offer count for use in _on_card_toggled
-	_offered_count = offer
-	_start_btn.size     = Vector2(392.0, 76.0)
+	_start_btn.position = Vector2(1280.0 - BTN_W - 16.0, (HEADER_H - 76.0) * 0.5)
+	_start_btn.size     = Vector2(BTN_W, 76.0)
+	_offered_count      = offer
 	add_child(_start_btn)
 
 
