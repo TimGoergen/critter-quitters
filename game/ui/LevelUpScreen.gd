@@ -480,13 +480,14 @@ func _build_equipment_card(tier: int, used_ids: Array) -> Dictionary:
 	var stat: String   = chosen["stat"]
 	var rep            = chosen["rep"]   # Node3D or null
 
-	# Resolve the display name: prefer a live node's get_type_name(); fall back to
-	# TRAP_DISPLAY which is always populated for all six trap types.
-	var title: String
+	# Title is "<Trap Name> Upgrade" so the card is immediately recognisable as a
+	# buff to that specific trap type rather than a campaign-wide effect.
+	var trap_name: String
 	if rep != null and is_instance_valid(rep):
-		title = rep.get_type_name()
+		trap_name = rep.get_type_name()
 	else:
-		title = TRAP_DISPLAY.get(trap_type, {}).get("name", "Trap")
+		trap_name = TRAP_DISPLAY.get(trap_type, {}).get("name", "Trap")
+	var title: String = "%s Upgrade" % trap_name
 
 	var stat_name: String  = STAT_NAMES.get(stat, stat)
 	var plain_text: String = STAT_PLAIN_TEXT.get(stat, "")
