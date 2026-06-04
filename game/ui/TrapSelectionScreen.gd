@@ -154,15 +154,19 @@ func _build_screen() -> void:
 
 	# Cards.
 	var offer := _offer_count()
-	# If more than 3 cards are offered, scale card width down so they all fit
-	# within the 1280 px virtual viewport with a 20 px margin on each side.
-	var card_w: float = CARD_W
-	if offer > 3:
-		var max_w := (1280.0 - 40.0 - CARD_GAP * float(offer - 1)) / float(offer)
-		card_w = minf(CARD_W, max_w)
+	# Derive card width from a fixed side margin so the cards sit well clear of the screen edges.
+	# SIDE_MARGIN ≈ 3× the implicit centred margin of the original layout.
+	# When Wider Selection offers more than 3 cards the margin shrinks proportionally,
+	# but card_w is still capped at CARD_W so extra offers never inflate beyond the default.
+	const SIDE_MARGIN: float = 200.0
+	var card_w: float = minf(
+		(1280.0 - SIDE_MARGIN * 2.0 - CARD_GAP * float(offer - 1)) / float(offer),
+		CARD_W
+	)
 	var total_w := card_w * float(offer) + CARD_GAP * float(offer - 1)
 	var start_x := (1280.0 - total_w) * 0.5
-	var card_y  := HEADER_H + SUB_H + 4.0   # 128 px from top
+	# 24 px gap so the selection ring (8 px outset) clears the sub-header text above.
+	var card_y  := HEADER_H + SUB_H + 24.0
 
 	# When Wider Selection narrows the cards, scale font density proportionally
 	# so text stays legible in narrower columns.
