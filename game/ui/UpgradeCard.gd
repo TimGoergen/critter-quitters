@@ -272,15 +272,22 @@ func _build_card() -> void:
 	_title_lbl.add_theme_font_size_override("font_size", roundi(38.0 * font_scale * title_font_scale))
 	add_child(_title_lbl)
 
-	# --- Trap/boost image — shown on unlock cards and gear-selection cards ---
+	# --- Image — shown on unlock, gear-selection, and campaign cards ---
 	# "unlock_trap"/"unlock_boost" are used by LevelUpScreen; "trap"/"boost" are
 	# used by TrapSelectionScreen. Both contexts display the unit's SVG preview.
+	# Campaign cards (company-wide upgrades) show the van illustration instead.
 	var item_type: int = _upgrade_data.get("item_type", -1)
-	var is_trap_img:  bool = (category == "unlock_trap"  or category == "trap")  and item_type >= 0
-	var is_boost_img: bool = (category == "unlock_boost" or category == "boost") and item_type >= 0
-	if is_trap_img or is_boost_img:
-		var tex_path: String = TRAP_TEXTURE_PATHS.get(item_type, "") if is_trap_img \
-				else BOOST_TEXTURE_PATHS.get(item_type, "")
+	var is_trap_img:     bool = (category == "unlock_trap"  or category == "trap")  and item_type >= 0
+	var is_boost_img:    bool = (category == "unlock_boost" or category == "boost") and item_type >= 0
+	var is_campaign_img: bool = (category == "campaign")
+	if is_trap_img or is_boost_img or is_campaign_img:
+		var tex_path: String
+		if is_campaign_img:
+			tex_path = "res://assets/van.png"
+		elif is_trap_img:
+			tex_path = TRAP_TEXTURE_PATHS.get(item_type, "")
+		else:
+			tex_path = BOOST_TEXTURE_PATHS.get(item_type, "")
 		if tex_path != "" and ResourceLoader.exists(tex_path):
 			_image_rect = TextureRect.new()
 			_image_rect.texture             = load(tex_path)
