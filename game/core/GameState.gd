@@ -786,6 +786,16 @@ func _apply_permanent_upgrade_bonuses() -> void:
 	infestation_damage_reduction = t * 0.04   # −4% per tier → −40% at tier 10
 
 
+## Resets all permanent upgrades to tier 0 and clears the Service Fees balance.
+## Saves immediately so the wipe persists across restarts.
+func reset_all_upgrades() -> void:
+	service_fees = 0
+	for key: String in permanent_upgrades.keys():
+		permanent_upgrades[key] = 0
+	service_fees_changed.emit(service_fees)
+	_save_persistent()
+
+
 func _save_persistent() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("meta", "service_fees", service_fees)
