@@ -2599,7 +2599,7 @@ class _PlayPauseIcon extends Control:
 	const BAR_GAP:   float = 4.0
 	const INNER_GAP: float = 8.0   # gap between the triangle and the first pause bar
 	const COLOR_GOLD: Color = Color(1.00, 0.84, 0.00, 1.0)
-	const COLOR_GRAY: Color = Color(0.12, 0.10, 0.05, 0.45)   # muted on gold button background
+	const COLOR_GRAY: Color = Color(0.08, 0.05, 0.00, 1.0)   # same near-black as the speed button
 
 	var play_speed_state: int = 1   # 0 = paused, non-zero = playing
 
