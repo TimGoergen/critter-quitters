@@ -30,3 +30,13 @@ In order to make sure that the player's starting gear is useful, the following r
 
 
 #in the arena, you can no longer place traps or boosts while the game is paused
+
+
+#on the choose your gear screen
+-the option panels need more space. The choose your gear title and pick two text should be left aligned across the top of the screen. The start button should be right aligned across the top. The option panels should all be taller to use up the space from where the start button used to be. 
+-the empty space between the option panels and trap / boost images should be cut in half
+
+#the zoom button should move to the top of the right side panel, pinned to the top left corner next to the settings button. The play/pause button should be restored, and the game speed button should remove the pause option. The play/pause button and game speed button should expand widths to take up the available space
+
+
+
