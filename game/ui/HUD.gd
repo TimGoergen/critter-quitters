@@ -2583,7 +2583,7 @@ class _PlaySpeedIcon extends Control:
 			var text_x := x_start + tri_block_w + TEXT_GAP
 			var text_y := y_mid + TEXT_SIZE * 0.35
 			draw_string(font_ref, Vector2(text_x, text_y), speed_text,
-					HORIZONTAL_ALIGNMENT_LEFT, -1, TEXT_SIZE, color)
+					HORIZONTAL_ALIGNMENT_LEFT, -1, TEXT_SIZE, COLOR_BASE)
 
 
 ## Play/pause icon for the bottom-left control button.
