@@ -152,12 +152,11 @@ const EQUIP_DISPLAY_PCT: Array = [5, 10, 20]
 # Layout constants
 # ---------------------------------------------------------------------------
 
-## Width of each upgrade card in virtual pixels — matches TrapSelectionScreen.
-const CARD_W: float = 372.0
+## Width of each upgrade card in virtual pixels — 10% smaller than TrapSelectionScreen's 372.
+const CARD_W: float = 335.0
 
-## Height of each upgrade card in virtual pixels.
-## Sized so cards span from card_y=180 to y=565, leaving a 35px bottom margin.
-const CARD_H: float = 385.0
+## Height of each upgrade card in virtual pixels — 10% smaller than the previous 385.
+const CARD_H: float = 347.0
 
 ## Horizontal gap between cards.
 const CARD_GAP: float = 20.0
