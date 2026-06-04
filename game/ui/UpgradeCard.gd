@@ -349,7 +349,7 @@ func _build_card() -> void:
 		bucks_lbl.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
 		bucks_lbl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.18, 1.0))
 		bucks_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-		bucks_lbl.add_theme_font_size_override("font_size", roundi(32.0 * font_scale))
+		bucks_lbl.add_theme_font_size_override("font_size", roundi(96.0 * font_scale))
 		_bucks_row.add_child(bucks_lbl)
 	else:
 		_impact_lbl = Label.new()
