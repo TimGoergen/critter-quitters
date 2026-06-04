@@ -158,7 +158,7 @@ func _build_screen() -> void:
 	# SIDE_MARGIN ≈ 3× the implicit centred margin of the original layout.
 	# When Wider Selection offers more than 3 cards the margin shrinks proportionally,
 	# but card_w is still capped at CARD_W so extra offers never inflate beyond the default.
-	const SIDE_MARGIN: float = 200.0
+	const SIDE_MARGIN: float = 80.0
 	var card_w: float = minf(
 		(1280.0 - SIDE_MARGIN * 2.0 - CARD_GAP * float(offer - 1)) / float(offer),
 		CARD_W
@@ -187,15 +187,15 @@ func _build_screen() -> void:
 		add_child(card)
 		_cards.append(card)
 
-	# "Start Buggin'" button — right-aligned in the header band.
-	# Disabled until PICK_COUNT cards are selected.
+	# "Start Buggin'" button — right edge aligned to the right edge of the rightmost panel,
+	# vertically centred in the space between the top of the screen and the top of the panels.
 	const BTN_W: float = 200.0
 	_start_btn = _make_start_button()
 	_start_btn.disabled             = true
 	_start_btn.process_mode         = Node.PROCESS_MODE_ALWAYS
 	_start_btn.custom_minimum_size  = Vector2(BTN_W, 76.0)
 	_start_btn.pressed.connect(_on_start_pressed)
-	_start_btn.position = Vector2(1280.0 - BTN_W - 16.0, (HEADER_H - 76.0) * 0.5)
+	_start_btn.position = Vector2(start_x + total_w - BTN_W, (card_y - 76.0) * 0.5)
 	_start_btn.size     = Vector2(BTN_W, 76.0)
 	_offered_count      = offer
 	add_child(_start_btn)
