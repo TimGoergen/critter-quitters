@@ -349,7 +349,7 @@ func _build_card() -> void:
 		bucks_lbl.size_flags_vertical  = Control.SIZE_SHRINK_CENTER
 		bucks_lbl.add_theme_color_override("font_color", Color(1.0, 0.82, 0.18, 1.0))
 		bucks_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-		bucks_lbl.add_theme_font_size_override("font_size", roundi(96.0 * font_scale))
+		bucks_lbl.add_theme_font_size_override("font_size", roundi(67.0 * font_scale))
 		_bucks_row.add_child(bucks_lbl)
 	else:
 		_impact_lbl = Label.new()
@@ -428,7 +428,10 @@ func _on_resized() -> void:
 	var has_stat: bool = _stat_lbl != null and not _stat_lbl.text.is_empty()
 	var stat_y   := cursor
 	var impact_y := stat_y + (34.0 if has_stat else 0.0)   # 30px label + 4px gap
-	var plain_y  := impact_y + 54.0 + 4.0
+	# Bucks row is taller than the standard 54 px impact label because its font is larger.
+	# Compute the height from the actual label size so plain_y always clears the row.
+	var bucks_h  := float(roundi(67.0 * font_scale)) + 20.0
+	var plain_y  := impact_y + (bucks_h if _bucks_row != null else 54.0) + 8.0
 
 	# Stat name row (equipment/campaign) or skipped when empty (unlock/gear).
 	if _stat_lbl:
@@ -441,7 +444,7 @@ func _on_resized() -> void:
 		_impact_lbl.size     = Vector2(w - px * 2.0, 54.0)
 	if _bucks_row:
 		_bucks_row.position = Vector2(px, impact_y)
-		_bucks_row.size     = Vector2(w - px * 2.0, 54.0)
+		_bucks_row.size     = Vector2(w - px * 2.0, bucks_h)
 
 	# Plain-text description — fills remaining space above the badge area.
 	# 7 px bottom padding matches the 7 px top offset for a symmetric feel.
