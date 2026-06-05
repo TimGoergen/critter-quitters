@@ -125,14 +125,17 @@ const INFESTATION_MAX: int = 20
 ## All permanent upgrades available for purchase with Service Fees.
 ## Each upgrade line has 10 tiers.  tier_costs[i] is the SF cost to buy tier i+1.
 ## tier_effects[i] is the short label shown on the buy button for that tier.
-## All numeric values are playtesting placeholders — scale linearly per tier.
+## Costs follow a triangular progression: each step costs 1 SF more than the last,
+## so early tiers are accessible and late tiers are a significant long-term investment.
+## Base-2 curve: [2, 3, 5, 8, 12, 17, 23, 30, 38, 47]  total = 185 SF
+## Base-3 curve: [3, 4, 6, 9, 13, 18, 24, 31, 39, 48]  total = 195 SF
 const PERMANENT_UPGRADE_DEFS: Array = [
 	# --- Equipment ---
 	{
 		"id": "reinforced_mechanisms", "category": "Equipment",
 		"name": "Reinforced Mechanisms",
 		"desc": "All traps start each run with bonus base damage.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 9, 11, 14, 18],
+		"tier_costs":   [2, 3, 5, 8, 12, 17, 23, 30, 38, 47],
 		"tier_effects": [
 			"+5% Damage",  "+10% Damage", "+15% Damage", "+20% Damage", "+25% Damage",
 			"+30% Damage", "+35% Damage", "+40% Damage", "+45% Damage", "+50% Damage",
@@ -142,7 +145,7 @@ const PERMANENT_UPGRADE_DEFS: Array = [
 		"id": "extended_range", "category": "Equipment",
 		"name": "Extended Range",
 		"desc": "All traps start each run with a wider targeting radius.",
-		"tier_costs":   [2, 2, 3, 4, 5, 5, 6, 7, 9, 12],
+		"tier_costs":   [2, 3, 5, 8, 12, 17, 23, 30, 38, 47],
 		"tier_effects": [
 			"+4% Range",  "+8% Range",  "+12% Range", "+16% Range", "+20% Range",
 			"+24% Range", "+28% Range", "+32% Range", "+36% Range", "+40% Range",
@@ -152,7 +155,7 @@ const PERMANENT_UPGRADE_DEFS: Array = [
 		"id": "tuned_triggers", "category": "Equipment",
 		"name": "Tuned Triggers",
 		"desc": "Active traps start each run firing more often.",
-		"tier_costs":   [2, 2, 3, 4, 5, 5, 6, 7, 9, 12],
+		"tier_costs":   [2, 3, 5, 8, 12, 17, 23, 30, 38, 47],
 		"tier_effects": [
 			"+4% Fire Rate",  "+8% Fire Rate",  "+12% Fire Rate", "+16% Fire Rate", "+20% Fire Rate",
 			"+24% Fire Rate", "+28% Fire Rate", "+32% Fire Rate", "+36% Fire Rate", "+40% Fire Rate",
@@ -162,7 +165,7 @@ const PERMANENT_UPGRADE_DEFS: Array = [
 		"id": "wider_selection", "category": "Equipment",
 		"name": "Wider Selection",
 		"desc": "Gear selection at run start offers more options to choose from.",
-		"tier_costs":   [3, 4, 5, 6, 7, 8, 10, 12, 15, 20],
+		"tier_costs":   [3, 4, 6, 9, 13, 18, 24, 31, 39, 48],
 		"tier_effects": [
 			"4 offered, pick 2", "4 offered, pick 3",
 			"5 offered, pick 3", "5 offered, pick 4",
@@ -176,7 +179,7 @@ const PERMANENT_UPGRADE_DEFS: Array = [
 		"id": "starting_capital", "category": "Business",
 		"name": "Starting Capital",
 		"desc": "Begin each run with more Bug Bucks.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
+		"tier_costs":   [2, 3, 5, 8, 12, 17, 23, 30, 38, 47],
 		"tier_effects": [
 			"+25 Bug Bucks",  "+50 Bug Bucks",  "+75 Bug Bucks",  "+100 Bug Bucks", "+125 Bug Bucks",
 			"+150 Bug Bucks", "+175 Bug Bucks", "+200 Bug Bucks", "+225 Bug Bucks", "+250 Bug Bucks",
@@ -186,7 +189,7 @@ const PERMANENT_UPGRADE_DEFS: Array = [
 		"id": "hazard_insurance", "category": "Business",
 		"name": "Hazard Insurance",
 		"desc": "The infestation threshold is higher before the run ends.",
-		"tier_costs":   [3, 4, 5, 6, 7, 8, 10, 12, 15, 20],
+		"tier_costs":   [3, 4, 6, 9, 13, 18, 24, 31, 39, 48],
 		"tier_effects": [
 			"+5% Threshold",  "+10% Threshold", "+15% Threshold", "+20% Threshold", "+25% Threshold",
 			"+30% Threshold", "+35% Threshold", "+40% Threshold", "+45% Threshold", "+50% Threshold",
@@ -196,7 +199,7 @@ const PERMANENT_UPGRADE_DEFS: Array = [
 		"id": "salvage_value", "category": "Business",
 		"name": "Salvage Value",
 		"desc": "Selling placed units returns a higher refund.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 9, 11, 14],
+		"tier_costs":   [2, 3, 5, 8, 12, 17, 23, 30, 38, 47],
 		"tier_effects": [
 			"+3% Sell Value",  "+6% Sell Value",  "+9% Sell Value",  "+12% Sell Value", "+15% Sell Value",
 			"+18% Sell Value", "+21% Sell Value", "+24% Sell Value", "+27% Sell Value", "+30% Sell Value",
@@ -206,7 +209,7 @@ const PERMANENT_UPGRADE_DEFS: Array = [
 		"id": "bulk_discount", "category": "Business",
 		"name": "Bulk Discount",
 		"desc": "All Bug Bucks upgrade costs are reduced.",
-		"tier_costs":   [3, 4, 5, 6, 7, 8, 9, 10, 12, 15],
+		"tier_costs":   [3, 4, 6, 9, 13, 18, 24, 31, 39, 48],
 		"tier_effects": [
 			"−3% Upgrade Costs",  "−6% Upgrade Costs",  "−9% Upgrade Costs",  "−12% Upgrade Costs",
 			"−15% Upgrade Costs", "−18% Upgrade Costs", "−21% Upgrade Costs", "−24% Upgrade Costs",
@@ -217,7 +220,7 @@ const PERMANENT_UPGRADE_DEFS: Array = [
 		"id": "field_experience", "category": "Business",
 		"name": "Field Experience",
 		"desc": "Earn more XP per kill, reaching level-ups faster.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
+		"tier_costs":   [2, 3, 5, 8, 12, 17, 23, 30, 38, 47],
 		"tier_effects": [
 			"+10% XP per Kill", "+20% XP per Kill", "+30% XP per Kill", "+40% XP per Kill",  "+50% XP per Kill",
 			"+60% XP per Kill", "+70% XP per Kill", "+80% XP per Kill", "+90% XP per Kill", "+100% XP per Kill",
@@ -227,7 +230,7 @@ const PERMANENT_UPGRADE_DEFS: Array = [
 		"id": "show_me", "category": "Business",
 		"name": "Show Me",
 		"desc": "Each kill earns more Bug Bucks.",
-		"tier_costs":   [2, 3, 4, 5, 6, 7, 8, 10, 13, 17],
+		"tier_costs":   [2, 3, 5, 8, 12, 17, 23, 30, 38, 47],
 		"tier_effects": [
 			"+5% Bucks/kill",  "+10% Bucks/kill", "+15% Bucks/kill", "+20% Bucks/kill", "+25% Bucks/kill",
 			"+30% Bucks/kill", "+35% Bucks/kill", "+40% Bucks/kill", "+45% Bucks/kill", "+50% Bucks/kill",
@@ -237,7 +240,7 @@ const PERMANENT_UPGRADE_DEFS: Array = [
 		"id": "strengthen_defenses", "category": "Business",
 		"name": "Strengthen Defenses",
 		"desc": "Pests deal less infestation damage on exit.",
-		"tier_costs":   [3, 4, 5, 6, 7, 8, 10, 12, 15, 20],
+		"tier_costs":   [3, 4, 6, 9, 13, 18, 24, 31, 39, 48],
 		"tier_effects": [
 			"−4% Infest/escape",  "−8% Infest/escape",  "−12% Infest/escape", "−16% Infest/escape",
 			"−20% Infest/escape", "−24% Infest/escape", "−28% Infest/escape", "−32% Infest/escape",

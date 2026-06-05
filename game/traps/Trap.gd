@@ -954,11 +954,21 @@ func _fire_fogger() -> bool:
 	return false
 
 
-## Pulses adhesive on a fixed interval. On each pulse, slows every ground enemy currently
-## in range and starts a cosmetic projectile toward each. Between pulses the slow lingers
-## on enemies that have already left range, counting down each frame until _slow_duration
-## expires. Flying enemies are excluded — they never contact the adhesive surface.
+## Applies adhesive slow to ground enemies continuously. Any enemy that enters range is
+## slowed immediately — not gated on the pulse timer. The pulse fires on its own interval
+## for cosmetics only (animation + sound + projectile arc). The slow lingers for
+## _slow_duration seconds after an enemy leaves range. Flying enemies are excluded.
 func _update_glue_aoe(delta: float) -> void:
+	# Every frame: slow any in-range ground enemy not yet tracked.
+	# Enemies that enter between pulses feel the slow immediately.
+	for enemy in _active_enemies:
+		if not is_instance_valid(enemy) or enemy.get_is_flying():
+			continue
+		if _xz_distance(enemy.global_position) <= _effective_range():
+			if not _glue_slowed_enemies.has(enemy):
+				enemy.add_slow_source(self, _damage)
+				_glue_slowed_enemies[enemy] = -1.0
+
 	# Every frame: tick duration countdowns for enemies that have left range.
 	# Cannot erase from a Dictionary while iterating — collect targets first.
 	var to_release: Array = []
@@ -984,25 +994,17 @@ func _update_glue_aoe(delta: float) -> void:
 			enemy.remove_slow_source(self)
 		_glue_slowed_enemies.erase(enemy)
 
-	# Tick the pulse timer.
+	# Pulse timer: cosmetic only — triggers projectile arcs, animation, and sound.
 	_glue_pulse_timer -= delta
 	if _glue_pulse_timer > 0.0:
 		return
 
-	# Pulse fires: apply slow to all ground enemies currently in range.
 	var hit_any := false
-	for enemy in _active_enemies:
-		if not is_instance_valid(enemy):
-			continue
-		if enemy.get_is_flying():
-			continue
-		if _xz_distance(enemy.global_position) <= _effective_range():
-			enemy.add_slow_source(self, _damage)
-			_glue_slowed_enemies[enemy] = -1.0
+	for enemy in _glue_slowed_enemies:
+		if is_instance_valid(enemy) and _xz_distance(enemy.global_position) <= _effective_range():
 			fired.emit(global_position, enemy.global_position, enemy, 0.0, _trap_type)
 			hit_any = true
 
-	# Always start the next cooldown, whether or not any enemies were in range.
 	_glue_pulse_timer = _glue_pulse_interval
 
 	if hit_any:

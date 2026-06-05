@@ -142,7 +142,7 @@ func _build_ui() -> void:
 	sf_icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
 	sf_icon.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
 	sf_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	sf_icon.custom_minimum_size = Vector2(196, 128)   # sized to match 112pt cap-height
+	sf_icon.custom_minimum_size = Vector2(176, 115)   # sized to match 112pt cap-height; 10% smaller than original 196×128
 	sf_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	sf_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sf_row.add_child(sf_icon)
@@ -172,7 +172,7 @@ func _build_ui() -> void:
 	_sf_earned_lbl.add_theme_constant_override("shadow_offset_y", 2)
 	_sf_earned_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sf_row.add_child(_sf_earned_lbl)
-	y += 155.0
+	y += 175.0
 
 	# Button row: Bug-Up! | Start New Job | Quit
 	# Buttons sized to fill the panel width; font doubled from 22 to 44.

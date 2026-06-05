@@ -649,10 +649,10 @@ func _spawn_cards(cards: Array) -> void:
 	const TAG_H:         float = 30.0    # taller than the old 22px to fit the larger font
 	const TAG_W:         float = 260.0   # slightly wider to accommodate the larger text
 	const CARD_BORDER_W: float = 6.0     # matches UpgradeCard.BORDER_W
-	const TAG_BG:        Color = Color(0.30, 0.19, 0.01, 1.0)   # dark amber body
-	const TAG_FG:        Color = Color(0.83, 0.52, 0.04, 1.0)   # amber text
-	const TAG_HI:        Color = Color(0.62, 0.40, 0.05, 0.90)  # top-edge highlight (lighter)
-	const TAG_DK:        Color = Color(0.10, 0.05, 0.00, 1.00)  # bottom-edge shadow (darker)
+	const TAG_BG:        Color = Color(0.68, 0.68, 0.72, 1.0)   # silver body
+	const TAG_FG:        Color = Color(0.05, 0.05, 0.06, 1.0)   # near-black text
+	const TAG_HI:        Color = Color(0.88, 0.88, 0.92, 0.90)  # top-edge highlight (lighter silver)
+	const TAG_DK:        Color = Color(0.35, 0.35, 0.38, 1.00)  # bottom-edge shadow (darker silver)
 	const TAG_SHADOW:    Color = Color(0.00, 0.00, 0.00, 0.55)  # drop shadow behind the tag
 	const BEVEL:         float = 2.5     # thickness of the top/bottom bevel strips in px
 	const FONT_SIZE:     int   = 18      # 13 × 1.4 ≈ 18 — 40% larger than previous
