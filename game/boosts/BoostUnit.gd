@@ -917,7 +917,7 @@ func _spawn_star_display() -> void:
 	_bar_bg_mi     = MeshInstance3D.new()
 	_bar_bg_mi.mesh = bg_box
 	var bg_mat            := StandardMaterial3D.new()
-	bg_mat.albedo_color    = Color(0.12, 0.12, 0.14, 0.90)
+	bg_mat.albedo_color    = Color(0.12, 0.12, 0.14, 0.50)
 	bg_mat.shading_mode    = BaseMaterial3D.SHADING_MODE_UNSHADED
 	bg_mat.transparency    = BaseMaterial3D.TRANSPARENCY_ALPHA
 	bg_mat.no_depth_test   = true

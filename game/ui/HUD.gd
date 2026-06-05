@@ -20,7 +20,7 @@ const ExperienceBar  = preload("res://ui/ExperienceBar.gd")
 const GEAR_OUTLINE_SHADER = preload("res://assets/gear_outline.gdshader")
 
 const COLOR_PANEL_BG    := Color(0.144, 0.144, 0.235, 0.88)
-const COLOR_BAR_BG      := Color(0.28, 0.28, 0.28, 1.0)
+const COLOR_BAR_BG      := Color(0.20, 0.04, 0.04, 1.0)
 const COLOR_BAR_FILL    := Color(0.85, 0.22, 0.22, 1.0)
 const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM    := Color(0.60, 0.60, 0.65, 1.0)
@@ -108,7 +108,8 @@ const PAUSE_BANNER_H:      float = 50.0
 const PAUSE_BANNER_TAPER:  float = 25.0
 # ~31% of the arena width (25% × 1.25); wide top edge, bottom edge is 2×TAPER narrower.
 const PAUSE_BANNER_W:      float = (1280.0 - LEFT_PANEL_W - RIGHT_PANEL_W) * 0.3125
-const COLOR_PAUSE_BANNER_BG := Color(0.48, 0.04, 0.04, 0.92)  # deep crimson
+const COLOR_PAUSE_BANNER_BG    := Color(0.48, 0.04, 0.04, 0.92)  # deep crimson
+const COLOR_INCOMING_FLASH     := Color(0.76, 0.10, 0.10, 0.97)  # brighter flash red
 
 # Incoming wave banner — slides up from the bottom during the between-wave countdown.
 # Reverse trapezoid: wide bottom edge flush with the screen, narrow top edge visible.
@@ -119,7 +120,9 @@ const INCOMING_BANNER_TAPER: float = PAUSE_BANNER_TAPER * 1.25
 
 # Incoming wave banner — slides up from the bottom of the screen during the countdown.
 var _incoming_banner:         Control = null
+var _incoming_banner_shape:   Control = null
 var _incoming_banner_tween:   Tween   = null
+var _incoming_flash_tween:    Tween   = null
 var _countdown_seconds_label: Label
 
 var _send_wave_btn:           Button           # fast-forward button inside the send-wave panel
@@ -917,6 +920,7 @@ func _build_incoming_overlay() -> void:
 	shape.color_fill   = COLOR_PAUSE_BANNER_BG
 	shape.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shape.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_incoming_banner_shape = shape
 	_incoming_banner.add_child(shape)
 
 	# Single centred label — "INCOMING  3..." — so both words are centred as a unit.
@@ -924,11 +928,16 @@ func _build_incoming_overlay() -> void:
 	_countdown_seconds_label.text                 = ""
 	_countdown_seconds_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_seconds_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_countdown_seconds_label.add_theme_font_override("font", UIFonts.header())
-	_countdown_seconds_label.add_theme_font_size_override("font_size", 36)
-	_countdown_seconds_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_countdown_seconds_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_countdown_seconds_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var incoming_font_var := FontVariation.new()
+	incoming_font_var.base_font    = UIFonts.header()
+	incoming_font_var.spacing_glyph = 2   # letter spacing; LabelSettings has no such property
+	var incoming_lbl_settings := LabelSettings.new()
+	incoming_lbl_settings.font       = incoming_font_var
+	incoming_lbl_settings.font_size  = 41   # 36 × 1.15
+	incoming_lbl_settings.font_color = COLOR_TEXT
+	_countdown_seconds_label.label_settings = incoming_lbl_settings
 	_incoming_banner.add_child(_countdown_seconds_label)
 
 
@@ -946,6 +955,29 @@ func _show_incoming_banner(visible_state: bool) -> void:
 	var target_bottom: float = 0.0               if visible_state else INCOMING_BANNER_H
 	_incoming_banner_tween.tween_property(_incoming_banner, "offset_top",    target_top,    0.22)
 	_incoming_banner_tween.parallel().tween_property(_incoming_banner, "offset_bottom", target_bottom, 0.22)
+
+	# Flash animation — pulse between base crimson and a brighter red while visible.
+	if _incoming_flash_tween:
+		_incoming_flash_tween.kill()
+	if visible_state and is_instance_valid(_incoming_banner_shape):
+		_incoming_flash_tween = create_tween()
+		_incoming_flash_tween.set_loops()
+		_incoming_flash_tween.set_ease(Tween.EASE_IN_OUT)
+		_incoming_flash_tween.set_trans(Tween.TRANS_SINE)
+		_incoming_flash_tween.tween_method(
+			func(c: Color) -> void:
+				_incoming_banner_shape.color_fill = c
+				_incoming_banner_shape.queue_redraw(),
+			COLOR_PAUSE_BANNER_BG, COLOR_INCOMING_FLASH, 0.65)
+		_incoming_flash_tween.tween_method(
+			func(c: Color) -> void:
+				_incoming_banner_shape.color_fill = c
+				_incoming_banner_shape.queue_redraw(),
+			COLOR_INCOMING_FLASH, COLOR_PAUSE_BANNER_BG, 0.65)
+	elif is_instance_valid(_incoming_banner_shape):
+		# Reset to base color when the banner hides.
+		_incoming_banner_shape.color_fill = COLOR_PAUSE_BANNER_BG
+		_incoming_banner_shape.queue_redraw()
 
 
 # ---------------------------------------------------------------------------
@@ -1047,10 +1079,15 @@ func _build_pause_banner() -> void:
 	label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	label.add_theme_font_override("font", UIFonts.header())
-	label.add_theme_font_size_override("font_size", 28)
-	label.add_theme_color_override("font_color", COLOR_TEXT)
 	label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	var pause_font_var := FontVariation.new()
+	pause_font_var.base_font     = UIFonts.header()
+	pause_font_var.spacing_glyph = 2   # letter spacing; LabelSettings has no such property
+	var pause_lbl_settings := LabelSettings.new()
+	pause_lbl_settings.font       = pause_font_var
+	pause_lbl_settings.font_size  = 32   # 28 × 1.15
+	pause_lbl_settings.font_color = COLOR_TEXT
+	label.label_settings = pause_lbl_settings
 	_pause_banner.add_child(label)
 
 
@@ -1294,30 +1331,28 @@ func _build_settings_dialog() -> void:
 	reset_btn.pressed.connect(_on_reset_progress_pressed)
 	left_btns.add_child(reset_btn)
 
-	# Dev mode button — label and tint reflect current state so the action is unambiguous.
-	var dev_bg:  Color  = Color(0.28, 0.20, 0.04, 1.0) if GameState.dev_mode \
-			else Color(0.08, 0.20, 0.28, 1.0)
-	var dev_lbl: String = "Exit Dev Mode" if GameState.dev_mode else "Dev Mode"
+	# Dev mode button — silver theme; text reflects current state.
 	var dev_btn := Button.new()
-	dev_btn.text                  = dev_lbl
+	dev_btn.text                  = "Exit DEVmode" if GameState.dev_mode else "DEVmode"
 	dev_btn.focus_mode            = Control.FOCUS_NONE
 	dev_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	dev_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	dev_btn.add_theme_font_size_override("font_size", 20)
-	dev_btn.add_theme_color_override("font_color", Color(0.90, 0.85, 0.70, 1.0))
+	dev_btn.add_theme_color_override("font_color", Color(0.92, 0.92, 0.95, 1.0))
 	dev_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	for dev_state: Array in [
-		["normal",  dev_bg],
-		["hover",   dev_bg.lightened(0.12)],
-		["pressed", dev_bg.darkened(0.10)],
+		["normal",  Color(0.30, 0.30, 0.32, 1.0)],
+		["hover",   Color(0.40, 0.40, 0.42, 1.0)],
+		["pressed", Color(0.22, 0.22, 0.24, 1.0)],
 	]:
 		var dev_box := StyleBoxFlat.new()
 		dev_box.bg_color     = dev_state[1]
-		dev_box.border_color = Color(0.65, 0.55, 0.30, 1.0)
+		dev_box.border_color = Color(0.60, 0.60, 0.62, 1.0)
 		dev_box.set_border_width_all(2)
 		dev_box.set_corner_radius_all(6)
 		dev_box.set_content_margin_all(8.0)
 		dev_btn.add_theme_stylebox_override(dev_state[0], dev_box)
+
 	dev_btn.pressed.connect(_on_dev_mode_btn_pressed)
 	left_btns.add_child(dev_btn)
 
@@ -1503,10 +1538,8 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 		_countdown_active       = true
 		_last_countdown_seconds = seconds_remaining
 		_countdown_seconds_label.text = "INCOMING  %d..." % seconds_remaining
-		_send_wave_reward_label.text  = GameState.format_bucks(seconds_remaining * GameState.early_wave_bonus_rate * _wave_multiplier)
 		if _max_countdown_seconds == 0:
 			_max_countdown_seconds = seconds_remaining
-		_update_reward_bar_display(float(seconds_remaining) / float(_max_countdown_seconds))
 		if not was_active:
 			_show_incoming_banner(true)
 	else:
@@ -1762,9 +1795,7 @@ func _on_multiplier_btn_pressed() -> void:
 ## Called when the multiplier changes so the displayed amount stays in sync
 ## without waiting for the next spawn tick or countdown second.
 func _refresh_reward_label() -> void:
-	if _countdown_active and _last_countdown_seconds > 0:
-		_send_wave_reward_label.text = GameState.format_bucks(_last_countdown_seconds * GameState.early_wave_bonus_rate * _wave_multiplier)
-	elif _current_wave_reward > 0:
+	if _current_wave_reward > 0:
 		_send_wave_reward_label.text = GameState.format_bucks(_current_wave_reward * _wave_multiplier)
 
 

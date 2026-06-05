@@ -66,11 +66,11 @@ const COLOR_GRID_HEADER  := Color(0.01, 0.08, 0.00, 1.0)   # header bar backgrou
 const COLOR_ROW_A        := Color(0.03, 0.18, 0.00, 1.0)   # alternating row background A (darker)
 const COLOR_ROW_B        := Color(0.06, 0.28, 0.01, 1.0)   # alternating row background B (lighter)
 
-## Dark-red theme for the Exit Dev Mode button.
-const COLOR_EXIT_NORMAL  := Color(0.25, 0.03, 0.03, 1.0)
-const COLOR_EXIT_HOVER   := Color(0.40, 0.06, 0.06, 1.0)
-const COLOR_EXIT_PRESSED := Color(0.15, 0.02, 0.02, 1.0)
-const COLOR_EXIT_BORDER  := Color(0.70, 0.15, 0.08, 1.0)
+## Medium-gray theme for the Exit DEVmode button.
+const COLOR_EXIT_NORMAL  := Color(0.30, 0.30, 0.32, 1.0)
+const COLOR_EXIT_HOVER   := Color(0.40, 0.40, 0.42, 1.0)
+const COLOR_EXIT_PRESSED := Color(0.22, 0.22, 0.24, 1.0)
+const COLOR_EXIT_BORDER  := Color(0.60, 0.60, 0.62, 1.0)
 
 const UIFonts = preload("res://ui/UIFonts.gd")
 const HUD     = preload("res://ui/HUD.gd")
@@ -121,10 +121,9 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
-	# Full-screen background — no floating panel, no border rect.
-	# Alpha 0.75: 25% transparent so the arena shows through, reducing the overlay's dimness.
+	# Full-screen background — fully opaque so the arena doesn't bleed through.
 	var bg_rect := ColorRect.new()
-	bg_rect.color = Color(COLOR_PANEL.r, COLOR_PANEL.g, COLOR_PANEL.b, 0.75)
+	bg_rect.color = COLOR_PANEL
 	bg_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg_rect)
 
@@ -215,7 +214,7 @@ func _build_ui() -> void:
 	var btn_y := 600.0 - CONTENT_PAD_V - btn_h   # 600 - 24 - 52 = 524
 
 	var exit_btn := Button.new()
-	exit_btn.text                = "Exit Dev Mode"
+	exit_btn.text                = "Exit DEVmode"
 	exit_btn.focus_mode          = Control.FOCUS_NONE
 	exit_btn.position            = Vector2(LEFT_COL_X, btn_y)
 	exit_btn.custom_minimum_size = Vector2(BTN_W, btn_h)

@@ -95,7 +95,9 @@ var _path_marker_pool: Array[MeshInstance3D] = []
 var _active_enemies: Array[Node3D] = []
 
 # Wave spawning — enemies launch one at a time with a small gap between them.
-const WAVE_SIZE: int = 10   # default; overridden at runtime by the debug start dialog
+const WAVE_SIZE: int = 15              # base count at wave 1; overridden by the debug start dialog
+const WAVE_SIZE_STEP_WAVES:  int = 5   # every N waves the enemy count increases
+const WAVE_SIZE_STEP_AMOUNT: int = 2   # enemies added per step
 var _wave_size: int = WAVE_SIZE
 const SPAWN_INTERVAL: float = 0.36     # delay before the first enemy in a wave; subsequent gaps are per-type
 # Minimum desired clear space (in cells) between consecutive enemies of the same type.
@@ -215,7 +217,7 @@ var _shake_axis:   Vector2 = Vector2.ZERO   # random unit vector for vibration d
 
 const SHAKE_DURATION: float = 0.35    # total vibration time in seconds
 const SHAKE_FREQ:     float = 10.0    # oscillations per second — low enough for smooth oscillation at 60 fps
-const SHAKE_MAG_PX:   float = 10.2   # peak displacement in screen pixels; converted to world units at runtime
+const SHAKE_MAG_PX:   float = 5.1    # peak displacement in screen pixels; converted to world units at runtime
 var _followed_enemy:        Node3D   = null  # non-null while enemy-follow mode is active
 var _enemy_stats_panel:    Node     = null  # EnemyStatsPanel instance
 var _floor_mi:           MeshInstance3D = null  # floor mesh; material_override swapped on zoom
@@ -1402,28 +1404,16 @@ func _on_trap_type_changed(_type: int) -> void:
 
 
 ## Handles the "Send Wave Early" button.
-## Between waves (countdown active): skips the countdown and awards a time-remaining bonus.
-## During a wave (enemies active): launches the next wave immediately for a larger bonus
-## scaled by the current wave number.  Both paths are available at any time.
+## Between waves (countdown or quiet period active): skips the wait and launches immediately,
+## no reward.  During a wave with enemies still queued: launches the next wave and awards
+## a bounty for each enemy that had not yet spawned.
 func _on_wave_skip_requested() -> void:
 	if _countdown_active:
 		_countdown_active = false
-		if _seconds_remaining > 0:
-			var bonus := _seconds_remaining * GameState.early_wave_bonus_rate
-			GameState.add_bug_bucks(bonus)
-			_spawn_earn_label(get_viewport().get_visible_rect().get_center(), int(bonus))
-			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.set_countdown(0)
 		_launch_wave()
 	elif _quiet_period_active:
-		# Skip the silent gap and the upcoming countdown — launch immediately.
-		# Bonus covers all remaining time: quiet seconds still waiting + the WAVE_COUNTDOWN
-		# that would have followed.
 		_quiet_period_active = false
-		var bonus := (_quiet_seconds_remaining + WAVE_COUNTDOWN) * GameState.early_wave_bonus_rate
-		GameState.add_bug_bucks(bonus)
-		_spawn_earn_label(get_viewport().get_visible_rect().get_center(), int(bonus))
-		GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.current_wave += 1
 		for boost in _boost_nodes.values():
 			if is_instance_valid(boost):
@@ -1431,13 +1421,12 @@ func _on_wave_skip_requested() -> void:
 		GameState.set_countdown(0)
 		_launch_wave()
 	elif not (_active_enemies.is_empty() and _enemies_left_to_spawn == 0):
-		# Wave is active — send the next wave immediately.  Reward equals the
-		# per-enemy bounty for each enemy that has not yet spawned; once all
-		# enemies are out the reward is 0.
-		var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY
-		GameState.add_bug_bucks(bonus)
-		_spawn_earn_label(get_viewport().get_visible_rect().get_center(), int(bonus))
-		GameState.early_wave_bonus_awarded.emit(bonus)
+		# Reward only fires when the current wave still has unspawned enemies.
+		if _enemies_left_to_spawn > 0:
+			var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY
+			GameState.add_bug_bucks(bonus)
+			_spawn_earn_label(get_viewport().get_visible_rect().get_center(), int(bonus))
+			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.early_send_reward_changed.emit(0)
 		GameState.current_wave += 1
 		_launch_wave()
@@ -1459,10 +1448,6 @@ func _on_wave_skip_requested() -> void:
 func _on_wave_skip_multi_requested(count: int) -> void:
 	if _countdown_active:
 		_countdown_active = false
-		if _seconds_remaining > 0:
-			var bonus := _seconds_remaining * GameState.early_wave_bonus_rate * count
-			GameState.add_bug_bucks(bonus)
-			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.set_countdown(0)
 		# Non-additive first call resets the counter and starts spawn stream 1.
 		# current_wave was already incremented by _start_wave() when the countdown began.
@@ -1471,11 +1456,7 @@ func _on_wave_skip_multi_requested(count: int) -> void:
 			GameState.current_wave += 1
 			_launch_wave(true)
 	elif _quiet_period_active:
-		# Skip the silent gap and the upcoming countdown — launch count waves immediately.
 		_quiet_period_active = false
-		var bonus := (_quiet_seconds_remaining + WAVE_COUNTDOWN) * GameState.early_wave_bonus_rate * count
-		GameState.add_bug_bucks(bonus)
-		GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.set_countdown(0)
 		# Increment wave and notify boosts for the first wave, then launch additively for the rest.
 		GameState.current_wave += 1
@@ -1490,11 +1471,11 @@ func _on_wave_skip_multi_requested(count: int) -> void:
 		for _i in range(count - 1):
 			get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
 	elif not (_active_enemies.is_empty() and _enemies_left_to_spawn == 0):
-		# Award the early-send bonus for the current wave's unsent enemies, then discard
-		# them so count fresh waves start from a clean slate.
-		var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY * count
-		GameState.add_bug_bucks(bonus)
-		GameState.early_wave_bonus_awarded.emit(bonus)
+		# Reward only fires when the current wave still has unspawned enemies.
+		if _enemies_left_to_spawn > 0:
+			var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY * count
+			GameState.add_bug_bucks(bonus)
+			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.early_send_reward_changed.emit(0)
 		# A running spawn chain means one stream is already active; remember this before
 		# zeroing the counter so we don't start a redundant timer for it.
@@ -1548,7 +1529,9 @@ func _launch_wave(additive: bool = false) -> void:
 				_static_spawn_queue.append(t)
 		new_enemies = types.size() * STATIC_GROUP_SIZE
 	else:
-		new_enemies = _wave_size
+		# Base count plus +WAVE_SIZE_STEP_AMOUNT for every WAVE_SIZE_STEP_WAVES completed.
+		# Wave 1–4 → 15, wave 5–9 → 17, wave 10–14 → 19, etc.
+		new_enemies = _wave_size + (GameState.current_wave / WAVE_SIZE_STEP_WAVES) * WAVE_SIZE_STEP_AMOUNT
 
 	if additive:
 		# Layer on top of the running wave — the existing spawn timer drains both.

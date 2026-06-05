@@ -42,8 +42,8 @@ const CARD_GAP: float = 10.0
 const BASE_OFFER_COUNT: int = 3
 const BASE_PICK_COUNT:  int = 2
 
-## Snap Trap and Fogger — affordable, ground-damage traps guaranteed in slot 1.
-const TIER_ONE_TRAP_TYPES: Array[int] = [0, 2]
+## Snap Trap — guaranteed in slot 1 every run.
+const TIER_ONE_TRAP_TYPES: Array[int] = [0]
 
 ## Probability that each "wildcard" slot (slot 3 onward) offers a boost instead of a trap.
 const BOOST_SLOT_CHANCE: float = 0.20
@@ -212,8 +212,7 @@ func _build_screen() -> void:
 
 ## Builds OFFER_COUNT slots with three distinct rules:
 ##
-##   Slot 1 — Tier-1 trap (Snap Trap or Fogger): the most affordable and
-##             versatile ground-damage options. Weighted by 1/cost.
+##   Slot 1 — Always a Snap Trap (the starter ground-damage trap).
 ##   Slot 2 — Any trap, weighted by 1/cost. Cannot duplicate slot 1.
 ##   Slot 3+ — Wildcard: BOOST_SLOT_CHANCE probability of a cost-weighted
 ##              boost; otherwise a cost-weighted trap (no trap duplicates).

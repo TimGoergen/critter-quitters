@@ -116,8 +116,8 @@ const UPGRADE_CRIT_DAMAGE_PER_LEVEL: float = 0.25   # +25% per level
 ## Values are slow factors: 0.0 = no slow, 1.0 = fully stopped.
 ## Defined as an explicit table because the intended values don't fit the shared
 ## UPGRADE_DAMAGE_FACTOR formula.
-## Values start at 0.45 (45% speed reduction) so the slow is immediately noticeable.
-const GLUE_ADHESION_LEVELS: Array[float] = [0.45, 0.55, 0.65, 0.75]
+## Values start at 0.35 (35% speed reduction) so the slow is noticeable but not punishing.
+const GLUE_ADHESION_LEVELS: Array[float] = [0.35, 0.45, 0.55, 0.65]
 
 ## Glue Board slow duration (seconds) at each duration upgrade level (index = _duration_level).
 ## How long the slow persists on an enemy after it leaves the board's radius.
@@ -955,20 +955,9 @@ func _fire_fogger() -> bool:
 
 
 ## Applies adhesive slow to ground enemies continuously. Any enemy that enters range is
-## slowed immediately — not gated on the pulse timer. The pulse fires on its own interval
-## for cosmetics only (animation + sound + projectile arc). The slow lingers for
-## _slow_duration seconds after an enemy leaves range. Flying enemies are excluded.
+## on the pulse timer. The slow lingers for _slow_duration seconds after an enemy
+## leaves range. Flying enemies are excluded.
 func _update_glue_aoe(delta: float) -> void:
-	# Every frame: slow any in-range ground enemy not yet tracked.
-	# Enemies that enter between pulses feel the slow immediately.
-	for enemy in _active_enemies:
-		if not is_instance_valid(enemy) or enemy.get_is_flying():
-			continue
-		if _xz_distance(enemy.global_position) <= _effective_range():
-			if not _glue_slowed_enemies.has(enemy):
-				enemy.add_slow_source(self, _damage)
-				_glue_slowed_enemies[enemy] = -1.0
-
 	# Every frame: tick duration countdowns for enemies that have left range.
 	# Cannot erase from a Dictionary while iterating — collect targets first.
 	var to_release: Array = []
@@ -994,14 +983,19 @@ func _update_glue_aoe(delta: float) -> void:
 			enemy.remove_slow_source(self)
 		_glue_slowed_enemies.erase(enemy)
 
-	# Pulse timer: cosmetic only — triggers projectile arcs, animation, and sound.
+	# Pulse timer: applies the slow and fires projectile arcs, animation, and sound.
 	_glue_pulse_timer -= delta
 	if _glue_pulse_timer > 0.0:
 		return
 
 	var hit_any := false
-	for enemy in _glue_slowed_enemies:
-		if is_instance_valid(enemy) and _xz_distance(enemy.global_position) <= _effective_range():
+	for enemy in _active_enemies:
+		if not is_instance_valid(enemy) or enemy.get_is_flying():
+			continue
+		if _xz_distance(enemy.global_position) <= _effective_range():
+			# Apply or refresh the slow on this enemy, then fire the cosmetic arc.
+			enemy.add_slow_source(self, _damage)
+			_glue_slowed_enemies[enemy] = -1.0
 			fired.emit(global_position, enemy.global_position, enemy, 0.0, _trap_type)
 			hit_any = true
 
@@ -1215,7 +1209,7 @@ func _spawn_star_display() -> void:
 	_bar_bg_mi     = MeshInstance3D.new()
 	_bar_bg_mi.mesh = bg_box
 	var bg_mat            := StandardMaterial3D.new()
-	bg_mat.albedo_color    = Color(0.12, 0.12, 0.14, 0.90)
+	bg_mat.albedo_color    = Color(0.12, 0.12, 0.14, 0.50)
 	bg_mat.shading_mode    = BaseMaterial3D.SHADING_MODE_UNSHADED
 	bg_mat.transparency    = BaseMaterial3D.TRANSPARENCY_ALPHA
 	bg_mat.no_depth_test   = true
