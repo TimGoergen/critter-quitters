@@ -102,12 +102,15 @@ const SPAWN_INTERVAL: float = 0.36     # delay before the first enemy in a wave;
 # The actual gap time is derived from this value and the enemy's speed + visual size,
 # so slow/large enemies automatically get longer waits than fast/small ones.
 const SPAWN_GAP_CELLS: float = 0.4
-const WAVE_COUNTDOWN: int  = 5         # seconds of countdown before each wave
+const WAVE_COUNTDOWN: int  = 3         # seconds of visible countdown before each wave
+const INTER_WAVE_QUIET: int = 7        # silent seconds after last enemy spawn before the countdown begins
 
 var _enemies_left_to_spawn: int  = 0
 var _wave_total_enemies:    int  = 0      # total enemies queued at _launch_wave; used for spawn-progress signal
-var _countdown_active: bool      = false  # true while between-wave countdown is ticking
-var _seconds_remaining: int      = 0     # last value broadcast during the active countdown
+var _countdown_active: bool       = false  # true while between-wave countdown is ticking
+var _seconds_remaining: int       = 0      # last value broadcast during the active countdown
+var _quiet_period_active: bool    = false  # true during the silent gap after the last enemy spawn
+var _quiet_seconds_remaining: int = 0      # seconds left in the quiet gap; used for skip bonus calculation
 
 # Static enemy review mode — when true, each wave spawns 3 of every enemy type
 # in order instead of using normal wave composition. Toggled at startup via DebugStartDialog.
@@ -1250,9 +1253,6 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 		_set_followed_enemy(null)
 	# enemy.queue_free() is called inside Enemy.gd — no double-free needed.
 
-	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
-		_start_wave()
-
 
 func _on_enemy_died(enemy: Node3D) -> void:
 	# Apply the global Bug Bucks bonus from campaign buffs (Invoice Padding).
@@ -1296,9 +1296,6 @@ func _on_enemy_died(enemy: Node3D) -> void:
 					spawn_enemy_at_grid_position.bind(death_cell, Enemy.EnemyType.RAT)
 				)
 
-	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
-		_start_wave()
-
 
 ## Increments the wave counter and begins the between-wave countdown.
 func _start_wave() -> void:
@@ -1324,6 +1321,30 @@ func _on_countdown_tick(seconds_remaining: int) -> void:
 	else:
 		_countdown_active = false
 		_launch_wave()
+
+
+## Starts the silent gap between the last enemy spawn and the visible 3-second countdown.
+## After INTER_WAVE_QUIET seconds the countdown begins, then the next wave launches.
+func _start_inter_wave_gap() -> void:
+	# Guard: skip if a gap or countdown is already in progress (can occur with additive waves).
+	if _quiet_period_active or _countdown_active:
+		return
+	_quiet_period_active = true
+	_quiet_seconds_remaining = INTER_WAVE_QUIET
+	get_tree().create_timer(1.0, false).timeout.connect(_on_quiet_tick.bind(INTER_WAVE_QUIET - 1))
+
+
+## Ticks down the silent inter-wave gap one second at a time.
+## Transitions to the visible countdown when it reaches zero.
+func _on_quiet_tick(seconds_remaining: int) -> void:
+	if not _quiet_period_active:
+		return
+	_quiet_seconds_remaining = seconds_remaining
+	if seconds_remaining > 0:
+		get_tree().create_timer(1.0, false).timeout.connect(_on_quiet_tick.bind(seconds_remaining - 1))
+	else:
+		_quiet_period_active = false
+		_start_wave()
 
 
 func _handle_key(_keycode: int) -> void:
@@ -1394,6 +1415,21 @@ func _on_wave_skip_requested() -> void:
 			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.set_countdown(0)
 		_launch_wave()
+	elif _quiet_period_active:
+		# Skip the silent gap and the upcoming countdown — launch immediately.
+		# Bonus covers all remaining time: quiet seconds still waiting + the WAVE_COUNTDOWN
+		# that would have followed.
+		_quiet_period_active = false
+		var bonus := (_quiet_seconds_remaining + WAVE_COUNTDOWN) * GameState.early_wave_bonus_rate
+		GameState.add_bug_bucks(bonus)
+		_spawn_earn_label(get_viewport().get_visible_rect().get_center(), int(bonus))
+		GameState.early_wave_bonus_awarded.emit(bonus)
+		GameState.current_wave += 1
+		for boost in _boost_nodes.values():
+			if is_instance_valid(boost):
+				boost.on_wave_started()
+		GameState.set_countdown(0)
+		_launch_wave()
 	elif not (_active_enemies.is_empty() and _enemies_left_to_spawn == 0):
 		# Wave is active — send the next wave immediately.  Reward equals the
 		# per-enemy bounty for each enemy that has not yet spawned; once all
@@ -1430,6 +1466,22 @@ func _on_wave_skip_multi_requested(count: int) -> void:
 		GameState.set_countdown(0)
 		# Non-additive first call resets the counter and starts spawn stream 1.
 		# current_wave was already incremented by _start_wave() when the countdown began.
+		_launch_wave()
+		for _i in range(count - 1):
+			GameState.current_wave += 1
+			_launch_wave(true)
+	elif _quiet_period_active:
+		# Skip the silent gap and the upcoming countdown — launch count waves immediately.
+		_quiet_period_active = false
+		var bonus := (_quiet_seconds_remaining + WAVE_COUNTDOWN) * GameState.early_wave_bonus_rate * count
+		GameState.add_bug_bucks(bonus)
+		GameState.early_wave_bonus_awarded.emit(bonus)
+		GameState.set_countdown(0)
+		# Increment wave and notify boosts for the first wave, then launch additively for the rest.
+		GameState.current_wave += 1
+		for boost in _boost_nodes.values():
+			if is_instance_valid(boost):
+				boost.on_wave_started()
 		_launch_wave()
 		for _i in range(count - 1):
 			GameState.current_wave += 1
@@ -1563,6 +1615,11 @@ func _spawn_next_in_wave() -> void:
 		else:
 			gap = _spawn_gap_for_type(enemy_type)
 		get_tree().create_timer(gap, false).timeout.connect(_spawn_next_in_wave)
+	else:
+		# All enemies for this wave have been dispatched from the spawn queue.
+		# Begin the fixed inter-wave gap; the next wave launches after INTER_WAVE_QUIET
+		# + WAVE_COUNTDOWN seconds regardless of whether active enemies are still alive.
+		_start_inter_wave_gap()
 
 
 ## Runs A* from start to each of the three exit-gap cells and returns

@@ -68,20 +68,20 @@ func _pick_count() -> int:
 # ---------------------------------------------------------------------------
 
 const TRAP_DISPLAY: Dictionary = {
-	0: { "name": "Snap Trap",          "desc": "Targets the nearest pest. Fast fire rate, low damage. The only ground trap that can also hit flying pests." },
-	1: { "name": "Zapper",             "desc": "Targets the pest farthest along the path. Very slow rate, very high damage. Cannot hit flying pests." },
-	2: { "name": "Fogger",             "desc": "Fires an expanding cloud that damages all pests from closest to farthest. Cannot hit flying pests." },
-	3: { "name": "Glue Board",         "desc": "Pulses adhesive every few seconds, slowing all ground pests in range at the moment of each pulse." },
-	4: { "name": "Fly Strip Launcher", "desc": "Targets flying pests only. Releases a sticky cloud on impact that slows and damages over time." },
-	5: { "name": "Bait Station",       "desc": "Enemies walk straight over it. Pulses poison onto every pest in range, dealing damage over time." },
+	0: { "name": "Snap Trap",          "desc": "Targets the nearest pest. Fast rate, low damage. Can hit flying pests." },
+	1: { "name": "Zapper",             "desc": "Targets the pest farthest along the path. Slow rate, very high damage. Ground only." },
+	2: { "name": "Fogger",             "desc": "Area attack — hits all ground pests in range, closest first." },
+	3: { "name": "Glue Board",         "desc": "Periodically slows all ground pests in range." },
+	4: { "name": "Fly Strip Launcher", "desc": "Anti-air only. Sticky cloud on impact slows and damages over time." },
+	5: { "name": "Bait Station",       "desc": "Pests walk straight over it. Pulses poison to all pests in range." },
 }
 
 const BOOST_DISPLAY: Dictionary = {
-	0: { "name": "Pheromone Dispenser", "desc": "Aura boost. All traps within range deal increased damage." },
-	1: { "name": "Compressor",          "desc": "Aura boost. All traps within range fire more often." },
-	2: { "name": "Cash Register",       "desc": "Earns Bug Bucks each wave and pays a bonus per kill inside its aura." },
-	3: { "name": "Air Freshener",       "desc": "Absorbs infestation from pests that escape through its aura. Perishable." },
-	4: { "name": "Quarantine Marker",   "desc": "Restores infestation for every kill inside its aura. Perishable." },
+	0: { "name": "Pheromone Dispenser", "desc": "All traps in range deal more damage." },
+	1: { "name": "Compressor",          "desc": "All traps in range fire more often." },
+	2: { "name": "Cash Register",       "desc": "Earns Bug Bucks each wave. Bonus per kill in its aura." },
+	3: { "name": "Air Freshener",       "desc": "Reduces infestation when pests escape through its aura. Perishable." },
+	4: { "name": "Quarantine Marker",   "desc": "Restores infestation per kill in its aura. Perishable." },
 }
 
 
