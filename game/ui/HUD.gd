@@ -113,8 +113,9 @@ const COLOR_PAUSE_BANNER_BG := Color(0.48, 0.04, 0.04, 0.92)  # deep crimson
 # Incoming wave banner — slides up from the bottom during the between-wave countdown.
 # Reverse trapezoid: wide bottom edge flush with the screen, narrow top edge visible.
 # Same width as the pause banner; TAPER matches so the slope is visually identical.
-const INCOMING_BANNER_W:     float = PAUSE_BANNER_W
-const INCOMING_BANNER_TAPER: float = PAUSE_BANNER_TAPER
+const INCOMING_BANNER_W:     float = PAUSE_BANNER_W    * 1.25
+const INCOMING_BANNER_H:     float = PAUSE_BANNER_H    * 1.25
+const INCOMING_BANNER_TAPER: float = PAUSE_BANNER_TAPER * 1.25
 
 # Incoming wave banner — slides up from the bottom of the screen during the countdown.
 var _incoming_banner:         Control = null
@@ -163,8 +164,9 @@ var _countdown_active: bool = false
 var _music_slider: HSlider
 var _sfx_slider:   HSlider
 
-var _settings_btn:    Button  = null
-var _settings_dialog: Control = null
+var _settings_btn:          Button  = null
+var _settings_dialog:       Control = null
+var _reset_confirm_overlay: Control = null
 
 var _grid_lines_overview_toggle: CheckButton = null
 var _grid_lines_zoomed_toggle:   CheckButton = null
@@ -900,10 +902,10 @@ func _build_incoming_overlay() -> void:
 	_incoming_banner.anchor_top    = 1.0
 	_incoming_banner.anchor_bottom = 1.0
 	_incoming_banner.offset_left   = -INCOMING_BANNER_W / 2.0
-	_incoming_banner.offset_right  = INCOMING_BANNER_W / 2.0
+	_incoming_banner.offset_right  =  INCOMING_BANNER_W / 2.0
 	# Hidden below the screen edge until a countdown starts.
 	_incoming_banner.offset_top    = 0.0
-	_incoming_banner.offset_bottom = PAUSE_BANNER_H
+	_incoming_banner.offset_bottom = INCOMING_BANNER_H
 	_incoming_banner.process_mode  = Node.PROCESS_MODE_ALWAYS
 	_incoming_banner.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	add_child(_incoming_banner)
@@ -917,13 +919,13 @@ func _build_incoming_overlay() -> void:
 	shape.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_incoming_banner.add_child(shape)
 
-	# Single centred label — "INCOMING  5..." — so both words are centred as a unit.
+	# Single centred label — "INCOMING  3..." — so both words are centred as a unit.
 	_countdown_seconds_label = Label.new()
 	_countdown_seconds_label.text                 = ""
 	_countdown_seconds_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_seconds_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	_countdown_seconds_label.add_theme_font_override("font", UIFonts.header())
-	_countdown_seconds_label.add_theme_font_size_override("font_size", 28)
+	_countdown_seconds_label.add_theme_font_size_override("font_size", 36)
 	_countdown_seconds_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_countdown_seconds_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_countdown_seconds_label.set_anchors_preset(Control.PRESET_FULL_RECT)
@@ -940,8 +942,8 @@ func _show_incoming_banner(visible_state: bool) -> void:
 	_incoming_banner_tween.set_trans(Tween.TRANS_CUBIC)
 	# Visible: top = -H, bottom = 0 (banner sits above screen edge).
 	# Hidden: top = 0, bottom = H (banner is pushed below the screen edge).
-	var target_top:    float = -PAUSE_BANNER_H if visible_state else 0.0
-	var target_bottom: float = 0.0             if visible_state else PAUSE_BANNER_H
+	var target_top:    float = -INCOMING_BANNER_H if visible_state else 0.0
+	var target_bottom: float = 0.0               if visible_state else INCOMING_BANNER_H
 	_incoming_banner_tween.tween_property(_incoming_banner, "offset_top",    target_top,    0.22)
 	_incoming_banner_tween.parallel().tween_property(_incoming_banner, "offset_bottom", target_bottom, 0.22)
 
@@ -1196,6 +1198,33 @@ func _build_settings_dialog() -> void:
 	_grid_lines_overview_toggle = _build_toggle_row(content_vbox, "Grid lines when zoomed out")
 	_grid_lines_zoomed_toggle   = _build_toggle_row(content_vbox, "Grid lines when zoomed in")
 
+	content_vbox.add_child(HSeparator.new())
+
+	# --- DATA section ---
+	_build_section_header(content_vbox, "DATA")
+	var reset_btn := Button.new()
+	reset_btn.text                  = "Reset Progress"
+	reset_btn.focus_mode            = Control.FOCUS_NONE
+	reset_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reset_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	reset_btn.add_theme_font_size_override("font_size", 16)
+	reset_btn.add_theme_color_override("font_color", Color(0.95, 0.90, 0.90, 1.0))
+	reset_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for state: Array in [
+		["normal",  Color(0.30, 0.03, 0.03, 1.0)],
+		["hover",   Color(0.42, 0.05, 0.05, 1.0)],
+		["pressed", Color(0.20, 0.02, 0.02, 1.0)],
+	]:
+		var box := StyleBoxFlat.new()
+		box.bg_color     = state[1]
+		box.border_color = Color(0.75, 0.18, 0.18, 1.0)
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(4)
+		box.set_content_margin_all(8.0)
+		reset_btn.add_theme_stylebox_override(state[0], box)
+	reset_btn.pressed.connect(_on_reset_progress_pressed)
+	content_vbox.add_child(reset_btn)
+
 	# Load saved values first so the initial signal emission from _load_all_settings
 	# carries the correct booleans before we wire up the change callbacks.
 	_load_all_settings()
@@ -1262,6 +1291,107 @@ func _on_settings_close_pressed() -> void:
 	AudioManager.play_ui("button")
 	_settings_dialog.visible = false
 	get_tree().paused        = _was_paused_before_settings
+
+
+# ---------------------------------------------------------------------------
+# Reset Progress confirmation
+# ---------------------------------------------------------------------------
+
+func _on_reset_progress_pressed() -> void:
+	AudioManager.play_ui("button")
+	if _reset_confirm_overlay == null:
+		_build_reset_confirm_overlay()
+	_reset_confirm_overlay.visible = true
+
+
+func _build_reset_confirm_overlay() -> void:
+	# Sits inside _settings_dialog so it appears above the settings panel.
+	_reset_confirm_overlay = Control.new()
+	_reset_confirm_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_reset_confirm_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_settings_dialog.add_child(_reset_confirm_overlay)
+
+	var dim := ColorRect.new()
+	dim.color        = Color(0.0, 0.0, 0.0, 0.65)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_reset_confirm_overlay.add_child(dim)
+
+	var panel := Panel.new()
+	panel.anchor_left   = 0.5;  panel.anchor_right  = 0.5
+	panel.anchor_top    = 0.5;  panel.anchor_bottom = 0.5
+	panel.offset_left   = -220.0;  panel.offset_right  = 220.0
+	panel.offset_top    = -100.0;  panel.offset_bottom = 100.0
+	panel.mouse_filter  = Control.MOUSE_FILTER_STOP
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color     = Color(0.10, 0.04, 0.04, 0.97)
+	panel_style.border_color = Color(0.65, 0.18, 0.18, 1.0)
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(8)
+	panel.add_theme_stylebox_override("panel", panel_style)
+	_reset_confirm_overlay.add_child(panel)
+
+	var prompt := Label.new()
+	prompt.text                 = "You are about to permanently erase\nall progress. Are you sure?"
+	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prompt.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	prompt.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	prompt.set_anchors_preset(Control.PRESET_FULL_RECT)
+	prompt.offset_bottom        = -58.0
+	prompt.add_theme_font_override("font", UIFonts.primary_bold())
+	prompt.add_theme_font_size_override("font_size", 18)
+	prompt.add_theme_color_override("font_color", Color(0.95, 0.90, 0.90, 1.0))
+	panel.add_child(prompt)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.anchor_left   = 0.0;  btn_row.anchor_right  = 1.0
+	btn_row.anchor_top    = 1.0;  btn_row.anchor_bottom = 1.0
+	btn_row.offset_top    = -52.0; btn_row.offset_bottom = -10.0
+	btn_row.offset_left   = 16.0;  btn_row.offset_right  = -16.0
+	btn_row.add_theme_constant_override("separation", 8)
+	panel.add_child(btn_row)
+
+	var no_btn := _make_reset_confirm_button("No",
+			Color(0.20, 0.20, 0.24, 1.0), Color(0.45, 0.45, 0.52, 1.0))
+	no_btn.pressed.connect(_on_reset_confirm_no)
+	btn_row.add_child(no_btn)
+
+	var yes_btn := _make_reset_confirm_button("Yes",
+			Color(0.30, 0.03, 0.03, 1.0), Color(0.70, 0.15, 0.15, 1.0))
+	yes_btn.pressed.connect(_on_reset_confirm_yes)
+	btn_row.add_child(yes_btn)
+
+
+func _make_reset_confirm_button(label_text: String, bg: Color, border: Color) -> Button:
+	var btn := Button.new()
+	btn.text                  = label_text
+	btn.focus_mode            = Control.FOCUS_NONE
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.add_theme_font_override("font", UIFonts.primary_bold())
+	btn.add_theme_font_size_override("font_size", 18)
+	btn.add_theme_color_override("font_color", Color(0.95, 0.92, 0.90, 1.0))
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for state_name: String in ["normal", "hover", "pressed"]:
+		var box := StyleBoxFlat.new()
+		box.bg_color     = bg.lightened(0.08) if state_name == "hover" else \
+				(bg.darkened(0.08) if state_name == "pressed" else bg)
+		box.border_color = border
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(5)
+		box.set_content_margin_all(6.0)
+		btn.add_theme_stylebox_override(state_name, box)
+	return btn
+
+
+func _on_reset_confirm_no() -> void:
+	AudioManager.play_ui("button")
+	_reset_confirm_overlay.visible = false
+
+
+func _on_reset_confirm_yes() -> void:
+	AudioManager.play_ui("button")
+	GameState.reset_all_upgrades()
+	_reset_confirm_overlay.visible = false
 
 
 # ---------------------------------------------------------------------------

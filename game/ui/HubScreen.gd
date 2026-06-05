@@ -13,7 +13,6 @@ extends CanvasLayer
 
 const UIFonts              = preload("res://ui/UIFonts.gd")
 const PermanentUpgradeScreen = preload("res://ui/PermanentUpgradeScreen.gd")
-const SettingsScreen         = preload("res://ui/SettingsScreen.gd")
 
 
 # ---------------------------------------------------------------------------
@@ -47,11 +46,6 @@ const COLOR_BTN_RED_HOVER  := Color(0.32, 0.05, 0.05, 1.0)
 const COLOR_BTN_RED_PRESS  := Color(0.14, 0.01, 0.01, 1.0)
 const COLOR_BTN_RED_BORDER := Color(0.80, 0.15, 0.15, 1.0)
 
-# Gray button palette for Settings.
-const COLOR_BTN_GRAY        := Color(0.18, 0.18, 0.20, 1.0)
-const COLOR_BTN_GRAY_HOVER  := Color(0.26, 0.26, 0.28, 1.0)
-const COLOR_BTN_GRAY_PRESS  := Color(0.12, 0.12, 0.14, 1.0)
-const COLOR_BTN_GRAY_BORDER := Color(0.55, 0.55, 0.58, 1.0)
 
 var _sf_balance_lbl: Label = null
 var _sf_earned_lbl:  Label = null
@@ -181,11 +175,11 @@ func _build_ui() -> void:
 	sf_row.add_child(_sf_earned_lbl)
 	y += 175.0
 
-	# Button row: Bug-Up! | Start New Job | Settings | Quit
-	# Four equal-width buttons spanning the full panel width.
+	# Button row: Bug-Up! | Start New Job | Quit
+	# Buttons sized to fill the panel width; font doubled from 22 to 44.
 	const BTN_H: float   = 80.0
 	const BTN_GAP: float = 14.0
-	const BTN_W: float   = (PW - PAD * 2.0 - BTN_GAP * 3.0) / 4.0
+	const BTN_W: float   = (PW - PAD * 2.0 - BTN_GAP * 2.0) / 3.0
 
 	var bugup_btn := _make_button("Company Upgrades", COLOR_BTN_GOLD, COLOR_BTN_GOLD_HOVER,
 			COLOR_BTN_GOLD_PRESS, COLOR_BTN_GOLD_BORDER)
@@ -201,17 +195,10 @@ func _build_ui() -> void:
 	start_btn.pressed.connect(_on_start_pressed)
 	panel.add_child(start_btn)
 
-	var settings_btn := _make_button("Settings", COLOR_BTN_GRAY, COLOR_BTN_GRAY_HOVER,
-			COLOR_BTN_GRAY_PRESS, COLOR_BTN_GRAY_BORDER)
-	settings_btn.position = Vector2(PAD + (BTN_W + BTN_GAP) * 2.0, y)
-	settings_btn.size     = Vector2(BTN_W, BTN_H)
-	settings_btn.pressed.connect(_on_settings_pressed)
-	panel.add_child(settings_btn)
-
 	# "Quit" is the plain-language equivalent of the old "Bug Out" label.
 	var quit_btn := _make_button("Quit", COLOR_BTN_RED, COLOR_BTN_RED_HOVER,
 			COLOR_BTN_RED_PRESS, COLOR_BTN_RED_BORDER)
-	quit_btn.position = Vector2(PAD + (BTN_W + BTN_GAP) * 3.0, y)
+	quit_btn.position = Vector2(PAD + (BTN_W + BTN_GAP) * 2.0, y)
 	quit_btn.size     = Vector2(BTN_W, BTN_H)
 	quit_btn.pressed.connect(_on_bugout_pressed)
 	panel.add_child(quit_btn)
@@ -316,12 +303,6 @@ func _on_start_pressed() -> void:
 	# dialog survives because it lives on root, not inside the Arena scene.
 	queue_free()
 	get_tree().reload_current_scene()
-
-
-func _on_settings_pressed() -> void:
-	AudioManager.play_ui("button")
-	var screen := SettingsScreen.new()
-	get_tree().root.add_child(screen)
 
 
 func _on_bugout_pressed() -> void:

@@ -12,8 +12,7 @@
 
 extends CanvasLayer
 
-const UIFonts        = preload("res://ui/UIFonts.gd")
-const SettingsScreen = preload("res://ui/SettingsScreen.gd")
+const UIFonts = preload("res://ui/UIFonts.gd")
 
 const COLOR_BG     := Color(0.06, 0.06, 0.10, 1.0)
 const COLOR_TEXT   := Color(0.90, 0.90, 0.90, 1.0)
@@ -65,12 +64,11 @@ const _CARD_PILE: Array = [
 	[-17.0,  0.00,  0.03, 0.80],
 ]
 
-var _van:          Sprite2D
-var _cards:        Array[Sprite2D] = []
-var _start_btn:    Button
-var _quit_btn:     Button
-var _settings_btn: Button
-var _dev_btn:      Button
+var _van:       Sprite2D
+var _cards:     Array[Sprite2D] = []
+var _start_btn: Button
+var _quit_btn:  Button
+var _dev_btn:   Button
 
 
 func _ready() -> void:
@@ -146,13 +144,13 @@ func _build_ui() -> void:
 	_van.position = Vector2(vp.x * 0.65, vp.y * 0.40)
 	add_child(_van)
 
-	# --- Buttons: four across, centred as a group ---
-	# Start and Exit are the primary player actions (24% wide each).
-	# Settings and Dev Mode are narrower secondary buttons (14% wide each) on the right.
-	# Layout: [0.03 ── 0.27] [0.29 ── 0.53] [0.55 ── 0.69] [0.71 ── 0.85]
+	# --- Buttons: three across, centred as a group ---
+	# Start Buggin' and Bug Out are the primary player actions (25% wide each).
+	# Start in Dev Mode is a narrower secondary button (17% wide) on the right.
+	# Layout: [0.14 ── 0.39] [0.41 ── 0.66] [0.68 ── 0.85] — centred around 0.495.
 	_start_btn = _make_icon_button("Start New Service Contract", "res://assets/uninfested.png", true)
-	_start_btn.anchor_left   = 0.03
-	_start_btn.anchor_right  = 0.27
+	_start_btn.anchor_left   = 0.14
+	_start_btn.anchor_right  = 0.39
 	_start_btn.anchor_top    = 0.82
 	_start_btn.anchor_bottom = 0.93
 	_start_btn.z_index       = 2   # above van (z=1) and exhaust puffs (z=0)
@@ -160,25 +158,16 @@ func _build_ui() -> void:
 	add_child(_start_btn)
 
 	_quit_btn = _make_icon_button("Exit", "res://assets/infestation_level.png", false)
-	_quit_btn.anchor_left   = 0.29
-	_quit_btn.anchor_right  = 0.53
+	_quit_btn.anchor_left   = 0.41
+	_quit_btn.anchor_right  = 0.66
 	_quit_btn.anchor_top    = 0.82
 	_quit_btn.anchor_bottom = 0.93
 	_quit_btn.z_index       = 2
 	_quit_btn.pressed.connect(_on_quit_pressed)
 	add_child(_quit_btn)
 
-	_settings_btn = _make_settings_button()
-	_settings_btn.anchor_left   = 0.55
-	_settings_btn.anchor_right  = 0.69
-	_settings_btn.anchor_top    = 0.82
-	_settings_btn.anchor_bottom = 0.93
-	_settings_btn.z_index       = 2
-	_settings_btn.pressed.connect(_on_settings_pressed)
-	add_child(_settings_btn)
-
 	_dev_btn = _make_dev_button()
-	_dev_btn.anchor_left   = 0.71
+	_dev_btn.anchor_left   = 0.68
 	_dev_btn.anchor_right  = 0.85
 	_dev_btn.anchor_top    = 0.82
 	_dev_btn.anchor_bottom = 0.93
@@ -229,38 +218,29 @@ func _make_icon_button(label_text: String, icon_path: String, is_green: bool) ->
 
 
 func _on_start_pressed() -> void:
-	GameState.dev_mode      = false
-	_start_btn.disabled     = true
-	_quit_btn.visible       = false
-	_settings_btn.visible   = false
-	_dev_btn.visible        = false
+	GameState.dev_mode  = false
+	_start_btn.disabled = true
+	_quit_btn.visible   = false
+	_dev_btn.visible    = false
 	_strip_btn_border(_start_btn, true)
 	_play_van_exit()
 
 
 func _on_dev_pressed() -> void:
-	GameState.dev_mode      = true
-	_dev_btn.disabled       = true
-	_start_btn.visible      = false
-	_quit_btn.visible       = false
-	_settings_btn.visible   = false
+	GameState.dev_mode = true
+	_dev_btn.disabled  = true
+	_start_btn.visible = false
+	_quit_btn.visible  = false
 	_strip_btn_border(_dev_btn, false, true)
 	_play_van_exit()
 
 
 func _on_quit_pressed() -> void:
-	_quit_btn.disabled      = true
-	_start_btn.visible      = false
-	_settings_btn.visible   = false
-	_dev_btn.visible        = false
+	_quit_btn.disabled  = true
+	_start_btn.visible  = false
+	_dev_btn.visible    = false
 	_strip_btn_border(_quit_btn, false)
 	get_tree().quit()
-
-
-func _on_settings_pressed() -> void:
-	AudioManager.play_ui("button")
-	var screen := SettingsScreen.new()
-	get_tree().root.add_child(screen)
 
 
 func _play_van_exit() -> void:
@@ -408,32 +388,6 @@ func _apply_gray_btn_style(btn: Button) -> void:
 		btn.add_theme_stylebox_override(state[0], box)
 	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	btn.add_theme_color_override("font_color", COLOR_TEXT)
-
-
-## Creates the gray "Settings" button. Text-only, styled the same as the Dev Mode
-## button so both secondary actions share a clear visual weight.
-func _make_settings_button() -> Button:
-	var btn := Button.new()
-	btn.text       = ""
-	btn.focus_mode = Control.FOCUS_NONE
-	_apply_gray_btn_style(btn)
-
-	var row := HBoxContainer.new()
-	row.set_anchors_preset(Control.PRESET_FULL_RECT)
-	row.alignment    = BoxContainer.ALIGNMENT_CENTER
-	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn.add_child(row)
-
-	var lbl := Label.new()
-	lbl.text                = "Settings"
-	lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	lbl.add_theme_font_size_override("font_size", 22)
-	lbl.add_theme_color_override("font_color", COLOR_TEXT)
-	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	row.add_child(lbl)
-
-	return btn
 
 
 ## Creates the gray "Start in Dev Mode" button. Text-only (no icon) to visually
