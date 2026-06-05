@@ -5,7 +5,7 @@
 ##
 ##   CAMPAIGN card:                    EQUIPMENT card:
 ##   ┌──────────────────────────┐      ┌──────────────────────────┐
-##   │ ■ PROFESSIONAL           │      │ ■ COMMON                 │
+##   │ ■ PROFESSIONAL      [🚐] │      │ ■ COMMON          [trap] │
 ##   │                          │      │                          │
 ##   │  Hair Trigger            │      │  Snap Trap               │
 ##   │                          │      │  Fire Rate               │
@@ -16,6 +16,9 @@
 ##   │  often. Stacks with ...  │      │  between shots, ...      │
 ##   │                          │      │                          │
 ##   └──────────────────────────┘      └──────────────────────────┘
+##
+## Both card types place a small image in the top-right corner of the title row:
+## campaign cards show the company van; equipment cards show the trap thumbnail.
 ##
 ## The card outline always uses the rarity tier color.
 ## The background derives from the trap/boost identity color when available,
@@ -125,7 +128,6 @@ signal card_selected(upgrade: Dictionary)
 # Child nodes (set in _build_card, used in _on_resized)
 # ---------------------------------------------------------------------------
 
-var _tier_lbl:   Label       = null   # "COMMON" / "PROFESSIONAL" / "RARE" — bottom-right badge
 var _title_lbl:  Label       = null   # buff name or trap name
 var _image_rect: TextureRect = null   # trap/boost SVG image (unlock cards only)
 var _thumb_rect: TextureRect = null   # small trap SVG thumbnail (equipment cards only)
@@ -162,9 +164,9 @@ var title_font_scale: float = 1.0
 ## represent unit types rather than rarity-tiered rewards.
 var use_identity_outline: bool = false
 
-## When false the tier badge ("COMMON" / "PROFESSIONAL" / "RARE") at the
-## card bottom is not created. TrapSelectionScreen cards have no rarity.
-var show_tier_badge: bool = true
+## Retained for API compatibility; no longer has any effect.
+## Tier is now rendered as a separate external sign by LevelUpScreen.
+var show_tier_badge: bool = false
 
 ## When >= 0, caps the image area height in _on_resized() so that a larger
 ## font_scale does not inflate the image region disproportionately.
@@ -248,19 +250,6 @@ func _build_card() -> void:
 	_card_frame.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	add_child(_card_frame)
 
-	# --- Tier badge — bottom-right corner (omitted on gear-selection cards) ---
-	# show_tier_badge = false on TrapSelectionScreen because gear has no rarity.
-	if show_tier_badge:
-		_tier_lbl = Label.new()
-		_tier_lbl.text                 = TIER_NAMES[tier]
-		_tier_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-		_tier_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-		_tier_lbl.clip_text            = true
-		_tier_lbl.add_theme_color_override("font_color", Color(outline_color.r, outline_color.g, outline_color.b, 0.70))
-		_tier_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-		_tier_lbl.add_theme_font_size_override("font_size", roundi(20.0 * font_scale))
-		add_child(_tier_lbl)
-
 	# --- Title — main name, large and prominent ---
 	_title_lbl = Label.new()
 	_title_lbl.text                 = _upgrade_data.get("title", "")
@@ -272,22 +261,15 @@ func _build_card() -> void:
 	_title_lbl.add_theme_font_size_override("font_size", roundi(38.0 * font_scale * title_font_scale))
 	add_child(_title_lbl)
 
-	# --- Image — shown on unlock, gear-selection, and campaign cards ---
+	# --- Image — shown on unlock and gear-selection cards ---
 	# "unlock_trap"/"unlock_boost" are used by LevelUpScreen; "trap"/"boost" are
 	# used by TrapSelectionScreen. Both contexts display the unit's SVG preview.
-	# Campaign cards (company-wide upgrades) show the van illustration instead.
 	var item_type: int = _upgrade_data.get("item_type", -1)
-	var is_trap_img:     bool = (category == "unlock_trap"  or category == "trap")  and item_type >= 0
-	var is_boost_img:    bool = (category == "unlock_boost" or category == "boost") and item_type >= 0
-	var is_campaign_img: bool = (category == "campaign")
-	if is_trap_img or is_boost_img or is_campaign_img:
-		var tex_path: String
-		if is_campaign_img:
-			tex_path = "res://assets/van.png"
-		elif is_trap_img:
-			tex_path = TRAP_TEXTURE_PATHS.get(item_type, "")
-		else:
-			tex_path = BOOST_TEXTURE_PATHS.get(item_type, "")
+	var is_trap_img:  bool = (category == "unlock_trap"  or category == "trap")  and item_type >= 0
+	var is_boost_img: bool = (category == "unlock_boost" or category == "boost") and item_type >= 0
+	if is_trap_img or is_boost_img:
+		var tex_path: String = TRAP_TEXTURE_PATHS.get(item_type, "") if is_trap_img \
+				else BOOST_TEXTURE_PATHS.get(item_type, "")
 		if tex_path != "" and ResourceLoader.exists(tex_path):
 			_image_rect = TextureRect.new()
 			_image_rect.texture             = load(tex_path)
@@ -302,19 +284,24 @@ func _build_card() -> void:
 			_image_rect.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 			add_child(_image_rect)
 
-	# --- Equipment thumbnail — small trap SVG in the top-right corner ---
-	# Shows the player which trap type this card upgrades at a glance.
+	# --- Thumbnail — small image in the top-right corner ---
+	# Equipment cards: shows the trap SVG so the player knows which trap is upgraded.
+	# Campaign cards: shows the company van — same corner position as equipment thumbnails
+	# so the top-right slot is consistently used as the "what this card is about" indicator.
 	var eq_trap_type: int = _upgrade_data.get("trap_type", -1)
+	var thumb_path: String = ""
 	if category == "equipment" and eq_trap_type >= 0:
-		var thumb_path: String = TRAP_TEXTURE_PATHS.get(eq_trap_type, "")
-		if thumb_path != "" and ResourceLoader.exists(thumb_path):
-			_thumb_rect = TextureRect.new()
-			_thumb_rect.texture             = load(thumb_path)
-			_thumb_rect.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
-			_thumb_rect.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			_thumb_rect.custom_minimum_size = Vector2.ZERO
-			_thumb_rect.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-			add_child(_thumb_rect)
+		thumb_path = TRAP_TEXTURE_PATHS.get(eq_trap_type, "")
+	elif category == "campaign":
+		thumb_path = "res://assets/van.png"
+	if thumb_path != "" and ResourceLoader.exists(thumb_path):
+		_thumb_rect = TextureRect.new()
+		_thumb_rect.texture             = load(thumb_path)
+		_thumb_rect.expand_mode         = TextureRect.EXPAND_IGNORE_SIZE
+		_thumb_rect.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		_thumb_rect.custom_minimum_size = Vector2.ZERO
+		_thumb_rect.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+		add_child(_thumb_rect)
 
 	# --- Stat name (equipment only) or empty for campaign cards ---
 	# Uses custom_color when available so the label matches the trap/boost identity;
@@ -407,8 +394,8 @@ func _on_resized() -> void:
 	var formula_h := (68.0 + (title_font_scale - 1.0) * 80.0) * font_scale
 	var title_h   := maxf(formula_h, font_px * 2.7)
 
-	# Space reserved at the bottom for the tier badge (0 when badge is hidden).
-	var badge_reserve := 26.0 if show_tier_badge else 0.0
+	# No bottom badge — tier is displayed as an external sign by LevelUpScreen.
+	var badge_reserve := 0.0
 
 	# Row 1: Title — narrowed when a thumbnail occupies the top-right corner.
 	if _title_lbl:
@@ -470,10 +457,6 @@ func _on_resized() -> void:
 		_thumb_rect.position = Vector2(w - px - THUMB_SZ, 7.0 + (title_h - THUMB_SZ) * 0.5)
 		_thumb_rect.size     = Vector2(THUMB_SZ, THUMB_SZ)
 
-	# Tier badge — bottom-right corner (null when show_tier_badge = false).
-	if _tier_lbl:
-		_tier_lbl.position = Vector2(px, h - 22.0)
-		_tier_lbl.size     = Vector2(w - px * 2.0 - 6.0, 18.0)
 
 
 # ---------------------------------------------------------------------------

@@ -252,10 +252,10 @@ func _build_ui() -> void:
 	_build_left_panel()
 	_build_right_panel()
 	_build_incoming_overlay()  # arena overlay; drawn above panels, below dialogs
-	_build_settings_dialog()   # must be after right panel so it draws on top
-	_build_panel_borders()     # drawn last so borders appear on top of all panel content
+	_build_panel_borders()     # drawn after panels so borders sit on top of panel content
 	_build_pause_banner()      # drawn after borders so it slides over the top edge
 	_build_experience_bar()    # overlaid on the arena zone, above all panel content
+	_build_settings_dialog()   # must be last — full-screen overlay must draw above everything
 
 
 # ---------------------------------------------------------------------------
@@ -1104,110 +1104,179 @@ func _add_border_line(al: float, at: float, ar: float, ab: float,
 # Settings dialog
 # ---------------------------------------------------------------------------
 
-## Builds the modal settings panel.  Hidden by default; shown when the user
-## taps the gear button in the top-right corner of the right panel.
-## The dialog lives at the CanvasLayer root so it floats above the side panels.
-## A ScrollContainer in the middle lets the settings list grow without resizing the panel.
-## Exit and Restart buttons are located here rather than on the right panel.
+## Builds the full-screen settings overlay.  Hidden by default; shown when the
+## user taps the gear button.  The overlay fills the entire virtual viewport
+## so it can give every setting generous touch targets and clear organization.
+##
+## Layout:
+##   Header (60px):  title + Close button
+##   ─────────────────────────────────────────
+##   Left half (640px) │ Right half (640px)
+##   AUDIO             │ DISPLAY
+##   Music slider      │ Grid lines overview
+##   SFX slider        │ Grid lines zoomed
+##   ─────────────────────────────────────────
+##   Footer (80px):  Reset Progress + Dev Mode  │  EXIT + RESTART
 func _build_settings_dialog() -> void:
 	_settings_dialog = Control.new()
 	_settings_dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_settings_dialog.visible      = false
-	# MOUSE_FILTER_STOP prevents taps on the dim area from reaching the arena.
 	_settings_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_settings_dialog)
 
-	# Full-screen dimmer behind the panel.
-	var dim := ColorRect.new()
-	dim.color        = Color(0.0, 0.0, 0.0, 0.60)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	_settings_dialog.add_child(dim)
+	const HEADER_H:     float = 60.0
+	const FOOTER_H:     float = 80.0
+	const COL_DIV_X:    float = 640.0
+	const PADDING:      float = 32.0
+	const DIVIDER_COL := Color(0.22, 0.22, 0.30, 1.0)
 
-	# Centered dialog panel — wider and taller than the original to make room
-	# for a full settings list; the ScrollContainer handles overflow.
+	# Full-screen panel — no dim, no floating box; fills the entire viewport.
 	var panel := Panel.new()
-	panel.anchor_left   = 0.5
-	panel.anchor_right  = 0.5
-	panel.anchor_top    = 0.5
-	panel.anchor_bottom = 0.5
-	panel.offset_left   = -240.0
-	panel.offset_right  =  240.0
-	panel.offset_top    = -220.0
-	panel.offset_bottom =  220.0
-	panel.mouse_filter  = Control.MOUSE_FILTER_STOP
-
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color     = Color(0.12, 0.12, 0.22, 0.97)
-	panel_style.border_color = Color(0.50, 0.50, 0.68, 1.0)
-	panel_style.set_border_width_all(2)
-	panel_style.set_corner_radius_all(8)
-	panel.add_theme_stylebox_override("panel", panel_style)
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var panel_sty := StyleBoxFlat.new()
+	panel_sty.bg_color = Color(0.06, 0.08, 0.14, 1.0)
+	panel_sty.set_border_width_all(0)
+	panel.add_theme_stylebox_override("panel", panel_sty)
 	_settings_dialog.add_child(panel)
 
-	var inner := MarginContainer.new()
-	inner.set_anchors_preset(Control.PRESET_FULL_RECT)
-	inner.add_theme_constant_override("margin_left",   24)
-	inner.add_theme_constant_override("margin_right",  24)
-	inner.add_theme_constant_override("margin_top",    18)
-	inner.add_theme_constant_override("margin_bottom", 18)
-	panel.add_child(inner)
+	# ── Header ──────────────────────────────────────────────────────────────
+	var title_lbl := Label.new()
+	title_lbl.text               = "SETTINGS"
+	title_lbl.position           = Vector2(PADDING, 0.0)
+	title_lbl.size               = Vector2(600.0, HEADER_H)
+	title_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title_lbl.add_theme_font_override("font", UIFonts.header())
+	title_lbl.add_theme_font_size_override("font_size", 36)
+	title_lbl.add_theme_color_override("font_color", COLOR_TEXT)
+	title_lbl.mouse_filter       = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(title_lbl)
 
-	var dialog_vbox := VBoxContainer.new()
-	dialog_vbox.add_theme_constant_override("separation", 12)
-	inner.add_child(dialog_vbox)
+	# Close button — right-aligned in header, same green style as PermanentUpgradeScreen.
+	var close_btn := Button.new()
+	close_btn.text          = "Close"
+	close_btn.focus_mode    = Control.FOCUS_NONE
+	close_btn.anchor_left   = 1.0;  close_btn.anchor_right  = 1.0
+	close_btn.anchor_top    = 0.0;  close_btn.anchor_bottom = 0.0
+	close_btn.offset_left   = -(PADDING + 130.0)
+	close_btn.offset_right  = -PADDING
+	close_btn.offset_top    = (HEADER_H - 44.0) * 0.5
+	close_btn.offset_bottom = HEADER_H - (HEADER_H - 44.0) * 0.5
+	close_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	close_btn.add_theme_font_size_override("font_size", 22)
+	close_btn.add_theme_color_override("font_color", COLOR_TEXT)
+	close_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for state: Array in [
+		["normal",  Color(0.04, 0.25, 0.00, 1.0)],
+		["hover",   Color(0.07, 0.33, 0.01, 1.0)],
+		["pressed", Color(0.02, 0.16, 0.00, 1.0)],
+	]:
+		var box := StyleBoxFlat.new()
+		box.bg_color     = state[1]
+		box.border_color = Color(0.22, 0.60, 0.04, 1.0)
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(6)
+		box.set_content_margin_all(8.0)
+		close_btn.add_theme_stylebox_override(state[0], box)
+	close_btn.pressed.connect(_on_settings_close_pressed)
+	panel.add_child(close_btn)
 
-	var title := Label.new()
-	title.text                 = "SETTINGS"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_override("font", UIFonts.header())
-	title.add_theme_font_size_override("font_size", 30)
-	title.add_theme_color_override("font_color", COLOR_TEXT)
-	dialog_vbox.add_child(title)
+	# ── Structural dividers ─────────────────────────────────────────────────
+	# Horizontal below header.
+	var hdr_div := ColorRect.new()
+	hdr_div.color        = DIVIDER_COL
+	hdr_div.position     = Vector2(0.0, HEADER_H)
+	hdr_div.size         = Vector2(1280.0, 1.0)
+	hdr_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(hdr_div)
 
-	dialog_vbox.add_child(HSeparator.new())
+	# Horizontal above footer.
+	var ftr_div := ColorRect.new()
+	ftr_div.color        = DIVIDER_COL
+	ftr_div.position     = Vector2(0.0, 600.0 - FOOTER_H - 1.0)
+	ftr_div.size         = Vector2(1280.0, 1.0)
+	ftr_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(ftr_div)
 
-	# Scrollable content — vertical scroll only; items expand to fill the panel width.
-	# Adding new settings to content_vbox automatically becomes scrollable.
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical    = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	dialog_vbox.add_child(scroll)
+	# Vertical between the two columns (only in the main area, not the footer).
+	var col_div := ColorRect.new()
+	col_div.color        = DIVIDER_COL
+	col_div.position     = Vector2(COL_DIV_X, HEADER_H + 1.0)
+	col_div.size         = Vector2(1.0, 600.0 - HEADER_H - 1.0 - FOOTER_H - 1.0)
+	col_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(col_div)
 
-	# Extra right padding so CheckButton toggle rings (which draw slightly outside
-	# their rect) are not clipped by the ScrollContainer's content boundary.
-	var content_margin := MarginContainer.new()
-	content_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content_margin.add_theme_constant_override("margin_right", 6)
-	scroll.add_child(content_margin)
+	# ── Left column: AUDIO ───────────────────────────────────────────────────
+	var main_y := HEADER_H + 1.0
+	var main_h := 600.0 - HEADER_H - 1.0 - FOOTER_H - 1.0
 
-	var content_vbox := VBoxContainer.new()
-	content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content_vbox.add_theme_constant_override("separation", 10)
-	content_margin.add_child(content_vbox)
+	var left_col := VBoxContainer.new()
+	left_col.position = Vector2(0.0, main_y)
+	left_col.size     = Vector2(COL_DIV_X, main_h)
+	left_col.add_theme_constant_override("separation", 0)
+	panel.add_child(left_col)
 
-	# --- AUDIO section ---
-	_build_section_header(content_vbox, "AUDIO")
-	_music_slider = _build_volume_row(content_vbox, "MUSIC")
-	_sfx_slider   = _build_volume_row(content_vbox, "SFX")
+	_add_settings_section_strip(left_col, "AUDIO")
 
-	content_vbox.add_child(HSeparator.new())
+	var left_pad := MarginContainer.new()
+	left_pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left_pad.add_theme_constant_override("margin_left",   int(PADDING))
+	left_pad.add_theme_constant_override("margin_right",  int(PADDING))
+	left_pad.add_theme_constant_override("margin_top",    20)
+	left_pad.add_theme_constant_override("margin_bottom", 20)
+	left_col.add_child(left_pad)
 
-	# --- DISPLAY section ---
-	_build_section_header(content_vbox, "DISPLAY")
-	_grid_lines_overview_toggle = _build_toggle_row(content_vbox, "Grid lines when zoomed out")
-	_grid_lines_zoomed_toggle   = _build_toggle_row(content_vbox, "Grid lines when zoomed in")
+	var left_inner := VBoxContainer.new()
+	left_inner.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left_inner.add_theme_constant_override("separation", 16)
+	left_pad.add_child(left_inner)
 
-	content_vbox.add_child(HSeparator.new())
+	_music_slider = _build_volume_row(left_inner, "MUSIC")
+	_sfx_slider   = _build_volume_row(left_inner, "SFX")
 
-	# --- DATA section ---
-	_build_section_header(content_vbox, "DATA")
+	# ── Right column: DISPLAY ─────────────────────────────────────────────────
+	var right_col := VBoxContainer.new()
+	right_col.position = Vector2(COL_DIV_X + 1.0, main_y)
+	right_col.size     = Vector2(1280.0 - COL_DIV_X - 1.0, main_h)
+	right_col.add_theme_constant_override("separation", 0)
+	panel.add_child(right_col)
+
+	_add_settings_section_strip(right_col, "DISPLAY")
+
+	var right_pad := MarginContainer.new()
+	right_pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_pad.add_theme_constant_override("margin_left",   int(PADDING))
+	right_pad.add_theme_constant_override("margin_right",  int(PADDING))
+	right_pad.add_theme_constant_override("margin_top",    20)
+	right_pad.add_theme_constant_override("margin_bottom", 20)
+	right_col.add_child(right_pad)
+
+	var right_inner := VBoxContainer.new()
+	right_inner.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_inner.add_theme_constant_override("separation", 16)
+	right_pad.add_child(right_inner)
+
+	_grid_lines_overview_toggle = _build_toggle_row(right_inner, "Grid lines — overview")
+	_grid_lines_zoomed_toggle   = _build_toggle_row(right_inner, "Grid lines — zoomed in")
+
+	# ── Footer ───────────────────────────────────────────────────────────────
+	var footer_y   := 600.0 - FOOTER_H
+	var btn_h      := 50.0
+	var btn_y      := footer_y + (FOOTER_H - btn_h) * 0.5
+
+	# Left half of footer: Reset Progress + Dev Mode (DATA actions).
+	var left_btns := HBoxContainer.new()
+	left_btns.position = Vector2(PADDING, btn_y)
+	left_btns.size     = Vector2(COL_DIV_X - PADDING * 2.0, btn_h)
+	left_btns.add_theme_constant_override("separation", 12)
+	panel.add_child(left_btns)
+
 	var reset_btn := Button.new()
 	reset_btn.text                  = "Reset Progress"
 	reset_btn.focus_mode            = Control.FOCUS_NONE
 	reset_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	reset_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	reset_btn.add_theme_font_size_override("font_size", 16)
+	reset_btn.add_theme_font_size_override("font_size", 20)
 	reset_btn.add_theme_color_override("font_color", Color(0.95, 0.90, 0.90, 1.0))
 	reset_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
 	for state: Array in [
@@ -1219,63 +1288,73 @@ func _build_settings_dialog() -> void:
 		box.bg_color     = state[1]
 		box.border_color = Color(0.75, 0.18, 0.18, 1.0)
 		box.set_border_width_all(2)
-		box.set_corner_radius_all(4)
+		box.set_corner_radius_all(6)
 		box.set_content_margin_all(8.0)
 		reset_btn.add_theme_stylebox_override(state[0], box)
 	reset_btn.pressed.connect(_on_reset_progress_pressed)
-	content_vbox.add_child(reset_btn)
+	left_btns.add_child(reset_btn)
 
-	# Load saved values first so the initial signal emission from _load_all_settings
-	# carries the correct booleans before we wire up the change callbacks.
+	# Dev mode button — label and tint reflect current state so the action is unambiguous.
+	var dev_bg:  Color  = Color(0.28, 0.20, 0.04, 1.0) if GameState.dev_mode \
+			else Color(0.08, 0.20, 0.28, 1.0)
+	var dev_lbl: String = "Exit Dev Mode" if GameState.dev_mode else "Dev Mode"
+	var dev_btn := Button.new()
+	dev_btn.text                  = dev_lbl
+	dev_btn.focus_mode            = Control.FOCUS_NONE
+	dev_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dev_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	dev_btn.add_theme_font_size_override("font_size", 20)
+	dev_btn.add_theme_color_override("font_color", Color(0.90, 0.85, 0.70, 1.0))
+	dev_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for dev_state: Array in [
+		["normal",  dev_bg],
+		["hover",   dev_bg.lightened(0.12)],
+		["pressed", dev_bg.darkened(0.10)],
+	]:
+		var dev_box := StyleBoxFlat.new()
+		dev_box.bg_color     = dev_state[1]
+		dev_box.border_color = Color(0.65, 0.55, 0.30, 1.0)
+		dev_box.set_border_width_all(2)
+		dev_box.set_corner_radius_all(6)
+		dev_box.set_content_margin_all(8.0)
+		dev_btn.add_theme_stylebox_override(dev_state[0], dev_box)
+	dev_btn.pressed.connect(_on_dev_mode_btn_pressed)
+	left_btns.add_child(dev_btn)
+
+	# Right half of footer: EXIT + RESTART.
+	var right_btns := HBoxContainer.new()
+	right_btns.position = Vector2(COL_DIV_X + 1.0 + PADDING, btn_y)
+	right_btns.size     = Vector2(1280.0 - COL_DIV_X - 1.0 - PADDING * 2.0, btn_h)
+	right_btns.add_theme_constant_override("separation", 12)
+	panel.add_child(right_btns)
+
+	_exit_btn = Button.new()
+	_exit_btn.text                  = "EXIT"
+	_exit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_exit_btn.custom_minimum_size   = Vector2(0, btn_h)
+	_exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_exit_btn.add_theme_font_size_override("font_size", 26)
+	_apply_gold_button_style(_exit_btn)
+	_exit_btn.pressed.connect(_on_exit_pressed)
+	right_btns.add_child(_exit_btn)
+
+	_restart_btn = Button.new()
+	_restart_btn.text                  = "RESTART"
+	_restart_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_restart_btn.custom_minimum_size   = Vector2(0, btn_h)
+	_restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_restart_btn.add_theme_font_size_override("font_size", 26)
+	_apply_gold_button_style(_restart_btn)
+	_restart_btn.pressed.connect(_on_restart_pressed)
+	right_btns.add_child(_restart_btn)
+
+	# Wire signals after _load_all_settings() so the initial value emission
+	# doesn't trigger save/side-effects before everything is constructed.
 	_load_all_settings()
 	_music_slider.value_changed.connect(_on_music_volume_changed)
 	_sfx_slider.value_changed.connect(_on_sfx_volume_changed)
 	_grid_lines_overview_toggle.toggled.connect(_on_grid_lines_overview_toggled)
 	_grid_lines_zoomed_toggle.toggled.connect(_on_grid_lines_zoomed_toggled)
-
-	# X button — square, top-right corner of the panel, outside the vbox flow.
-	var close_btn := Button.new()
-	close_btn.text          = "X"
-	close_btn.anchor_left   = 1.0
-	close_btn.anchor_right  = 1.0
-	close_btn.anchor_top    = 0.0
-	close_btn.anchor_bottom = 0.0
-	close_btn.offset_left   = -48.0
-	close_btn.offset_right  = -8.0
-	close_btn.offset_top    =  8.0
-	close_btn.offset_bottom =  48.0
-	close_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	close_btn.add_theme_font_size_override("font_size", 20)
-	_apply_button_style(close_btn)
-	close_btn.pressed.connect(_on_settings_close_pressed)
-	panel.add_child(close_btn)
-
-	dialog_vbox.add_child(HSeparator.new())
-
-	# Exit and Restart live in the settings dialog so the right panel stays clean.
-	var exit_restart_row := HBoxContainer.new()
-	exit_restart_row.add_theme_constant_override("separation", 4)
-	dialog_vbox.add_child(exit_restart_row)
-
-	_exit_btn = Button.new()
-	_exit_btn.text = "EXIT"
-	_exit_btn.add_theme_font_size_override("font_size", 24)
-	_exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_exit_btn)
-	_exit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_exit_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_exit_btn.pressed.connect(_on_exit_pressed)
-	exit_restart_row.add_child(_exit_btn)
-
-	_restart_btn = Button.new()
-	_restart_btn.text = "RESTART"
-	_restart_btn.add_theme_font_size_override("font_size", 24)
-	_restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_restart_btn)
-	_restart_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_restart_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_restart_btn.pressed.connect(_on_restart_pressed)
-	exit_restart_row.add_child(_restart_btn)
 
 
 func _on_settings_btn_pressed() -> void:
@@ -1764,6 +1843,13 @@ func _on_run_ended() -> void:
 func _on_restart_pressed() -> void:
 	AudioManager.play_ui("button")
 	get_tree().paused = false
+	get_tree().reload_current_scene()
+
+
+func _on_dev_mode_btn_pressed() -> void:
+	AudioManager.play_ui("button")
+	GameState.dev_mode = not GameState.dev_mode
+	get_tree().paused  = false
 	get_tree().reload_current_scene()
 
 
@@ -2455,31 +2541,46 @@ func _update_reward_bar_display(fill: float) -> void:
 # Volume controls and settings helpers
 # ---------------------------------------------------------------------------
 
-## Builds a small dimmed category label used as a section divider in the settings scroll area.
-func _build_section_header(parent: VBoxContainer, header_text: String) -> void:
+## Adds a colored section-title strip spanning the full column width.
+## Used in the full-screen settings layout to clearly label each column.
+func _add_settings_section_strip(parent: VBoxContainer, header_text: String) -> void:
+	var strip := Panel.new()
+	strip.custom_minimum_size = Vector2(0.0, 44.0)
+	strip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	strip.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	var sty := StyleBoxFlat.new()
+	sty.bg_color = Color(0.04, 0.16, 0.12, 1.0)   # dark teal — matches the game's green palette
+	sty.set_border_width_all(0)
+	strip.add_theme_stylebox_override("panel", sty)
+	parent.add_child(strip)
+
 	var lbl := Label.new()
-	lbl.text = header_text
+	lbl.text                 = header_text
+	lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	lbl.add_theme_font_size_override("font_size", 12)
-	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
-	parent.add_child(lbl)
+	lbl.add_theme_font_size_override("font_size", 20)
+	lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
+	strip.add_child(lbl)
 
 
-## Builds a compact label + slider row for one audio bus.
+## Builds a label + slider row for one audio bus, sized for full-screen layout.
 ## Returns the HSlider so the caller can read/write its value.
 func _build_volume_row(parent: VBoxContainer, label_text: String) -> HSlider:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	row.size_flags_vertical = Control.SIZE_SHRINK_END
+	row.add_theme_constant_override("separation", 14)
+	row.custom_minimum_size = Vector2(0.0, 52.0)
 	parent.add_child(row)
 
 	var lbl := Label.new()
-	lbl.text = label_text
-	lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	lbl.add_theme_font_size_override("font_size", 14)
-	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
-	lbl.custom_minimum_size = Vector2(32, 0)
+	lbl.text                = label_text
+	lbl.custom_minimum_size = Vector2(80.0, 0.0)
 	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_color_override("font_color", COLOR_TEXT)
 	row.add_child(lbl)
 
 	var slider := HSlider.new()
@@ -2489,17 +2590,18 @@ func _build_volume_row(parent: VBoxContainer, label_text: String) -> HSlider:
 	slider.value                 = 1.0
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	slider.custom_minimum_size   = Vector2(0, 24)
+	slider.custom_minimum_size   = Vector2(0.0, 36.0)
 	row.add_child(slider)
 
 	return slider
 
 
-## Builds a full-width label + CheckButton row for a boolean setting.
+## Builds a label + CheckButton row for a boolean setting, sized for full-screen layout.
 ## Returns the CheckButton so the caller can connect its toggled signal and read its state.
 func _build_toggle_row(parent: VBoxContainer, label_text: String) -> CheckButton:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", 14)
+	row.custom_minimum_size = Vector2(0.0, 52.0)
 	parent.add_child(row)
 
 	var lbl := Label.new()
@@ -2507,7 +2609,7 @@ func _build_toggle_row(parent: VBoxContainer, label_text: String) -> CheckButton
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_font_size_override("font_size", 22)
 	lbl.add_theme_color_override("font_color", COLOR_TEXT)
 	row.add_child(lbl)
 
@@ -2661,12 +2763,13 @@ class _IncomingBannerShape extends Control:
 ## Combined speed icon for the bottom-right speed button.
 ##
 ## State 1 (play 1×): one dark triangle.
-## State 2 (play 2×): two gold triangles.
-## State 3 (play 3×): three gold triangles.
+## State 2 (play 2×): one dark triangle + one gold triangle.
+## State 3 (play 3×): one dark triangle + two gold triangles.
+## The leftmost triangle is always dark; gold triangles indicate speed above 1×.
 ## When speed_text is set (e.g. "1x", "2x", "3x") and font_ref is provided,
 ## the text is drawn immediately to the right of the triangles in the same colour.
 class _PlaySpeedIcon extends Control:
-	const TRIANGLE_W: float = 13.0
+	const TRIANGLE_W: float = 15.6
 	const TRIANGLE_H: float = 26.0
 	const GAP:        float = 3.0
 	const TEXT_GAP:   float = 5.0   # horizontal gap between last triangle and text
@@ -2686,7 +2789,6 @@ class _PlaySpeedIcon extends Control:
 		var count := play_speed_state   # 1, 2, or 3 triangles
 		if count < 1:
 			count = 1
-		var color := COLOR_BASE if play_speed_state == 1 else COLOR_FAST
 
 		# Measure text width so the triangle+text group can be centred as a unit.
 		var text_w := 0.0
@@ -2701,12 +2803,14 @@ class _PlaySpeedIcon extends Control:
 		var y_mid       := size.y * 0.5
 
 		for i in count:
+			# The leftmost triangle is always dark; additional triangles are gold to signal speed.
+			var tri_color := COLOR_BASE if i == 0 else COLOR_FAST
 			var x := x_start + i * (TRIANGLE_W + GAP)
 			draw_colored_polygon(PackedVector2Array([
 				Vector2(x,              y_top),
 				Vector2(x,              y_bot),
 				Vector2(x + TRIANGLE_W, y_mid),
-			]), color)
+			]), tri_color)
 
 		if text_w > 0.0 and font_ref != null:
 			# Vertical offset: font baseline sits ~65% of font size below the top of the glyph.
@@ -2722,7 +2826,7 @@ class _PlaySpeedIcon extends Control:
 ##   Paused  (play_speed_state == 0): triangle is gold (press to play),  bars are gray.
 ##   Playing (play_speed_state != 0): triangle is gray (current state),  bars are gold (press to pause).
 class _PlayPauseIcon extends Control:
-	const TRI_W:     float = 13.0
+	const TRI_W:     float = 15.6
 	const TRI_H:     float = 26.0
 	const BAR_W:     float = 6.0
 	const BAR_H:     float = 26.0

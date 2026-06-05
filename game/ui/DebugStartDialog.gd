@@ -122,8 +122,9 @@ func _ready() -> void:
 
 func _build_ui() -> void:
 	# Full-screen background — no floating panel, no border rect.
+	# Alpha 0.75: 25% transparent so the arena shows through, reducing the overlay's dimness.
 	var bg_rect := ColorRect.new()
-	bg_rect.color = COLOR_PANEL
+	bg_rect.color = Color(COLOR_PANEL.r, COLOR_PANEL.g, COLOR_PANEL.b, 0.75)
 	bg_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	add_child(bg_rect)
 
@@ -201,7 +202,7 @@ func _build_ui() -> void:
 	_add_divider_at(y)
 	y += 14.0
 
-	# ── Action buttons — side by side at the bottom of the left column ──────
+	# ── Action buttons — pinned to the bottom edge of the display area ──────
 	# Two equal-width buttons with a 12px gap between them.
 	const BTN_GAP:   float = 12.0
 	const BTN_W:     float = (LEFT_COL_W_NEW - BTN_GAP) / 2.0   # 224px each
@@ -210,10 +211,13 @@ func _build_ui() -> void:
 	# Standard button height — matches ROW_H_CTRL used by the input rows above.
 	var btn_h := ROW_H_CTRL
 
+	# Pin buttons to the bottom of the 600px screen with the standard vertical margin.
+	var btn_y := 600.0 - CONTENT_PAD_V - btn_h   # 600 - 24 - 52 = 524
+
 	var exit_btn := Button.new()
 	exit_btn.text                = "Exit Dev Mode"
 	exit_btn.focus_mode          = Control.FOCUS_NONE
-	exit_btn.position            = Vector2(LEFT_COL_X, y)
+	exit_btn.position            = Vector2(LEFT_COL_X, btn_y)
 	exit_btn.custom_minimum_size = Vector2(BTN_W, btn_h)
 	exit_btn.add_theme_font_size_override("font_size", BTN_FONT)
 	exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
@@ -224,7 +228,7 @@ func _build_ui() -> void:
 	var start_btn := Button.new()
 	start_btn.text                = "Start"
 	start_btn.focus_mode          = Control.FOCUS_NONE
-	start_btn.position            = Vector2(LEFT_COL_X + BTN_W + BTN_GAP, y)
+	start_btn.position            = Vector2(LEFT_COL_X + BTN_W + BTN_GAP, btn_y)
 	start_btn.custom_minimum_size = Vector2(BTN_W, btn_h)
 	start_btn.add_theme_font_size_override("font_size", BTN_FONT)
 	start_btn.add_theme_font_override("font", UIFonts.primary_bold())
@@ -233,12 +237,12 @@ func _build_ui() -> void:
 	add_child(start_btn)
 
 	# ── Right column — enemy-type selector ──────────────────────────────────
-	# Centered vertically within the 533px content area below the header.
-	var right_col_h   := ENEMY_HEADER_H + ENEMY_SECTION_H
-	var content_h     := 600.0 - CONTENT_Y   # 533px
+	# Top-aligned with the left column's first input row (CONTENT_Y + CONTENT_PAD_V)
+	# so the list top sits flush with Bug Bucks, Wave Size, and Service Fees.
+	var right_col_h := ENEMY_HEADER_H + ENEMY_SECTION_H
 
 	_right_col = Control.new()
-	_right_col.position            = Vector2(RIGHT_COL_X_NEW, CONTENT_Y + (content_h - right_col_h) * 0.5)
+	_right_col.position            = Vector2(RIGHT_COL_X_NEW, CONTENT_Y + CONTENT_PAD_V)
 	_right_col.custom_minimum_size = Vector2(RIGHT_COL_W_NEW, right_col_h)
 	add_child(_right_col)
 

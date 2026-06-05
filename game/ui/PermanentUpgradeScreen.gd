@@ -65,7 +65,6 @@ var _tab_equip:      Button        = null
 var _tab_biz:        Button        = null
 var _vbox:           VBoxContainer = null
 var _buy_btns:       Array         = []   # Array of { "id", "btn", "cost_lbl", "cost_icon" }
-var _confirm_overlay: Control      = null
 
 
 # ---------------------------------------------------------------------------
@@ -166,32 +165,6 @@ func _build_header() -> void:
 	_sf_lbl.add_theme_color_override("font_color", COLOR_HEADER)
 	_sf_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	sf_row.add_child(_sf_lbl)
-
-	# Reset button — left of Close; red to signal a destructive action.
-	var reset_btn := Button.new()
-	reset_btn.text       = "Reset All"
-	reset_btn.focus_mode = Control.FOCUS_NONE
-	reset_btn.position   = Vector2(1280.0 - PADDING - 130.0 - 8.0 - 120.0, (HEADER_H - 44.0) * 0.5)
-	reset_btn.size       = Vector2(120.0, 44.0)
-	reset_btn.process_mode = Node.PROCESS_MODE_ALWAYS
-	reset_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	reset_btn.add_theme_font_size_override("font_size", 22)
-	reset_btn.add_theme_color_override("font_color", Color(0.95, 0.90, 0.90, 1.0))
-	reset_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	for state: Array in [
-		["normal",  Color(0.30, 0.03, 0.03, 1.0)],
-		["hover",   Color(0.40, 0.05, 0.05, 1.0)],
-		["pressed", Color(0.20, 0.02, 0.02, 1.0)],
-	]:
-		var box := StyleBoxFlat.new()
-		box.bg_color     = state[1]
-		box.border_color = Color(0.70, 0.15, 0.15, 1.0)
-		box.set_border_width_all(2)
-		box.set_corner_radius_all(6)
-		box.set_content_margin_all(6.0)
-		reset_btn.add_theme_stylebox_override(state[0], box)
-	reset_btn.pressed.connect(_on_reset_pressed)
-	add_child(reset_btn)
 
 	# Close button — right-aligned in the header.
 	var done_btn := Button.new()
@@ -604,113 +577,3 @@ func _on_done_pressed() -> void:
 	if GameState.service_fees_changed.is_connected(_on_fees_changed):
 		GameState.service_fees_changed.disconnect(_on_fees_changed)
 	queue_free()
-
-
-# ---------------------------------------------------------------------------
-# Reset confirmation overlay
-# ---------------------------------------------------------------------------
-
-func _on_reset_pressed() -> void:
-	AudioManager.play_ui("button")
-	if _confirm_overlay == null:
-		_build_confirm_overlay()
-	_confirm_overlay.visible = true
-
-
-func _build_confirm_overlay() -> void:
-	# Full-screen dim that blocks input to the upgrade rows behind it.
-	_confirm_overlay = Control.new()
-	_confirm_overlay.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	_confirm_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
-	_confirm_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
-	add_child(_confirm_overlay)
-
-	var dim := ColorRect.new()
-	dim.color        = Color(0.0, 0.0, 0.0, 0.70)
-	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_confirm_overlay.add_child(dim)
-
-	# Centred dialog panel.
-	var panel := Panel.new()
-	panel.anchor_left   = 0.5;  panel.anchor_right  = 0.5
-	panel.anchor_top    = 0.5;  panel.anchor_bottom = 0.5
-	panel.offset_left   = -220.0;  panel.offset_right  = 220.0
-	panel.offset_top    = -90.0;   panel.offset_bottom = 90.0
-	panel.mouse_filter  = Control.MOUSE_FILTER_STOP
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color     = Color(0.10, 0.04, 0.04, 0.97)
-	panel_style.border_color = Color(0.65, 0.18, 0.18, 1.0)
-	panel_style.set_border_width_all(2)
-	panel_style.set_corner_radius_all(8)
-	panel.add_theme_stylebox_override("panel", panel_style)
-	_confirm_overlay.add_child(panel)
-
-	var prompt := Label.new()
-	prompt.text                 = "Erase all upgrades and\nService Fees?"
-	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	prompt.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	prompt.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	prompt.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
-	prompt.offset_bottom        = -56.0   # leave room for buttons at the bottom
-	prompt.add_theme_font_override("font", UIFonts.primary_bold())
-	prompt.add_theme_font_size_override("font_size", 22)
-	prompt.add_theme_color_override("font_color", Color(0.95, 0.90, 0.90, 1.0))
-	panel.add_child(prompt)
-
-	# Button row — Cancel (left) and Erase (right).
-	var btn_row := HBoxContainer.new()
-	btn_row.anchor_left   = 0.0;  btn_row.anchor_right  = 1.0
-	btn_row.anchor_top    = 1.0;  btn_row.anchor_bottom = 1.0
-	btn_row.offset_top    = -52.0; btn_row.offset_bottom = -8.0
-	btn_row.offset_left   = 16.0;  btn_row.offset_right  = -16.0
-	btn_row.add_theme_constant_override("separation", 8)
-	panel.add_child(btn_row)
-
-	var cancel_btn := _make_confirm_button("Cancel",
-			Color(0.20, 0.20, 0.24, 1.0), Color(0.45, 0.45, 0.52, 1.0))
-	cancel_btn.pressed.connect(_on_reset_cancelled)
-	btn_row.add_child(cancel_btn)
-
-	var erase_btn := _make_confirm_button("Yes, Erase",
-			Color(0.30, 0.03, 0.03, 1.0), Color(0.70, 0.15, 0.15, 1.0))
-	erase_btn.pressed.connect(_on_reset_confirmed)
-	btn_row.add_child(erase_btn)
-
-
-func _make_confirm_button(label_text: String, bg: Color, border: Color) -> Button:
-	var btn := Button.new()
-	btn.text                  = label_text
-	btn.focus_mode            = Control.FOCUS_NONE
-	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	btn.process_mode          = Node.PROCESS_MODE_ALWAYS
-	btn.add_theme_font_override("font", UIFonts.primary_bold())
-	btn.add_theme_font_size_override("font_size", 20)
-	btn.add_theme_color_override("font_color", Color(0.95, 0.92, 0.90, 1.0))
-	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
-	for state_name: String in ["normal", "hover", "pressed"]:
-		var box := StyleBoxFlat.new()
-		box.bg_color     = bg.lightened(0.08) if state_name == "hover" else \
-				(bg.darkened(0.08) if state_name == "pressed" else bg)
-		box.border_color = border
-		box.set_border_width_all(2)
-		box.set_corner_radius_all(5)
-		box.set_content_margin_all(6.0)
-		btn.add_theme_stylebox_override(state_name, box)
-	return btn
-
-
-func _on_reset_cancelled() -> void:
-	AudioManager.play_ui("button")
-	_confirm_overlay.visible = false
-
-
-func _on_reset_confirmed() -> void:
-	AudioManager.play_ui("button")
-	GameState.reset_all_upgrades()
-	_confirm_overlay.visible = false
-	# Rebuild the active tab so tier indicators reflect the reset state.
-	_buy_btns.clear()
-	for child in _vbox.get_children():
-		child.queue_free()
-	_populate_tab(_active_tab)

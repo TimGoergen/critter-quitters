@@ -38,7 +38,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Extermination Formula",
 		"stat_name":       "Damage",
 		"impact_template": "+%s%% Damage to all traps",
-		"plain_text":      "Every trap deals more damage per shot. Stacks with trap upgrades and Pheromone Dispenser boosts.",
+		"plain_text":      "All traps deal more damage. Stacks with upgrades and Pheromone.",
 		"magnitudes":      [0.05, 0.10, 0.20],
 	},
 	{
@@ -46,7 +46,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Extended Reach",
 		"stat_name":       "Range",
 		"impact_template": "+%s%% Range for all traps",
-		"plain_text":      "Every trap covers a wider area. Enemies spend more time inside each trap's kill zone.",
+		"plain_text":      "All traps cover a wider area, keeping pests in range longer.",
 		"magnitudes":      [0.05, 0.10, 0.20],
 	},
 	{
@@ -54,7 +54,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Hair Trigger",
 		"stat_name":       "Fire Rate",
 		"impact_template": "+%s%% Fire Rate for all traps",
-		"plain_text":      "Every trap fires more often. Stacks with fire rate upgrades and Compressor boosts.",
+		"plain_text":      "All traps fire more often. Stacks with upgrades and Compressor.",
 		"magnitudes":      [0.05, 0.10, 0.20],
 	},
 	{
@@ -62,7 +62,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Sharpened Instincts",
 		"stat_name":       "Crit Chance",
 		"impact_template": "+%s%% Crit Chance for all traps",
-		"plain_text":      "Every trap has a higher chance to deal bonus damage on each shot. Applies directly — a trap with 0% crit chance becomes 2% (or more) immediately.",
+		"plain_text":      "All traps gain crit chance. Works even on traps with 0% base.",
 		"magnitudes":      [0.02, 0.04, 0.08],
 	},
 	{
@@ -70,7 +70,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Lethal Potency",
 		"stat_name":       "Crit Damage",
 		"impact_template": "+%s%% Crit Damage bonus",
-		"plain_text":      "Critical hits from every trap hit harder. Combines with per-trap Crit Damage upgrades.",
+		"plain_text":      "Critical hits from all traps deal more damage.",
 		"magnitudes":      [0.10, 0.20, 0.40],
 	},
 	{
@@ -78,7 +78,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Invoice Padding",
 		"stat_name":       "Bug Bucks",
 		"impact_template": "+%s%% Bug Bucks per kill",
-		"plain_text":      "Every kill pays out more. Applies to all enemy types including boss splits and spawned units.",
+		"plain_text":      "Every kill pays out more Bug Bucks.",
 		"magnitudes":      [0.10, 0.20, 0.40],
 	},
 	{
@@ -92,7 +92,7 @@ const CAMPAIGN_BUFFS: Array = [
 		# Plain text gives the player a concrete anchor: an escaped Ant fills the bar
 		# by exactly 5% (1.0 infestation / INFESTATION_MAX 20 = 0.05 = 5%).
 		# That lets them calculate roughly how many kills offset one escape.
-		"plain_text":      "Each kill quietly trims the infestation bar. An escaped Ant fills it by 5% — this upgrade claws back a share of that with every kill.",
+		"plain_text":      "Each kill slightly reduces the infestation bar.",
 		"magnitudes":      [0.002, 0.004, 0.008],
 	},
 	{
@@ -100,7 +100,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Bulk Procurement",
 		"stat_name":       "Upgrade Costs",
 		"impact_template": "-%s%% Upgrade Costs",
-		"plain_text":      "All Bug Bucks upgrade costs for traps and boosts are reduced. Applies immediately to all future upgrades this run.",
+		"plain_text":      "Reduces upgrade costs for all traps and boosts.",
 		"magnitudes":      [0.05, 0.10, 0.20],
 	},
 ]
@@ -117,12 +117,12 @@ const STAT_NAMES: Dictionary = {
 
 ## Plain-text explanation of what each stat upgrade actually does.
 const STAT_PLAIN_TEXT: Dictionary = {
-	"damage":      "Increases the damage this trap deals per shot.",
-	"range":       "Increases the radius of this trap's targeting area.",
-	"fire_rate":   "Reduces the cooldown between shots, firing more often.",
-	"duration":    "Extends how long the slow or poison effect lasts.",
-	"crit_chance": "Adds a chance for each shot to deal bonus critical damage.",
-	"crit_dmg":    "Increases the damage multiplier when a critical hit occurs.",
+	"damage":      "Increases damage per shot.",
+	"range":       "Expands the targeting radius.",
+	"fire_rate":   "Fires more often.",
+	"duration":    "Extends effect duration.",
+	"crit_chance": "Adds critical hit chance.",
+	"crit_dmg":    "Increases critical hit damage.",
 }
 
 
@@ -166,8 +166,9 @@ const CARD_GAP: float = 20.0
 # Internal state
 # ---------------------------------------------------------------------------
 
-var _trap_nodes: Array = []   # placed trap nodes passed in from Arena
-var _cards:      Array = []   # UpgradeCard nodes — used for mobile touch hit-testing
+var _trap_nodes:  Array = []   # placed trap nodes passed in from Arena
+var _cards:       Array = []   # UpgradeCard nodes — used for mobile touch hit-testing
+var _sign_nodes:  Array = []   # parallel array: _sign_nodes[i] holds all external sign nodes for card i
 
 
 # ---------------------------------------------------------------------------
@@ -191,38 +192,53 @@ func _build_screen(new_level: int) -> void:
 
 	# Dim overlay — covers the full virtual viewport.
 	var dim := ColorRect.new()
-	dim.color = Color(0.0, 0.0, 0.0, 0.60)
+	dim.color = Color(0.0, 0.0, 0.0, 0.90)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(dim)
 
-	# "LEVEL N" header label, centred near the top.
-	# Font size 128 so the level announcement dominates the screen.
+	# Card layout metrics — kept in sync with _spawn_cards so labels align with card edges.
+	var total_w      := CARD_W * 3.0 + CARD_GAP * 2.0
+	var card_start_x := (1280.0 - total_w) * 0.5   # left edge of the leftmost card
+	var card_top_y   := 180.0                        # top edge of all cards (matches card_y in _spawn_cards)
+	# The NEW EQUIPMENT tag's top edge sits above the card top; center labels in 0→tag_top,
+	# not 0→card_top, so they read as vertically centered with that visible boundary.
+	var tag_top_y    := card_top_y - 30.0 + 6.0     # TAG_H=30, CARD_BORDER_W=6
+
+	# "LEVEL N" header — left-aligned to the left edge of the leftmost card,
+	# vertically centred in the zone above the cards. Font is 10% larger than before.
 	var header := Label.new()
 	header.text                 = "LEVEL %d" % new_level
-	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	header.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	header.add_theme_font_override("font", UIFonts.primary_bold())
-	header.add_theme_font_size_override("font_size", 115)
+	header.add_theme_font_size_override("font_size", 127)   # 115 × 1.10
 	header.add_theme_color_override("font_color", Color(1.0, 0.88, 0.20, 1.0))
 	header.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
 	header.add_theme_constant_override("shadow_offset_x", 2)
 	header.add_theme_constant_override("shadow_offset_y", 2)
 	header.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	header.offset_top    = 5.0
-	header.offset_bottom = 115.0   # 115pt font fits in ~110px
+	header.offset_left   = card_start_x
+	header.offset_top    = 0.0
+	header.offset_bottom = tag_top_y
 	header.process_mode  = Node.PROCESS_MODE_ALWAYS
 	add_child(header)
 
-	# "CHOOSE ONE" sub-header — bolder, brighter, and larger than the old "Choose an upgrade".
+	# "CHOOSE ONE" sub-header — right-aligned to the right edge of the rightmost card,
+	# vertically centred in the same above-cards zone. Font is 30% larger than before.
 	var sub := Label.new()
 	sub.text                 = "CHOOSE ONE"
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	sub.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	sub.add_theme_font_override("font", UIFonts.primary_bold())
 	sub.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
-	sub.add_theme_font_size_override("font_size", 32)
+	sub.add_theme_font_size_override("font_size", 84)   # 32 × 1.30 × 2
+	# Cards are centred, so right margin equals left margin; offset_right pushes the
+	# label's right edge flush with the rightmost card's right edge.
 	sub.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	sub.offset_top    = 130.0   # 15px gap below the header (which ends at 115px)
-	sub.offset_bottom = 170.0   # 40px for 32pt font
+	sub.offset_right  = -card_start_x
+	sub.offset_top    = 0.0
+	sub.offset_bottom = tag_top_y
 	sub.process_mode  = Node.PROCESS_MODE_ALWAYS
 	add_child(sub)
 
@@ -299,20 +315,20 @@ func _roll_tier() -> int:
 
 ## Short display text for each trap and boost type, used on unlock cards.
 const TRAP_DISPLAY: Dictionary = {
-	0: { "name": "Snap Trap",          "desc": "Targets the nearest pest. Fast fire rate, low damage. The only ground trap that can also hit flying pests." },
-	1: { "name": "Zapper",             "desc": "Targets the pest farthest along the path. Very slow rate, very high damage. Cannot hit flying pests." },
-	2: { "name": "Fogger",             "desc": "Fires an expanding cloud that damages all pests from closest to farthest. Cannot hit flying pests." },
-	3: { "name": "Glue Board",         "desc": "Pulses adhesive every few seconds, slowing all ground pests in range at the moment of each pulse." },
-	4: { "name": "Fly Strip Launcher", "desc": "Targets flying pests only. Releases a sticky cloud on impact that slows and damages over time." },
-	5: { "name": "Bait Station",       "desc": "Enemies walk straight over it. Pulses poison onto every pest in range, dealing damage over time." },
+	0: { "name": "Snap Trap",          "desc": "Targets the nearest pest. Fast rate, low damage. Can hit flying pests." },
+	1: { "name": "Zapper",             "desc": "Targets the pest farthest along the path. Slow rate, very high damage. Ground only." },
+	2: { "name": "Fogger",             "desc": "Area attack — hits all ground pests in range, closest first." },
+	3: { "name": "Glue Board",         "desc": "Periodically slows all ground pests in range." },
+	4: { "name": "Fly Strip Launcher", "desc": "Anti-air only. Sticky cloud on impact slows and damages over time." },
+	5: { "name": "Bait Station",       "desc": "Pests walk straight over it. Pulses poison to all pests in range." },
 }
 
 const BOOST_DISPLAY: Dictionary = {
-	0: { "name": "Pheromone Dispenser", "desc": "Aura boost. All traps within range deal increased damage." },
-	1: { "name": "Compressor",          "desc": "Aura boost. All traps within range fire more often." },
-	2: { "name": "Cash Register",       "desc": "Earns Bug Bucks each wave and pays a bonus per kill inside its aura." },
-	3: { "name": "Air Freshener",       "desc": "Absorbs infestation from pests that escape through its aura. Perishable." },
-	4: { "name": "Quarantine Marker",   "desc": "Restores infestation for every kill inside its aura. Perishable." },
+	0: { "name": "Pheromone Dispenser", "desc": "All traps in range deal more damage." },
+	1: { "name": "Compressor",          "desc": "All traps in range fire more often." },
+	2: { "name": "Cash Register",       "desc": "Earns Bug Bucks each wave. Bonus per kill in its aura." },
+	3: { "name": "Air Freshener",       "desc": "Reduces infestation when pests escape through its aura. Perishable." },
+	4: { "name": "Quarantine Marker",   "desc": "Restores infestation per kill in its aura. Perishable." },
 }
 
 
@@ -629,6 +645,9 @@ func _spawn_cards(cards: Array) -> void:
 	# 10px gap below the sub-header (which ends at 170px). Tag panels render above this line.
 	var card_y  := 180.0
 
+	# One inner array per card slot; populated below so selection can dim them to match the card.
+	_sign_nodes = [[], [], []]
+
 	for i in 3:
 		var card_ctrl := UpgradeCard.new()
 		# Apply identity colour for unlock cards before setup() reads it.
@@ -639,7 +658,8 @@ func _spawn_cards(cards: Array) -> void:
 		card_ctrl.position    = Vector2(start_x + i * (CARD_W + CARD_GAP), card_y)
 		card_ctrl.size        = Vector2(CARD_W, CARD_H)
 		card_ctrl.process_mode = Node.PROCESS_MODE_ALWAYS
-		card_ctrl.card_selected.connect(_on_card_selected)
+		# Bind the slot index so _on_card_selected can dim the matching external signs.
+		card_ctrl.card_selected.connect(_on_card_selected.bind(i))
 		add_child(card_ctrl)
 		_cards.append(card_ctrl)
 
@@ -649,12 +669,12 @@ func _spawn_cards(cards: Array) -> void:
 	const TAG_H:         float = 30.0    # taller than the old 22px to fit the larger font
 	const TAG_W:         float = 260.0   # slightly wider to accommodate the larger text
 	const CARD_BORDER_W: float = 6.0     # matches UpgradeCard.BORDER_W
-	const TAG_BG:        Color = Color(0.68, 0.68, 0.72, 1.0)   # silver body
+	const TAG_BG:        Color = Color(0.80, 0.80, 0.84, 1.0)   # silver body
 	const TAG_FG:        Color = Color(0.05, 0.05, 0.06, 1.0)   # near-black text
-	const TAG_HI:        Color = Color(0.88, 0.88, 0.92, 0.90)  # top-edge highlight (lighter silver)
-	const TAG_DK:        Color = Color(0.35, 0.35, 0.38, 1.00)  # bottom-edge shadow (darker silver)
+	const TAG_HI:        Color = Color(0.80, 0.80, 0.83, 1.00)  # top/left highlight — light silver
+	const TAG_DK:        Color = Color(0.50, 0.50, 0.53, 1.00)  # bottom/right shadow — dark silver
 	const TAG_SHADOW:    Color = Color(0.00, 0.00, 0.00, 0.55)  # drop shadow behind the tag
-	const BEVEL:         float = 2.5     # thickness of the top/bottom bevel strips in px
+	const BEVEL:         float = 3.5     # thicker bevel so the high-contrast strips are clearly visible
 	const FONT_SIZE:     int   = 18      # 13 × 1.4 ≈ 18 — 40% larger than previous
 
 	for i in 3:
@@ -677,6 +697,7 @@ func _spawn_cards(cards: Array) -> void:
 		shadow.z_index      = 1
 		shadow.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(shadow)
+		_sign_nodes[i].append(shadow)
 
 		# Main amber body.
 		var tag_bg := ColorRect.new()
@@ -686,6 +707,7 @@ func _spawn_cards(cards: Array) -> void:
 		tag_bg.z_index      = 2
 		tag_bg.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(tag_bg)
+		_sign_nodes[i].append(tag_bg)
 
 		# Top highlight strip — simulates light catching the upper face.
 		var hi := ColorRect.new()
@@ -695,6 +717,7 @@ func _spawn_cards(cards: Array) -> void:
 		hi.z_index      = 3
 		hi.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(hi)
+		_sign_nodes[i].append(hi)
 
 		# Bottom shadow strip — simulates the underside receding into shadow.
 		var dk := ColorRect.new()
@@ -704,6 +727,28 @@ func _spawn_cards(cards: Array) -> void:
 		dk.z_index      = 3
 		dk.process_mode = Node.PROCESS_MODE_ALWAYS
 		add_child(dk)
+		_sign_nodes[i].append(dk)
+
+		# Left highlight strip — inset top and bottom by BEVEL so corner pixels are
+		# owned by the horizontal strips and the four corners read cleanly.
+		var left_hi := ColorRect.new()
+		left_hi.color        = TAG_HI
+		left_hi.position     = Vector2(tag_x, tag_y + BEVEL)
+		left_hi.size         = Vector2(BEVEL, TAG_H - 2.0 * BEVEL)
+		left_hi.z_index      = 3
+		left_hi.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(left_hi)
+		_sign_nodes[i].append(left_hi)
+
+		# Right shadow strip — inset top and bottom by BEVEL for the same reason.
+		var right_dk := ColorRect.new()
+		right_dk.color        = TAG_DK
+		right_dk.position     = Vector2(tag_x + TAG_W - BEVEL, tag_y + BEVEL)
+		right_dk.size         = Vector2(BEVEL, TAG_H - 2.0 * BEVEL)
+		right_dk.z_index      = 3
+		right_dk.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(right_dk)
+		_sign_nodes[i].append(right_dk)
 
 		var tag_lbl := Label.new()
 		tag_lbl.text                 = "★  NEW EQUIPMENT"
@@ -713,11 +758,112 @@ func _spawn_cards(cards: Array) -> void:
 		tag_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 		tag_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 		tag_lbl.add_theme_color_override("font_color", TAG_FG)
+		tag_lbl.add_theme_color_override("font_outline_color", TAG_FG)
+		tag_lbl.add_theme_constant_override("outline_size", 1)
 		tag_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 		tag_lbl.add_theme_font_size_override("font_size", FONT_SIZE)
 		tag_lbl.z_index              = 4
 		tag_lbl.process_mode         = Node.PROCESS_MODE_ALWAYS
 		add_child(tag_lbl)
+		_sign_nodes[i].append(tag_lbl)
+
+	# Tier signs — one per card, bottom edge, drawn last so they layer over all cards.
+	# Structure mirrors the NEW EQUIPMENT tag above but uses colors derived from the
+	# card's rarity tier so Common/Professional/Rare are visually distinct at a glance.
+	const TIER_SIGN_H:    float = 30.0
+	const TIER_SIGN_W:    float = 240.0
+	const TIER_BEVEL:     float = 3.5
+	const TIER_FONT_SIZE: int   = 18
+
+	for i in 3:
+		var cat_check: String = cards[i].get("category", "")
+		if cat_check == "unlock_trap" or cat_check == "unlock_boost":
+			continue   # unlock cards use the NEW EQUIPMENT sign instead; no tier sign shown
+		var tier: int         = cards[i].get("tier", UpgradeCard.Tier.COMMON)
+		var tier_color: Color = UpgradeCard.TIER_COLORS[tier]
+		var tier_name: String = UpgradeCard.TIER_NAMES[tier]
+
+		# Derive three tonal values from the tier's HSV: a mid-tone body, a brightened
+		# highlight, and a deep shadow. White text reads clearly against all three tiers.
+		var body_color: Color = Color.from_hsv(tier_color.h, tier_color.s, tier_color.v * 0.65, 1.0)
+		var hi_color:   Color = Color.from_hsv(tier_color.h, tier_color.s * 0.60, minf(tier_color.v * 1.35, 1.0), 1.0)
+		var dk_color:   Color = Color.from_hsv(tier_color.h, tier_color.s, tier_color.v * 0.25, 1.0)
+
+		var cx:     float = start_x + i * (CARD_W + CARD_GAP)
+		var sign_x: float = cx + (CARD_W - TIER_SIGN_W) * 0.5
+		# Position so the top of the sign sits at the bottom border of the card —
+		# the sign overlaps the bottom border (CARD_BORDER_W px) and hangs below,
+		# mirroring how the top tag overlaps the card's top border.
+		var sign_y: float = card_y + CARD_H - CARD_BORDER_W
+
+		var t_shadow := ColorRect.new()
+		t_shadow.color        = Color(0.0, 0.0, 0.0, 0.55)
+		t_shadow.position     = Vector2(sign_x + 3.0, sign_y + 3.0)
+		t_shadow.size         = Vector2(TIER_SIGN_W, TIER_SIGN_H)
+		t_shadow.z_index      = 1
+		t_shadow.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(t_shadow)
+		_sign_nodes[i].append(t_shadow)
+
+		var t_bg := ColorRect.new()
+		t_bg.color        = body_color
+		t_bg.position     = Vector2(sign_x, sign_y)
+		t_bg.size         = Vector2(TIER_SIGN_W, TIER_SIGN_H)
+		t_bg.z_index      = 2
+		t_bg.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(t_bg)
+		_sign_nodes[i].append(t_bg)
+
+		var t_hi := ColorRect.new()
+		t_hi.color        = hi_color
+		t_hi.position     = Vector2(sign_x, sign_y)
+		t_hi.size         = Vector2(TIER_SIGN_W, TIER_BEVEL)
+		t_hi.z_index      = 3
+		t_hi.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(t_hi)
+		_sign_nodes[i].append(t_hi)
+
+		var t_dk := ColorRect.new()
+		t_dk.color        = dk_color
+		t_dk.position     = Vector2(sign_x, sign_y + TIER_SIGN_H - TIER_BEVEL)
+		t_dk.size         = Vector2(TIER_SIGN_W, TIER_BEVEL)
+		t_dk.z_index      = 3
+		t_dk.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(t_dk)
+		_sign_nodes[i].append(t_dk)
+
+		var t_left_hi := ColorRect.new()
+		t_left_hi.color        = hi_color
+		t_left_hi.position     = Vector2(sign_x, sign_y + TIER_BEVEL)
+		t_left_hi.size         = Vector2(TIER_BEVEL, TIER_SIGN_H - 2.0 * TIER_BEVEL)
+		t_left_hi.z_index      = 3
+		t_left_hi.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(t_left_hi)
+		_sign_nodes[i].append(t_left_hi)
+
+		var t_right_dk := ColorRect.new()
+		t_right_dk.color        = dk_color
+		t_right_dk.position     = Vector2(sign_x + TIER_SIGN_W - TIER_BEVEL, sign_y + TIER_BEVEL)
+		t_right_dk.size         = Vector2(TIER_BEVEL, TIER_SIGN_H - 2.0 * TIER_BEVEL)
+		t_right_dk.z_index      = 3
+		t_right_dk.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(t_right_dk)
+		_sign_nodes[i].append(t_right_dk)
+
+		var t_lbl := Label.new()
+		t_lbl.text                 = tier_name
+		t_lbl.position             = Vector2(sign_x, sign_y)
+		t_lbl.size                 = Vector2(TIER_SIGN_W, TIER_SIGN_H)
+		t_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		t_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+		t_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+		t_lbl.add_theme_color_override("font_color", Color.WHITE)
+		t_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+		t_lbl.add_theme_font_size_override("font_size", TIER_FONT_SIZE)
+		t_lbl.z_index              = 4
+		t_lbl.process_mode         = Node.PROCESS_MODE_ALWAYS
+		add_child(t_lbl)
+		_sign_nodes[i].append(t_lbl)
 
 
 # ---------------------------------------------------------------------------
@@ -751,7 +897,12 @@ func _unhandled_input(event: InputEvent) -> void:
 # Selection
 # ---------------------------------------------------------------------------
 
-func _on_card_selected(upgrade: Dictionary) -> void:
+func _on_card_selected(upgrade: Dictionary, card_index: int) -> void:
+	# Dim the external signs for this card to match the card's own dim-on-select behaviour.
+	for node in _sign_nodes[card_index]:
+		if is_instance_valid(node):
+			node.modulate = Color(0.6, 0.6, 0.6, 1.0)
+
 	# Emit before unpausing so Arena can apply the upgrade while still paused.
 	upgrade_chosen.emit(upgrade)
 
