@@ -12,7 +12,8 @@
 
 extends CanvasLayer
 
-const UIFonts = preload("res://ui/UIFonts.gd")
+const UIFonts        = preload("res://ui/UIFonts.gd")
+const SettingsScreen = preload("res://ui/SettingsScreen.gd")
 
 const COLOR_BG     := Color(0.06, 0.06, 0.10, 1.0)
 const COLOR_TEXT   := Color(0.90, 0.90, 0.90, 1.0)
@@ -258,7 +259,7 @@ func _on_quit_pressed() -> void:
 
 func _on_settings_pressed() -> void:
 	AudioManager.play_ui("button")
-	var screen := load("res://ui/SettingsScreen.gd").new()
+	var screen := SettingsScreen.new()
 	get_tree().root.add_child(screen)
 
 
