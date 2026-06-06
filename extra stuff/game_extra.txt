@@ -1,4 +1,4 @@
-9The Play/Pause button should have equal height for all values that it displays, and the gamespeed button should ahve the same height.  
+79The Play/Pause button should have equal height for all values that it displays, and the gamespeed button should ahve the same height.  
 
 the gamespeed button is being improved to better communicate with the player what would happen if they click it.  When the game starts, teh button defaults to showing a single triangle pointed to the right, left aligned, equal in height to the standard.
   right-aligned on the button will be the current gamespeed multiplier, communicated as "1X" or "2X" at the same height as all other text on this button.  If the user clicks this button, the gamespeed will
@@ -40,3 +40,8 @@ In order to make sure that the player's starting gear is useful, the following r
 
 
 
+# there should be a slight decrease in the time between enemies spawning in a wave
+
+# there should be a slight increase in enemy hp
+
+# during an active game, the settings screen should have a tab for all non trap or boost upgrades to visualize what upgrades the player has received and which they have not
