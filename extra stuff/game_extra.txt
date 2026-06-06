@@ -42,6 +42,6 @@ In order to make sure that the player's starting gear is useful, the following r
 
 # there should be a slight decrease in the time between enemies spawning in a wave
 
-# there should be a slight increase in enemy hp
+# there should be a slight increase in enemy hp, even more for big enemies and bosses
 
 # during an active game, the settings screen should have a tab for all non trap or boost upgrades to visualize what upgrades the player has received and which they have not
