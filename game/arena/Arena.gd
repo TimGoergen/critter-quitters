@@ -1325,23 +1325,26 @@ func _on_countdown_tick(seconds_remaining: int) -> void:
 		_launch_wave()
 
 
-## Starts the silent gap between the last enemy spawn and the visible 3-second countdown.
-## After INTER_WAVE_QUIET seconds the countdown begins, then the next wave launches.
+## Starts the inter-wave gap. The incoming banner is shown immediately with the
+## full total countdown (quiet + visible countdown), so the player sees it from
+## the moment the last enemy spawns rather than only during the final 3 seconds.
 func _start_inter_wave_gap() -> void:
 	# Guard: skip if a gap or countdown is already in progress (can occur with additive waves).
 	if _quiet_period_active or _countdown_active:
 		return
 	_quiet_period_active = true
 	_quiet_seconds_remaining = INTER_WAVE_QUIET
+	GameState.set_countdown(INTER_WAVE_QUIET + WAVE_COUNTDOWN)
 	get_tree().create_timer(1.0, false).timeout.connect(_on_quiet_tick.bind(INTER_WAVE_QUIET - 1))
 
 
-## Ticks down the silent inter-wave gap one second at a time.
-## Transitions to the visible countdown when it reaches zero.
+## Ticks down the inter-wave gap one second at a time, emitting the running
+## total so the HUD countdown stays continuous into the visible countdown phase.
 func _on_quiet_tick(seconds_remaining: int) -> void:
 	if not _quiet_period_active:
 		return
 	_quiet_seconds_remaining = seconds_remaining
+	GameState.set_countdown(seconds_remaining + WAVE_COUNTDOWN)
 	if seconds_remaining > 0:
 		get_tree().create_timer(1.0, false).timeout.connect(_on_quiet_tick.bind(seconds_remaining - 1))
 	else:

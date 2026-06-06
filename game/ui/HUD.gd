@@ -129,10 +129,9 @@ var _send_wave_btn:           Button           # fast-forward button inside the 
 var _multiplier_btn:          Button           # small gold button cycling ×1 → ×5 → ×10
 var _multiplier_label:        Label
 var _send_wave_header_label:  Label            # "SEND 1 WAVE" / "SEND 5 WAVES" — updates with multiplier
-var _send_wave_reward_label:  Label            # bucks amount overlaid on the reward bar
-var _reward_bar_fill_rect:    Panel            # green bar shrinking right→left as reward depletes
-var _reward_bar_container:    Control          # bottom-third container; used to size the fill rect
-var _reward_bar_overlay:      HBoxContainer    # coin icon + label drawn over the green bar
+var _call_early_label:        Label            # left-aligned "Call Early Reward" text
+var _send_wave_reward_label:  Label            # right-aligned bucks amount
+var _reward_bar_overlay:      HBoxContainer    # row containing both labels; hidden when no reward
 var _max_countdown_seconds:   int = 0         # first seconds_remaining of the countdown; bar denominator
 var _early_bonus_particles:   CPUParticles2D
 var _wave_multiplier:        int = 1   # current send-wave multiplier; cycles 1 → 5 → 10 → 1
@@ -785,8 +784,8 @@ void fragment() {
 	_multiplier_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
 	mult_hbox.add_child(_multiplier_label)
 
-	# Bottom — reward bar. SIZE_SHRINK_CENTER so it takes only its fixed height;
-	# extra bottom margin keeps the bar visually clear of the panel's border/corners.
+	# Bottom — "Call Early Reward" row: left label + right-aligned amount.
+	# Hidden until a reward is available; no bar, text only.
 	var bar_margin := MarginContainer.new()
 	bar_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar_margin.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
@@ -796,48 +795,36 @@ void fragment() {
 	bar_margin.add_theme_constant_override("margin_bottom", 10)
 	inner_vbox.add_child(bar_margin)
 
-	_reward_bar_container = Control.new()
-	_reward_bar_container.custom_minimum_size   = Vector2(0, 30)
-	_reward_bar_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_reward_bar_container.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_reward_bar_container.clip_contents         = true
-	bar_margin.add_child(_reward_bar_container)
-
-	_reward_bar_fill_rect = Panel.new()
-	var bar_style := StyleBoxFlat.new()
-	bar_style.bg_color = Color(0.10, 0.50, 0.16, 1.0)
-	bar_style.set_corner_radius_all(4)
-	bar_style.set_content_margin_all(0.0)
-	_reward_bar_fill_rect.add_theme_stylebox_override("panel", bar_style)
-	_reward_bar_fill_rect.anchor_left   = 0.0
-	_reward_bar_fill_rect.anchor_right  = 0.0   # right edge driven by offset_right
-	_reward_bar_fill_rect.anchor_top    = 0.0
-	_reward_bar_fill_rect.anchor_bottom = 1.0
-	_reward_bar_fill_rect.offset_left   = 0.0
-	_reward_bar_fill_rect.offset_right  = 0.0   # updated by _update_reward_bar_display
-	_reward_bar_container.add_child(_reward_bar_fill_rect)
-
 	_reward_bar_overlay = HBoxContainer.new()
-	_reward_bar_overlay.alignment    = BoxContainer.ALIGNMENT_CENTER
-	_reward_bar_overlay.add_theme_constant_override("separation", 4)
-	_reward_bar_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_reward_bar_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_reward_bar_overlay.modulate.a   = 0.0   # hidden until a reward is available
-	_reward_bar_container.add_child(_reward_bar_overlay)
+	_reward_bar_overlay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_reward_bar_overlay.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	_reward_bar_overlay.modulate.a            = 0.0   # hidden until a reward is available
+	bar_margin.add_child(_reward_bar_overlay)
 
-	var bar_coin := TextureRect.new()
-	bar_coin.texture             = load("res://assets/bug_buck_coin_small.png") as Texture2D
-	bar_coin.custom_minimum_size = Vector2(20, 20)
-	bar_coin.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	bar_coin.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	bar_coin.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	bar_coin.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	_reward_bar_overlay.add_child(bar_coin)
+	_call_early_label = Label.new()
+	_call_early_label.text                  = "Call Early Reward"
+	_call_early_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_call_early_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_call_early_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	_call_early_label.add_theme_font_override("font", UIFonts.primary_bold())
+	_call_early_label.add_theme_font_size_override("font_size", 15)
+	_call_early_label.add_theme_color_override("font_color", COLOR_TEXT)
+	_reward_bar_overlay.add_child(_call_early_label)
+
+	var reward_coin := TextureRect.new()
+	reward_coin.texture             = load("res://assets/bug_buck_coin_small.png") as Texture2D
+	reward_coin.custom_minimum_size = Vector2(20, 20)
+	reward_coin.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	reward_coin.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	reward_coin.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	reward_coin.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	_reward_bar_overlay.add_child(reward_coin)
 
 	_send_wave_reward_label = Label.new()
-	_send_wave_reward_label.text                = ""
-	_send_wave_reward_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_send_wave_reward_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	_send_wave_reward_label.text                  = ""
+	_send_wave_reward_label.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_send_wave_reward_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_send_wave_reward_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	_send_wave_reward_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_send_wave_reward_label.add_theme_font_size_override("font_size", 17)
 	_send_wave_reward_label.add_theme_color_override("font_color", COLOR_GOLD_BORDER)
@@ -2560,12 +2547,9 @@ func _apply_ff_button_style(btn: Button) -> void:
 	btn.focus_mode = Control.FOCUS_NONE
 
 
-## Sets the green bar fill fraction and shows/hides the overlay accordingly.
-## fill = 1.0 means full reward available; 0.0 means no reward.
+## Shows or hides the early-reward row. fill > 0.0 means a reward is available.
 func _update_reward_bar_display(fill: float) -> void:
-	var clamped := clampf(fill, 0.0, 1.0)
-	_reward_bar_fill_rect.offset_right = _reward_bar_container.size.x * clamped
-	_reward_bar_overlay.modulate.a     = 1.0 if clamped > 0.0 else 0.0
+	_reward_bar_overlay.modulate.a = 1.0 if fill > 0.0 else 0.0
 
 
 # ---------------------------------------------------------------------------

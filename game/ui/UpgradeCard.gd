@@ -130,7 +130,8 @@ signal card_selected(upgrade: Dictionary)
 
 var _title_lbl:  Label       = null   # buff name or trap name
 var _image_rect: TextureRect = null   # trap/boost SVG image (unlock cards only)
-var _thumb_rect: TextureRect = null   # small trap SVG thumbnail (equipment cards only)
+var _thumb_rect:    TextureRect = null   # small trap SVG or van thumbnail
+var _is_van_thumb:  bool        = false  # true for campaign cards; drives larger thumb size
 var _stat_lbl:   Label       = null   # stat name (equipment only)
 var _impact_lbl: Label       = null   # "+10% fire rate" or "+5% Fire Rate"
 var _plain_lbl:  Label       = null   # plain-English explanation
@@ -293,7 +294,8 @@ func _build_card() -> void:
 	if category == "equipment" and eq_trap_type >= 0:
 		thumb_path = TRAP_TEXTURE_PATHS.get(eq_trap_type, "")
 	elif category == "campaign":
-		thumb_path = "res://assets/van.png"
+		thumb_path    = "res://assets/van_small.png"
+		_is_van_thumb = true
 	if thumb_path != "" and ResourceLoader.exists(thumb_path):
 		_thumb_rect = TextureRect.new()
 		_thumb_rect.texture             = load(thumb_path)
@@ -402,7 +404,8 @@ func _on_resized() -> void:
 		const THUMB_SIZE: float = 44.0
 		var title_w := w - px * 2.0
 		if _thumb_rect != null:
-			title_w -= THUMB_SIZE + 4.0   # 4 px gap between title text and thumbnail
+			var effective_thumb_sz: float = 77.0 if _is_van_thumb else THUMB_SIZE
+			title_w -= effective_thumb_sz + 4.0   # 4 px gap between title text and thumbnail
 		_title_lbl.position = Vector2(px, 7.0)
 		_title_lbl.size     = Vector2(title_w, title_h)
 
@@ -451,11 +454,12 @@ func _on_resized() -> void:
 		_plain_lbl.position = Vector2(px, plain_y)
 		_plain_lbl.size     = Vector2(w - px * 2.0, h - plain_y - badge_reserve - 7.0)
 
-	# Equipment thumbnail — top-right corner, centred vertically within the title row.
+	# Thumbnail — top-right corner, centred vertically within the title row.
+	# Van (campaign) cards use a 75% larger thumbnail than equipment cards.
 	if _thumb_rect:
-		const THUMB_SZ: float = 44.0
-		_thumb_rect.position = Vector2(w - px - THUMB_SZ, 7.0 + (title_h - THUMB_SZ) * 0.5)
-		_thumb_rect.size     = Vector2(THUMB_SZ, THUMB_SZ)
+		var thumb_sz: float = 77.0 if _is_van_thumb else 44.0
+		_thumb_rect.position = Vector2(w - px - thumb_sz, 7.0 + (title_h - thumb_sz) * 0.5)
+		_thumb_rect.size     = Vector2(thumb_sz, thumb_sz)
 
 
 

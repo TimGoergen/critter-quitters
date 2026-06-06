@@ -79,6 +79,8 @@ var _start_btn: Button
 var _quit_btn:  Button
 var _dev_btn:   Button
 
+var _sf_balance_lbl:             Label       = null
+
 var _settings_btn:               Button      = null
 var _settings_dialog:            Control     = null
 var _reset_confirm_overlay:      Control     = null
@@ -91,6 +93,7 @@ var _grid_lines_zoomed_toggle:   CheckButton = null
 func _ready() -> void:
 	_build_ui()
 	get_viewport().size_changed.connect(_on_viewport_resized)
+	GameState.service_fees_changed.connect(_on_service_fees_changed)
 
 
 func _on_viewport_resized() -> void:
@@ -183,17 +186,67 @@ func _build_ui() -> void:
 	_quit_btn.pressed.connect(_on_quit_pressed)
 	add_child(_quit_btn)
 
+	# Dev button is narrower than start/quit to leave room for the SF balance on the right.
+	# Layout: [0.14──0.39] [0.41──0.66] [0.68──0.79] [0.81──0.97]
 	_dev_btn = _make_dev_button()
 	_dev_btn.anchor_left   = 0.68
-	_dev_btn.anchor_right  = 0.85
+	_dev_btn.anchor_right  = 0.79
 	_dev_btn.anchor_top    = 0.82
 	_dev_btn.anchor_bottom = 0.93
 	_dev_btn.z_index       = 2
 	_dev_btn.pressed.connect(_on_dev_pressed)
 	add_child(_dev_btn)
 
+	_build_sf_balance_display()
 	_build_settings_button()
 	_build_settings_dialog()
+
+
+# ---------------------------------------------------------------------------
+# Service Fee balance display
+# ---------------------------------------------------------------------------
+
+## Non-interactive panel on the button row showing the player's persistent
+## Service Fee balance. Updates live via the service_fees_changed signal.
+func _build_sf_balance_display() -> void:
+	var panel := Control.new()
+	panel.anchor_left   = 0.81
+	panel.anchor_right  = 0.97
+	panel.anchor_top    = 0.82
+	panel.anchor_bottom = 0.93
+	panel.z_index       = 2
+	panel.mouse_filter  = Control.MOUSE_FILTER_IGNORE
+	add_child(panel)
+
+	var row := HBoxContainer.new()
+	row.set_anchors_preset(Control.PRESET_FULL_RECT)
+	row.alignment    = BoxContainer.ALIGNMENT_CENTER
+	row.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	row.add_theme_constant_override("separation", 8)
+	panel.add_child(row)
+
+	var icon := TextureRect.new()
+	icon.texture             = load("res://assets/service_fee_icon.svg") as Texture2D
+	icon.custom_minimum_size = Vector2(36, 36)
+	icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	row.add_child(icon)
+
+	_sf_balance_lbl = Label.new()
+	_sf_balance_lbl.text       = "%d" % GameState.service_fees
+	_sf_balance_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_sf_balance_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	_sf_balance_lbl.add_theme_font_size_override("font_size", 28)
+	_sf_balance_lbl.add_theme_color_override("font_color", Color(1.00, 0.90, 0.30, 1.0))
+	_sf_balance_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	row.add_child(_sf_balance_lbl)
+
+
+func _on_service_fees_changed(new_amount: int) -> void:
+	if is_instance_valid(_sf_balance_lbl):
+		_sf_balance_lbl.text = "%d" % new_amount
 
 
 # ---------------------------------------------------------------------------
