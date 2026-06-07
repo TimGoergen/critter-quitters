@@ -303,17 +303,41 @@ func _populate_tab(tab_name: String) -> void:
 # Upgrade row
 # ---------------------------------------------------------------------------
 
+## Returns the effect label for the nth effect index (0-indexed) of an upgrade.
+## For n within the defined tier_effects array, returns that string directly.
+## For n beyond the array, computes from each upgrade's known per-tier increment.
+## Note: n=0 means "the effect gained by buying tier 1", n=1 means "tier 2", etc.
+func _effect_label_at(def: Dictionary, n: int) -> String:
+	if n < def["tier_effects"].size():
+		return def["tier_effects"][n]
+	# tier_effects[n] represents the cumulative value after buying n+1 tiers.
+	var tier_num := n + 1
+	match def["id"]:
+		"reinforced_mechanisms": return "+%d%% Damage"        % [tier_num * 5]
+		"extended_range":        return "+%d%% Range"         % [tier_num * 4]
+		"tuned_triggers":        return "+%d%% Fire Rate"     % [tier_num * 4]
+		"wider_selection":
+			var offered := 3 + ceili((n + 1) / 2.0)
+			var pick    := 2 + (n + 1) / 2
+			return "%d offered, pick %d" % [offered, pick]
+		"starting_capital":      return "+%d Bug Bucks"        % [tier_num * 25]
+		"hazard_insurance":      return "+%d%% Threshold"      % [tier_num * 5]
+		"salvage_value":         return "+%d%% Sell Value"     % [tier_num * 3]
+		"bulk_discount":         return "-%d%% Upgrade Costs"  % [tier_num * 3]
+		"field_experience":      return "+%d%% XP per Kill"    % [tier_num * 10]
+		"show_me":               return "+%d%% Bucks/kill"     % [tier_num * 5]
+		"strengthen_defenses":   return "-%d%% Infest/escape"  % [tier_num * 4]
+	return "Tier %d" % tier_num
+
+
 ## Returns the effect label string for a given upgrade at its current tier:
-##   tier 0       → first tier label (what you'll get)
-##   tier 1–9     → "previous → next" so the player sees what changes
-##   tier == max  → "MAX"
+##   tier 0   → first tier label (what you'll get on purchase)
+##   tier 1+  → "previous → next" so the player sees what the next purchase changes
+## There is no upper cap — upgrades grow indefinitely.
 func _effect_text(def: Dictionary, tier: int) -> String:
-	var max_tiers: int = def["tier_costs"].size()
-	if tier >= max_tiers:
-		return "MAX  " + def["tier_effects"][max_tiers - 1]
 	if tier == 0:
-		return def["tier_effects"][0]
-	return def["tier_effects"][tier - 1] + " → " + def["tier_effects"][tier]
+		return _effect_label_at(def, 0)
+	return _effect_label_at(def, tier - 1) + " → " + _effect_label_at(def, tier)
 
 
 ## Builds a single upgrade row and appends it to _vbox.
@@ -325,7 +349,6 @@ func _effect_text(def: Dictionary, tier: int) -> String:
 func _build_upgrade_row(def: Dictionary) -> void:
 	var upgrade_id: String = def["id"]
 	var tier: int          = GameState.get_upgrade_tier(upgrade_id)
-	var max_tiers: int     = def["tier_costs"].size()
 
 	# Full-width row container; height is fixed, width expands to fill VBoxContainer.
 	var row := Control.new()
@@ -348,7 +371,7 @@ func _build_upgrade_row(def: Dictionary) -> void:
 	star_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var star_sty            := StyleBoxFlat.new()
 	star_sty.bg_color     = Color(0.04, 0.04, 0.06, 0.60)
-	star_sty.border_color = COLOR_HEADER if tier >= max_tiers else COLOR_BORDER
+	star_sty.border_color = COLOR_BORDER
 	star_sty.set_border_width_all(1)
 	star_sty.set_corner_radius_all(3)
 	star_panel.add_theme_stylebox_override("panel", star_sty)
@@ -403,8 +426,7 @@ func _build_upgrade_row(def: Dictionary) -> void:
 
 	var effect_lbl := Label.new()
 	effect_lbl.text = _effect_text(def, tier)
-	effect_lbl.add_theme_color_override("font_color",
-		COLOR_MAX if tier >= max_tiers else COLOR_HEADER)
+	effect_lbl.add_theme_color_override("font_color", COLOR_HEADER)
 	effect_lbl.position     = Vector2(PADDING + 96.0 + 300.0 + 16.0, row1_y)
 	effect_lbl.size         = Vector2(660.0, 26.0)
 	effect_lbl.clip_text    = true
@@ -474,26 +496,18 @@ func _refresh_all_buttons() -> void:
 		var btn: Button            = entry["btn"]
 		var cost_lbl: Label        = entry["cost_lbl"]
 		var cost_icon: TextureRect = entry["cost_icon"]
-		var def: Dictionary        = _def_for(upgrade_id)
 		var tier: int              = GameState.get_upgrade_tier(upgrade_id)
-		var maxed: bool            = tier >= def["tier_costs"].size()
+		var cost: int              = GameState.get_upgrade_cost(upgrade_id, tier)
 		var can_buy: bool          = GameState.can_purchase_upgrade(upgrade_id)
 
-		btn.disabled = maxed or not can_buy
+		btn.disabled      = not can_buy
+		cost_icon.visible = true
+		cost_lbl.text     = "%d" % cost
 
-		if maxed:
-			cost_icon.visible = false
-			cost_lbl.text     = "MAX"
-			cost_lbl.add_theme_color_override("font_color", COLOR_MAX)
-			_apply_btn_style(btn, false, true)
-		elif can_buy:
-			cost_icon.visible = true
-			cost_lbl.text     = "%d" % def["tier_costs"][tier]
+		if can_buy:
 			cost_lbl.add_theme_color_override("font_color", COLOR_HEADER)
 			_apply_btn_style(btn, true, false)
 		else:
-			cost_icon.visible = true
-			cost_lbl.text     = "%d" % def["tier_costs"][tier]
 			cost_lbl.add_theme_color_override("font_color", COLOR_DIM)
 			_apply_btn_style(btn, false, false)
 

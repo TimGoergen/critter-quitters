@@ -404,6 +404,13 @@ var sell_value_bonus: float = 0.0
 ## 1 = 4 offered / pick 2. 2 = 4 offered / pick 3.
 var wider_selection_tier: int = 0
 
+## Raw campaign buff magnitudes accumulated from level-up card picks this run only.
+## Does not include permanent upgrade contributions — permanent bonuses feed directly
+## into the global_* vars without appearing here.
+## Keys match the "id" field in LevelUpScreen.CAMPAIGN_BUFFS.
+## Read by the in-game settings UPGRADES tab to show which buffs the player has received.
+var run_campaign_buff_totals: Dictionary = {}
+
 
 # ---------------------------------------------------------------------------
 # Persistent state — survives across runs; loaded at startup, saved on change.
@@ -466,6 +473,7 @@ func start_run(entrance: Vector2i, exit: Vector2i) -> void:
 	boost_placed_counts        = {}
 	starting_star_bonus_traps  = {}
 	starting_star_bonus_boosts = {}
+	run_campaign_buff_totals   = {}
 	# Apply permanent upgrades on top of the clean slate. Starting Capital
 	# bonus is added here after bug_bucks is already set to STARTING_BUG_BUCKS.
 	_apply_permanent_upgrade_bonuses()
@@ -641,6 +649,8 @@ func on_boost_removed(boost_type: int) -> void:
 
 
 func apply_campaign_buff(buff_id: String, magnitude: float) -> void:
+	# Record the raw pick for the in-game settings UPGRADES tab display.
+	run_campaign_buff_totals[buff_id] = run_campaign_buff_totals.get(buff_id, 0.0) + magnitude
 	match buff_id:
 		"dmg_all":          global_damage_bonus      += magnitude
 		"range_all":        global_range_bonus        += magnitude
@@ -681,39 +691,51 @@ func get_upgrade_tier(upgrade_id: String) -> int:
 	return permanent_upgrades.get(upgrade_id, 0)
 
 
-## Returns true if the player can afford the next tier of the given upgrade.
-func can_purchase_upgrade(upgrade_id: String) -> bool:
-	var tier := get_upgrade_tier(upgrade_id)
+## Returns the Service Fee cost to purchase the given tier of an upgrade.
+## Tiers within the defined array use the exact value from the def.
+## Tiers beyond the array continue the same triangular progression:
+##   cost = base + tier × (tier + 1) / 2
+## where base is the tier-0 cost. This keeps costs growing at the same rate
+## the existing array established, so the player always faces increasing investment.
+func get_upgrade_cost(upgrade_id: String, tier: int) -> int:
 	for def: Dictionary in PERMANENT_UPGRADE_DEFS:
 		if def["id"] == upgrade_id:
-			# Max tier is determined by how many cost entries the def has (10 for all lines).
-			if tier >= def["tier_costs"].size():
-				return false
-			return service_fees >= def["tier_costs"][tier]
-	return false
+			if tier < def["tier_costs"].size():
+				return def["tier_costs"][tier]
+			var base: int = def["tier_costs"][0]
+			return base + tier * (tier + 1) / 2
+	return 0
+
+
+## Returns true if the player can afford the next tier of the given upgrade.
+## There is no tier cap — upgrades can always be purchased if the player has enough SF.
+func can_purchase_upgrade(upgrade_id: String) -> bool:
+	var tier := get_upgrade_tier(upgrade_id)
+	var cost := get_upgrade_cost(upgrade_id, tier)
+	if cost <= 0:
+		return false
+	return service_fees >= cost
 
 
 ## Purchases the next tier of the given upgrade, deducting the SF cost.
-## Returns true on success, false if already maxed or unaffordable.
+## Returns true on success, false if the player cannot afford it.
 func purchase_upgrade(upgrade_id: String) -> bool:
-	if not can_purchase_upgrade(upgrade_id):
-		return false
 	var tier := get_upgrade_tier(upgrade_id)
-	for def: Dictionary in PERMANENT_UPGRADE_DEFS:
-		if def["id"] == upgrade_id:
-			service_fees -= def["tier_costs"][tier]
-			permanent_upgrades[upgrade_id] = tier + 1
-			service_fees_changed.emit(service_fees)
-			_save_persistent()
-			return true
-	return false
+	var cost := get_upgrade_cost(upgrade_id, tier)
+	if cost <= 0 or service_fees < cost:
+		return false
+	service_fees -= cost
+	permanent_upgrades[upgrade_id] = tier + 1
+	service_fees_changed.emit(service_fees)
+	_save_persistent()
+	return true
 
 
 ## Applies all purchased permanent upgrade effects to run-scoped state.
 ## Called at the end of start_run() after all vars are reset to zero, so
 ## permanent bonuses form the baseline that campaign cards then stack on top of.
 ##
-## All stats now scale linearly per tier (10 tiers max).
+## All stats scale linearly per tier with no upper cap.
 ## The multipliers below match the per-tier increments defined in PERMANENT_UPGRADE_DEFS.
 ## Re-reads permanent_upgrades and updates all upgrade-driven runtime variables.
 ## Does NOT touch bug_bucks — _apply_permanent_upgrade_bonuses() handles that

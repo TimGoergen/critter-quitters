@@ -16,6 +16,7 @@ const Trap           = preload("res://traps/Trap.gd")
 const BoostUnit      = preload("res://boosts/BoostUnit.gd")
 const UIFonts        = preload("res://ui/UIFonts.gd")
 const ExperienceBar  = preload("res://ui/ExperienceBar.gd")
+const LevelUpScreen  = preload("res://ui/LevelUpScreen.gd")
 
 const GEAR_OUTLINE_SHADER = preload("res://assets/gear_outline.gdshader")
 
@@ -172,6 +173,12 @@ var _reset_confirm_overlay: Control = null
 
 var _grid_lines_overview_toggle: CheckButton = null
 var _grid_lines_zoomed_toggle:   CheckButton = null
+
+var _settings_tab_btn:   Button  = null
+var _upgrades_tab_btn:   Button  = null
+var _settings_content:   Control = null
+var _upgrades_content:   Control = null
+var _active_settings_tab: String = "Settings"
 # Saved when Settings opens so we can restore it on close rather than
 # unconditionally unpausing — the user may have already paused manually.
 var _was_paused_before_settings: bool = false
@@ -1205,6 +1212,8 @@ func _build_settings_dialog() -> void:
 	close_btn.pressed.connect(_on_settings_close_pressed)
 	panel.add_child(close_btn)
 
+	const TAB_H: float = 44.0
+
 	# ── Structural dividers ─────────────────────────────────────────────────
 	# Horizontal below header.
 	var hdr_div := ColorRect.new()
@@ -1214,6 +1223,40 @@ func _build_settings_dialog() -> void:
 	hdr_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(hdr_div)
 
+	# ── Tab bar ─────────────────────────────────────────────────────────────
+	_settings_tab_btn          = _make_settings_tab_button("SETTINGS")
+	_settings_tab_btn.position = Vector2(0.0, HEADER_H + 1.0)
+	_settings_tab_btn.size     = Vector2(640.0, TAB_H)
+	_settings_tab_btn.pressed.connect(func() -> void: _switch_settings_tab("Settings"))
+	panel.add_child(_settings_tab_btn)
+
+	var tab_v_div := ColorRect.new()
+	tab_v_div.color        = DIVIDER_COL
+	tab_v_div.position     = Vector2(639.5, HEADER_H + 1.0 + 6.0)
+	tab_v_div.size         = Vector2(1.0, TAB_H - 12.0)
+	tab_v_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(tab_v_div)
+
+	_upgrades_tab_btn          = _make_settings_tab_button("UPGRADES")
+	_upgrades_tab_btn.position = Vector2(640.0, HEADER_H + 1.0)
+	_upgrades_tab_btn.size     = Vector2(640.0, TAB_H)
+	_upgrades_tab_btn.pressed.connect(func() -> void: _switch_settings_tab("Upgrades"))
+	panel.add_child(_upgrades_tab_btn)
+
+	var tab_div := ColorRect.new()
+	tab_div.color        = DIVIDER_COL
+	tab_div.position     = Vector2(0.0, HEADER_H + 1.0 + TAB_H)
+	tab_div.size         = Vector2(1280.0, 1.0)
+	tab_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(tab_div)
+
+	_apply_settings_tab_style(_settings_tab_btn, true)
+	_apply_settings_tab_style(_upgrades_tab_btn, false)
+
+	# ── Content area geometry ────────────────────────────────────────────────
+	var main_y := HEADER_H + 1.0 + TAB_H + 1.0
+	var main_h := 600.0 - main_y - FOOTER_H - 1.0
+
 	# Horizontal above footer.
 	var ftr_div := ColorRect.new()
 	ftr_div.color        = DIVIDER_COL
@@ -1222,23 +1265,26 @@ func _build_settings_dialog() -> void:
 	ftr_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(ftr_div)
 
-	# Vertical between the two columns (only in the main area, not the footer).
+	# ── SETTINGS content — two-column audio + display layout ─────────────────
+	_settings_content              = Control.new()
+	_settings_content.position     = Vector2(0.0, main_y)
+	_settings_content.size         = Vector2(1280.0, main_h)
+	_settings_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(_settings_content)
+
+	# Vertical divider between the two columns.
 	var col_div := ColorRect.new()
 	col_div.color        = DIVIDER_COL
-	col_div.position     = Vector2(COL_DIV_X, HEADER_H + 1.0)
-	col_div.size         = Vector2(1.0, 600.0 - HEADER_H - 1.0 - FOOTER_H - 1.0)
+	col_div.position     = Vector2(COL_DIV_X, 0.0)
+	col_div.size         = Vector2(1.0, main_h)
 	col_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(col_div)
-
-	# ── Left column: AUDIO ───────────────────────────────────────────────────
-	var main_y := HEADER_H + 1.0
-	var main_h := 600.0 - HEADER_H - 1.0 - FOOTER_H - 1.0
+	_settings_content.add_child(col_div)
 
 	var left_col := VBoxContainer.new()
-	left_col.position = Vector2(0.0, main_y)
+	left_col.position = Vector2(0.0, 0.0)
 	left_col.size     = Vector2(COL_DIV_X, main_h)
 	left_col.add_theme_constant_override("separation", 0)
-	panel.add_child(left_col)
+	_settings_content.add_child(left_col)
 
 	_add_settings_section_strip(left_col, "AUDIO")
 
@@ -1258,12 +1304,11 @@ func _build_settings_dialog() -> void:
 	_music_slider = _build_volume_row(left_inner, "MUSIC")
 	_sfx_slider   = _build_volume_row(left_inner, "SFX")
 
-	# ── Right column: DISPLAY ─────────────────────────────────────────────────
 	var right_col := VBoxContainer.new()
-	right_col.position = Vector2(COL_DIV_X + 1.0, main_y)
+	right_col.position = Vector2(COL_DIV_X + 1.0, 0.0)
 	right_col.size     = Vector2(1280.0 - COL_DIV_X - 1.0, main_h)
 	right_col.add_theme_constant_override("separation", 0)
-	panel.add_child(right_col)
+	_settings_content.add_child(right_col)
 
 	_add_settings_section_strip(right_col, "DISPLAY")
 
@@ -1282,6 +1327,15 @@ func _build_settings_dialog() -> void:
 
 	_grid_lines_overview_toggle = _build_toggle_row(right_inner, "Grid lines — overview")
 	_grid_lines_zoomed_toggle   = _build_toggle_row(right_inner, "Grid lines — zoomed in")
+
+	# ── UPGRADES content — campaign buff summary; rebuilt each time tab opens ──
+	_upgrades_content = ScrollContainer.new()
+	_upgrades_content.position               = Vector2(0.0, main_y)
+	_upgrades_content.size                   = Vector2(1280.0, main_h)
+	_upgrades_content.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_upgrades_content.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_AUTO
+	_upgrades_content.visible                = false
+	panel.add_child(_upgrades_content)
 
 	# ── Footer ───────────────────────────────────────────────────────────────
 	var footer_y   := 600.0 - FOOTER_H
@@ -1385,7 +1439,10 @@ func _on_settings_btn_pressed() -> void:
 	# the user might have already paused manually before opening Settings.
 	_was_paused_before_settings = get_tree().paused
 	get_tree().paused           = true
-	_settings_dialog.visible   = true
+	# Always open on the SETTINGS tab; force a clean tab state on each open.
+	_active_settings_tab        = ""
+	_switch_settings_tab("Settings")
+	_settings_dialog.visible    = true
 
 
 func _on_settings_close_pressed() -> void:
@@ -2555,6 +2612,155 @@ func _update_reward_bar_display(fill: float) -> void:
 # ---------------------------------------------------------------------------
 # Volume controls and settings helpers
 # ---------------------------------------------------------------------------
+
+## Switches the active settings tab, refreshes tab button styles, and
+## shows/hides the content containers accordingly.  Rebuilds the UPGRADES
+## content each time that tab is opened so values reflect the current run state.
+func _switch_settings_tab(tab_name: String) -> void:
+	if _active_settings_tab == tab_name:
+		return
+	_active_settings_tab = tab_name
+	_apply_settings_tab_style(_settings_tab_btn, tab_name == "Settings")
+	_apply_settings_tab_style(_upgrades_tab_btn, tab_name == "Upgrades")
+	_settings_content.visible = tab_name == "Settings"
+	_upgrades_content.visible = tab_name == "Upgrades"
+	if tab_name == "Upgrades":
+		_build_upgrades_content()
+
+
+## Applies active/idle visual styling to a settings tab button.
+## Active tab: gold text + gold bottom underline border.
+## Idle tab: dim text + no border.
+func _apply_settings_tab_style(btn: Button, active: bool) -> void:
+	const ACTIVE_BG  := Color(0.04, 0.08, 0.14, 1.0)
+	const IDLE_BG    := Color(0.02, 0.03, 0.08, 1.0)
+	const ACTIVE_TXT := Color(1.00, 0.84, 0.00, 1.0)
+	const IDLE_TXT   := Color(0.50, 0.50, 0.56, 1.0)
+	btn.add_theme_color_override("font_color", ACTIVE_TXT if active else IDLE_TXT)
+	for state: String in ["normal", "hover", "pressed"]:
+		var bg := ACTIVE_BG if active else IDLE_BG
+		if state == "hover":
+			bg = bg.lightened(0.06)
+		var box := StyleBoxFlat.new()
+		box.bg_color = bg
+		if active:
+			box.border_color        = COLOR_HAZARD_YELLOW
+			box.border_width_bottom = 3
+			box.border_width_top    = 0
+			box.border_width_left   = 0
+			box.border_width_right  = 0
+		else:
+			box.set_border_width_all(0)
+		box.content_margin_left   = 6.0
+		box.content_margin_right  = 6.0
+		box.content_margin_top    = 4.0
+		box.content_margin_bottom = 4.0
+		btn.add_theme_stylebox_override(state, box)
+
+
+## Creates a bare Button styled for the settings tab bar.
+func _make_settings_tab_button(label_text: String) -> Button:
+	var btn := Button.new()
+	btn.text       = label_text
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.add_theme_font_override("font", UIFonts.primary_bold())
+	btn.add_theme_font_size_override("font_size", 22)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	return btn
+
+
+## Populates the UPGRADES ScrollContainer with one row per campaign buff,
+## showing the total magnitude picked this run (or "—" if none yet).
+## Called each time the UPGRADES tab is opened so the display is always current.
+func _build_upgrades_content() -> void:
+	# Clear any previously built rows.
+	for child in _upgrades_content.get_children():
+		child.queue_free()
+
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 0)
+	_upgrades_content.add_child(vbox)
+
+	const ROW_H:     float = 64.0
+	const PADDING_X: float = 28.0
+	const DIVIDER_C := Color(0.22, 0.22, 0.30, 1.0)
+	const COLOR_ACQUIRED := Color(1.00, 0.84, 0.00, 1.0)   # gold — buff has been picked this run
+	const COLOR_NONE     := Color(0.45, 0.45, 0.50, 1.0)   # dim — not yet acquired
+
+	var buffs: Array = LevelUpScreen.CAMPAIGN_BUFFS
+
+	for i in buffs.size():
+		var buff: Dictionary = buffs[i]
+		var total: float     = GameState.run_campaign_buff_totals.get(buff["id"], 0.0)
+		var acquired: bool   = total > 0.0
+
+		var row := Control.new()
+		row.custom_minimum_size   = Vector2(0.0, ROW_H)
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+		vbox.add_child(row)
+
+		# Title — left column.
+		var title_lbl := Label.new()
+		title_lbl.text         = buff["title"]
+		title_lbl.position     = Vector2(PADDING_X, 8.0)
+		title_lbl.size         = Vector2(440.0, 24.0)
+		title_lbl.clip_text    = true
+		title_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+		title_lbl.add_theme_font_size_override("font_size", 18)
+		title_lbl.add_theme_color_override("font_color",
+				COLOR_TEXT if acquired else COLOR_NONE)
+		title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(title_lbl)
+
+		# Description — below the title.
+		var desc_lbl := Label.new()
+		desc_lbl.text         = buff["plain_text"]
+		desc_lbl.position     = Vector2(PADDING_X, 36.0)
+		desc_lbl.size         = Vector2(820.0, 20.0)
+		desc_lbl.clip_text    = true
+		desc_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+		desc_lbl.add_theme_font_size_override("font_size", 16)
+		desc_lbl.add_theme_color_override("font_color",
+				Color(0.72, 0.72, 0.77, 1.0) if acquired else COLOR_NONE)
+		desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(desc_lbl)
+
+		# Current value label — right-aligned.
+		var value_lbl := Label.new()
+		value_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+		value_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+		value_lbl.add_theme_font_size_override("font_size", 22)
+		value_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+		value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		value_lbl.position             = Vector2(860.0, 0.0)
+		value_lbl.size                 = Vector2(392.0, ROW_H)
+		value_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+		row.add_child(value_lbl)
+
+		if acquired:
+			# Format using the same logic as the level-up card display.
+			var display_val: String
+			if buff["id"] == "infestation_heal":
+				display_val = "%.1f" % (total * 100.0)
+			else:
+				display_val = "%d" % roundi(total * 100.0)
+			value_lbl.text = buff["impact_template"] % display_val
+			value_lbl.add_theme_color_override("font_color", COLOR_ACQUIRED)
+		else:
+			value_lbl.text = "—"
+			value_lbl.add_theme_color_override("font_color", COLOR_NONE)
+
+		# Row divider (except after the last row).
+		if i < buffs.size() - 1:
+			var div := ColorRect.new()
+			div.custom_minimum_size   = Vector2(0.0, 1.0)
+			div.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			div.color        = DIVIDER_C
+			div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			vbox.add_child(div)
+
 
 ## Adds a colored section-title strip spanning the full column width.
 ## Used in the full-screen settings layout to clearly label each column.

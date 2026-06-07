@@ -103,7 +103,7 @@ const SPAWN_INTERVAL: float = 0.36     # delay before the first enemy in a wave;
 # Minimum desired clear space (in cells) between consecutive enemies of the same type.
 # The actual gap time is derived from this value and the enemy's speed + visual size,
 # so slow/large enemies automatically get longer waits than fast/small ones.
-const SPAWN_GAP_CELLS: float = 0.4
+const SPAWN_GAP_CELLS: float = 0.25
 const WAVE_COUNTDOWN: int  = 3         # seconds of visible countdown before each wave
 const INTER_WAVE_QUIET: int = 7        # silent seconds after last enemy spawn before the countdown begins
 

@@ -493,6 +493,41 @@ func _build_settings_dialog() -> void:
 	reset_btn.pressed.connect(_on_reset_progress_pressed)
 	footer_pad.add_child(reset_btn)
 
+	# Spacer pushes the upgrades button to the right edge.
+	var spacer := Control.new()
+	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	spacer.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	footer.add_child(spacer)
+
+	var upgrades_pad := MarginContainer.new()
+	upgrades_pad.add_theme_constant_override("margin_right",  int(PADDING))
+	upgrades_pad.add_theme_constant_override("margin_top",    int((FOOTER_H - 50.0) * 0.5))
+	upgrades_pad.add_theme_constant_override("margin_bottom", int((FOOTER_H - 50.0) * 0.5))
+	footer.add_child(upgrades_pad)
+
+	var upgrades_btn := Button.new()
+	upgrades_btn.text                = "Permanent Upgrades"
+	upgrades_btn.focus_mode          = Control.FOCUS_NONE
+	upgrades_btn.custom_minimum_size = Vector2(240.0, 50.0)
+	upgrades_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	upgrades_btn.add_theme_font_size_override("font_size", 20)
+	upgrades_btn.add_theme_color_override("font_color", Color(0.10, 0.08, 0.02, 1.0))
+	upgrades_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for state: Array in [
+		["normal",  Color(0.72, 0.56, 0.02, 1.0)],
+		["hover",   Color(0.84, 0.66, 0.03, 1.0)],
+		["pressed", Color(0.58, 0.45, 0.01, 1.0)],
+	]:
+		var box := StyleBoxFlat.new()
+		box.bg_color     = state[1]
+		box.border_color = Color(1.00, 0.82, 0.10, 1.0)
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(6)
+		box.set_content_margin_all(8.0)
+		upgrades_btn.add_theme_stylebox_override(state[0], box)
+	upgrades_btn.pressed.connect(_on_permanent_upgrades_pressed)
+	upgrades_pad.add_child(upgrades_btn)
+
 	# Load saved values before connecting signals so the initial assignment
 	# doesn't fire value_changed/toggled and re-save prematurely.
 	_load_settings()
@@ -517,6 +552,14 @@ func _on_reset_progress_pressed() -> void:
 	if _reset_confirm_overlay == null:
 		_build_reset_confirm_overlay()
 	_reset_confirm_overlay.visible = true
+
+
+func _on_permanent_upgrades_pressed() -> void:
+	AudioManager.play_ui("button")
+	# PermanentUpgradeScreen is a CanvasLayer (layer 20) and must be added at the
+	# root level so its layer value renders it above all other CanvasLayers.
+	var screen := preload("res://ui/PermanentUpgradeScreen.gd").new()
+	get_tree().root.add_child(screen)
 
 
 ## Confirmation overlay — sits inside _settings_dialog so it draws above the settings panel.
