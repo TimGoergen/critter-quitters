@@ -10,15 +10,15 @@ Base values are fixed per enemy type. Only HP scales with wave progression (see 
 
 | Enemy | Base HP | Speed (cells/s) | Infestation | Bounty (BB) | XP | Size (cells) | Notes |
 |:------|--------:|----------------:|------------:|------------:|---:|-------------:|:------|
-| Gnat | 5 | 5.6 | 4.0 | 3 | 1 | 1.6 | Fastest; tutorial enemy |
-| Ant | 10 | 2.5 | 8.0 | 6 | 2 | 2.0 | Baseline unit |
-| Cricket | 12 | 3.2 | 8.0 | 10 | 2 | 1.8 | |
-| Rat | 65 | 1.3 | 22.0 | 20 | 6 | 2.4 | Also spawned by Rat King death |
-| Beetle | 25 | 1.5 | 20.0 | 20 | 5 | 2.4 | |
-| Mosquito | 15 | 5.5 | 18.0 | 10 | 3 | 1.8 | Flying; ignores pathfinder |
-| Cockroach | 80 | 1.0 | 35.0 | 35 | 8 | 2.6 | |
-| Mouse | 200 | 0.6 | 60.0 | 60 | 20 | 3.2 | Boss; steals 20 BB on exit |
-| Rat King | 600 | 0.35 | 100.0 | 180 | 40 | 3.8 | Mega-boss; splits into 3 Rats on death |
+| Gnat | 6 | 5.6 | 4.0 | 3 | 1 | 1.6 | Fastest; tutorial enemy |
+| Ant | 12 | 2.5 | 8.0 | 6 | 2 | 2.0 | Baseline unit |
+| Cricket | 15 | 3.2 | 8.0 | 10 | 2 | 1.8 | |
+| Rat | 85 | 1.3 | 22.0 | 20 | 6 | 2.4 | Also spawned by Rat King death |
+| Beetle | 33 | 1.5 | 20.0 | 20 | 5 | 2.4 | |
+| Mosquito | 18 | 5.5 | 18.0 | 10 | 3 | 1.8 | Flying; ignores pathfinder |
+| Cockroach | 105 | 1.0 | 35.0 | 35 | 8 | 2.6 | |
+| Mouse | 280 | 0.6 | 60.0 | 60 | 20 | 3.2 | Boss; steals 20 BB on exit |
+| Rat King | 900 | 0.35 | 100.0 | 180 | 40 | 3.8 | Mega-boss; splits into 3 Rats on death |
 
 ---
 
@@ -32,12 +32,12 @@ max_hp = base_hp × (1.0 + floor(wave / 5) × 0.3)
 
 | Wave band | Multiplier | Ant HP | Cockroach HP | Mouse HP |
 |:----------|:----------:|-------:|-------------:|---------:|
-| 1–4 | 1.0× | 10 | 80 | 200 |
-| 5–9 | 1.3× | 13 | 104 | 260 |
-| 10–14 | 1.6× | 16 | 128 | 320 |
-| 15–19 | 1.9× | 19 | 152 | 380 |
-| 20–24 | 2.2× | 22 | 176 | 440 |
-| 25–29 | 2.5× | 25 | 200 | 500 |
+| 1–4 | 1.0× | 12 | 105 | 280 |
+| 5–9 | 1.3× | 16 | 137 | 364 |
+| 10–14 | 1.6× | 19 | 168 | 448 |
+| 15–19 | 1.9× | 23 | 200 | 532 |
+| 20–24 | 2.2× | 26 | 231 | 616 |
+| 25–29 | 2.5× | 30 | 263 | 700 |
 
 Speed, bounty, XP, and infestation value do **not** scale with wave number.
 
@@ -111,7 +111,7 @@ WAVE_COUNTDOWN      = 5 s      (between-wave pause)
 The gap between individual enemies is dynamic — it depends on enemy size and speed so that enemies don't visually stack on the path:
 
 ```
-gap_seconds = (visual_size + 0.4) / enemy_speed
+gap_seconds = (visual_size + 0.25) / enemy_speed
 ```
 
 Larger or slower enemies naturally space further apart; small fast enemies (Gnat, Mosquito) pack tighter.
@@ -182,7 +182,7 @@ bonus = seconds_remaining × early_wave_bonus_rate   (per wave sent)
 
 | Constant | Value |
 |:---------|------:|
-| Starting Bug Bucks | 100 |
+| Starting Bug Bucks | 110 |
 | Infestation threshold (run ends) | 20 pts (= 100% bar) |
 | Trap sell refund | 70% of buy price |
 
