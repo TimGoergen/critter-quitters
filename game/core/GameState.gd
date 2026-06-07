@@ -115,8 +115,8 @@ signal unlocked_boosts_set(types: Array[int])
 
 ## Starting currency given to the player at the beginning of every run.
 ## Increased by business upgrades purchased with Service Fees.
-## 75 BB = exactly 3 Snap Traps — tight by design; forces immediate strategic decisions.
-const STARTING_BUG_BUCKS: int = 100
+## 110 BB = enough to place exactly 4 Snap Traps (25 + 26 + 28 + 29 = 108) with 2 to spare.
+const STARTING_BUG_BUCKS: int = 110
 
 ## Total infestation points that fill the bar to 1.0.
 ## TODO: tune via playtesting

@@ -544,9 +544,9 @@ func get_description() -> String:
 	return ""
 
 ## Bug Bucks cost when placed_count units of this type are already on the grid.
-## Formula: base_cost × (1 + 0.2 × placed_count), rounded to nearest integer.
+## Formula: base_cost × (1 + 0.05 × placed_count), rounded to nearest integer.
 static func compute_placement_cost(boost_type: BoostType, placed_count: int) -> int:
-	return roundi(float(STATS[boost_type]["cost"]) * (1.0 + 0.1 * float(placed_count)))
+	return roundi(float(STATS[boost_type]["cost"]) * (1.0 + 0.05 * float(placed_count)))
 
 
 ## Records the Bug Bucks actually paid at placement so get_sell_value() refunds
