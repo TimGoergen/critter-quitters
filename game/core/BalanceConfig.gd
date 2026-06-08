@@ -528,6 +528,29 @@ func export_to_markdown() -> String:
 	return "\n".join(lines)
 
 
+# ---------------------------------------------------------------------------
+# Setters for scalar values — used by BalanceEditorScreen
+# ---------------------------------------------------------------------------
+# Dict and Array values can be mutated directly through their getter references,
+# so only the standalone scalar fields need explicit setters.
+
+func set_hp_scaling_per_tier(value: float) -> void:
+	_hp_scaling_per_tier = value
+
+func set_boost_stat_b_delta(boost_type: int, value: float) -> void:
+	_boost_stat_b_delta[boost_type] = value
+
+func set_boost_stat_c_delta(boost_type: int, value: float) -> void:
+	_boost_stat_c_delta[boost_type] = value
+
+func set_boost_range_factor(value: float) -> void:
+	_boost_range_factor = value
+
+
+# ---------------------------------------------------------------------------
+# Markdown export
+# ---------------------------------------------------------------------------
+
 ## Format a number: integer display if it's a whole number, 2 decimal places otherwise.
 func _fmt(val) -> String:
 	if val is bool:

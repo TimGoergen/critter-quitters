@@ -493,6 +493,35 @@ func _build_settings_dialog() -> void:
 	reset_btn.pressed.connect(_on_reset_progress_pressed)
 	footer_pad.add_child(reset_btn)
 
+	var editor_pad := MarginContainer.new()
+	editor_pad.add_theme_constant_override("margin_left",   12)
+	editor_pad.add_theme_constant_override("margin_top",    int((FOOTER_H - 50.0) * 0.5))
+	editor_pad.add_theme_constant_override("margin_bottom", int((FOOTER_H - 50.0) * 0.5))
+	footer.add_child(editor_pad)
+
+	var editor_btn := Button.new()
+	editor_btn.text                = "Balance Editor"
+	editor_btn.focus_mode          = Control.FOCUS_NONE
+	editor_btn.custom_minimum_size = Vector2(200.0, 50.0)
+	editor_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	editor_btn.add_theme_font_size_override("font_size", 20)
+	editor_btn.add_theme_color_override("font_color", Color(0.85, 0.92, 1.0, 1.0))
+	editor_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for state: Array in [
+		["normal",  Color(0.06, 0.14, 0.34, 1.0)],
+		["hover",   Color(0.09, 0.20, 0.45, 1.0)],
+		["pressed", Color(0.04, 0.09, 0.22, 1.0)],
+	]:
+		var box := StyleBoxFlat.new()
+		box.bg_color     = state[1]
+		box.border_color = Color(0.28, 0.55, 0.90, 1.0)
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(6)
+		box.set_content_margin_all(8.0)
+		editor_btn.add_theme_stylebox_override(state[0], box)
+	editor_btn.pressed.connect(_on_balance_editor_pressed)
+	editor_pad.add_child(editor_btn)
+
 	# Spacer pushes the upgrades button to the right edge.
 	var spacer := Control.new()
 	spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
@@ -559,6 +588,12 @@ func _on_permanent_upgrades_pressed() -> void:
 	# PermanentUpgradeScreen is a CanvasLayer (layer 20) and must be added at the
 	# root level so its layer value renders it above all other CanvasLayers.
 	var screen := preload("res://ui/PermanentUpgradeScreen.gd").new()
+	get_tree().root.add_child(screen)
+
+
+func _on_balance_editor_pressed() -> void:
+	AudioManager.play_ui("button")
+	var screen := preload("res://ui/BalanceEditorScreen.gd").new()
 	get_tree().root.add_child(screen)
 
 
