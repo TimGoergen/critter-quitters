@@ -98,7 +98,7 @@ var _active_enemies: Array[Node3D] = []
 const WAVE_SIZE: int = 15              # base count at wave 1; overridden by the debug start dialog
 const WAVE_SIZE_STEP_WAVES:  int = 5   # every N waves the enemy count increases
 const WAVE_SIZE_STEP_AMOUNT: int = 2   # enemies added per step
-var _wave_size: int = WAVE_SIZE
+var _wave_size: int = BalanceConfig.get_wave_config()["wave_size"]
 const SPAWN_INTERVAL: float = 0.36     # delay before the first enemy in a wave; subsequent gaps are per-type
 # Minimum desired clear space (in cells) between consecutive enemies of the same type.
 # The actual gap time is derived from this value and the enemy's speed + visual size,
@@ -1472,7 +1472,7 @@ func _on_wave_skip_multi_requested(count: int) -> void:
 			_launch_wave(true)
 		# Start streams 2 through count — same delay as stream 1 so all fire together.
 		for _i in range(count - 1):
-			get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
+			get_tree().create_timer(BalanceConfig.get_wave_config()["spawn_interval"], false).timeout.connect(_spawn_next_in_wave)
 	elif not (_active_enemies.is_empty() and _enemies_left_to_spawn == 0):
 		# Reward only fires when the current wave still has unspawned enemies.
 		if _enemies_left_to_spawn > 0:
@@ -1491,7 +1491,7 @@ func _on_wave_skip_multi_requested(count: int) -> void:
 		# Start count streams total; the existing chain (if any) already counts as one.
 		var new_timers := count - (1 if chain_running else 0)
 		for _i in range(new_timers):
-			get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
+			get_tree().create_timer(BalanceConfig.get_wave_config()["spawn_interval"], false).timeout.connect(_spawn_next_in_wave)
 
 
 ## Begins spawning enemies for the wave.
@@ -1534,7 +1534,7 @@ func _launch_wave(additive: bool = false) -> void:
 	else:
 		# Base count plus +WAVE_SIZE_STEP_AMOUNT for every WAVE_SIZE_STEP_WAVES completed.
 		# Wave 1–4 → 15, wave 5–9 → 17, wave 10–14 → 19, etc.
-		new_enemies = _wave_size + (GameState.current_wave / WAVE_SIZE_STEP_WAVES) * WAVE_SIZE_STEP_AMOUNT
+		new_enemies = _wave_size + (GameState.current_wave / BalanceConfig.get_wave_config()["wave_size_step_waves"]) * BalanceConfig.get_wave_config()["wave_size_step_amount"]
 
 	if additive:
 		# Layer on top of the running wave — the existing spawn timer drains both.
@@ -1556,7 +1556,7 @@ func _launch_wave(additive: bool = false) -> void:
 
 	# Only start the spawn timer for fresh waves; additive waves share the running timer.
 	if not additive:
-		get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
+		get_tree().create_timer(BalanceConfig.get_wave_config()["spawn_interval"], false).timeout.connect(_spawn_next_in_wave)
 
 
 ## Spawns one enemy then schedules the next, until the wave is exhausted.

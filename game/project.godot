@@ -17,6 +17,7 @@ config/icon="res://assets/icon.svg"
 
 [autoload]
 
+BalanceConfig="*res://core/BalanceConfig.gd"
 GameState="*res://core/GameState.gd"
 AudioManager="*res://core/AudioManager.gd"
 Log="*res://core/Log.gd"

@@ -134,7 +134,7 @@ jobs:
       - name: Stamp build version into Android export preset
         # Sets version/code (integer) and version/name (string) from GITHUB_RUN_NUMBER
         # so that Firebase App Distribution and Android settings show the correct build.
-        # version/code must be a plain integer; version/name matches the Windows "0.0.0.NNNN" format.
+        # version/code must be a plain integer; version/name matches the Windows "0.1.0.NNNN" format.
         run: |
           python3 - <<'EOF'
           import os, re
@@ -143,9 +143,9 @@ jobs:
           run_num = int(os.environ["GITHUB_RUN_NUMBER"])
           build_num = f"{run_num:04d}"
           content = re.sub(r'^version/code=\d+',           f'version/code={run_num}',             content, flags=re.MULTILINE)
-          content = re.sub(r'^version/name="[^"]*"',       f'version/name="0.0.0.{build_num}"',   content, flags=re.MULTILINE)
+          content = re.sub(r'^version/name="[^"]*"',       f'version/name="0.1.0.{build_num}"',   content, flags=re.MULTILINE)
           open(path, "w").write(content)
-          print(f"Android version: 0.0.0.{build_num} (code {run_num})")
+          print(f"Android version: 0.1.0.{build_num} (code {run_num})")
           EOF
 
       - name: Verify keystore and Android SDK
@@ -287,7 +287,7 @@ jobs:
         run: |
           $sha      = "${{ needs.export.outputs.sha }}"
           $buildNum = "${{ needs.export.outputs.build_num }}"
-          $version  = "0.0.0.$buildNum"
+          $version  = "0.1.0.$buildNum"
           $srcExe   = (Get-ChildItem "dist\critter_quitters_*_win.exe" | Select-Object -First 1).FullName
           # ISCC resolves OutputDir relative to the .iss file (build\), so pass an absolute path.
           $outputDir = (Resolve-Path "dist").Path

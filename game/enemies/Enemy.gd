@@ -337,7 +337,7 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 	_enemy_type    = enemy_type
 	_walk_frames   = _frames_for_type(enemy_type)
 
-	var stats          = STATS[enemy_type]
+	var stats          = BalanceConfig.get_enemy_stats(int(enemy_type))
 	_move_speed        = stats["speed"]
 	_base_move_speed   = _move_speed
 	_waddle_speed      = WADDLE_RADS_PER_CELL * _move_speed
@@ -345,7 +345,7 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 	# HP scales in steps every 5 waves (+30% per tier) so difficulty feels like
 	# a noticeable jump rather than imperceptible per-wave drift.
 	var _wave_tier := wave / 5
-	_max_hp = stats["hp"] * (1.0 + _wave_tier * 0.3)
+	_max_hp = stats["hp"] * (1.0 + _wave_tier * BalanceConfig.get_hp_scaling_per_tier())
 	_current_hp         = _max_hp
 	_infestation_damage = stats["infestation"]
 	_bounty             = stats["bounty"]
@@ -366,7 +366,7 @@ func initialize(initial_path: Array[Vector2i], enemy_type: EnemyType = EnemyType
 		var exit_world  := _cell_to_world(initial_path.back())
 		_fly_target_pos  = Vector3(exit_world.x, 0.25, exit_world.z)
 
-	_base_color        = stats["color"]
+	_base_color        = STATS[enemy_type]["color"]
 	_sprite_brightness = SPRITE_BRIGHTNESS[enemy_type]
 	_spawn_visual(_base_color)
 	_spawn_shadow()
