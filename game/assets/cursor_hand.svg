@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   viewBox="0 0 44 62"
+   version="1.1"
+   id="svg1"
+   sodipodi:docname="cursor_hand.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1">
+    <inkscape:path-effect
+       effect="fillet_chamfer"
+       id="path-effect4"
+       is_visible="true"
+       lpeversion="1"
+       nodesatellites_param="F,0,0,1,0,0,0,1 @ F,0,0,1,0,0,0,1 @ F,0,0,1,0,0,0,1 @ F,0,0,1,0,0,0,1 @ F,0,0,1,0,0,0,1 @ F,0,0,1,0,0,0,1 @ F,0,0,1,0,0,0,1 @ F,0,0,1,0,0,0,1 @ F,0,0,1,0,0,0,1 @ F,0,0,1,0,0,0,1 @ F,0,0,1,0,0,0,1 @ F,0,0,1,0,0,0,1 @ F,0,0,1,0,0,0,1 @ F,0,0,1,0,0,0,1"
+       radius="0"
+       unit="px"
+       method="auto"
+       mode="F"
+       chamfer_steps="1"
+       flexible="false"
+       use_knot_distance="true"
+       apply_no_radius="true"
+       apply_with_radius="true"
+       only_selected="false"
+       hide_knots="false" />
+  </defs>
+  <sodipodi:namedview
+     id="namedview1"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="13.016129"
+     inkscape:cx="21.972739"
+     inkscape:cy="34.226766"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg1" />
+  <!--
+    Pointing-hand cursor for Critter Quitters Pest Control.
+
+    HOTSPOT: the click point is the tip of the index finger, at approximately
+    (13, 1) within this 44×62 viewBox.  If you move the finger tip, update
+    CursorManager._HOTSPOT to match.
+
+    COLORS
+      Fill:    #F5C795  medium skin tone
+      Stroke:  #1E0F03  dark brown outline
+
+    GEOMETRY
+      The hand body is one closed path.  M 8 6 starts at the left base of
+      the rounded index-finger tip; the arc sweeps over the top to (18, 6);
+      the path then steps right across the knuckles of the middle, ring, and
+      pinky fingers before closing back through the palm.
+      The diagonal close line (Z) from the bottom-left of the palm back to
+      the start point represents the thumb side of the hand.
+  -->
+  <!-- Hand body -->
+  <path
+     d="m 27.691454,25.387853 c 0,0 2.384137,-3.149935 5.610903,0.307314 l 0.07684,2.146221 c 0,0 2.389095,-1.920692 4.156133,1.152418 1.942912,3.780673 -0.401236,19.134046 -1.990086,22.01487 -2.688972,3.610905 -7.346975,7.45229 -19.639416,0.921931 C 14.292441,51.008674 13.402459,48.332485 12.116911,46.876705 9.7863623,44.237546 2.1951961,31.688956 5.194549,30.74542 c 3.5685105,-1.122581 5.239862,4.492555 7.622155,6.908219 2.25528,2.286872 2.986988,0.96025 3.012295,-1.661074 0.08954,-9.274459 0.08043,-11.964188 0.237916,-26.6889717 1.125108,-3.6289773 4.966333,-2.6362142 5.620817,0.1536555 L 21.536576,23.610903 c 0,0 2.313507,-3.687735 5.847584,-0.153658"
+     fill="#f5c795"
+     stroke="#1e0f03"
+     stroke-width="1.5"
+     stroke-linejoin="round"
+     stroke-linecap="round"
+     id="path1"
+     sodipodi:nodetypes="ccccccsssscccc" />
+  <!-- Knuckle crease across the index finger -->
+  <path
+     style="fill:#000000;stroke:#000000;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:5.4;stroke-dasharray:none"
+     d="m 21.5886,23.201982 c 0,0 0.153658,6.914498 0.07683,6.914498"
+     id="path2"
+     sodipodi:nodetypes="cc" />
+  <path
+     style="fill:#000000;stroke:#000000;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:5.4;stroke-dasharray:none"
+     d="m 27.581165,24.047087 c 0,0 -0.07683,6.684015 -0.153656,6.684015"
+     id="path3"
+     sodipodi:nodetypes="cc" />
+  <path
+     style="fill:#000000;stroke:#000000;stroke-width:1.3;stroke-linecap:round;stroke-linejoin:miter;stroke-miterlimit:5.4;stroke-dasharray:none"
+     d="m 33.343247,25.814125 c 0,0 3e-6,6.299876 -0.07683,6.299876"
+     id="path4"
+     sodipodi:nodetypes="cc" />
+</svg>

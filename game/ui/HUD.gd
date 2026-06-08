@@ -7,8 +7,8 @@
 ##   Each row: static info panel (left, brand-colored) + draggable trap icon (right).
 ##   Press the icon and move to begin drag-and-drop placement.
 ## Right panel (RIGHT_PANEL_W wide, same width as left): wave, bug bucks, infestation bar,
-##   INCOMING label, send-wave button, and a bottom row of three control buttons
-##   (zoom, pause, speed).  Exit and Restart live inside the Settings dialog.
+##   INCOMING label, send-wave button, and a bottom row of two control buttons
+##   (zoom, play/speed).  Exit and Restart live inside the Settings dialog.
 
 extends CanvasLayer
 
@@ -16,11 +16,12 @@ const Trap           = preload("res://traps/Trap.gd")
 const BoostUnit      = preload("res://boosts/BoostUnit.gd")
 const UIFonts        = preload("res://ui/UIFonts.gd")
 const ExperienceBar  = preload("res://ui/ExperienceBar.gd")
+const LevelUpScreen  = preload("res://ui/LevelUpScreen.gd")
 
 const GEAR_OUTLINE_SHADER = preload("res://assets/gear_outline.gdshader")
 
 const COLOR_PANEL_BG    := Color(0.144, 0.144, 0.235, 0.88)
-const COLOR_BAR_BG      := Color(0.28, 0.28, 0.28, 1.0)
+const COLOR_BAR_BG      := Color(0.20, 0.04, 0.04, 1.0)
 const COLOR_BAR_FILL    := Color(0.85, 0.22, 0.22, 1.0)
 const COLOR_TEXT        := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM    := Color(0.60, 0.60, 0.65, 1.0)
@@ -108,30 +109,32 @@ const PAUSE_BANNER_H:      float = 50.0
 const PAUSE_BANNER_TAPER:  float = 25.0
 # ~31% of the arena width (25% × 1.25); wide top edge, bottom edge is 2×TAPER narrower.
 const PAUSE_BANNER_W:      float = (1280.0 - LEFT_PANEL_W - RIGHT_PANEL_W) * 0.3125
-const COLOR_PAUSE_BANNER_BG := Color(0.48, 0.04, 0.04, 0.92)  # deep crimson
+const COLOR_PAUSE_BANNER_BG    := Color(0.48, 0.04, 0.04, 0.92)  # deep crimson
+const COLOR_INCOMING_FLASH     := Color(0.76, 0.10, 0.10, 0.97)  # brighter flash red
 
 # Incoming wave banner — slides up from the bottom during the between-wave countdown.
 # Reverse trapezoid: wide bottom edge flush with the screen, narrow top edge visible.
 # Same width as the pause banner; TAPER matches so the slope is visually identical.
-const INCOMING_BANNER_W:     float = PAUSE_BANNER_W
-const INCOMING_BANNER_TAPER: float = PAUSE_BANNER_TAPER
+const INCOMING_BANNER_W:     float = PAUSE_BANNER_W    * 1.25
+const INCOMING_BANNER_H:     float = PAUSE_BANNER_H    * 1.25
+const INCOMING_BANNER_TAPER: float = PAUSE_BANNER_TAPER * 1.25
 
 # Incoming wave banner — slides up from the bottom of the screen during the countdown.
 var _incoming_banner:         Control = null
+var _incoming_banner_shape:   Control = null
 var _incoming_banner_tween:   Tween   = null
+var _incoming_flash_tween:    Tween   = null
 var _countdown_seconds_label: Label
 
 var _send_wave_btn:           Button           # fast-forward button inside the send-wave panel
 var _multiplier_btn:          Button           # small gold button cycling ×1 → ×5 → ×10
 var _multiplier_label:        Label
 var _send_wave_header_label:  Label            # "SEND 1 WAVE" / "SEND 5 WAVES" — updates with multiplier
-var _send_wave_reward_label:  Label            # bucks amount overlaid on the reward bar
-var _reward_bar_fill_rect:    Panel            # green bar shrinking right→left as reward depletes
-var _reward_bar_container:    Control          # bottom-third container; used to size the fill rect
-var _reward_bar_overlay:      HBoxContainer    # coin icon + label drawn over the green bar
+var _call_early_label:        Label            # left-aligned "Call Early Reward" text
+var _send_wave_reward_label:  Label            # right-aligned bucks amount
+var _reward_bar_overlay:      HBoxContainer    # row containing both labels; hidden when no reward
 var _max_countdown_seconds:   int = 0         # first seconds_remaining of the countdown; bar denominator
 var _early_bonus_particles:   CPUParticles2D
-var _run_over_overlay:        Control
 var _wave_multiplier:        int = 1   # current send-wave multiplier; cycles 1 → 5 → 10 → 1
 var _last_countdown_seconds: int = 0   # last received countdown value; used to refresh reward text when multiplier changes
 var _current_wave_reward:    int = 0   # last value from early_send_reward_changed; drives the reward label
@@ -139,10 +142,11 @@ var _current_wave_reward:    int = 0   # last value from early_send_reward_chang
 const SEND_WAVE_COOLDOWN_SEC: float = 1.0
 var _send_wave_cooldown: float = 0.0   # seconds remaining before the send-wave button is usable again
 
-var _speed_btn:      Button
-var _speed_icon_lbl: Label   # ">>" icon; black at 1×, bright gold at 2×
-var _pause_btn:      Button
-var _pause_bar_icon: Control
+var _play_pause_btn:  Button          # toggles paused ↔ playing
+var _play_pause_icon: _PlayPauseIcon  # always shows triangle + bars; gold = what pressing will do
+var _speed_btn:       Button          # cycles 1× → 2× → 3× → 1× (no pause)
+var _speed_icon:      _PlaySpeedIcon  # shows 1–3 triangles + "Nx" label for current speed
+var _last_play_speed: int = 1         # remembers speed when toggling pause
 var _pause_banner:       Control = null
 var _pause_banner_tween: Tween   = null
 var _exit_btn:       Button
@@ -155,18 +159,26 @@ var _bucks_label:       Label
 var _infestation_fill:  Panel
 var _infestation_label: Label
 
-var _is_fast:        bool = false
-var _is_paused:      bool = false
+## Combined play/speed state: 0=paused, 1=play 1×, 2=play 2×, 3=play 3×.
+## Replaces the old separate _is_paused and _speed_state fields.
+var _play_speed_state: int  = 1
 var _countdown_active: bool = false
 
 var _music_slider: HSlider
 var _sfx_slider:   HSlider
 
-var _settings_btn:    Button  = null
-var _settings_dialog: Control = null
+var _settings_btn:          Button  = null
+var _settings_dialog:       Control = null
+var _reset_confirm_overlay: Control = null
 
 var _grid_lines_overview_toggle: CheckButton = null
 var _grid_lines_zoomed_toggle:   CheckButton = null
+
+var _settings_tab_btn:   Button  = null
+var _upgrades_tab_btn:   Button  = null
+var _settings_content:   Control = null
+var _upgrades_content:   Control = null
+var _active_settings_tab: String = "Settings"
 # Saved when Settings opens so we can restore it on close rather than
 # unconditionally unpausing — the user may have already paused manually.
 var _was_paused_before_settings: bool = false
@@ -179,13 +191,18 @@ var _icon_controls: Array[Control] = []
 # Used by _start_drag() to find the icon's screen position for the floating icon tween.
 var _icon_area_controls: Array[Control] = []
 
+# Cost label per trap/boost type — updated by _refresh_trap_selector() whenever
+# bug_bucks or placed counts change so the displayed cost stays current.
+var _trap_cost_labels:  Array[Label] = []
+var _boost_cost_labels: Array[Label] = []
+
 # Parallel arrays for the boost selector tab.
 var _boost_icon_controls:      Array[Control] = []
 var _boost_icon_area_controls: Array[Control] = []
 
 # Left-panel tab state.
-var _trap_scroll:  ScrollContainer = null
-var _boost_scroll: ScrollContainer = null
+var _trap_scroll:  Control = null
+var _boost_scroll: Control = null
 var _active_tab:   int             = 0     # 0 = Traps, 1 = Boosts
 var _tab_btns:     Array[Button]   = []
 
@@ -212,7 +229,7 @@ const DRAG_ICON_SIZE: float = 90.0
 const DRAG_ICON_DISPLAY: float = 45.0
 # Offset from the cursor/finger to the placement-zone center sent to Arena.
 # Above-and-left so the ghost preview is not hidden under the finger.
-const DRAG_OFFSET: Vector2 = Vector2(-15.0, -47.5)
+const DRAG_OFFSET: Vector2 = Vector2(-26.25, -83.125)
 # Additional offset applied only to the floating icon's screen position, not to Arena.
 # Shifts the opaque cursor image further up-left so the ghost preview behind it stays readable.
 const DRAG_ICON_EXTRA_OFFSET: Vector2 = Vector2(-15.0, -15.0)
@@ -244,11 +261,10 @@ func _build_ui() -> void:
 	_build_left_panel()
 	_build_right_panel()
 	_build_incoming_overlay()  # arena overlay; drawn above panels, below dialogs
-	_build_settings_dialog()   # must be after right panel so it draws on top
-	_build_run_over_overlay()
-	_build_panel_borders()     # drawn last so borders appear on top of all panel content
+	_build_panel_borders()     # drawn after panels so borders sit on top of panel content
 	_build_pause_banner()      # drawn after borders so it slides over the top edge
 	_build_experience_bar()    # overlaid on the arena zone, above all panel content
+	_build_settings_dialog()   # must be last — full-screen overlay must draw above everything
 
 
 # ---------------------------------------------------------------------------
@@ -322,12 +338,10 @@ func _build_left_panel() -> void:
 	vbox.add_child(gap)
 
 	# --- Trap tab ---
-	_trap_scroll = ScrollContainer.new()
-	_trap_scroll.size_flags_vertical    = Control.SIZE_EXPAND_FILL
-	_trap_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	# SHOW_ALWAYS reserves the scrollbar gutter permanently so both tabs have
-	# identical content widths regardless of whether scrolling is needed.
-	_trap_scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
+	_trap_scroll = VBoxContainer.new()
+	_trap_scroll.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	_trap_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_trap_scroll.add_theme_constant_override("separation", 0)
 	vbox.add_child(_trap_scroll)
 
 	var trap_vbox := VBoxContainer.new()
@@ -339,12 +353,17 @@ func _build_left_panel() -> void:
 		var row_panel := _build_trap_row(trap_vbox, i)
 		_icon_controls.append(row_panel)
 
+	# All trap rows start hidden — TrapSelectionScreen sets the unlocked
+	# types before the first wave and fires unlocked_traps_set to reveal them.
+	_refresh_trap_visibility()
+	GameState.unlocked_traps_set.connect(_on_unlocked_traps_set)
+
 	# --- Boost tab (hidden until Boosts tab is selected) ---
-	_boost_scroll = ScrollContainer.new()
-	_boost_scroll.size_flags_vertical    = Control.SIZE_EXPAND_FILL
-	_boost_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	_boost_scroll.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_SHOW_ALWAYS
-	_boost_scroll.visible                = false
+	_boost_scroll = VBoxContainer.new()
+	_boost_scroll.size_flags_vertical   = Control.SIZE_EXPAND_FILL
+	_boost_scroll.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_boost_scroll.add_theme_constant_override("separation", 0)
+	_boost_scroll.visible              = false
 	vbox.add_child(_boost_scroll)
 
 	var boost_vbox := VBoxContainer.new()
@@ -355,6 +374,10 @@ func _build_left_panel() -> void:
 	for i in range(BOOST_LABELS.size()):
 		var row_panel := _build_boost_row(boost_vbox, i)
 		_boost_icon_controls.append(row_panel)
+
+	# All boost rows start hidden — shown when unlocked_boosts_set fires.
+	_refresh_boost_visibility()
+	GameState.unlocked_boosts_set.connect(_on_unlocked_boosts_set)
 
 	_update_tab_styles()
 
@@ -414,35 +437,44 @@ func _build_right_panel() -> void:
 	vbox.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	margin.add_child(vbox)
 
-	# --- Settings button — top-right corner, opens the Settings dialog.
-	# Standard button: gray background, silver border, SVG gear icon centered inside.
-	var settings_row := HBoxContainer.new()
-	settings_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	settings_row.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
-	vbox.add_child(settings_row)
+	# --- Top row: Zoom button on the left, Settings button on the right.
+	# Zoom is pinned to the top-left corner of the right panel, next to settings.
+	var top_row := HBoxContainer.new()
+	top_row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	top_row.size_flags_vertical   = Control.SIZE_SHRINK_BEGIN
+	top_row.add_theme_constant_override("separation", 4)
+	vbox.add_child(top_row)
 
-	# Left spacer pushes the button to the right edge of the panel.
-	var left_spacer := Control.new()
-	left_spacer.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	settings_row.add_child(left_spacer)
+	_zoom_btn = Button.new()
+	_zoom_btn.text                    = ""
+	_zoom_btn.custom_minimum_size     = Vector2(0, 60.0)
+	_zoom_btn.size_flags_horizontal   = Control.SIZE_EXPAND_FILL
+	_zoom_btn.size_flags_stretch_ratio = 3.0   # 60% of the row (3 out of 3+2 parts)
+	_zoom_btn.size_flags_vertical     = Control.SIZE_SHRINK_CENTER
+	_apply_gold_button_style(_zoom_btn)
+	_zoom_btn.pressed.connect(_on_zoom_btn_pressed)
+	top_row.add_child(_zoom_btn)
+
+	_zoom_icon = _ZoomIcon.new()
+	_zoom_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_zoom_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_zoom_btn.add_child(_zoom_icon)
 
 	_settings_btn = Button.new()
-	_settings_btn.text                  = ""
-	_settings_btn.custom_minimum_size   = Vector2(60.0, 60.0)
-	_settings_btn.size_flags_horizontal = Control.SIZE_SHRINK_END
-	_settings_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_settings_btn.text                    = ""
+	_settings_btn.custom_minimum_size     = Vector2(0, 60.0)
+	_settings_btn.size_flags_horizontal   = Control.SIZE_EXPAND_FILL
+	_settings_btn.size_flags_stretch_ratio = 2.0   # 40% of the row (2 out of 3+2 parts)
+	_settings_btn.size_flags_vertical     = Control.SIZE_SHRINK_CENTER
 	_apply_gear_button_style(_settings_btn)
 	_settings_btn.pressed.connect(_on_settings_btn_pressed)
-	settings_row.add_child(_settings_btn)
+	top_row.add_child(_settings_btn)
 
-	# TextureRect child centers the PNG gear inside the button with equal inset on all sides.
-	# The PNG carries its own silver/gray styling and baked outline — no shader needed.
 	var gear_rect := TextureRect.new()
 	gear_rect.texture      = load("res://assets/gear_icon.png") as Texture2D
 	gear_rect.expand_mode  = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	gear_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	gear_rect.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# 8 px inset on all sides keeps the gear clear of the button border.
 	gear_rect.offset_left   = 8.0
 	gear_rect.offset_top    = 8.0
 	gear_rect.offset_right  = -8.0
@@ -759,8 +791,8 @@ void fragment() {
 	_multiplier_label.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0))
 	mult_hbox.add_child(_multiplier_label)
 
-	# Bottom — reward bar. SIZE_SHRINK_CENTER so it takes only its fixed height;
-	# extra bottom margin keeps the bar visually clear of the panel's border/corners.
+	# Bottom — "Call Early Reward" row: left label + right-aligned amount.
+	# Hidden until a reward is available; no bar, text only.
 	var bar_margin := MarginContainer.new()
 	bar_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	bar_margin.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
@@ -770,48 +802,36 @@ void fragment() {
 	bar_margin.add_theme_constant_override("margin_bottom", 10)
 	inner_vbox.add_child(bar_margin)
 
-	_reward_bar_container = Control.new()
-	_reward_bar_container.custom_minimum_size   = Vector2(0, 30)
-	_reward_bar_container.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_reward_bar_container.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_reward_bar_container.clip_contents         = true
-	bar_margin.add_child(_reward_bar_container)
-
-	_reward_bar_fill_rect = Panel.new()
-	var bar_style := StyleBoxFlat.new()
-	bar_style.bg_color = Color(0.10, 0.50, 0.16, 1.0)
-	bar_style.set_corner_radius_all(4)
-	bar_style.set_content_margin_all(0.0)
-	_reward_bar_fill_rect.add_theme_stylebox_override("panel", bar_style)
-	_reward_bar_fill_rect.anchor_left   = 0.0
-	_reward_bar_fill_rect.anchor_right  = 0.0   # right edge driven by offset_right
-	_reward_bar_fill_rect.anchor_top    = 0.0
-	_reward_bar_fill_rect.anchor_bottom = 1.0
-	_reward_bar_fill_rect.offset_left   = 0.0
-	_reward_bar_fill_rect.offset_right  = 0.0   # updated by _update_reward_bar_display
-	_reward_bar_container.add_child(_reward_bar_fill_rect)
-
 	_reward_bar_overlay = HBoxContainer.new()
-	_reward_bar_overlay.alignment    = BoxContainer.ALIGNMENT_CENTER
-	_reward_bar_overlay.add_theme_constant_override("separation", 4)
-	_reward_bar_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_reward_bar_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_reward_bar_overlay.modulate.a   = 0.0   # hidden until a reward is available
-	_reward_bar_container.add_child(_reward_bar_overlay)
+	_reward_bar_overlay.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_reward_bar_overlay.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	_reward_bar_overlay.modulate.a            = 0.0   # hidden until a reward is available
+	bar_margin.add_child(_reward_bar_overlay)
 
-	var bar_coin := TextureRect.new()
-	bar_coin.texture             = load("res://assets/bug_buck_coin_small.png") as Texture2D
-	bar_coin.custom_minimum_size = Vector2(20, 20)
-	bar_coin.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	bar_coin.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	bar_coin.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	bar_coin.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	_reward_bar_overlay.add_child(bar_coin)
+	_call_early_label = Label.new()
+	_call_early_label.text                  = "Call Early Reward"
+	_call_early_label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_call_early_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_call_early_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	_call_early_label.add_theme_font_override("font", UIFonts.primary_bold())
+	_call_early_label.add_theme_font_size_override("font_size", 15)
+	_call_early_label.add_theme_color_override("font_color", COLOR_TEXT)
+	_reward_bar_overlay.add_child(_call_early_label)
+
+	var reward_coin := TextureRect.new()
+	reward_coin.texture             = load("res://assets/bug_buck_coin_small.png") as Texture2D
+	reward_coin.custom_minimum_size = Vector2(20, 20)
+	reward_coin.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	reward_coin.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	reward_coin.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	reward_coin.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	_reward_bar_overlay.add_child(reward_coin)
 
 	_send_wave_reward_label = Label.new()
-	_send_wave_reward_label.text                = ""
-	_send_wave_reward_label.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	_send_wave_reward_label.mouse_filter        = Control.MOUSE_FILTER_IGNORE
+	_send_wave_reward_label.text                  = ""
+	_send_wave_reward_label.size_flags_horizontal = Control.SIZE_SHRINK_END
+	_send_wave_reward_label.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_send_wave_reward_label.mouse_filter          = Control.MOUSE_FILTER_IGNORE
 	_send_wave_reward_label.add_theme_font_override("font", UIFonts.primary_bold())
 	_send_wave_reward_label.add_theme_font_size_override("font_size", 17)
 	_send_wave_reward_label.add_theme_color_override("font_color", COLOR_GOLD_BORDER)
@@ -823,48 +843,30 @@ void fragment() {
 	send_spacer_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
 	vbox.add_child(send_spacer_bottom)
 
-	# --- Bottom 3-button row: Zoom | Pause | Speed ---
-	# Three equal-width gold buttons at a fixed height.
+	# --- Bottom 2-button row: Play/Pause | Speed ---
+	# Both buttons expand to fill equal widths.
 	var bottom_row := HBoxContainer.new()
 	bottom_row.add_theme_constant_override("separation", 4)
 	bottom_row.size_flags_vertical = Control.SIZE_SHRINK_END
 	vbox.add_child(bottom_row)
 
-	# Zoom button — magnifying glass with + (zoom in) or − (zoom out).
-	_zoom_btn = Button.new()
-	_zoom_btn.text = ""
-	_apply_gold_button_style(_zoom_btn)
-	_zoom_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_zoom_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_zoom_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_zoom_btn.pressed.connect(_on_zoom_btn_pressed)
-	bottom_row.add_child(_zoom_btn)
+	# Play/pause button — shows pause bars when playing (will pause), play arrow when paused.
+	_play_pause_btn = Button.new()
+	_play_pause_btn.text = ""
+	_apply_gold_button_style(_play_pause_btn)
+	_play_pause_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_play_pause_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
+	_play_pause_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
+	_play_pause_btn.pressed.connect(_on_play_pause_btn_pressed)
+	bottom_row.add_child(_play_pause_btn)
 
-	# _ZoomIcon fills the button face and redraws when show_plus changes.
-	_zoom_icon = _ZoomIcon.new()
-	_zoom_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_zoom_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_zoom_btn.add_child(_zoom_icon)
+	_play_pause_icon = _PlayPauseIcon.new()
+	_play_pause_icon.play_speed_state = _play_speed_state   # 1 = playing at startup
+	_play_pause_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_play_pause_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_play_pause_btn.add_child(_play_pause_icon)
 
-	# Pause button — procedural pause bars when playing, ▶ text when paused.
-	_pause_btn = Button.new()
-	_pause_btn.text = ""
-	_pause_btn.add_theme_font_size_override("font_size", 26)
-	_pause_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_pause_btn)
-	_pause_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_pause_btn.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	_pause_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_pause_btn.pressed.connect(_on_pause_btn_pressed)
-	bottom_row.add_child(_pause_btn)
-
-	_pause_bar_icon = _PauseBarIcon.new()
-	_pause_bar_icon.target_height = UIFonts.primary_bold().get_ascent(26)
-	_pause_bar_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_pause_bar_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	_pause_btn.add_child(_pause_bar_icon)
-
-	# Speed button — always shows "▶▶"; black at 1× speed, bright gold at 2×.
+	# Speed button — cycles 1× → 2× → 3× → 1× (pause is handled by the separate button above).
 	_speed_btn = Button.new()
 	_speed_btn.text = ""
 	_apply_gold_button_style(_speed_btn)
@@ -874,16 +876,13 @@ void fragment() {
 	_speed_btn.pressed.connect(_on_speed_btn_pressed)
 	bottom_row.add_child(_speed_btn)
 
-	_speed_icon_lbl = Label.new()
-	_speed_icon_lbl.text                 = "▶▶"
-	_speed_icon_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_speed_icon_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_speed_icon_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
-	_speed_icon_lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_speed_icon_lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	_speed_icon_lbl.add_theme_font_size_override("font_size", 26)
-	_speed_icon_lbl.add_theme_color_override("font_color", Color.BLACK)  # black at 1× speed
-	_speed_btn.add_child(_speed_icon_lbl)
+	_speed_icon = _PlaySpeedIcon.new()
+	_speed_icon.play_speed_state = _play_speed_state
+	_speed_icon.speed_text       = "1x"
+	_speed_icon.font_ref         = UIFonts.primary_bold()
+	_speed_icon.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_speed_icon.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_speed_btn.add_child(_speed_icon)
 
 
 # ---------------------------------------------------------------------------
@@ -900,10 +899,10 @@ func _build_incoming_overlay() -> void:
 	_incoming_banner.anchor_top    = 1.0
 	_incoming_banner.anchor_bottom = 1.0
 	_incoming_banner.offset_left   = -INCOMING_BANNER_W / 2.0
-	_incoming_banner.offset_right  = INCOMING_BANNER_W / 2.0
+	_incoming_banner.offset_right  =  INCOMING_BANNER_W / 2.0
 	# Hidden below the screen edge until a countdown starts.
 	_incoming_banner.offset_top    = 0.0
-	_incoming_banner.offset_bottom = PAUSE_BANNER_H
+	_incoming_banner.offset_bottom = INCOMING_BANNER_H
 	_incoming_banner.process_mode  = Node.PROCESS_MODE_ALWAYS
 	_incoming_banner.mouse_filter  = Control.MOUSE_FILTER_IGNORE
 	add_child(_incoming_banner)
@@ -915,18 +914,24 @@ func _build_incoming_overlay() -> void:
 	shape.color_fill   = COLOR_PAUSE_BANNER_BG
 	shape.set_anchors_preset(Control.PRESET_FULL_RECT)
 	shape.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_incoming_banner_shape = shape
 	_incoming_banner.add_child(shape)
 
-	# Single centred label — "INCOMING  5..." — so both words are centred as a unit.
+	# Single centred label — "INCOMING  3..." — so both words are centred as a unit.
 	_countdown_seconds_label = Label.new()
 	_countdown_seconds_label.text                 = ""
 	_countdown_seconds_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_countdown_seconds_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	_countdown_seconds_label.add_theme_font_override("font", UIFonts.header())
-	_countdown_seconds_label.add_theme_font_size_override("font_size", 28)
-	_countdown_seconds_label.add_theme_color_override("font_color", COLOR_TEXT)
 	_countdown_seconds_label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	_countdown_seconds_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	var incoming_font_var := FontVariation.new()
+	incoming_font_var.base_font    = UIFonts.header()
+	incoming_font_var.spacing_glyph = 2   # letter spacing; LabelSettings has no such property
+	var incoming_lbl_settings := LabelSettings.new()
+	incoming_lbl_settings.font       = incoming_font_var
+	incoming_lbl_settings.font_size  = 41   # 36 × 1.15
+	incoming_lbl_settings.font_color = COLOR_TEXT
+	_countdown_seconds_label.label_settings = incoming_lbl_settings
 	_incoming_banner.add_child(_countdown_seconds_label)
 
 
@@ -940,75 +945,33 @@ func _show_incoming_banner(visible_state: bool) -> void:
 	_incoming_banner_tween.set_trans(Tween.TRANS_CUBIC)
 	# Visible: top = -H, bottom = 0 (banner sits above screen edge).
 	# Hidden: top = 0, bottom = H (banner is pushed below the screen edge).
-	var target_top:    float = -PAUSE_BANNER_H if visible_state else 0.0
-	var target_bottom: float = 0.0             if visible_state else PAUSE_BANNER_H
+	var target_top:    float = -INCOMING_BANNER_H if visible_state else 0.0
+	var target_bottom: float = 0.0               if visible_state else INCOMING_BANNER_H
 	_incoming_banner_tween.tween_property(_incoming_banner, "offset_top",    target_top,    0.22)
 	_incoming_banner_tween.parallel().tween_property(_incoming_banner, "offset_bottom", target_bottom, 0.22)
 
-
-# ---------------------------------------------------------------------------
-# Run-over overlay
-# ---------------------------------------------------------------------------
-
-func _build_run_over_overlay() -> void:
-	_run_over_overlay = Control.new()
-	_run_over_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_run_over_overlay.process_mode = Node.PROCESS_MODE_ALWAYS
-	_run_over_overlay.visible      = false
-	add_child(_run_over_overlay)
-
-	var bg := ColorRect.new()
-	bg.color = COLOR_OVERLAY_BG
-	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_run_over_overlay.add_child(bg)
-
-	var infested_label := Label.new()
-	infested_label.text                 = "INFESTED!"
-	infested_label.anchor_right         = 1.0
-	infested_label.anchor_top           = 0.30
-	infested_label.anchor_bottom        = 0.55
-	infested_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	infested_label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	infested_label.add_theme_font_size_override("font_size", 144)
-	infested_label.add_theme_color_override("font_color", COLOR_INFESTED)
-	infested_label.add_theme_font_override("font", UIFonts.header())
-	_run_over_overlay.add_child(infested_label)
-
-	var btn := Button.new()
-	btn.text         = ""
-	btn.anchor_left  = 0.30
-	btn.anchor_right = 0.70
-	btn.anchor_top   = 0.70
-	btn.anchor_bottom = 0.80
-	btn.process_mode = Node.PROCESS_MODE_ALWAYS
-	_apply_send_wave_btn_style(btn)
-	btn.pressed.connect(_on_restart_pressed)
-	_run_over_overlay.add_child(btn)
-
-	# Inner layout mirrors the Send Next Wave button: icon + label in an HBox.
-	var btn_hbox := HBoxContainer.new()
-	btn_hbox.set_anchors_preset(Control.PRESET_FULL_RECT)
-	btn_hbox.alignment   = BoxContainer.ALIGNMENT_CENTER
-	btn_hbox.add_theme_constant_override("separation", 5)
-	btn_hbox.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	btn.add_child(btn_hbox)
-
-	var restart_icon := TextureRect.new()
-	restart_icon.texture             = load("res://assets/uninfested.png") as Texture2D
-	restart_icon.custom_minimum_size = Vector2(36, 36)
-	restart_icon.expand_mode         = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	restart_icon.stretch_mode        = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	restart_icon.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	restart_icon.mouse_filter        = Control.MOUSE_FILTER_IGNORE
-	btn_hbox.add_child(restart_icon)
-
-	var restart_label := Label.new()
-	restart_label.text         = "Restart"
-	restart_label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	restart_label.add_theme_font_override("font", UIFonts.primary_bold())
-	restart_label.add_theme_font_size_override("font_size", 24)
-	restart_label.add_theme_color_override("font_color", COLOR_TEXT)
-	btn_hbox.add_child(restart_label)
+	# Flash animation — pulse between base crimson and a brighter red while visible.
+	if _incoming_flash_tween:
+		_incoming_flash_tween.kill()
+	if visible_state and is_instance_valid(_incoming_banner_shape):
+		_incoming_flash_tween = create_tween()
+		_incoming_flash_tween.set_loops()
+		_incoming_flash_tween.set_ease(Tween.EASE_IN_OUT)
+		_incoming_flash_tween.set_trans(Tween.TRANS_SINE)
+		_incoming_flash_tween.tween_method(
+			func(c: Color) -> void:
+				_incoming_banner_shape.color_fill = c
+				_incoming_banner_shape.queue_redraw(),
+			COLOR_PAUSE_BANNER_BG, COLOR_INCOMING_FLASH, 0.65)
+		_incoming_flash_tween.tween_method(
+			func(c: Color) -> void:
+				_incoming_banner_shape.color_fill = c
+				_incoming_banner_shape.queue_redraw(),
+			COLOR_INCOMING_FLASH, COLOR_PAUSE_BANNER_BG, 0.65)
+	elif is_instance_valid(_incoming_banner_shape):
+		# Reset to base color when the banner hides.
+		_incoming_banner_shape.color_fill = COLOR_PAUSE_BANNER_BG
+		_incoming_banner_shape.queue_redraw()
 
 
 # ---------------------------------------------------------------------------
@@ -1110,10 +1073,15 @@ func _build_pause_banner() -> void:
 	label.set_anchors_preset(Control.PRESET_FULL_RECT)
 	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	label.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
-	label.add_theme_font_override("font", UIFonts.header())
-	label.add_theme_font_size_override("font_size", 28)
-	label.add_theme_color_override("font_color", COLOR_TEXT)
 	label.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	var pause_font_var := FontVariation.new()
+	pause_font_var.base_font     = UIFonts.header()
+	pause_font_var.spacing_glyph = 2   # letter spacing; LabelSettings has no such property
+	var pause_lbl_settings := LabelSettings.new()
+	pause_lbl_settings.font       = pause_font_var
+	pause_lbl_settings.font_size  = 32   # 28 × 1.15
+	pause_lbl_settings.font_color = COLOR_TEXT
+	label.label_settings = pause_lbl_settings
 	_pause_banner.add_child(label)
 
 
@@ -1167,151 +1135,302 @@ func _add_border_line(al: float, at: float, ar: float, ab: float,
 # Settings dialog
 # ---------------------------------------------------------------------------
 
-## Builds the modal settings panel.  Hidden by default; shown when the user
-## taps the gear button in the top-right corner of the right panel.
-## The dialog lives at the CanvasLayer root so it floats above the side panels.
-## A ScrollContainer in the middle lets the settings list grow without resizing the panel.
-## Exit and Restart buttons are located here rather than on the right panel.
+## Builds the full-screen settings overlay.  Hidden by default; shown when the
+## user taps the gear button.  The overlay fills the entire virtual viewport
+## so it can give every setting generous touch targets and clear organization.
+##
+## Layout:
+##   Header (60px):  title + Close button
+##   ─────────────────────────────────────────
+##   Left half (640px) │ Right half (640px)
+##   AUDIO             │ DISPLAY
+##   Music slider      │ Grid lines overview
+##   SFX slider        │ Grid lines zoomed
+##   ─────────────────────────────────────────
+##   Footer (80px):  Reset Progress + Dev Mode  │  EXIT + RESTART
 func _build_settings_dialog() -> void:
 	_settings_dialog = Control.new()
 	_settings_dialog.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_settings_dialog.visible      = false
-	# MOUSE_FILTER_STOP prevents taps on the dim area from reaching the arena.
 	_settings_dialog.mouse_filter = Control.MOUSE_FILTER_STOP
 	add_child(_settings_dialog)
 
-	# Full-screen dimmer behind the panel.
-	var dim := ColorRect.new()
-	dim.color        = Color(0.0, 0.0, 0.0, 0.60)
-	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
-	dim.mouse_filter = Control.MOUSE_FILTER_STOP
-	_settings_dialog.add_child(dim)
+	const HEADER_H:     float = 60.0
+	const FOOTER_H:     float = 80.0
+	const COL_DIV_X:    float = 640.0
+	const PADDING:      float = 32.0
+	const DIVIDER_COL := Color(0.22, 0.22, 0.30, 1.0)
 
-	# Centered dialog panel — wider and taller than the original to make room
-	# for a full settings list; the ScrollContainer handles overflow.
+	# Full-screen panel — no dim, no floating box; fills the entire viewport.
 	var panel := Panel.new()
-	panel.anchor_left   = 0.5
-	panel.anchor_right  = 0.5
-	panel.anchor_top    = 0.5
-	panel.anchor_bottom = 0.5
-	panel.offset_left   = -240.0
-	panel.offset_right  =  240.0
-	panel.offset_top    = -220.0
-	panel.offset_bottom =  220.0
-	panel.mouse_filter  = Control.MOUSE_FILTER_STOP
-
-	var panel_style := StyleBoxFlat.new()
-	panel_style.bg_color     = Color(0.12, 0.12, 0.22, 0.97)
-	panel_style.border_color = Color(0.50, 0.50, 0.68, 1.0)
-	panel_style.set_border_width_all(2)
-	panel_style.set_corner_radius_all(8)
-	panel.add_theme_stylebox_override("panel", panel_style)
+	panel.set_anchors_preset(Control.PRESET_FULL_RECT)
+	panel.mouse_filter = Control.MOUSE_FILTER_STOP
+	var panel_sty := StyleBoxFlat.new()
+	panel_sty.bg_color = Color(0.06, 0.08, 0.14, 1.0)
+	panel_sty.set_border_width_all(0)
+	panel.add_theme_stylebox_override("panel", panel_sty)
 	_settings_dialog.add_child(panel)
 
-	var inner := MarginContainer.new()
-	inner.set_anchors_preset(Control.PRESET_FULL_RECT)
-	inner.add_theme_constant_override("margin_left",   24)
-	inner.add_theme_constant_override("margin_right",  24)
-	inner.add_theme_constant_override("margin_top",    18)
-	inner.add_theme_constant_override("margin_bottom", 18)
-	panel.add_child(inner)
+	# ── Header ──────────────────────────────────────────────────────────────
+	var title_lbl := Label.new()
+	title_lbl.text               = "SETTINGS"
+	title_lbl.position           = Vector2(PADDING, 0.0)
+	title_lbl.size               = Vector2(600.0, HEADER_H)
+	title_lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title_lbl.add_theme_font_override("font", UIFonts.header())
+	title_lbl.add_theme_font_size_override("font_size", 36)
+	title_lbl.add_theme_color_override("font_color", COLOR_TEXT)
+	title_lbl.mouse_filter       = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(title_lbl)
 
-	var dialog_vbox := VBoxContainer.new()
-	dialog_vbox.add_theme_constant_override("separation", 12)
-	inner.add_child(dialog_vbox)
+	# Close button — right-aligned in header, same green style as PermanentUpgradeScreen.
+	var close_btn := Button.new()
+	close_btn.text          = "Close"
+	close_btn.focus_mode    = Control.FOCUS_NONE
+	close_btn.anchor_left   = 1.0;  close_btn.anchor_right  = 1.0
+	close_btn.anchor_top    = 0.0;  close_btn.anchor_bottom = 0.0
+	close_btn.offset_left   = -(PADDING + 130.0)
+	close_btn.offset_right  = -PADDING
+	close_btn.offset_top    = (HEADER_H - 44.0) * 0.5
+	close_btn.offset_bottom = HEADER_H - (HEADER_H - 44.0) * 0.5
+	close_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	close_btn.add_theme_font_size_override("font_size", 22)
+	close_btn.add_theme_color_override("font_color", COLOR_TEXT)
+	close_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for state: Array in [
+		["normal",  Color(0.04, 0.25, 0.00, 1.0)],
+		["hover",   Color(0.07, 0.33, 0.01, 1.0)],
+		["pressed", Color(0.02, 0.16, 0.00, 1.0)],
+	]:
+		var box := StyleBoxFlat.new()
+		box.bg_color     = state[1]
+		box.border_color = Color(0.22, 0.60, 0.04, 1.0)
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(6)
+		box.set_content_margin_all(8.0)
+		close_btn.add_theme_stylebox_override(state[0], box)
+	close_btn.pressed.connect(_on_settings_close_pressed)
+	panel.add_child(close_btn)
 
-	var title := Label.new()
-	title.text                 = "SETTINGS"
-	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	title.add_theme_font_override("font", UIFonts.header())
-	title.add_theme_font_size_override("font_size", 30)
-	title.add_theme_color_override("font_color", COLOR_TEXT)
-	dialog_vbox.add_child(title)
+	const TAB_H: float = 44.0
 
-	dialog_vbox.add_child(HSeparator.new())
+	# ── Structural dividers ─────────────────────────────────────────────────
+	# Horizontal below header.
+	var hdr_div := ColorRect.new()
+	hdr_div.color        = DIVIDER_COL
+	hdr_div.position     = Vector2(0.0, HEADER_H)
+	hdr_div.size         = Vector2(1280.0, 1.0)
+	hdr_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(hdr_div)
 
-	# Scrollable content — vertical scroll only; items expand to fill the panel width.
-	# Adding new settings to content_vbox automatically becomes scrollable.
-	var scroll := ScrollContainer.new()
-	scroll.size_flags_vertical    = Control.SIZE_EXPAND_FILL
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	dialog_vbox.add_child(scroll)
+	# ── Tab bar ─────────────────────────────────────────────────────────────
+	_settings_tab_btn          = _make_settings_tab_button("SETTINGS")
+	_settings_tab_btn.position = Vector2(0.0, HEADER_H + 1.0)
+	_settings_tab_btn.size     = Vector2(640.0, TAB_H)
+	_settings_tab_btn.pressed.connect(func() -> void: _switch_settings_tab("Settings"))
+	panel.add_child(_settings_tab_btn)
 
-	# Extra right padding so CheckButton toggle rings (which draw slightly outside
-	# their rect) are not clipped by the ScrollContainer's content boundary.
-	var content_margin := MarginContainer.new()
-	content_margin.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content_margin.add_theme_constant_override("margin_right", 6)
-	scroll.add_child(content_margin)
+	var tab_v_div := ColorRect.new()
+	tab_v_div.color        = DIVIDER_COL
+	tab_v_div.position     = Vector2(639.5, HEADER_H + 1.0 + 6.0)
+	tab_v_div.size         = Vector2(1.0, TAB_H - 12.0)
+	tab_v_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(tab_v_div)
 
-	var content_vbox := VBoxContainer.new()
-	content_vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	content_vbox.add_theme_constant_override("separation", 10)
-	content_margin.add_child(content_vbox)
+	_upgrades_tab_btn          = _make_settings_tab_button("UPGRADES")
+	_upgrades_tab_btn.position = Vector2(640.0, HEADER_H + 1.0)
+	_upgrades_tab_btn.size     = Vector2(640.0, TAB_H)
+	_upgrades_tab_btn.pressed.connect(func() -> void: _switch_settings_tab("Upgrades"))
+	panel.add_child(_upgrades_tab_btn)
 
-	# --- AUDIO section ---
-	_build_section_header(content_vbox, "AUDIO")
-	_music_slider = _build_volume_row(content_vbox, "MUSIC")
-	_sfx_slider   = _build_volume_row(content_vbox, "SFX")
+	var tab_div := ColorRect.new()
+	tab_div.color        = DIVIDER_COL
+	tab_div.position     = Vector2(0.0, HEADER_H + 1.0 + TAB_H)
+	tab_div.size         = Vector2(1280.0, 1.0)
+	tab_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(tab_div)
 
-	content_vbox.add_child(HSeparator.new())
+	_apply_settings_tab_style(_settings_tab_btn, true)
+	_apply_settings_tab_style(_upgrades_tab_btn, false)
 
-	# --- DISPLAY section ---
-	_build_section_header(content_vbox, "DISPLAY")
-	_grid_lines_overview_toggle = _build_toggle_row(content_vbox, "Grid lines when zoomed out")
-	_grid_lines_zoomed_toggle   = _build_toggle_row(content_vbox, "Grid lines when zoomed in")
+	# ── Content area geometry ────────────────────────────────────────────────
+	var main_y := HEADER_H + 1.0 + TAB_H + 1.0
+	var main_h := 600.0 - main_y - FOOTER_H - 1.0
 
-	# Load saved values first so the initial signal emission from _load_all_settings
-	# carries the correct booleans before we wire up the change callbacks.
+	# Horizontal above footer.
+	var ftr_div := ColorRect.new()
+	ftr_div.color        = DIVIDER_COL
+	ftr_div.position     = Vector2(0.0, 600.0 - FOOTER_H - 1.0)
+	ftr_div.size         = Vector2(1280.0, 1.0)
+	ftr_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(ftr_div)
+
+	# ── SETTINGS content — two-column audio + display layout ─────────────────
+	_settings_content              = Control.new()
+	_settings_content.position     = Vector2(0.0, main_y)
+	_settings_content.size         = Vector2(1280.0, main_h)
+	_settings_content.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	panel.add_child(_settings_content)
+
+	# Vertical divider between the two columns.
+	var col_div := ColorRect.new()
+	col_div.color        = DIVIDER_COL
+	col_div.position     = Vector2(COL_DIV_X, 0.0)
+	col_div.size         = Vector2(1.0, main_h)
+	col_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_settings_content.add_child(col_div)
+
+	var left_col := VBoxContainer.new()
+	left_col.position = Vector2(0.0, 0.0)
+	left_col.size     = Vector2(COL_DIV_X, main_h)
+	left_col.add_theme_constant_override("separation", 0)
+	_settings_content.add_child(left_col)
+
+	_add_settings_section_strip(left_col, "AUDIO")
+
+	var left_pad := MarginContainer.new()
+	left_pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left_pad.add_theme_constant_override("margin_left",   int(PADDING))
+	left_pad.add_theme_constant_override("margin_right",  int(PADDING))
+	left_pad.add_theme_constant_override("margin_top",    20)
+	left_pad.add_theme_constant_override("margin_bottom", 20)
+	left_col.add_child(left_pad)
+
+	var left_inner := VBoxContainer.new()
+	left_inner.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	left_inner.add_theme_constant_override("separation", 16)
+	left_pad.add_child(left_inner)
+
+	_music_slider = _build_volume_row(left_inner, "MUSIC")
+	_sfx_slider   = _build_volume_row(left_inner, "SFX")
+
+	var right_col := VBoxContainer.new()
+	right_col.position = Vector2(COL_DIV_X + 1.0, 0.0)
+	right_col.size     = Vector2(1280.0 - COL_DIV_X - 1.0, main_h)
+	right_col.add_theme_constant_override("separation", 0)
+	_settings_content.add_child(right_col)
+
+	_add_settings_section_strip(right_col, "DISPLAY")
+
+	var right_pad := MarginContainer.new()
+	right_pad.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_pad.add_theme_constant_override("margin_left",   int(PADDING))
+	right_pad.add_theme_constant_override("margin_right",  int(PADDING))
+	right_pad.add_theme_constant_override("margin_top",    20)
+	right_pad.add_theme_constant_override("margin_bottom", 20)
+	right_col.add_child(right_pad)
+
+	var right_inner := VBoxContainer.new()
+	right_inner.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	right_inner.add_theme_constant_override("separation", 16)
+	right_pad.add_child(right_inner)
+
+	_grid_lines_overview_toggle = _build_toggle_row(right_inner, "Grid lines — overview")
+	_grid_lines_zoomed_toggle   = _build_toggle_row(right_inner, "Grid lines — zoomed in")
+
+	# ── UPGRADES content — campaign buff summary; rebuilt each time tab opens ──
+	_upgrades_content = ScrollContainer.new()
+	_upgrades_content.position               = Vector2(0.0, main_y)
+	_upgrades_content.size                   = Vector2(1280.0, main_h)
+	_upgrades_content.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	_upgrades_content.vertical_scroll_mode   = ScrollContainer.SCROLL_MODE_AUTO
+	_upgrades_content.visible                = false
+	panel.add_child(_upgrades_content)
+
+	# ── Footer ───────────────────────────────────────────────────────────────
+	var footer_y   := 600.0 - FOOTER_H
+	var btn_h      := 50.0
+	var btn_y      := footer_y + (FOOTER_H - btn_h) * 0.5
+
+	# Left half of footer: Reset Progress + Dev Mode (DATA actions).
+	var left_btns := HBoxContainer.new()
+	left_btns.position = Vector2(PADDING, btn_y)
+	left_btns.size     = Vector2(COL_DIV_X - PADDING * 2.0, btn_h)
+	left_btns.add_theme_constant_override("separation", 12)
+	panel.add_child(left_btns)
+
+	var reset_btn := Button.new()
+	reset_btn.text                  = "Reset Progress"
+	reset_btn.focus_mode            = Control.FOCUS_NONE
+	reset_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	reset_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	reset_btn.add_theme_font_size_override("font_size", 20)
+	reset_btn.add_theme_color_override("font_color", Color(0.95, 0.90, 0.90, 1.0))
+	reset_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for state: Array in [
+		["normal",  Color(0.30, 0.03, 0.03, 1.0)],
+		["hover",   Color(0.42, 0.05, 0.05, 1.0)],
+		["pressed", Color(0.20, 0.02, 0.02, 1.0)],
+	]:
+		var box := StyleBoxFlat.new()
+		box.bg_color     = state[1]
+		box.border_color = Color(0.75, 0.18, 0.18, 1.0)
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(6)
+		box.set_content_margin_all(8.0)
+		reset_btn.add_theme_stylebox_override(state[0], box)
+	reset_btn.pressed.connect(_on_reset_progress_pressed)
+	left_btns.add_child(reset_btn)
+
+	# Dev mode button — silver theme; text reflects current state.
+	var dev_btn := Button.new()
+	dev_btn.text                  = "Exit DEVmode" if GameState.dev_mode else "DEVmode"
+	dev_btn.focus_mode            = Control.FOCUS_NONE
+	dev_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	dev_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	dev_btn.add_theme_font_size_override("font_size", 20)
+	dev_btn.add_theme_color_override("font_color", Color(0.92, 0.92, 0.95, 1.0))
+	dev_btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for dev_state: Array in [
+		["normal",  Color(0.30, 0.30, 0.32, 1.0)],
+		["hover",   Color(0.40, 0.40, 0.42, 1.0)],
+		["pressed", Color(0.22, 0.22, 0.24, 1.0)],
+	]:
+		var dev_box := StyleBoxFlat.new()
+		dev_box.bg_color     = dev_state[1]
+		dev_box.border_color = Color(0.60, 0.60, 0.62, 1.0)
+		dev_box.set_border_width_all(2)
+		dev_box.set_corner_radius_all(6)
+		dev_box.set_content_margin_all(8.0)
+		dev_btn.add_theme_stylebox_override(dev_state[0], dev_box)
+
+	dev_btn.pressed.connect(_on_dev_mode_btn_pressed)
+	left_btns.add_child(dev_btn)
+
+	# Right half of footer: EXIT + RESTART.
+	var right_btns := HBoxContainer.new()
+	right_btns.position = Vector2(COL_DIV_X + 1.0 + PADDING, btn_y)
+	right_btns.size     = Vector2(1280.0 - COL_DIV_X - 1.0 - PADDING * 2.0, btn_h)
+	right_btns.add_theme_constant_override("separation", 12)
+	panel.add_child(right_btns)
+
+	_exit_btn = Button.new()
+	_exit_btn.text                  = "EXIT"
+	_exit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_exit_btn.custom_minimum_size   = Vector2(0, btn_h)
+	_exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_exit_btn.add_theme_font_size_override("font_size", 26)
+	_apply_gold_button_style(_exit_btn)
+	_exit_btn.pressed.connect(_on_exit_pressed)
+	right_btns.add_child(_exit_btn)
+
+	_restart_btn = Button.new()
+	_restart_btn.text                  = "RESTART"
+	_restart_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_restart_btn.custom_minimum_size   = Vector2(0, btn_h)
+	_restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	_restart_btn.add_theme_font_size_override("font_size", 26)
+	_apply_gold_button_style(_restart_btn)
+	_restart_btn.pressed.connect(_on_restart_pressed)
+	right_btns.add_child(_restart_btn)
+
+	# Wire signals after _load_all_settings() so the initial value emission
+	# doesn't trigger save/side-effects before everything is constructed.
 	_load_all_settings()
 	_music_slider.value_changed.connect(_on_music_volume_changed)
 	_sfx_slider.value_changed.connect(_on_sfx_volume_changed)
 	_grid_lines_overview_toggle.toggled.connect(_on_grid_lines_overview_toggled)
 	_grid_lines_zoomed_toggle.toggled.connect(_on_grid_lines_zoomed_toggled)
-
-	# X button — square, top-right corner of the panel, outside the vbox flow.
-	var close_btn := Button.new()
-	close_btn.text          = "X"
-	close_btn.anchor_left   = 1.0
-	close_btn.anchor_right  = 1.0
-	close_btn.anchor_top    = 0.0
-	close_btn.anchor_bottom = 0.0
-	close_btn.offset_left   = -48.0
-	close_btn.offset_right  = -8.0
-	close_btn.offset_top    =  8.0
-	close_btn.offset_bottom =  48.0
-	close_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	close_btn.add_theme_font_size_override("font_size", 20)
-	_apply_button_style(close_btn)
-	close_btn.pressed.connect(_on_settings_close_pressed)
-	panel.add_child(close_btn)
-
-	dialog_vbox.add_child(HSeparator.new())
-
-	# Exit and Restart live in the settings dialog so the right panel stays clean.
-	var exit_restart_row := HBoxContainer.new()
-	exit_restart_row.add_theme_constant_override("separation", 4)
-	dialog_vbox.add_child(exit_restart_row)
-
-	_exit_btn = Button.new()
-	_exit_btn.text = "EXIT"
-	_exit_btn.add_theme_font_size_override("font_size", 24)
-	_exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_exit_btn)
-	_exit_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_exit_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_exit_btn.pressed.connect(_on_exit_pressed)
-	exit_restart_row.add_child(_exit_btn)
-
-	_restart_btn = Button.new()
-	_restart_btn.text = "RESTART"
-	_restart_btn.add_theme_font_size_override("font_size", 24)
-	_restart_btn.add_theme_font_override("font", UIFonts.primary_bold())
-	_apply_gold_button_style(_restart_btn)
-	_restart_btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	_restart_btn.custom_minimum_size   = Vector2(0, RIGHT_BTN_H)
-	_restart_btn.pressed.connect(_on_restart_pressed)
-	exit_restart_row.add_child(_restart_btn)
 
 
 func _on_settings_btn_pressed() -> void:
@@ -1320,13 +1439,117 @@ func _on_settings_btn_pressed() -> void:
 	# the user might have already paused manually before opening Settings.
 	_was_paused_before_settings = get_tree().paused
 	get_tree().paused           = true
-	_settings_dialog.visible   = true
+	# Always open on the SETTINGS tab; force a clean tab state on each open.
+	_active_settings_tab        = ""
+	_switch_settings_tab("Settings")
+	_settings_dialog.visible    = true
 
 
 func _on_settings_close_pressed() -> void:
 	AudioManager.play_ui("button")
 	_settings_dialog.visible = false
 	get_tree().paused        = _was_paused_before_settings
+
+
+# ---------------------------------------------------------------------------
+# Reset Progress confirmation
+# ---------------------------------------------------------------------------
+
+func _on_reset_progress_pressed() -> void:
+	AudioManager.play_ui("button")
+	if _reset_confirm_overlay == null:
+		_build_reset_confirm_overlay()
+	_reset_confirm_overlay.visible = true
+
+
+func _build_reset_confirm_overlay() -> void:
+	# Sits inside _settings_dialog so it appears above the settings panel.
+	_reset_confirm_overlay = Control.new()
+	_reset_confirm_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_reset_confirm_overlay.mouse_filter = Control.MOUSE_FILTER_STOP
+	_settings_dialog.add_child(_reset_confirm_overlay)
+
+	var dim := ColorRect.new()
+	dim.color        = Color(0.0, 0.0, 0.0, 0.65)
+	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_reset_confirm_overlay.add_child(dim)
+
+	var panel := Panel.new()
+	panel.anchor_left   = 0.5;  panel.anchor_right  = 0.5
+	panel.anchor_top    = 0.5;  panel.anchor_bottom = 0.5
+	panel.offset_left   = -220.0;  panel.offset_right  = 220.0
+	panel.offset_top    = -100.0;  panel.offset_bottom = 100.0
+	panel.mouse_filter  = Control.MOUSE_FILTER_STOP
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color     = Color(0.10, 0.04, 0.04, 0.97)
+	panel_style.border_color = Color(0.65, 0.18, 0.18, 1.0)
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(8)
+	panel.add_theme_stylebox_override("panel", panel_style)
+	_reset_confirm_overlay.add_child(panel)
+
+	var prompt := Label.new()
+	prompt.text                 = "You are about to permanently erase\nall progress. Are you sure?"
+	prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	prompt.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	prompt.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+	prompt.set_anchors_preset(Control.PRESET_FULL_RECT)
+	prompt.offset_bottom        = -58.0
+	prompt.add_theme_font_override("font", UIFonts.primary_bold())
+	prompt.add_theme_font_size_override("font_size", 18)
+	prompt.add_theme_color_override("font_color", Color(0.95, 0.90, 0.90, 1.0))
+	panel.add_child(prompt)
+
+	var btn_row := HBoxContainer.new()
+	btn_row.anchor_left   = 0.0;  btn_row.anchor_right  = 1.0
+	btn_row.anchor_top    = 1.0;  btn_row.anchor_bottom = 1.0
+	btn_row.offset_top    = -52.0; btn_row.offset_bottom = -10.0
+	btn_row.offset_left   = 16.0;  btn_row.offset_right  = -16.0
+	btn_row.add_theme_constant_override("separation", 8)
+	panel.add_child(btn_row)
+
+	var no_btn := _make_reset_confirm_button("No",
+			Color(0.20, 0.20, 0.24, 1.0), Color(0.45, 0.45, 0.52, 1.0))
+	no_btn.pressed.connect(_on_reset_confirm_no)
+	btn_row.add_child(no_btn)
+
+	var yes_btn := _make_reset_confirm_button("Yes",
+			Color(0.30, 0.03, 0.03, 1.0), Color(0.70, 0.15, 0.15, 1.0))
+	yes_btn.pressed.connect(_on_reset_confirm_yes)
+	btn_row.add_child(yes_btn)
+
+
+func _make_reset_confirm_button(label_text: String, bg: Color, border: Color) -> Button:
+	var btn := Button.new()
+	btn.text                  = label_text
+	btn.focus_mode            = Control.FOCUS_NONE
+	btn.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	btn.add_theme_font_override("font", UIFonts.primary_bold())
+	btn.add_theme_font_size_override("font_size", 18)
+	btn.add_theme_color_override("font_color", Color(0.95, 0.92, 0.90, 1.0))
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	for state_name: String in ["normal", "hover", "pressed"]:
+		var box := StyleBoxFlat.new()
+		box.bg_color     = bg.lightened(0.08) if state_name == "hover" else \
+				(bg.darkened(0.08) if state_name == "pressed" else bg)
+		box.border_color = border
+		box.set_border_width_all(2)
+		box.set_corner_radius_all(5)
+		box.set_content_margin_all(6.0)
+		btn.add_theme_stylebox_override(state_name, box)
+	return btn
+
+
+func _on_reset_confirm_no() -> void:
+	AudioManager.play_ui("button")
+	_reset_confirm_overlay.visible = false
+
+
+func _on_reset_confirm_yes() -> void:
+	AudioManager.play_ui("button")
+	GameState.reset_all_upgrades()
+	_reset_confirm_overlay.visible = false
 
 
 # ---------------------------------------------------------------------------
@@ -1359,10 +1582,8 @@ func _on_wave_countdown_changed(seconds_remaining: int) -> void:
 		_countdown_active       = true
 		_last_countdown_seconds = seconds_remaining
 		_countdown_seconds_label.text = "INCOMING  %d..." % seconds_remaining
-		_send_wave_reward_label.text  = GameState.format_bucks(seconds_remaining * GameState.early_wave_bonus_rate * _wave_multiplier)
 		if _max_countdown_seconds == 0:
 			_max_countdown_seconds = seconds_remaining
-		_update_reward_bar_display(float(seconds_remaining) / float(_max_countdown_seconds))
 		if not was_active:
 			_show_incoming_banner(true)
 	else:
@@ -1379,6 +1600,14 @@ func _on_wave_spawn_progress_changed(spawned: int, total: int) -> void:
 
 
 func _process(delta: float) -> void:
+	# If the game pauses while a drag is in progress due to a system event (e.g. a
+	# level-up screen appears), cancel the drag so the trap is not silently committed
+	# on resume.  Player-initiated pauses (_play_speed_state == 0) must NOT cancel:
+	# the design allows placing traps while the player has manually paused to inspect the arena.
+	if _drag_active and get_tree().paused and _play_speed_state != 0:
+		_arena.cancel_hud_drag()
+		_end_drag()
+
 	# Keep the floating drag icon centred above the cursor each frame.
 	# We do this in _process (rather than only in _input) so the icon stays
 	# locked to position even when the cursor is stationary.
@@ -1401,10 +1630,15 @@ func _process(delta: float) -> void:
 ## Intercepts mouse/touch events when a drag is in progress, preventing them
 ## from reaching the arena's own input handlers.
 func _input(event: InputEvent) -> void:
-	# Spacebar toggles pause regardless of drag state.
+	# Spacebar toggles between paused and play-1× regardless of drag state.
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode == KEY_SPACE:
-			_on_pause_btn_pressed()
+			if _play_speed_state == 0:
+				_play_speed_state = _last_play_speed
+			else:
+				_last_play_speed  = _play_speed_state
+				_play_speed_state = 0
+			_apply_play_speed_state()
 			get_viewport().set_input_as_handled()
 			return
 
@@ -1533,35 +1767,60 @@ func _on_viewport_resized() -> void:
 	pass
 
 
+func _on_play_pause_btn_pressed() -> void:
+	AudioManager.play_ui("button")
+	if _play_speed_state == 0:
+		_play_speed_state = _last_play_speed   # resume at the last active speed
+	else:
+		_last_play_speed  = _play_speed_state  # save speed before pausing
+		_play_speed_state = 0
+	_apply_play_speed_state()
+
+
 func _on_speed_btn_pressed() -> void:
 	AudioManager.play_ui("button")
-	if _is_paused:
-		# Clicking >> while paused resumes play; handle visuals directly to avoid
-		# playing the button sound a second time through _on_pause_btn_pressed().
-		_is_paused = false
-		get_tree().paused = false
-		_pause_btn.text = ""
-		_pause_bar_icon.show()
-		_show_pause_banner(false)
-	_is_fast = not _is_fast
-	Engine.time_scale = 2.0 if _is_fast else 1.0
-	# Icon colour signals the active speed: bright gold for 2×, black for 1×.
-	_speed_icon_lbl.add_theme_color_override("font_color",
-		COLOR_HAZARD_YELLOW if _is_fast else Color.BLACK)
-
-
-func _on_pause_btn_pressed() -> void:
-	AudioManager.play_ui("button")
-	_is_paused = not _is_paused
-	get_tree().paused = _is_paused
-	if _is_paused:
-		_pause_btn.text = "▶"
-		_pause_bar_icon.hide()
-		_show_pause_banner(true)
+	# Cycle 1× → 2× → 3× → 1×, based on last active speed (so cycling works while paused too).
+	var current := _play_speed_state if _play_speed_state > 0 else _last_play_speed
+	_last_play_speed = (current % 3) + 1
+	if _play_speed_state > 0:
+		# Apply immediately when not paused.
+		_play_speed_state = _last_play_speed
+		_apply_play_speed_state()
 	else:
-		_pause_btn.text = ""
-		_pause_bar_icon.show()
-		_show_pause_banner(false)
+		# When paused, update the speed preview without unpausing.
+		_speed_icon.play_speed_state = _last_play_speed
+		_speed_icon.speed_text       = "%dx" % _last_play_speed
+		_speed_icon.queue_redraw()
+
+
+## Applies Engine.time_scale, tree pause, and banner visibility for the current _play_speed_state.
+## Called on button press, spacebar toggle, send-wave resume, and run end.
+func _apply_play_speed_state() -> void:
+	match _play_speed_state:
+		0:  # paused
+			get_tree().paused = true
+			_show_pause_banner(true)
+		1:  # play 1×
+			Engine.time_scale = 1.0
+			get_tree().paused = false
+			_show_pause_banner(false)
+		2:  # play 2×
+			Engine.time_scale = 2.0
+			get_tree().paused = false
+			_show_pause_banner(false)
+		3:  # play 3×
+			Engine.time_scale = 3.0
+			get_tree().paused = false
+			_show_pause_banner(false)
+	# Play/pause icon: pass the game speed state directly.
+	# _PlayPauseIcon colours triangle gold when paused (press to play) and bars gold when playing.
+	_play_pause_icon.play_speed_state = _play_speed_state
+	_play_pause_icon.queue_redraw()
+	# Speed icon: shows current speed (or last speed when paused) with "Nx" label.
+	var display_speed := _play_speed_state if _play_speed_state > 0 else _last_play_speed
+	_speed_icon.play_speed_state = display_speed
+	_speed_icon.speed_text       = "%dx" % display_speed
+	_speed_icon.queue_redraw()
 
 
 func _on_multiplier_btn_pressed() -> void:
@@ -1580,14 +1839,16 @@ func _on_multiplier_btn_pressed() -> void:
 ## Called when the multiplier changes so the displayed amount stays in sync
 ## without waiting for the next spawn tick or countdown second.
 func _refresh_reward_label() -> void:
-	if _countdown_active and _last_countdown_seconds > 0:
-		_send_wave_reward_label.text = GameState.format_bucks(_last_countdown_seconds * GameState.early_wave_bonus_rate * _wave_multiplier)
-	elif _current_wave_reward > 0:
+	if _current_wave_reward > 0:
 		_send_wave_reward_label.text = GameState.format_bucks(_current_wave_reward * _wave_multiplier)
 
 
 func _on_send_wave_pressed() -> void:
 	AudioManager.play_ui("button")
+	# Clicking send-wave while paused resumes play at 1× first, then sends the wave.
+	if _play_speed_state == 0:
+		_play_speed_state = _last_play_speed
+		_apply_play_speed_state()
 	if _wave_multiplier > 1:
 		GameState.wave_skip_multi_requested.emit(_wave_multiplier)
 	else:
@@ -1637,19 +1898,33 @@ func _on_early_send_reward_changed(amount: int) -> void:
 
 
 func _on_run_ended() -> void:
+	# Reset button to play-1× appearance without calling _apply_play_speed_state,
+	# because the line below immediately pauses the tree for the run-over state.
+	_play_speed_state = 1
+	_last_play_speed  = 1
 	Engine.time_scale = 1.0
-	_is_paused        = false
-	_pause_btn.text   = ""
-	_pause_bar_icon.show()
-	# Hide the pause banner — the run-over overlay provides context instead.
+	_play_pause_icon.play_speed_state = 1   # 1 = playing; _PlayPauseIcon will colour bars gold
+	_play_pause_icon.queue_redraw()
+	_speed_icon.play_speed_state = 1
+	_speed_icon.speed_text       = "1x"
+	_speed_icon.queue_redraw()
 	_show_pause_banner(false)
-	_run_over_overlay.visible = true
 	get_tree().paused = true
+	# Open the infested dialog immediately — no interstitial overlay.
+	var hub: Node = load("res://ui/HubScreen.gd").new()
+	get_tree().root.add_child(hub)
 
 
 func _on_restart_pressed() -> void:
 	AudioManager.play_ui("button")
 	get_tree().paused = false
+	get_tree().reload_current_scene()
+
+
+func _on_dev_mode_btn_pressed() -> void:
+	AudioManager.play_ui("button")
+	GameState.dev_mode = not GameState.dev_mode
+	get_tree().paused  = false
 	get_tree().reload_current_scene()
 
 
@@ -1662,11 +1937,42 @@ func _on_exit_pressed() -> void:
 # Trap selector
 # ---------------------------------------------------------------------------
 
+## Shows only the trap rows that are unlocked for this run.
+## Called once after TrapSelectionScreen confirms, and on every subsequent
+## unlock_traps_set emission (future: meta upgrades may change the set mid-run).
+func _refresh_trap_visibility() -> void:
+	for i in range(_icon_controls.size()):
+		_icon_controls[i].visible = i in GameState.unlocked_trap_types
+
+
+func _on_unlocked_traps_set(_types: Array[int]) -> void:
+	_refresh_trap_visibility()
+	_refresh_trap_selector()
+
+
+func _refresh_boost_visibility() -> void:
+	for i in range(_boost_icon_controls.size()):
+		_boost_icon_controls[i].visible = i in GameState.unlocked_boost_types
+
+
+func _on_unlocked_boosts_set(_types: Array[int]) -> void:
+	_refresh_boost_visibility()
+	_update_tab_styles()
+
+
 func _refresh_trap_selector() -> void:
 	for i in range(_icon_controls.size()):
 		_icon_controls[i].modulate = Color(1, 1, 1, 1) if _can_afford(i) else COLOR_UNAFFORDABLE_MODULATE
+		if i < _trap_cost_labels.size():
+			var count := GameState.get_trap_placed_count(i)
+			_trap_cost_labels[i].text = GameState.format_bucks(
+					Trap.compute_placement_cost(i as Trap.TrapType, count))
 	for i in range(_boost_icon_controls.size()):
 		_boost_icon_controls[i].modulate = Color(1, 1, 1, 1) if _can_afford_boost(i) else COLOR_UNAFFORDABLE_MODULATE
+		if i < _boost_cost_labels.size():
+			var count := GameState.get_boost_placed_count(i)
+			_boost_cost_labels[i].text = GameState.format_bucks(
+					BoostUnit.compute_placement_cost(i as BoostUnit.BoostType, count))
 
 
 
@@ -1745,13 +2051,14 @@ func _build_trap_row(parent: VBoxContainer, type: int) -> Control:
 	cost_row.add_child(coin_icon)
 
 	var cost_lbl := Label.new()
-	cost_lbl.text                = GameState.format_bucks(Trap.STATS[type]["cost"])
+	cost_lbl.text                = GameState.format_bucks(Trap.compute_placement_cost(type as Trap.TrapType, 0))
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	cost_lbl.add_theme_font_size_override("font_size", 15)
 	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.20))
 	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
+	_trap_cost_labels.append(cost_lbl)
 
 	# Badge sits on the same row as the cost, pushed to the right edge.
 	var badge_lbl := Label.new()
@@ -1873,11 +2180,13 @@ func _build_floating_trap_icon(parent: Control, type: int) -> Control:
 
 
 func _can_afford(type: int) -> bool:
-	return GameState.bug_bucks >= Trap.STATS[type]["cost"]
+	return GameState.bug_bucks >= Trap.compute_placement_cost(
+			type as Trap.TrapType, GameState.get_trap_placed_count(type))
 
 
 func _can_afford_boost(type: int) -> bool:
-	return GameState.bug_bucks >= BoostUnit.STATS[type]["cost"]
+	return GameState.bug_bucks >= BoostUnit.compute_placement_cost(
+			type as BoostUnit.BoostType, GameState.get_boost_placed_count(type))
 
 
 # ---------------------------------------------------------------------------
@@ -1901,7 +2210,24 @@ func _on_boost_tab_pressed() -> void:
 
 
 func _update_tab_styles() -> void:
+	var has_boosts := not GameState.unlocked_boost_types.is_empty()
+	_tab_btns[1].disabled = not has_boosts
+
 	for i in range(_tab_btns.size()):
+		var is_disabled := (i == 1 and not has_boosts)
+
+		if is_disabled:
+			# Greyed-out appearance while no boosts are available.
+			for state_name in ["normal", "hover", "pressed", "disabled"]:
+				var box := StyleBoxFlat.new()
+				box.bg_color     = Color(0.08, 0.08, 0.10, 1.0)
+				box.border_color = Color(0.20, 0.20, 0.22, 1.0)
+				box.set_border_width_all(2)
+				box.set_corner_radius_all(4)
+				_tab_btns[i].add_theme_stylebox_override(state_name, box)
+			_tab_btns[i].add_theme_color_override("font_color", Color(0.28, 0.28, 0.30, 1.0))
+			continue
+
 		var is_active := (i == _active_tab)
 		# Silver theme: active tab is a medium steel-gray; inactive is near-black.
 		var bg_normal := Color(0.42, 0.44, 0.48, 1.0) if is_active else Color(0.12, 0.12, 0.14, 1.0)
@@ -1994,13 +2320,14 @@ func _build_boost_row(parent: VBoxContainer, type: int) -> Control:
 	cost_row.add_child(coin_icon)
 
 	var cost_lbl := Label.new()
-	cost_lbl.text                = GameState.format_bucks(BoostUnit.STATS[type]["cost"])
+	cost_lbl.text                = GameState.format_bucks(BoostUnit.compute_placement_cost(type as BoostUnit.BoostType, 0))
 	cost_lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
 	cost_lbl.add_theme_font_override("font", UIFonts.primary_bold())
 	cost_lbl.add_theme_font_size_override("font_size", 15)
 	cost_lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.20))
 	cost_lbl.mouse_filter        = Control.MOUSE_FILTER_IGNORE
 	cost_row.add_child(cost_lbl)
+	_boost_cost_labels.append(cost_lbl)
 
 	# Badge sits on the same row as the cost, pushed to the right edge.
 	var badge_lbl := Label.new()
@@ -2277,43 +2604,204 @@ func _apply_ff_button_style(btn: Button) -> void:
 	btn.focus_mode = Control.FOCUS_NONE
 
 
-## Sets the green bar fill fraction and shows/hides the overlay accordingly.
-## fill = 1.0 means full reward available; 0.0 means no reward.
+## Shows or hides the early-reward row. fill > 0.0 means a reward is available.
 func _update_reward_bar_display(fill: float) -> void:
-	var clamped := clampf(fill, 0.0, 1.0)
-	_reward_bar_fill_rect.offset_right = _reward_bar_container.size.x * clamped
-	_reward_bar_overlay.modulate.a     = 1.0 if clamped > 0.0 else 0.0
+	_reward_bar_overlay.modulate.a = 1.0 if fill > 0.0 else 0.0
 
 
 # ---------------------------------------------------------------------------
 # Volume controls and settings helpers
 # ---------------------------------------------------------------------------
 
-## Builds a small dimmed category label used as a section divider in the settings scroll area.
-func _build_section_header(parent: VBoxContainer, header_text: String) -> void:
+## Switches the active settings tab, refreshes tab button styles, and
+## shows/hides the content containers accordingly.  Rebuilds the UPGRADES
+## content each time that tab is opened so values reflect the current run state.
+func _switch_settings_tab(tab_name: String) -> void:
+	if _active_settings_tab == tab_name:
+		return
+	_active_settings_tab = tab_name
+	_apply_settings_tab_style(_settings_tab_btn, tab_name == "Settings")
+	_apply_settings_tab_style(_upgrades_tab_btn, tab_name == "Upgrades")
+	_settings_content.visible = tab_name == "Settings"
+	_upgrades_content.visible = tab_name == "Upgrades"
+	if tab_name == "Upgrades":
+		_build_upgrades_content()
+
+
+## Applies active/idle visual styling to a settings tab button.
+## Active tab: gold text + gold bottom underline border.
+## Idle tab: dim text + no border.
+func _apply_settings_tab_style(btn: Button, active: bool) -> void:
+	const ACTIVE_BG  := Color(0.04, 0.08, 0.14, 1.0)
+	const IDLE_BG    := Color(0.02, 0.03, 0.08, 1.0)
+	const ACTIVE_TXT := Color(1.00, 0.84, 0.00, 1.0)
+	const IDLE_TXT   := Color(0.50, 0.50, 0.56, 1.0)
+	btn.add_theme_color_override("font_color", ACTIVE_TXT if active else IDLE_TXT)
+	for state: String in ["normal", "hover", "pressed"]:
+		var bg := ACTIVE_BG if active else IDLE_BG
+		if state == "hover":
+			bg = bg.lightened(0.06)
+		var box := StyleBoxFlat.new()
+		box.bg_color = bg
+		if active:
+			box.border_color        = COLOR_HAZARD_YELLOW
+			box.border_width_bottom = 3
+			box.border_width_top    = 0
+			box.border_width_left   = 0
+			box.border_width_right  = 0
+		else:
+			box.set_border_width_all(0)
+		box.content_margin_left   = 6.0
+		box.content_margin_right  = 6.0
+		box.content_margin_top    = 4.0
+		box.content_margin_bottom = 4.0
+		btn.add_theme_stylebox_override(state, box)
+
+
+## Creates a bare Button styled for the settings tab bar.
+func _make_settings_tab_button(label_text: String) -> Button:
+	var btn := Button.new()
+	btn.text       = label_text
+	btn.focus_mode = Control.FOCUS_NONE
+	btn.add_theme_font_override("font", UIFonts.primary_bold())
+	btn.add_theme_font_size_override("font_size", 22)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	return btn
+
+
+## Populates the UPGRADES ScrollContainer with one row per campaign buff,
+## showing the total magnitude picked this run (or "—" if none yet).
+## Called each time the UPGRADES tab is opened so the display is always current.
+func _build_upgrades_content() -> void:
+	# Clear any previously built rows.
+	for child in _upgrades_content.get_children():
+		child.queue_free()
+
+	var vbox := VBoxContainer.new()
+	vbox.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	vbox.add_theme_constant_override("separation", 0)
+	_upgrades_content.add_child(vbox)
+
+	const ROW_H:     float = 64.0
+	const PADDING_X: float = 28.0
+	const DIVIDER_C := Color(0.22, 0.22, 0.30, 1.0)
+	const COLOR_ACQUIRED := Color(1.00, 0.84, 0.00, 1.0)   # gold — buff has been picked this run
+	const COLOR_NONE     := Color(0.45, 0.45, 0.50, 1.0)   # dim — not yet acquired
+
+	var buffs: Array = LevelUpScreen.CAMPAIGN_BUFFS
+
+	for i in buffs.size():
+		var buff: Dictionary = buffs[i]
+		var total: float     = GameState.run_campaign_buff_totals.get(buff["id"], 0.0)
+		var acquired: bool   = total > 0.0
+
+		var row := Control.new()
+		row.custom_minimum_size   = Vector2(0.0, ROW_H)
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+		vbox.add_child(row)
+
+		# Title — left column.
+		var title_lbl := Label.new()
+		title_lbl.text         = buff["title"]
+		title_lbl.position     = Vector2(PADDING_X, 8.0)
+		title_lbl.size         = Vector2(440.0, 24.0)
+		title_lbl.clip_text    = true
+		title_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+		title_lbl.add_theme_font_size_override("font_size", 18)
+		title_lbl.add_theme_color_override("font_color",
+				COLOR_TEXT if acquired else COLOR_NONE)
+		title_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(title_lbl)
+
+		# Description — below the title.
+		var desc_lbl := Label.new()
+		desc_lbl.text         = buff["plain_text"]
+		desc_lbl.position     = Vector2(PADDING_X, 36.0)
+		desc_lbl.size         = Vector2(820.0, 20.0)
+		desc_lbl.clip_text    = true
+		desc_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+		desc_lbl.add_theme_font_size_override("font_size", 16)
+		desc_lbl.add_theme_color_override("font_color",
+				Color(0.72, 0.72, 0.77, 1.0) if acquired else COLOR_NONE)
+		desc_lbl.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		row.add_child(desc_lbl)
+
+		# Current value label — right-aligned.
+		var value_lbl := Label.new()
+		value_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+		value_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+		value_lbl.add_theme_font_size_override("font_size", 22)
+		value_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+		value_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+		value_lbl.position             = Vector2(860.0, 0.0)
+		value_lbl.size                 = Vector2(392.0, ROW_H)
+		value_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+		row.add_child(value_lbl)
+
+		if acquired:
+			# Format using the same logic as the level-up card display.
+			var display_val: String
+			if buff["id"] == "infestation_heal":
+				display_val = "%.1f" % (total * 100.0)
+			else:
+				display_val = "%d" % roundi(total * 100.0)
+			value_lbl.text = buff["impact_template"] % display_val
+			value_lbl.add_theme_color_override("font_color", COLOR_ACQUIRED)
+		else:
+			value_lbl.text = "—"
+			value_lbl.add_theme_color_override("font_color", COLOR_NONE)
+
+		# Row divider (except after the last row).
+		if i < buffs.size() - 1:
+			var div := ColorRect.new()
+			div.custom_minimum_size   = Vector2(0.0, 1.0)
+			div.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+			div.color        = DIVIDER_C
+			div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+			vbox.add_child(div)
+
+
+## Adds a colored section-title strip spanning the full column width.
+## Used in the full-screen settings layout to clearly label each column.
+func _add_settings_section_strip(parent: VBoxContainer, header_text: String) -> void:
+	var strip := Panel.new()
+	strip.custom_minimum_size = Vector2(0.0, 44.0)
+	strip.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	strip.mouse_filter          = Control.MOUSE_FILTER_IGNORE
+	var sty := StyleBoxFlat.new()
+	sty.bg_color = Color(0.04, 0.16, 0.12, 1.0)   # dark teal — matches the game's green palette
+	sty.set_border_width_all(0)
+	strip.add_theme_stylebox_override("panel", sty)
+	parent.add_child(strip)
+
 	var lbl := Label.new()
-	lbl.text = header_text
+	lbl.text                 = header_text
+	lbl.set_anchors_preset(Control.PRESET_FULL_RECT)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+	lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
 	lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	lbl.add_theme_font_size_override("font_size", 12)
-	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
-	parent.add_child(lbl)
+	lbl.add_theme_font_size_override("font_size", 20)
+	lbl.add_theme_color_override("font_color", COLOR_HAZARD_YELLOW)
+	strip.add_child(lbl)
 
 
-## Builds a compact label + slider row for one audio bus.
+## Builds a label + slider row for one audio bus, sized for full-screen layout.
 ## Returns the HSlider so the caller can read/write its value.
 func _build_volume_row(parent: VBoxContainer, label_text: String) -> HSlider:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 6)
-	row.size_flags_vertical = Control.SIZE_SHRINK_END
+	row.add_theme_constant_override("separation", 14)
+	row.custom_minimum_size = Vector2(0.0, 52.0)
 	parent.add_child(row)
 
 	var lbl := Label.new()
-	lbl.text = label_text
-	lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	lbl.add_theme_font_size_override("font_size", 14)
-	lbl.add_theme_color_override("font_color", COLOR_TEXT_DIM)
-	lbl.custom_minimum_size = Vector2(32, 0)
+	lbl.text                = label_text
+	lbl.custom_minimum_size = Vector2(80.0, 0.0)
 	lbl.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	lbl.add_theme_font_override("font", UIFonts.primary_bold())
+	lbl.add_theme_font_size_override("font_size", 22)
+	lbl.add_theme_color_override("font_color", COLOR_TEXT)
 	row.add_child(lbl)
 
 	var slider := HSlider.new()
@@ -2323,17 +2811,18 @@ func _build_volume_row(parent: VBoxContainer, label_text: String) -> HSlider:
 	slider.value                 = 1.0
 	slider.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	slider.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
-	slider.custom_minimum_size   = Vector2(0, 24)
+	slider.custom_minimum_size   = Vector2(0.0, 36.0)
 	row.add_child(slider)
 
 	return slider
 
 
-## Builds a full-width label + CheckButton row for a boolean setting.
+## Builds a label + CheckButton row for a boolean setting, sized for full-screen layout.
 ## Returns the CheckButton so the caller can connect its toggled signal and read its state.
 func _build_toggle_row(parent: VBoxContainer, label_text: String) -> CheckButton:
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override("separation", 8)
+	row.add_theme_constant_override("separation", 14)
+	row.custom_minimum_size = Vector2(0.0, 52.0)
 	parent.add_child(row)
 
 	var lbl := Label.new()
@@ -2341,7 +2830,7 @@ func _build_toggle_row(parent: VBoxContainer, label_text: String) -> CheckButton
 	lbl.size_flags_horizontal = Control.SIZE_EXPAND_FILL
 	lbl.size_flags_vertical   = Control.SIZE_SHRINK_CENTER
 	lbl.add_theme_font_override("font", UIFonts.primary_bold())
-	lbl.add_theme_font_size_override("font_size", 14)
+	lbl.add_theme_font_size_override("font_size", 22)
 	lbl.add_theme_color_override("font_color", COLOR_TEXT)
 	row.add_child(lbl)
 
@@ -2492,23 +2981,111 @@ class _IncomingBannerShape extends Control:
 		]), color_fill)
 
 
-## Two vertical bars drawn at the correct cap height for the pause button.
-class _PauseBarIcon extends Control:
-	var target_height: float = 0.0
+## Combined speed icon for the bottom-right speed button.
+##
+## State 1 (play 1×): one dark triangle.
+## State 2 (play 2×): one dark triangle + one gold triangle.
+## State 3 (play 3×): one dark triangle + two gold triangles.
+## The leftmost triangle is always dark; gold triangles indicate speed above 1×.
+## When speed_text is set (e.g. "1x", "2x", "3x") and font_ref is provided,
+## the text is drawn immediately to the right of the triangles in the same colour.
+class _PlaySpeedIcon extends Control:
+	const TRIANGLE_W: float = 15.6
+	const TRIANGLE_H: float = 26.0
+	const GAP:        float = 3.0
+	const TEXT_GAP:   float = 5.0   # horizontal gap between last triangle and text
+	const TEXT_SIZE:  int   = 18
+	const COLOR_BASE: Color = Color(0.08, 0.05, 0.00, 1.0)
+	const COLOR_FAST: Color = Color(1.00, 0.84, 0.00, 1.0)
+
+	var play_speed_state: int  = 1
+	var speed_text:       String = ""
+	var font_ref:         Font   = null
 
 	func _notification(what: int) -> void:
 		if what == NOTIFICATION_RESIZED:
 			queue_redraw()
 
 	func _draw() -> void:
-		var bar_w := size.x * 0.13
-		var gap   := size.x * 0.091
-		var bar_h := target_height if target_height > 0.0 else size.y * 0.52
-		var x0    := (size.x - bar_w * 2.0 - gap) * 0.5
-		var y0    := (size.y - bar_h) * 0.5
-		var color := Color(0.08, 0.05, 0.00)
-		draw_rect(Rect2(x0,               y0, bar_w, bar_h), color)
-		draw_rect(Rect2(x0 + bar_w + gap, y0, bar_w, bar_h), color)
+		var count := play_speed_state   # 1, 2, or 3 triangles
+		if count < 1:
+			count = 1
+
+		# Measure text width so the triangle+text group can be centred as a unit.
+		var text_w := 0.0
+		if speed_text != "" and font_ref != null:
+			text_w = font_ref.get_string_size(speed_text, HORIZONTAL_ALIGNMENT_LEFT, -1, TEXT_SIZE).x
+
+		var tri_block_w := count * TRIANGLE_W + (count - 1) * GAP
+		var content_w   := tri_block_w + (TEXT_GAP + text_w if text_w > 0.0 else 0.0)
+		var x_start     := (size.x - content_w) * 0.5
+		var y_top       := (size.y - TRIANGLE_H) * 0.5
+		var y_bot       := y_top + TRIANGLE_H
+		var y_mid       := size.y * 0.5
+
+		for i in count:
+			# The leftmost triangle is always dark; additional triangles are gold to signal speed.
+			var tri_color := COLOR_BASE if i == 0 else COLOR_FAST
+			var x := x_start + i * (TRIANGLE_W + GAP)
+			draw_colored_polygon(PackedVector2Array([
+				Vector2(x,              y_top),
+				Vector2(x,              y_bot),
+				Vector2(x + TRIANGLE_W, y_mid),
+			]), tri_color)
+
+		if text_w > 0.0 and font_ref != null:
+			# Vertical offset: font baseline sits ~65% of font size below the top of the glyph.
+			var text_x := x_start + tri_block_w + TEXT_GAP
+			var text_y := y_mid + TEXT_SIZE * 0.35
+			draw_string(font_ref, Vector2(text_x, text_y), speed_text,
+					HORIZONTAL_ALIGNMENT_LEFT, -1, TEXT_SIZE, COLOR_BASE)
+
+
+## Play/pause icon for the bottom-left control button.
+## Always draws a right-pointing triangle AND two vertical pause bars side by side.
+## The symbol representing the available action is gold; the other is gray.
+##   Paused  (play_speed_state == 0): triangle is gold (press to play),  bars are gray.
+##   Playing (play_speed_state != 0): triangle is gray (current state),  bars are gold (press to pause).
+class _PlayPauseIcon extends Control:
+	const TRI_W:     float = 15.6
+	const TRI_H:     float = 26.0
+	const BAR_W:     float = 6.0
+	const BAR_H:     float = 26.0
+	const BAR_GAP:   float = 4.0
+	const INNER_GAP: float = 8.0   # gap between the triangle and the first pause bar
+	const COLOR_GOLD: Color = Color(1.00, 0.84, 0.00, 1.0)
+	const COLOR_GRAY: Color = Color(0.08, 0.05, 0.00, 1.0)   # same near-black as the speed button
+
+	var play_speed_state: int = 1   # 0 = paused, non-zero = playing
+
+	func _notification(what: int) -> void:
+		if what == NOTIFICATION_RESIZED:
+			queue_redraw()
+
+	func _draw() -> void:
+		var is_paused  := play_speed_state == 0
+		var tri_color  := COLOR_GOLD if is_paused  else COLOR_GRAY
+		var bars_color := COLOR_GRAY if is_paused  else COLOR_GOLD
+
+		# Centre the triangle + bars group as a single unit.
+		var total_w := TRI_W + INNER_GAP + BAR_W + BAR_GAP + BAR_W
+		var x0      := (size.x - total_w) * 0.5
+		var y_mid   := size.y * 0.5
+		var y_top_t := y_mid - TRI_H * 0.5
+		var y_bot_t := y_mid + TRI_H * 0.5
+
+		# Right-pointing triangle (left side of group).
+		draw_colored_polygon(PackedVector2Array([
+			Vector2(x0,          y_top_t),
+			Vector2(x0,          y_bot_t),
+			Vector2(x0 + TRI_W,  y_mid),
+		]), tri_color)
+
+		# Two vertical pause bars (right side of group).
+		var bar_x := x0 + TRI_W + INNER_GAP
+		var bar_y := y_mid - BAR_H * 0.5
+		draw_rect(Rect2(bar_x,                   bar_y, BAR_W, BAR_H), bars_color)
+		draw_rect(Rect2(bar_x + BAR_W + BAR_GAP, bar_y, BAR_W, BAR_H), bars_color)
 
 
 ## Magnifying glass with a + (zoom-in) or − (zoom-out) symbol in the lens.
@@ -2542,6 +3119,7 @@ class _ZoomIcon extends Control:
 		draw_line(Vector2(cx - arm, cy), Vector2(cx + arm, cy), icon_color, line)
 		if show_plus:
 			draw_line(Vector2(cx, cy - arm), Vector2(cx, cy + arm), icon_color, line)
+
 
 
 ## Draws the outer progress ring on the Send Next Wave button.

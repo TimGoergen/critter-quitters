@@ -37,7 +37,8 @@ const TrapUpgradePanel  = preload("res://ui/TrapUpgradePanel.gd")
 const BoostUpgradePanel = preload("res://ui/BoostUpgradePanel.gd")
 const EnemyStatsPanel   = preload("res://ui/EnemyStatsPanel.gd")
 const DebugStartDialog  = preload("res://ui/DebugStartDialog.gd")
-const LevelUpScreen     = preload("res://ui/LevelUpScreen.gd")
+const LevelUpScreen         = preload("res://ui/LevelUpScreen.gd")
+const TrapSelectionScreen   = preload("res://ui/TrapSelectionScreen.gd")
 const ExperienceBar     = preload("res://ui/ExperienceBar.gd")
 
 
@@ -94,19 +95,24 @@ var _path_marker_pool: Array[MeshInstance3D] = []
 var _active_enemies: Array[Node3D] = []
 
 # Wave spawning — enemies launch one at a time with a small gap between them.
-const WAVE_SIZE: int = 10   # default; overridden at runtime by the debug start dialog
+const WAVE_SIZE: int = 15              # base count at wave 1; overridden by the debug start dialog
+const WAVE_SIZE_STEP_WAVES:  int = 5   # every N waves the enemy count increases
+const WAVE_SIZE_STEP_AMOUNT: int = 2   # enemies added per step
 var _wave_size: int = WAVE_SIZE
 const SPAWN_INTERVAL: float = 0.36     # delay before the first enemy in a wave; subsequent gaps are per-type
 # Minimum desired clear space (in cells) between consecutive enemies of the same type.
 # The actual gap time is derived from this value and the enemy's speed + visual size,
 # so slow/large enemies automatically get longer waits than fast/small ones.
-const SPAWN_GAP_CELLS: float = 0.4
-const WAVE_COUNTDOWN: int  = 5         # seconds of countdown before each wave
+const SPAWN_GAP_CELLS: float = 0.25
+const WAVE_COUNTDOWN: int  = 3         # seconds of visible countdown before each wave
+const INTER_WAVE_QUIET: int = 7        # silent seconds after last enemy spawn before the countdown begins
 
 var _enemies_left_to_spawn: int  = 0
 var _wave_total_enemies:    int  = 0      # total enemies queued at _launch_wave; used for spawn-progress signal
-var _countdown_active: bool      = false  # true while between-wave countdown is ticking
-var _seconds_remaining: int      = 0     # last value broadcast during the active countdown
+var _countdown_active: bool       = false  # true while between-wave countdown is ticking
+var _seconds_remaining: int       = 0      # last value broadcast during the active countdown
+var _quiet_period_active: bool    = false  # true during the silent gap after the last enemy spawn
+var _quiet_seconds_remaining: int = 0      # seconds left in the quiet gap; used for skip bonus calculation
 
 # Static enemy review mode — when true, each wave spawns 3 of every enemy type
 # in order instead of using normal wave composition. Toggled at startup via DebugStartDialog.
@@ -201,6 +207,17 @@ var _v_center_offset_px:   float     = 0.0   # arena-zone vertical centre minus 
 var _pan_world_pos:         Vector2  = Vector2.ZERO   # current camera XZ pan offset (world units)
 var _arena_world_half:      float    = 0.0   # half the grid world width (X); used for pan clamping
 var _arena_world_half_z:    float    = 0.0   # half the grid world height (Z); used for pan clamping
+
+# Camera shake — a brief vibration triggered when a pest reaches the exit.
+# A sine-wave oscillator runs in _process for SHAKE_DURATION seconds, creating
+# rapid back-and-forth movement that reads as a physical shudder.
+var _shake_offset: Vector2 = Vector2.ZERO
+var _shake_timer:  float   = 0.0    # counts down; > 0 while shaking
+var _shake_axis:   Vector2 = Vector2.ZERO   # random unit vector for vibration direction
+
+const SHAKE_DURATION: float = 0.35    # total vibration time in seconds
+const SHAKE_FREQ:     float = 10.0    # oscillations per second — low enough for smooth oscillation at 60 fps
+const SHAKE_MAG_PX:   float = 5.1    # peak displacement in screen pixels; converted to world units at runtime
 var _followed_enemy:        Node3D   = null  # non-null while enemy-follow mode is active
 var _enemy_stats_panel:    Node     = null  # EnemyStatsPanel instance
 var _floor_mi:           MeshInstance3D = null  # floor mesh; material_override swapped on zoom
@@ -209,6 +226,9 @@ var _floor_mat_zoomed:   ShaderMaterial  = null  # grid lines visible (zoomed in
 
 # Reference to the playtest setup dialog while it is open; null after it confirms.
 var _debug_dialog: Node = null
+# Stores playtest config from DebugStartDialog when it runs before TrapSelectionScreen.
+# Populated in _on_debug_pre_confirmed; consumed in _on_traps_selected.
+var _dev_config: Dictionary = {}
 
 # Outside-wall reference positions (x only matters; y is chosen per enemy).
 var _spawn_cell: Vector2i = Vector2i.ZERO    # centre spawn cell (used for x and gap centre)
@@ -227,11 +247,11 @@ func _ready() -> void:
 	# or upgrade panel pause) so camera pan and trap placement remain available.
 	process_mode = Node.PROCESS_MODE_ALWAYS
 
-	# Phase 1: entrance and exit are hardcoded for the prototype.
-	# Grid is 31×29; row 14 is the exact vertical centre — both gaps
+	# Entrance and exit are hardcoded on opposite wall columns.
+	# Grid is 41×29; row 14 is the exact vertical centre — both gaps
 	# land there, spanning rows 13–15 (3 rows each).
 	var entrance := Vector2i(0, 14)
-	var exit     := Vector2i(30, 14)
+	var exit     := Vector2i(40, 14)
 
 	_spawn_cell   = Vector2i(entrance.x - 1, entrance.y)
 	_despawn_cell = Vector2i(exit.x + 1, exit.y)
@@ -321,11 +341,16 @@ func _ready() -> void:
 	_fit_camera_to_grid()
 	get_viewport().size_changed.connect(_fit_camera_to_grid)
 
-	# Show the playtest setup dialog before starting the first wave.
-	var dialog := DebugStartDialog.new()
-	dialog.confirmed.connect(_on_debug_confirmed)
-	add_child(dialog)
-	_debug_dialog = dialog
+	# In dev mode, playtest setup runs first so the player configures wave
+	# parameters before committing to a gear loadout. In normal mode the trap
+	# selection screen opens immediately.
+	if GameState.dev_mode:
+		var dialog := DebugStartDialog.new()
+		dialog.confirmed.connect(_on_debug_pre_confirmed)
+		add_child(dialog)
+		_debug_dialog = dialog
+	else:
+		_show_trap_selection()
 
 
 # ---------------------------------------------------------------------------
@@ -553,7 +578,8 @@ func _commit_boost_drag_place() -> void:
 	_clear_drag_preview()
 	if anchor == Vector2i(-1, -1):
 		return
-	if GameState.bug_bucks < BoostUnit.STATS[_hud_drag_boost_type]["cost"]:
+	if GameState.bug_bucks < BoostUnit.compute_placement_cost(
+			_hud_drag_boost_type, GameState.get_boost_placed_count(_hud_drag_boost_type)):
 		return
 	var cells := _get_trap_cells(anchor)
 	if not cells.is_empty() and not _footprint_overlaps_enemy(cells):
@@ -687,7 +713,10 @@ func _handle_enemy_tap(enemy: Node3D) -> void:
 
 ## Returns true if the player can afford one more trap of the currently selected type.
 func _can_afford_trap() -> bool:
-	return GameState.bug_bucks >= Trap.STATS[GameState.selected_trap_type]["cost"]
+	var cost := Trap.compute_placement_cost(
+			GameState.selected_trap_type as Trap.TrapType,
+			GameState.get_trap_placed_count(GameState.selected_trap_type))
+	return GameState.bug_bucks >= cost
 
 
 ## Returns true if any active enemy's current or target cell falls inside
@@ -897,6 +926,7 @@ func _on_sell_boost_requested(anchor: Vector2i) -> void:
 func _try_remove_trap_by_anchor(anchor: Vector2i) -> void:
 	if _trap_nodes.has(anchor):
 		var trap: Node3D = _trap_nodes[anchor]
+		GameState.on_trap_removed(trap.get_type())  # decrement supply count before refund so HUD updates
 		var sell_value: int = trap.get_sell_value()
 		GameState.add_bug_bucks(sell_value)
 		_spawn_earn_label(_camera.unproject_position(trap.global_position), sell_value)
@@ -1132,9 +1162,20 @@ func _spawn_gap_for_type(enemy_type: Enemy.EnemyType) -> float:
 	return (visual_size + SPAWN_GAP_CELLS) / speed
 
 
+## Returns true if the player has unlocked any trap capable of targeting flying enemies.
+## Called before adding Mosquito to the wave pool — if no anti-air exists, spawning
+## flying pests would give the player no way to counter them.
+func _player_has_anti_air() -> bool:
+	for trap_type: int in GameState.unlocked_trap_types:
+		if trap_type in Trap.ANTI_AIR_TYPES:
+			return true
+	return false
+
+
 ## Returns which enemy type to spawn for the given wave number.
 ## Wave 1 is pure gnats (tutorial difficulty). Every 10th wave is a rat boss wave.
 ## New types unlock progressively; gnats phase out after wave 6 as heavier enemies dominate.
+## Flying enemies are only added to the pool when the player has at least one anti-air trap.
 func _enemy_type_for_wave(wave: int) -> Enemy.EnemyType:
 	if wave == 1:
 		return Enemy.EnemyType.GNAT
@@ -1153,7 +1194,7 @@ func _enemy_type_for_wave(wave: int) -> Enemy.EnemyType:
 		pool.append_array([Enemy.EnemyType.BEETLE, Enemy.EnemyType.BEETLE])
 	if wave >= 8:
 		pool.append_array([Enemy.EnemyType.COCKROACH, Enemy.EnemyType.COCKROACH, Enemy.EnemyType.COCKROACH])
-	if wave >= 3:
+	if wave >= 3 and _player_has_anti_air():
 		pool.append(Enemy.EnemyType.MOSQUITO)
 
 	return pool[randi() % pool.size()]
@@ -1187,6 +1228,16 @@ func spawn_enemy_at_grid_position(grid_pos: Vector2i, enemy_type: Enemy.EnemyTyp
 	_spawn_enemy(path, enemy_type)
 
 
+## Starts a brief camera vibration — a tactile signal that the infestation bar
+## just ticked up.  The shake is driven by a sine-wave oscillator in _process,
+## so the camera moves rapidly back and forth rather than in a single sweep.
+## Direction is randomised so repeated escapes feel distinct.
+func _start_exit_shake() -> void:
+	var angle    := randf() * TAU
+	_shake_axis   = Vector2(cos(angle), sin(angle))
+	_shake_timer  = SHAKE_DURATION
+
+
 func _on_enemy_reached_exit(enemy: Node3D) -> void:
 	# Air Freshener Boosts may absorb a fraction of the infestation — pass the full
 	# amount through each Boost in sequence, with each returning its unabsorbed remainder.
@@ -1195,6 +1246,7 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 		if is_instance_valid(boost):
 			infestation = boost.absorb_infestation(infestation, enemy.global_position)
 	GameState.add_infestation(infestation)
+	_start_exit_shake()
 	# Mouse steals Bug Bucks from the player in addition to adding infestation.
 	if enemy.get_enemy_type() == Enemy.EnemyType.MOUSE:
 		GameState.add_bug_bucks(-enemy.get_bug_bucks_steal())
@@ -1202,9 +1254,6 @@ func _on_enemy_reached_exit(enemy: Node3D) -> void:
 	if enemy == _followed_enemy:
 		_set_followed_enemy(null)
 	# enemy.queue_free() is called inside Enemy.gd — no double-free needed.
-
-	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
-		_start_wave()
 
 
 func _on_enemy_died(enemy: Node3D) -> void:
@@ -1249,9 +1298,6 @@ func _on_enemy_died(enemy: Node3D) -> void:
 					spawn_enemy_at_grid_position.bind(death_cell, Enemy.EnemyType.RAT)
 				)
 
-	if _active_enemies.is_empty() and _enemies_left_to_spawn == 0:
-		_start_wave()
-
 
 ## Increments the wave counter and begins the between-wave countdown.
 func _start_wave() -> void:
@@ -1279,8 +1325,71 @@ func _on_countdown_tick(seconds_remaining: int) -> void:
 		_launch_wave()
 
 
+## Starts the inter-wave gap. The incoming banner is shown immediately with the
+## full total countdown (quiet + visible countdown), so the player sees it from
+## the moment the last enemy spawns rather than only during the final 3 seconds.
+func _start_inter_wave_gap() -> void:
+	# Guard: skip if a gap or countdown is already in progress (can occur with additive waves).
+	if _quiet_period_active or _countdown_active:
+		return
+	_quiet_period_active = true
+	_quiet_seconds_remaining = INTER_WAVE_QUIET
+	GameState.set_countdown(INTER_WAVE_QUIET + WAVE_COUNTDOWN)
+	get_tree().create_timer(1.0, false).timeout.connect(_on_quiet_tick.bind(INTER_WAVE_QUIET - 1))
+
+
+## Ticks down the inter-wave gap one second at a time, emitting the running
+## total so the HUD countdown stays continuous into the visible countdown phase.
+func _on_quiet_tick(seconds_remaining: int) -> void:
+	if not _quiet_period_active:
+		return
+	_quiet_seconds_remaining = seconds_remaining
+	GameState.set_countdown(seconds_remaining + WAVE_COUNTDOWN)
+	if seconds_remaining > 0:
+		get_tree().create_timer(1.0, false).timeout.connect(_on_quiet_tick.bind(seconds_remaining - 1))
+	else:
+		_quiet_period_active = false
+		_start_wave()
+
+
 func _handle_key(_keycode: int) -> void:
 	pass
+
+
+## Spawns the trap selection screen. Called directly on normal starts, or after
+## DebugStartDialog confirms in dev mode so the playtest config comes first.
+func _show_trap_selection() -> void:
+	var selection := TrapSelectionScreen.new()
+	selection.loadout_selected.connect(_on_traps_selected)
+	add_child(selection)
+
+
+## Called when DebugStartDialog confirms in dev mode, before TrapSelectionScreen.
+## Stashes the config values then shows the gear selection screen.
+func _on_debug_pre_confirmed(bug_bucks: int, wave_size: int,
+		static_enemies: bool, allowed_types: Array) -> void:
+	_dev_config = {
+		"bug_bucks":     bug_bucks,
+		"wave_size":     wave_size,
+		"static_enemies": static_enemies,
+		"allowed_types":  allowed_types,
+	}
+	_show_trap_selection()
+
+
+## Called when TrapSelectionScreen confirms the player's chosen loadout.
+## Uses the previously stashed dev config in dev mode, or defaults otherwise.
+func _on_traps_selected(trap_types: Array[int], boost_types: Array[int]) -> void:
+	GameState.set_unlocked_loadout(trap_types, boost_types)
+	if GameState.dev_mode:
+		_on_debug_confirmed(
+			_dev_config.get("bug_bucks",      GameState.STARTING_BUG_BUCKS),
+			_dev_config.get("wave_size",      DebugStartDialog.DEFAULT_WAVE_SIZE),
+			_dev_config.get("static_enemies", false),
+			_dev_config.get("allowed_types",  [])
+		)
+	else:
+		_on_debug_confirmed(GameState.STARTING_BUG_BUCKS, DebugStartDialog.DEFAULT_WAVE_SIZE, false, [])
 
 
 ## Receives the confirmed playtest values from DebugStartDialog and starts the run.
@@ -1298,27 +1407,29 @@ func _on_trap_type_changed(_type: int) -> void:
 
 
 ## Handles the "Send Wave Early" button.
-## Between waves (countdown active): skips the countdown and awards a time-remaining bonus.
-## During a wave (enemies active): launches the next wave immediately for a larger bonus
-## scaled by the current wave number.  Both paths are available at any time.
+## Between waves (countdown or quiet period active): skips the wait and launches immediately,
+## no reward.  During a wave with enemies still queued: launches the next wave and awards
+## a bounty for each enemy that had not yet spawned.
 func _on_wave_skip_requested() -> void:
 	if _countdown_active:
 		_countdown_active = false
-		if _seconds_remaining > 0:
-			var bonus := _seconds_remaining * GameState.early_wave_bonus_rate
-			GameState.add_bug_bucks(bonus)
-			_spawn_earn_label(get_viewport().get_visible_rect().get_center(), int(bonus))
-			GameState.early_wave_bonus_awarded.emit(bonus)
+		GameState.set_countdown(0)
+		_launch_wave()
+	elif _quiet_period_active:
+		_quiet_period_active = false
+		GameState.current_wave += 1
+		for boost in _boost_nodes.values():
+			if is_instance_valid(boost):
+				boost.on_wave_started()
 		GameState.set_countdown(0)
 		_launch_wave()
 	elif not (_active_enemies.is_empty() and _enemies_left_to_spawn == 0):
-		# Wave is active — send the next wave immediately.  Reward equals the
-		# per-enemy bounty for each enemy that has not yet spawned; once all
-		# enemies are out the reward is 0.
-		var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY
-		GameState.add_bug_bucks(bonus)
-		_spawn_earn_label(get_viewport().get_visible_rect().get_center(), int(bonus))
-		GameState.early_wave_bonus_awarded.emit(bonus)
+		# Reward only fires when the current wave still has unspawned enemies.
+		if _enemies_left_to_spawn > 0:
+			var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY
+			GameState.add_bug_bucks(bonus)
+			_spawn_earn_label(get_viewport().get_visible_rect().get_center(), int(bonus))
+			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.early_send_reward_changed.emit(0)
 		GameState.current_wave += 1
 		_launch_wave()
@@ -1340,13 +1451,21 @@ func _on_wave_skip_requested() -> void:
 func _on_wave_skip_multi_requested(count: int) -> void:
 	if _countdown_active:
 		_countdown_active = false
-		if _seconds_remaining > 0:
-			var bonus := _seconds_remaining * GameState.early_wave_bonus_rate * count
-			GameState.add_bug_bucks(bonus)
-			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.set_countdown(0)
 		# Non-additive first call resets the counter and starts spawn stream 1.
 		# current_wave was already incremented by _start_wave() when the countdown began.
+		_launch_wave()
+		for _i in range(count - 1):
+			GameState.current_wave += 1
+			_launch_wave(true)
+	elif _quiet_period_active:
+		_quiet_period_active = false
+		GameState.set_countdown(0)
+		# Increment wave and notify boosts for the first wave, then launch additively for the rest.
+		GameState.current_wave += 1
+		for boost in _boost_nodes.values():
+			if is_instance_valid(boost):
+				boost.on_wave_started()
 		_launch_wave()
 		for _i in range(count - 1):
 			GameState.current_wave += 1
@@ -1355,11 +1474,11 @@ func _on_wave_skip_multi_requested(count: int) -> void:
 		for _i in range(count - 1):
 			get_tree().create_timer(SPAWN_INTERVAL, false).timeout.connect(_spawn_next_in_wave)
 	elif not (_active_enemies.is_empty() and _enemies_left_to_spawn == 0):
-		# Award the early-send bonus for the current wave's unsent enemies, then discard
-		# them so count fresh waves start from a clean slate.
-		var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY * count
-		GameState.add_bug_bucks(bonus)
-		GameState.early_wave_bonus_awarded.emit(bonus)
+		# Reward only fires when the current wave still has unspawned enemies.
+		if _enemies_left_to_spawn > 0:
+			var bonus := _enemies_left_to_spawn * GameState.EARLY_SEND_PER_ENEMY * count
+			GameState.add_bug_bucks(bonus)
+			GameState.early_wave_bonus_awarded.emit(bonus)
 		GameState.early_send_reward_changed.emit(0)
 		# A running spawn chain means one stream is already active; remember this before
 		# zeroing the counter so we don't start a redundant timer for it.
@@ -1413,7 +1532,9 @@ func _launch_wave(additive: bool = false) -> void:
 				_static_spawn_queue.append(t)
 		new_enemies = types.size() * STATIC_GROUP_SIZE
 	else:
-		new_enemies = _wave_size
+		# Base count plus +WAVE_SIZE_STEP_AMOUNT for every WAVE_SIZE_STEP_WAVES completed.
+		# Wave 1–4 → 15, wave 5–9 → 17, wave 10–14 → 19, etc.
+		new_enemies = _wave_size + (GameState.current_wave / WAVE_SIZE_STEP_WAVES) * WAVE_SIZE_STEP_AMOUNT
 
 	if additive:
 		# Layer on top of the running wave — the existing spawn timer drains both.
@@ -1480,6 +1601,11 @@ func _spawn_next_in_wave() -> void:
 		else:
 			gap = _spawn_gap_for_type(enemy_type)
 		get_tree().create_timer(gap, false).timeout.connect(_spawn_next_in_wave)
+	else:
+		# All enemies for this wave have been dispatched from the spawn queue.
+		# Begin the fixed inter-wave gap; the next wave launches after INTER_WAVE_QUIET
+		# + WAVE_COUNTDOWN seconds regardless of whether active enemies are still alive.
+		_start_inter_wave_gap()
 
 
 ## Runs A* from start to each of the three exit-gap cells and returns
@@ -2388,6 +2514,11 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	trap.fly_strip_fired.connect(_on_fly_strip_fired)
 	trap.initialize(GameState.selected_trap_type as Trap.TrapType, _active_enemies)
 
+	# Compute supply-priced cost BEFORE incrementing the count (current count = already-placed).
+	var trap_type := GameState.selected_trap_type as Trap.TrapType
+	var placement_cost := Trap.compute_placement_cost(trap_type, GameState.get_trap_placed_count(trap_type))
+	trap.set_placement_cost(placement_cost)
+
 	# Apply any type-wide free upgrades that were earned from previous level-ups.
 	# This ensures a newly placed trap is immediately as strong as existing traps of the same type.
 	var tq: Dictionary = GameState.type_upgrade_queue.get(trap.get_type(), {})
@@ -2398,8 +2529,12 @@ func _spawn_trap(anchor: Vector2i) -> void:
 	# Arena is PROCESS_MODE_ALWAYS; override so traps pause with the game.
 	trap.process_mode = Node.PROCESS_MODE_PAUSABLE
 	_trap_container.add_child(trap)
+	GameState.on_trap_placed(trap_type)          # count increments before spend so HUD refreshes to N+1 cost
 	GameState.spend_bug_bucks(trap.get_cost())
 	_trap_nodes[anchor] = trap
+	# Apply any pre-conditioning bonus (permanent upgrade) — free upgrade levels
+	# given to this trap type at run start, applied once at placement.
+	_apply_starting_star_bonus_to_trap(trap, trap_type)
 
 
 func _on_trap_fired(from_pos: Vector3, to_pos: Vector3, target: Node3D, damage: float, trap_type: int) -> void:
@@ -2450,11 +2585,20 @@ func _try_place_boost(anchor: Vector2i, boost_type: BoostUnit.BoostType) -> bool
 	boost.position = center + Vector3(0.0, Grid.CELL_SIZE * 0.25, 0.0)
 	boost.process_mode = Node.PROCESS_MODE_PAUSABLE
 	boost.initialize(boost_type, _active_enemies, _trap_nodes)
+
+	# Compute supply-priced cost BEFORE incrementing the count.
+	var boost_placement_cost := BoostUnit.compute_placement_cost(boost_type, GameState.get_boost_placed_count(boost_type))
+	boost.set_placement_cost(boost_placement_cost)
+
 	boost.boost_depleted.connect(_try_remove_boost_by_anchor.bind(anchor))
 	add_child(boost)
 	_boost_nodes[anchor] = boost
 	_draw_boost_outline(anchor)
+	GameState.on_boost_placed(boost_type)
 	GameState.spend_bug_bucks(boost.get_cost())
+	# Apply any pre-conditioning bonus (permanent upgrade) — free upgrade levels
+	# given to this boost type at run start, applied once at placement.
+	_apply_starting_star_bonus_to_boost(boost, boost_type)
 	# cell_changed from place_trap() above triggers Pathfinder recalculation automatically.
 	return true
 
@@ -2463,6 +2607,7 @@ func _try_place_boost(anchor: Vector2i, boost_type: BoostUnit.BoostType) -> bool
 func _try_remove_boost_by_anchor(anchor: Vector2i) -> void:
 	if _boost_nodes.has(anchor):
 		var boost: Node3D = _boost_nodes[anchor]
+		GameState.on_boost_removed(boost.get_type())  # decrement supply count before refund so HUD updates
 		GameState.add_bug_bucks(boost.get_sell_value())
 		boost.queue_free()
 		_boost_nodes.erase(anchor)
@@ -2550,6 +2695,33 @@ func _process(delta: float) -> void:
 		var p := _followed_enemy.global_position
 		_apply_pan(Vector2(p.x, p.z))
 
+	# Drive the sine-wave camera shake oscillator.
+	# elapsed counts up from 0 so sin() starts at 0 (no initial snap).
+	# Amplitude decays linearly to zero so the vibration fades out naturally.
+	# Shake is expressed in screen pixels, converted to world units at the current zoom
+	# level so the visible displacement is the same whether zoomed in or out.
+	# _apply_pan is called to establish the clean base position; shake is then layered
+	# directly onto the camera offsets below, bypassing the pan clamp entirely.
+	if _shake_timer > 0.0:
+		_shake_timer -= delta
+		if _shake_timer <= 0.0:
+			_shake_timer  = 0.0
+			_shake_offset = Vector2.ZERO
+		else:
+			var elapsed      := SHAKE_DURATION - _shake_timer
+			var decay        := _shake_timer / SHAKE_DURATION   # 1.0 → 0.0
+			var world_per_px := _camera.size / get_viewport().get_visible_rect().size.y
+			var mag_px       := sin(elapsed * SHAKE_FREQ * TAU) * SHAKE_MAG_PX * decay
+			_shake_offset     = _shake_axis * mag_px * world_per_px
+		# Re-establish the clean base camera position so shake can be applied on top.
+		if _followed_enemy == null:
+			_apply_pan(_pan_world_pos)
+
+	# Apply the shake offset directly to camera offsets — separate from the clamped pan
+	# so the shake works at all zoom levels and never gets caught in the overview clamp.
+	_camera.h_offset += _shake_offset.x
+	_camera.v_offset += _shake_offset.y
+
 	# Pan toward whichever arena edge the drag ghost is approaching.
 	if _hud_drag_active and _zoom_state == ZoomState.ZOOMED_IN:
 		_apply_edge_scroll(delta)
@@ -2579,6 +2751,7 @@ func _toggle_zoom(center_pos: Vector2 = Vector2.ZERO) -> void:
 
 
 ## Pans the camera to pos (world XZ), clamped so the arena never scrolls off-screen.
+## Does NOT apply shake — shake is layered on top by _process after this call.
 func _apply_pan(pos: Vector2) -> void:
 	var vp            := get_viewport().get_visible_rect().size
 	var world_per_px  := _camera.size / vp.y
@@ -2586,8 +2759,17 @@ func _apply_pan(pos: Vector2) -> void:
 	# Arena zone height below the experience bar; used for pan clamping so the
 	# camera cannot scroll arena content entirely behind the XP bar or off-screen.
 	var visible_half_h := (vp.y - ExperienceBar.PANEL_H - HUD.SCREEN_EDGE_MARGIN) * world_per_px * 0.5
-	var cx := clampf(pos.x, -_arena_world_half   + visible_half_w, _arena_world_half   - visible_half_w)
-	var cz := clampf(pos.y, -_arena_world_half_z + visible_half_h, _arena_world_half_z - visible_half_h)
+
+	# In overview the visible area is larger than the arena, so the clamp range would
+	# be inverted (min > max). Guard against this: if the arena fits completely in view
+	# on an axis, that axis cannot be panned — lock it to 0.
+	var cx := 0.0
+	if visible_half_w < _arena_world_half:
+		cx = clampf(pos.x, -_arena_world_half + visible_half_w, _arena_world_half - visible_half_w)
+	var cz := 0.0
+	if visible_half_h < _arena_world_half_z:
+		cz = clampf(pos.y, -_arena_world_half_z + visible_half_h, _arena_world_half_z - visible_half_h)
+
 	_pan_world_pos   = Vector2(cx, cz)
 	_camera.h_offset = _camera_base_h_offset + cx
 	# _v_center_offset_px is converted to world units using the CURRENT camera size
@@ -2631,11 +2813,18 @@ func _apply_edge_scroll(delta: float) -> void:
 	_apply_pan(_pan_world_pos + Vector2(scroll_x, scroll_z) * EDGE_SCROLL_MAX_SPEED * delta)
 
 
-## Resets camera to overview when a run ends.
+## Called when a run ends.  Cancels any active shake and releases enemy follow,
+## but deliberately does NOT reset h_offset/v_offset: the HubScreen appears over
+## the arena immediately, so snapping the camera to the overview centre would
+## produce a jarring flash of movement just before the overlay covers the view.
 func _on_run_ended_camera() -> void:
+	_shake_timer  = 0.0
+	_shake_offset = Vector2.ZERO
 	_set_followed_enemy(null)
+	# Keep the internal zoom-state consistent for the next run without moving the camera.
 	if _zoom_state == ZoomState.ZOOMED_IN:
-		_toggle_zoom()
+		_zoom_state  = ZoomState.OVERVIEW
+		_camera.size = _overview_camera_size
 
 
 ## Called when the player accumulates enough XP to advance a level.
@@ -2669,17 +2858,22 @@ func _show_level_up_screen(new_level: int) -> void:
 ## the fire-rate (and range indicator) changes take effect immediately.
 ## For equipment upgrades, calls the free-upgrade method directly on the trap.
 func _on_level_up_upgrade_chosen(upgrade: Dictionary) -> void:
-	if upgrade.get("category") == "campaign":
-		GameState.apply_campaign_buff(upgrade["id"], upgrade["magnitude"])
-		# Fire-rate and range indicator changes require each trap to recalculate.
-		_refresh_global_trap_multipliers()
-	else:
-		# Equipment upgrade: free stat boost applied to every placed trap of this type
-		# AND recorded so new placements of the same type inherit the upgrade immediately.
-		_apply_free_equipment_upgrade_by_type(
-			upgrade.get("trap_type", -1),
-			upgrade.get("stat", "")
-		)
+	match upgrade.get("category", ""):
+		"campaign":
+			GameState.apply_campaign_buff(upgrade["id"], upgrade["magnitude"])
+			# Fire-rate and range indicator changes require each trap to recalculate.
+			_refresh_global_trap_multipliers()
+		"unlock_trap":
+			GameState.unlock_trap(upgrade["item_type"])
+		"unlock_boost":
+			GameState.unlock_boost(upgrade["item_type"])
+		_:
+			# Equipment upgrade: free stat boost applied to every placed trap of this
+			# type AND recorded so new placements inherit it immediately.
+			_apply_free_equipment_upgrade_by_type(
+				upgrade.get("trap_type", -1),
+				upgrade.get("stat", "")
+			)
 
 
 ## Iterates all placed traps and tells each one to recompute its multipliers.
@@ -2717,6 +2911,35 @@ func _apply_free_equipment_upgrade(trap: Node3D, stat: String) -> void:
 		"duration":    trap.apply_free_duration_upgrade()
 		"crit_chance": trap.apply_free_crit_chance_upgrade()
 		"crit_dmg":    trap.apply_free_crit_dmg_upgrade()
+
+
+## Applies the pre-conditioning bonus to a newly placed trap.
+## Passive traps (Glue Board, Bait Station) advance their duration stat because they
+## have no fire cycle — duration is their primary effectiveness lever.
+## All other traps advance damage, which is the most universally impactful stat.
+## The free-upgrade pool caps at FREE_MAX_LEVEL (3), matching the 3-tier bonus max.
+func _apply_starting_star_bonus_to_trap(trap: Node3D, trap_type: int) -> void:
+	var bonus: int = GameState.starting_star_bonus_traps.get(trap_type, 0)
+	if bonus <= 0 or not is_instance_valid(trap):
+		return
+	# Passive traps have no fire cycle, so duration is their most meaningful stat.
+	# Active traps use damage — universally useful regardless of targeting mode.
+	var stat := "duration" if trap.is_passive() else "damage"
+	for _i in bonus:
+		_apply_free_equipment_upgrade(trap, stat)
+
+
+## Applies the pre-conditioning bonus to a newly placed boost.
+## Advances stat B (the primary bonus stat) N times — this is the signature effect
+## for every boost type (damage bonus, fire-rate bonus, income, reduction, restore).
+## BoostUnit has no separate free-upgrade pool; apply_stat_b_upgrade() modifies
+## the live stat directly without deducting Bug Bucks.
+func _apply_starting_star_bonus_to_boost(boost: Node3D, boost_type: int) -> void:
+	var bonus: int = GameState.starting_star_bonus_boosts.get(boost_type, 0)
+	if bonus <= 0 or not is_instance_valid(boost):
+		return
+	for _i in bonus:
+		boost.apply_stat_b_upgrade()
 
 
 ## Plays phase-transition audio cues.

@@ -1,4 +1,4 @@
-The Play/Pause button should have equal height for all values that it displays, and the gamespeed button should ahve the same height.  
+79The Play/Pause button should have equal height for all values that it displays, and the gamespeed button should ahve the same height.  
 
 the gamespeed button is being improved to better communicate with the player what would happen if they click it.  When the game starts, teh button defaults to showing a single triangle pointed to the right, left aligned, equal in height to the standard.
   right-aligned on the button will be the current gamespeed multiplier, communicated as "1X" or "2X" at the same height as all other text on this button.  If the user clicks this button, the gamespeed will
@@ -13,3 +13,35 @@ i want to build a repeatable process that will compile the game project into an 
 
 
 bz4mU9t8Em86gkrJztFb
+
+# make choose your gear screen offer smarter choices to prevent poor balance
+
+In order to make sure that the player's starting gear is useful, the following rules will be applied. 
+-one of the great options will always be a tier one trap as they are the most affordable and versatile. Your one traps include snap trap and fogger. 
+
+# slight camera shadow when enemy reaches exit
+
+# make button labels less silly, more consistent
+
+# for level up screen, possibility of any item being a new trap or boost should be low, and decrease as the number of traps and boosts that the player has unlocked increases
+
+# on permanent upgrade screen, each item should have 10 tiers, not two. Currently there are two gold dots that represent the level. This should change to a large bright gold star with the level number in gold next to it. The star should be dark gray when the level is zero. The star will be inside a panel that has a dark gray outline when the level is 9 or lower, bright gold when the level is 10.  The service fee icon and text should be twice as large. The description text should be bold, larger and white to be easier to read on mobile. 
+
+
+
+#in the arena, you can no longer place traps or boosts while the game is paused
+
+
+#on the choose your gear screen
+-the option panels need more space. The choose your gear title and pick two text should be left aligned across the top of the screen. The start button should be right aligned across the top. The option panels should all be taller to use up the space from where the start button used to be. 
+-the empty space between the option panels and trap / boost images should be cut in half
+
+#the zoom button should move to the top of the right side panel, pinned to the top left corner next to the settings button. The play/pause button should be restored, and the game speed button should remove the pause option. The play/pause button and game speed button should expand widths to take up the available space
+
+
+
+# there should be a slight decrease in the time between enemies spawning in a wave
+
+# there should be a slight increase in enemy hp, even more for big enemies and bosses
+
+# during an active game, the settings screen should have a tab for all non trap or boost upgrades to visualize what upgrades the player has received and which they have not

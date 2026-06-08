@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Service Fee icon — two overlapping dollar bills (viewed from above-front).
+     ViewBox 80×52 (bill-landscape proportion). Used in UI as a 2D TextureRect. -->
+
+<svg
+   viewBox="0 0 80 52"
+   version="1.1"
+   id="svg7"
+   sodipodi:docname="service_fee_icon.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs7" />
+  <sodipodi:namedview
+     id="namedview7"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="10.973753"
+     inkscape:cx="22.872757"
+     inkscape:cy="15.08144"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg7" />
+  <!-- Back bill (offset up-right to suggest a stack) -->
+  <rect
+     x="10"
+     y="1.4820322"
+     width="69.291199"
+     height="42.517967"
+     rx="3.9999998"
+     fill="#1a5c1a"
+     id="rect1"
+     ry="3.9999998"
+     style="stroke-width:0.978024;fill:#124012;fill-opacity:1" />
+  <rect
+     x="9.97787"
+     y="1.2665941"
+     width="68.884407"
+     height="42.755535"
+     rx="4"
+     fill="none"
+     stroke="#0a2e0a"
+     stroke-width="1.95574"
+     id="rect2"
+     ry="3.9999998"
+     style="stroke:#258925;stroke-opacity:1" />
+  <rect
+     x="13.983741"
+     y="5.1435924"
+     width="61.259285"
+     height="34.872665"
+     rx="2"
+     fill="none"
+     stroke="#2e8c2e"
+     stroke-width="1.46749"
+     id="rect3"
+     style="stroke:#1c671c;stroke-opacity:1"
+     ry="2" />
+  <!-- Front bill -->
+  <rect
+     x="0.96654278"
+     y="8"
+     width="69.033455"
+     height="42.906483"
+     rx="4"
+     fill="#2b8a2b"
+     id="rect4"
+     ry="4"
+     style="stroke-width:0.980654;stroke:#50cf50;stroke-opacity:1" />
+  <ellipse
+     cx="36.935783"
+     cy="6.233665"
+     rx="24.147123"
+     ry="1.4058241"
+     fill="#ffffff"
+     opacity="0.15"
+     id="ellipse1"
+     style="opacity:0.24;stroke-width:1.17711" />
+  <rect
+     x="1.168857"
+     y="7.9767876"
+     width="68.854355"
+     height="42.679527"
+     rx="3.9999998"
+     fill="none"
+     stroke="#1a5c1a"
+     stroke-width="1.95357"
+     id="rect5"
+     ry="3.9999998"
+     style="stroke-width:1.954;stroke-dasharray:none;stroke:#3de23d;stroke-opacity:1" />
+  <rect
+     x="4"
+     y="12"
+     width="62"
+     height="36"
+     rx="2"
+     fill="none"
+     stroke="#50c050"
+     stroke-width="1.5"
+     id="rect6"
+     style="stroke:#50cf50;stroke-opacity:1" />
+  <!-- Oval medallion behind the dollar sign -->
+  <ellipse
+     cx="35"
+     cy="30"
+     rx="13"
+     ry="13"
+     fill="#185818"
+     stroke="#50c050"
+     stroke-width="1.5"
+     id="ellipse6"
+     style="stroke:#50cf50;stroke-opacity:1" />
+  <!-- Dollar sign — vertical stem -->
+  <line
+     x1="35"
+     y1="21"
+     x2="35"
+     y2="39"
+     stroke="#90e090"
+     stroke-width="2.5"
+     stroke-linecap="round"
+     id="line6"
+     style="stroke:#edff00;stroke-opacity:1" />
+  <!-- Dollar sign — S-curve: three cubic segments tracing the S shape -->
+  <!-- Segment 1: top bowl  (41,25) → (29,26), curving up-left -->
+  <!-- Segment 2: crossbar  (29,26) → (41,35), curving down-right -->
+  <!-- Segment 3: bot bowl  (41,35) → (29,36), curving down-left -->
+  <path
+     d="M 41,25 C 41,21 29,21 29,26 C 29,30 41,30 41,35 C 41,39 29,39 29,36"
+     fill="none"
+     stroke="#90e090"
+     stroke-width="2.5"
+     stroke-linecap="round"
+     stroke-linejoin="round"
+     id="path6"
+     style="stroke:#edff00;stroke-opacity:1" />
+  <!-- Specular highlight on the front bill (top-left corner) -->
+  <ellipse
+     cx="27.732006"
+     cy="13.068154"
+     rx="24.147123"
+     ry="1.4058241"
+     fill="#ffffff"
+     opacity="0.15"
+     id="ellipse7"
+     style="opacity:0.35;stroke-width:1.17711" />
+</svg>

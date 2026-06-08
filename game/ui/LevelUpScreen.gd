@@ -11,6 +11,7 @@ extends CanvasLayer
 
 const UIFonts     = preload("res://ui/UIFonts.gd")
 const Trap        = preload("res://traps/Trap.gd")
+const BoostUnit   = preload("res://boosts/BoostUnit.gd")
 const UpgradeCard = preload("res://ui/UpgradeCard.gd")
 
 
@@ -37,7 +38,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Extermination Formula",
 		"stat_name":       "Damage",
 		"impact_template": "+%s%% Damage to all traps",
-		"plain_text":      "Every trap deals more damage per shot. Stacks with trap upgrades and Pheromone Dispenser boosts.",
+		"plain_text":      "All traps deal more damage. Stacks with upgrades and Pheromone.",
 		"magnitudes":      [0.05, 0.10, 0.20],
 	},
 	{
@@ -45,7 +46,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Extended Reach",
 		"stat_name":       "Range",
 		"impact_template": "+%s%% Range for all traps",
-		"plain_text":      "Every trap covers a wider area. Enemies spend more time inside each trap's kill zone.",
+		"plain_text":      "All traps cover a wider area, keeping pests in range longer.",
 		"magnitudes":      [0.05, 0.10, 0.20],
 	},
 	{
@@ -53,7 +54,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Hair Trigger",
 		"stat_name":       "Fire Rate",
 		"impact_template": "+%s%% Fire Rate for all traps",
-		"plain_text":      "Every trap fires more often. Stacks with fire rate upgrades and Compressor boosts.",
+		"plain_text":      "All traps fire more often. Stacks with upgrades and Compressor.",
 		"magnitudes":      [0.05, 0.10, 0.20],
 	},
 	{
@@ -61,7 +62,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Sharpened Instincts",
 		"stat_name":       "Crit Chance",
 		"impact_template": "+%s%% Crit Chance for all traps",
-		"plain_text":      "Every trap has a higher chance to deal bonus damage on each shot. Applies directly — a trap with 0% crit chance becomes 2% (or more) immediately.",
+		"plain_text":      "All traps gain crit chance. Works even on traps with 0% base.",
 		"magnitudes":      [0.02, 0.04, 0.08],
 	},
 	{
@@ -69,7 +70,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Lethal Potency",
 		"stat_name":       "Crit Damage",
 		"impact_template": "+%s%% Crit Damage bonus",
-		"plain_text":      "Critical hits from every trap hit harder. Combines with per-trap Crit Damage upgrades.",
+		"plain_text":      "Critical hits from all traps deal more damage.",
 		"magnitudes":      [0.10, 0.20, 0.40],
 	},
 	{
@@ -77,7 +78,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Invoice Padding",
 		"stat_name":       "Bug Bucks",
 		"impact_template": "+%s%% Bug Bucks per kill",
-		"plain_text":      "Every kill pays out more. Applies to all enemy types including boss splits and spawned units.",
+		"plain_text":      "Every kill pays out more Bug Bucks.",
 		"magnitudes":      [0.10, 0.20, 0.40],
 	},
 	{
@@ -91,7 +92,7 @@ const CAMPAIGN_BUFFS: Array = [
 		# Plain text gives the player a concrete anchor: an escaped Ant fills the bar
 		# by exactly 5% (1.0 infestation / INFESTATION_MAX 20 = 0.05 = 5%).
 		# That lets them calculate roughly how many kills offset one escape.
-		"plain_text":      "Each kill quietly trims the infestation bar. An escaped Ant fills it by 5% — this upgrade claws back a share of that with every kill.",
+		"plain_text":      "Each kill slightly reduces the infestation bar.",
 		"magnitudes":      [0.002, 0.004, 0.008],
 	},
 	{
@@ -99,7 +100,7 @@ const CAMPAIGN_BUFFS: Array = [
 		"title":           "Bulk Procurement",
 		"stat_name":       "Upgrade Costs",
 		"impact_template": "-%s%% Upgrade Costs",
-		"plain_text":      "All Bug Bucks upgrade costs for traps and boosts are reduced. Applies immediately to all future upgrades this run.",
+		"plain_text":      "Reduces upgrade costs for all traps and boosts.",
 		"magnitudes":      [0.05, 0.10, 0.20],
 	},
 ]
@@ -116,12 +117,12 @@ const STAT_NAMES: Dictionary = {
 
 ## Plain-text explanation of what each stat upgrade actually does.
 const STAT_PLAIN_TEXT: Dictionary = {
-	"damage":      "Increases the damage this trap deals per shot.",
-	"range":       "Increases the radius of this trap's targeting area.",
-	"fire_rate":   "Reduces the cooldown between shots, firing more often.",
-	"duration":    "Extends how long the slow or poison effect lasts.",
-	"crit_chance": "Adds a chance for each shot to deal bonus critical damage.",
-	"crit_dmg":    "Increases the damage multiplier when a critical hit occurs.",
+	"damage":      "Increases damage per shot.",
+	"range":       "Expands the targeting radius.",
+	"fire_rate":   "Fires more often.",
+	"duration":    "Extends effect duration.",
+	"crit_chance": "Adds critical hit chance.",
+	"crit_dmg":    "Increases critical hit damage.",
 }
 
 
@@ -136,6 +137,11 @@ const STAT_PLAIN_TEXT: Dictionary = {
 const RARE_THRESHOLD: float = 0.01
 const PRO_THRESHOLD:  float = 0.16   # 0.01 + 0.15
 
+## When an unlock card is generated, trap unlock candidates are weighted by this
+## multiplier relative to boost candidates. At 4.0 a single trap and single boost
+## of equal cost produce an 80/20 split — traps appear far more often than boosts.
+const TRAP_CATEGORY_BIAS: float = 4.0
+
 ## Displayed percentage for equipment upgrade cards at each tier [common, pro, rare].
 ## These are shown as "+X%" on the card — a relative label, not an exact formula output,
 ## since different traps of the same type may have different absolute starting stats.
@@ -146,11 +152,11 @@ const EQUIP_DISPLAY_PCT: Array = [5, 10, 20]
 # Layout constants
 # ---------------------------------------------------------------------------
 
-## Width of each upgrade card in virtual pixels.
-const CARD_W: float = 190.0
+## Width of each upgrade card in virtual pixels — 10% smaller than TrapSelectionScreen's 372.
+const CARD_W: float = 335.0
 
-## Height of each upgrade card in virtual pixels.
-const CARD_H: float = 310.0
+## Height of each upgrade card in virtual pixels — 10% smaller than the previous 385.
+const CARD_H: float = 347.0
 
 ## Horizontal gap between cards.
 const CARD_GAP: float = 20.0
@@ -160,7 +166,9 @@ const CARD_GAP: float = 20.0
 # Internal state
 # ---------------------------------------------------------------------------
 
-var _trap_nodes: Array = []   # placed trap nodes passed in from Arena
+var _trap_nodes:  Array = []   # placed trap nodes passed in from Arena
+var _cards:       Array = []   # UpgradeCard nodes — used for mobile touch hit-testing
+var _sign_nodes:  Array = []   # parallel array: _sign_nodes[i] holds all external sign nodes for card i
 
 
 # ---------------------------------------------------------------------------
@@ -184,38 +192,53 @@ func _build_screen(new_level: int) -> void:
 
 	# Dim overlay — covers the full virtual viewport.
 	var dim := ColorRect.new()
-	dim.color = Color(0.0, 0.0, 0.0, 0.60)
+	dim.color = Color(0.0, 0.0, 0.0, 0.90)
 	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	dim.process_mode = Node.PROCESS_MODE_ALWAYS
 	add_child(dim)
 
-	# "LEVEL N" header label, centred near the top.
-	# Font size 128 so the level announcement dominates the screen.
+	# Card layout metrics — kept in sync with _spawn_cards so labels align with card edges.
+	var total_w      := CARD_W * 3.0 + CARD_GAP * 2.0
+	var card_start_x := (1280.0 - total_w) * 0.5   # left edge of the leftmost card
+	var card_top_y   := 180.0                        # top edge of all cards (matches card_y in _spawn_cards)
+	# The NEW EQUIPMENT tag's top edge sits above the card top; center labels in 0→tag_top,
+	# not 0→card_top, so they read as vertically centered with that visible boundary.
+	var tag_top_y    := card_top_y - 30.0 + 6.0     # TAG_H=30, CARD_BORDER_W=6
+
+	# "LEVEL N" header — left-aligned to the left edge of the leftmost card,
+	# vertically centred in the zone above the cards. Font is 10% larger than before.
 	var header := Label.new()
 	header.text                 = "LEVEL %d" % new_level
-	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	header.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT
+	header.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	header.add_theme_font_override("font", UIFonts.primary_bold())
-	header.add_theme_font_size_override("font_size", 128)
+	header.add_theme_font_size_override("font_size", 127)   # 115 × 1.10
 	header.add_theme_color_override("font_color", Color(1.0, 0.88, 0.20, 1.0))
 	header.add_theme_color_override("font_shadow_color", Color(0.0, 0.0, 0.0, 0.9))
 	header.add_theme_constant_override("shadow_offset_x", 2)
 	header.add_theme_constant_override("shadow_offset_y", 2)
 	header.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	header.offset_top    = 5.0
-	header.offset_bottom = 160.0   # 155px for 128pt font
+	header.offset_left   = card_start_x
+	header.offset_top    = 0.0
+	header.offset_bottom = tag_top_y
 	header.process_mode  = Node.PROCESS_MODE_ALWAYS
 	add_child(header)
 
-	# "CHOOSE ONE" sub-header — bolder, brighter, and larger than the old "Choose an upgrade".
+	# "CHOOSE ONE" sub-header — right-aligned to the right edge of the rightmost card,
+	# vertically centred in the same above-cards zone. Font is 30% larger than before.
 	var sub := Label.new()
 	sub.text                 = "CHOOSE ONE"
-	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	sub.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	sub.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
 	sub.add_theme_font_override("font", UIFonts.primary_bold())
 	sub.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
-	sub.add_theme_font_size_override("font_size", 32)
+	sub.add_theme_font_size_override("font_size", 84)   # 32 × 1.30 × 2
+	# Cards are centred, so right margin equals left margin; offset_right pushes the
+	# label's right edge flush with the rightmost card's right edge.
 	sub.set_anchors_and_offsets_preset(Control.PRESET_TOP_WIDE)
-	sub.offset_top    = 163.0
-	sub.offset_bottom = 205.0   # 42px for 32pt font
+	sub.offset_right  = -card_start_x
+	sub.offset_top    = 0.0
+	sub.offset_bottom = tag_top_y
 	sub.process_mode  = Node.PROCESS_MODE_ALWAYS
 	add_child(sub)
 
@@ -229,19 +252,54 @@ func _build_screen(new_level: int) -> void:
 # ---------------------------------------------------------------------------
 
 ## Generates 3 unique upgrade card data Dictionaries.
-## Tiers are rolled independently per card. Category (equipment vs campaign)
-## is chosen randomly, with a fallback to campaign if no eligible traps exist.
+##
+## Unlock cards (new trap or boost) appear with a probability that starts low
+## and decreases as the player already has more items unlocked.  This means
+## they are a pleasant surprise rather than a guaranteed outcome every level-up.
+##
+## The probability per slot is:
+##   BASE_UNLOCK_CHANCE × (locked_count / TOTAL_UNLOCKABLE)
+## At maximum lock (all 11 items locked) this equals BASE_UNLOCK_CHANCE (~25%).
+## As the player accumulates unlocks the chance falls proportionally toward zero.
 func _generate_cards() -> Array:
-	var result: Array = []
-	# Track which upgrade IDs have already been offered to avoid duplicates.
+	var result:   Array = []
 	var used_ids: Array = []
 
-	for _i in 3:
-		var tier   := _roll_tier()
-		var card   := _build_card(tier, used_ids)
+	# Count how many traps and boosts are still locked for this run.
+	var locked_traps: int = 0
+	for t in range(6):
+		if t not in GameState.unlocked_trap_types:
+			locked_traps += 1
+	var locked_boosts: int = 0
+	for b in range(5):
+		if b not in GameState.unlocked_boost_types:
+			locked_boosts += 1
+	var locked_total: int = locked_traps + locked_boosts
+
+	# 6 trap types + 5 boost types = 11 total unlockable items.
+	const TOTAL_UNLOCKABLE:    int   = 11
+	const BASE_UNLOCK_CHANCE: float = 0.25
+
+	var unlock_chance: float = BASE_UNLOCK_CHANCE * float(locked_total) / float(TOTAL_UNLOCKABLE)
+
+	while result.size() < 3:
+		var tier := _roll_tier()
+		var card:  Dictionary
+
+		if locked_total > 0 and randf() < unlock_chance:
+			var unlock_card := _build_unlock_card(tier, used_ids)
+			# Fall back to a stat card if no distinct unlock candidate could be found.
+			if not unlock_card.is_empty():
+				card = unlock_card
+			else:
+				card = _build_equipment_or_campaign_card(tier, used_ids)
+		else:
+			card = _build_equipment_or_campaign_card(tier, used_ids)
+
 		result.append(card)
 		used_ids.append(card.get("id", ""))
 
+	result.shuffle()
 	return result
 
 
@@ -255,30 +313,153 @@ func _roll_tier() -> int:
 	return UpgradeCard.Tier.COMMON
 
 
-## Builds a card Dictionary for the given tier.
+## Short display text for each trap and boost type, used on unlock cards.
+const TRAP_DISPLAY: Dictionary = {
+	0: { "name": "Snap Trap",          "desc": "Targets the nearest pest. Fast rate, low damage. Can hit flying pests." },
+	1: { "name": "Zapper",             "desc": "Targets the pest farthest along the path. Slow rate, very high damage. Ground only." },
+	2: { "name": "Fogger",             "desc": "Area attack — hits all ground pests in range, closest first." },
+	3: { "name": "Glue Board",         "desc": "Periodically slows all ground pests in range." },
+	4: { "name": "Fly Strip Launcher", "desc": "Anti-air only. Sticky cloud on impact slows and damages over time." },
+	5: { "name": "Bait Station",       "desc": "Pests walk straight over it. Pulses poison to all pests in range." },
+}
+
+const BOOST_DISPLAY: Dictionary = {
+	0: { "name": "Pheromone Dispenser", "desc": "All traps in range deal more damage." },
+	1: { "name": "Compressor",          "desc": "All traps in range fire more often." },
+	2: { "name": "Cash Register",       "desc": "Earns Bug Bucks each wave. Bonus per kill in its aura." },
+	3: { "name": "Air Freshener",       "desc": "Reduces infestation when pests escape through its aura. Perishable." },
+	4: { "name": "Quarantine Marker",   "desc": "Restores infestation per kill in its aura. Perishable." },
+}
+
+
+## Builds an equipment or campaign card for the given tier.
 ## Tries equipment first (50/50 split), falling back to campaign if no traps
 ## are eligible or the chosen upgrade ID is already in used_ids.
-func _build_card(tier: int, used_ids: Array) -> Dictionary:
-	# Try equipment first with a 50% probability.
+func _build_equipment_or_campaign_card(tier: int, used_ids: Array) -> Dictionary:
 	if randf() < 0.50:
 		var equip_card := _build_equipment_card(tier, used_ids)
 		if not equip_card.is_empty():
 			return equip_card
 
-	# Fall back to (or always choose) a campaign card.
 	return _build_campaign_card(tier, used_ids)
+
+
+## Builds an unlock card for a randomly chosen locked trap or boost type.
+## Returns empty if all traps and boosts are already unlocked, or all
+## eligible unlock IDs are already in used_ids.
+##
+## Selection is weighted two ways:
+##   1. Within each category, weight = 1 / cost — cheaper items appear more often.
+##   2. Between categories, the trap pool's total weight is multiplied by
+##      TRAP_CATEGORY_BIAS so traps are strongly favoured over boosts.
+func _build_unlock_card(tier: int, used_ids: Array) -> Dictionary:
+	# Build weighted candidate lists per category.
+	var trap_candidates: Array  = []
+	var boost_candidates: Array = []
+
+	for t in range(6):
+		var uid := "unlock_trap_%d" % t
+		if t not in GameState.unlocked_trap_types and uid not in used_ids:
+			var cost: int    = Trap.STATS[t].get("cost", 1)
+			var weight: float = 1.0 / float(maxi(cost, 1))
+			trap_candidates.append({ "category": "unlock_trap",  "type": t, "uid": uid, "weight": weight })
+
+	for b in range(5):
+		var uid := "unlock_boost_%d" % b
+		if b not in GameState.unlocked_boost_types and uid not in used_ids:
+			var cost: int    = BoostUnit.STATS[b].get("cost", 1)
+			var weight: float = 1.0 / float(maxi(cost, 1))
+			boost_candidates.append({ "category": "unlock_boost", "type": b, "uid": uid, "weight": weight })
+
+	if trap_candidates.is_empty() and boost_candidates.is_empty():
+		return {}
+
+	# Choose category. Apply TRAP_CATEGORY_BIAS to the trap pool's total weight so
+	# traps appear far more often when both categories have locked items.
+	var chosen_pool: Array
+	if trap_candidates.is_empty():
+		chosen_pool = boost_candidates
+	elif boost_candidates.is_empty():
+		chosen_pool = trap_candidates
+	else:
+		var trap_weight: float  = 0.0
+		for c in trap_candidates:
+			trap_weight += c["weight"]
+		trap_weight *= TRAP_CATEGORY_BIAS
+
+		var boost_weight: float = 0.0
+		for c in boost_candidates:
+			boost_weight += c["weight"]
+
+		chosen_pool = trap_candidates if randf() * (trap_weight + boost_weight) < trap_weight \
+				else boost_candidates
+
+	# Weighted pick within the chosen category.
+	var pool_total: float = 0.0
+	for c in chosen_pool:
+		pool_total += c["weight"]
+
+	var roll := randf() * pool_total
+	var accumulated := 0.0
+	var chosen: Dictionary = chosen_pool[-1]   # fallback to last entry
+	for c in chosen_pool:
+		accumulated += c["weight"]
+		if roll <= accumulated:
+			chosen = c
+			break
+
+	var category: String = chosen["category"]
+	var item_type: int   = chosen["type"]
+	var uid: String      = chosen["uid"]
+
+	if category == "unlock_trap":
+		var display: Dictionary = TRAP_DISPLAY.get(item_type, {})
+		return {
+			"id":           uid,
+			"category":     "unlock_trap",
+			"tier":         tier,
+			"tier_label":   "NEW TRAP",
+			"title":        display.get("name", "Trap"),
+			"stat_name":    "",
+			"impact_line":  "Unlocks for placement",
+			"plain_text":   display.get("desc", ""),
+			"custom_color": Trap.STATS[item_type].get("color", Color.WHITE),
+			"item_type":    item_type,
+			"magnitude":    0.0,
+			"trap_node":    null,
+			"stat":         "",
+		}
+	else:
+		var display: Dictionary = BOOST_DISPLAY.get(item_type, {})
+		return {
+			"id":           uid,
+			"category":     "unlock_boost",
+			"tier":         tier,
+			"tier_label":   "NEW BOOST",
+			"title":        display.get("name", "Boost"),
+			"stat_name":    "",
+			"impact_line":  "Unlocks for placement",
+			"plain_text":   display.get("desc", ""),
+			"custom_color": BoostUnit.GLOW_COLORS[item_type],
+			"item_type":    item_type,
+			"magnitude":    0.0,
+			"trap_node":    null,
+			"stat":         "",
+		}
 
 
 ## Tries to find an eligible trap type and non-exhausted free-upgrade stat.
 ## Returns an empty Dictionary if no eligible (type, stat) pair exists.
 ##
-## Equipment upgrades are now type-wide: the chosen upgrade applies to every
-## placed trap of that type AND all future placements (tracked in GameState).
-## The free pool (FREE_MAX_LEVEL = 3) is independent of the paid Bug-Bucks pool,
-## so a stat can be offered here even if already paid-maxed, and vice-versa.
+## Equipment upgrades are type-wide: the chosen upgrade applies to every placed
+## trap of that type AND all future placements (tracked in GameState).
+##
+## Eligibility is based on unlocked trap types, not just placed ones — if the player
+## has unlocked a Zapper but hasn't placed one yet, Zapper equipment cards can still
+## appear and will apply to any Zapper placed later in the run.
 func _build_equipment_card(tier: int, used_ids: Array) -> Dictionary:
 	# Build a map of {trap_type_int → representative_trap_node} from placed traps.
-	# One entry per type — we need only one instance to check passive-ness and naming.
+	# A placed node is preferred because it lets us call get_type_name() directly.
 	var type_to_rep: Dictionary = {}
 	for trap in _trap_nodes:
 		if not is_instance_valid(trap):
@@ -287,13 +468,19 @@ func _build_equipment_card(tier: int, used_ids: Array) -> Dictionary:
 		if not type_to_rep.has(t):
 			type_to_rep[t] = trap
 
+	# Include every unlocked type even if none of that type are currently placed.
+	# Null sentinel signals that we must derive type info from STATS instead of a live node.
+	for trap_type: int in GameState.unlocked_trap_types:
+		if not type_to_rep.has(trap_type):
+			type_to_rep[trap_type] = null
+
 	if type_to_rep.is_empty():
 		return {}
 
 	# Collect all eligible (type, stat) pairs where the free pool is not exhausted.
-	var eligible: Array = []   # each entry: { "type": int, "stat": String, "rep": Node3D }
+	var eligible: Array = []   # each entry: { "type": int, "stat": String, "rep": Node3D or null }
 	for trap_type: int in type_to_rep.keys():
-		var rep: Node3D = type_to_rep[trap_type]
+		var rep = type_to_rep[trap_type]   # Node3D or null
 		for stat: String in _get_free_upgradeable_stats(rep, trap_type):
 			var uid := "equip_%d_%s" % [trap_type, stat]
 			if uid not in used_ids:
@@ -304,9 +491,18 @@ func _build_equipment_card(tier: int, used_ids: Array) -> Dictionary:
 
 	eligible.shuffle()
 	var chosen: Dictionary = eligible[0]
-	var trap_type: int  = chosen["type"]
-	var stat: String    = chosen["stat"]
-	var rep: Node3D     = chosen["rep"]
+	var trap_type: int = chosen["type"]
+	var stat: String   = chosen["stat"]
+	var rep            = chosen["rep"]   # Node3D or null
+
+	# Title is "<Trap Name> Upgrade" so the card is immediately recognisable as a
+	# buff to that specific trap type rather than a campaign-wide effect.
+	var trap_name: String
+	if rep != null and is_instance_valid(rep):
+		trap_name = rep.get_type_name()
+	else:
+		trap_name = TRAP_DISPLAY.get(trap_type, {}).get("name", "Trap")
+	var title: String = "%s Upgrade" % trap_name
 
 	var stat_name: String  = STAT_NAMES.get(stat, stat)
 	var plain_text: String = STAT_PLAIN_TEXT.get(stat, "")
@@ -317,37 +513,46 @@ func _build_equipment_card(tier: int, used_ids: Array) -> Dictionary:
 		"id":        unique_id,
 		"category":  "equipment",
 		"tier":      tier,
-		"title":     rep.get_type_name(),
+		"title":     title,
 		"stat_name": stat_name,
-		# Impact line mirrors campaign card format: "+X% Stat" — relative, not absolute.
-		# Different traps of the same type may have different base stats, so we show a
-		# relative label rather than a precise current-to-after delta.
-		"impact_line": "+%d%% %s" % [display_pct, stat_name],
-		"plain_text":  plain_text,
-		"current_val": "",   # not shown for equipment cards
+		# Relative label — different traps of the same type may have different base stats,
+		# so "+X%" is shown rather than an absolute current-to-after delta.
+		"impact_line":  "+%d%% %s" % [display_pct, stat_name],
+		"plain_text":   plain_text,
+		"custom_color": Trap.STATS.get(trap_type, {}).get("color", Color.TRANSPARENT),
+		"current_val": "",
 		"after_val":   "",
 		"magnitude":   0.0,
-		"trap_node":   null,   # unused — upgrade is applied by type, not by instance
+		"trap_node":   null,   # upgrade is applied by type, not by instance
 		"trap_type":   trap_type,
 		"stat":        stat,
 	}
 
 
 ## Returns stat strings whose free-upgrade pool is not yet exhausted for this type.
-## Uses the representative trap instance only to check passive status and naming;
-## the actual cap is checked against GameState.type_upgrade_queue.
-func _get_free_upgradeable_stats(rep: Node3D, trap_type: int) -> Array:
+##
+## rep may be a live Node3D or null (when the trap type is unlocked but not placed).
+## Passivity — which determines whether fire_rate or duration is the relevant stat —
+## is read from the live node when available, and derived from Trap.STATS otherwise.
+## A passive trap (cooldown == 0.0) has no fire cycle, so fire_rate doesn't apply;
+## it has a linger duration instead.
+func _get_free_upgradeable_stats(rep, trap_type: int) -> Array:
 	var result: Array = []
 	var queue: Dictionary = GameState.type_upgrade_queue.get(trap_type, {})
+
+	var passive: bool
+	if rep != null and is_instance_valid(rep):
+		passive = rep.is_passive()
+	else:
+		passive = Trap.STATS[trap_type]["cooldown"] == 0.0
 
 	if queue.get("damage", 0) < Trap.FREE_MAX_LEVEL:
 		result.append("damage")
 	if queue.get("range", 0) < Trap.FREE_MAX_LEVEL:
 		result.append("range")
-	# Fire rate is not applicable to passive traps (Glue Board, Bait Station).
-	if not rep.is_passive() and queue.get("fire_rate", 0) < Trap.FREE_MAX_LEVEL:
+	if not passive and queue.get("fire_rate", 0) < Trap.FREE_MAX_LEVEL:
 		result.append("fire_rate")
-	if rep.is_passive() and queue.get("duration", 0) < Trap.FREE_MAX_LEVEL:
+	if passive and queue.get("duration", 0) < Trap.FREE_MAX_LEVEL:
 		result.append("duration")
 	if queue.get("crit_chance", 0) < Trap.FREE_MAX_LEVEL:
 		result.append("crit_chance")
@@ -437,17 +642,228 @@ func _build_campaign_card(tier: int, used_ids: Array) -> Dictionary:
 func _spawn_cards(cards: Array) -> void:
 	var total_w := CARD_W * 3.0 + CARD_GAP * 2.0
 	var start_x := (1280.0 - total_w) * 0.5   # centred in 1280px virtual width
-	# Pushed down to clear the taller 128pt header + 32pt sub-header.
-	var card_y  := 213.0
+	# 10px gap below the sub-header (which ends at 170px). Tag panels render above this line.
+	var card_y  := 180.0
+
+	# One inner array per card slot; populated below so selection can dim them to match the card.
+	_sign_nodes = [[], [], []]
 
 	for i in 3:
 		var card_ctrl := UpgradeCard.new()
+		# Apply identity colour for unlock cards before setup() reads it.
+		card_ctrl.custom_color  = cards[i].get("custom_color", Color.TRANSPARENT)
+		card_ctrl.font_scale    = 0.65   # match TrapSelectionScreen text density
+		card_ctrl.image_h_max   = 65.0   # 25% smaller than the 87px baseline
 		card_ctrl.setup(cards[i])
 		card_ctrl.position    = Vector2(start_x + i * (CARD_W + CARD_GAP), card_y)
 		card_ctrl.size        = Vector2(CARD_W, CARD_H)
 		card_ctrl.process_mode = Node.PROCESS_MODE_ALWAYS
-		card_ctrl.card_selected.connect(_on_card_selected)
+		# Bind the slot index so _on_card_selected can dim the matching external signs.
+		card_ctrl.card_selected.connect(_on_card_selected.bind(i))
 		add_child(card_ctrl)
+		_cards.append(card_ctrl)
+
+	# Tag panels for unlock cards — drawn in a second pass so they render on top of all cards.
+	# Each tag is a raised amber banner sitting just above the card border.
+	# A drop shadow behind and highlight/shadow edge strips simulate a 3D pressed-in label.
+	const TAG_H:         float = 30.0    # taller than the old 22px to fit the larger font
+	const TAG_W:         float = 260.0   # slightly wider to accommodate the larger text
+	const CARD_BORDER_W: float = 6.0     # matches UpgradeCard.BORDER_W
+	const TAG_BG:        Color = Color(0.80, 0.80, 0.84, 1.0)   # silver body
+	const TAG_FG:        Color = Color(0.05, 0.05, 0.06, 1.0)   # near-black text
+	const TAG_HI:        Color = Color(0.80, 0.80, 0.83, 1.00)  # top/left highlight — light silver
+	const TAG_DK:        Color = Color(0.50, 0.50, 0.53, 1.00)  # bottom/right shadow — dark silver
+	const TAG_SHADOW:    Color = Color(0.00, 0.00, 0.00, 0.55)  # drop shadow behind the tag
+	const BEVEL:         float = 3.5     # thicker bevel so the high-contrast strips are clearly visible
+	const FONT_SIZE:     int   = 18      # 13 × 1.4 ≈ 18 — 40% larger than previous
+
+	for i in 3:
+		var cat: String = cards[i].get("category", "")
+		if cat != "unlock_trap" and cat != "unlock_boost":
+			continue
+
+		var cx: float  = start_x + i * (CARD_W + CARD_GAP)
+		var tag_x: float = cx + (CARD_W - TAG_W) * 0.5
+		# Vertically: the tag overlaps the top border of the card — bottom of tag
+		# aligns with the bottom of the border ring so content starts flush below.
+		var tag_y: float = card_y - TAG_H + CARD_BORDER_W
+
+		# Drop shadow — offset 3px right and 3px down; drawn first so every
+		# tag layer paints over it.
+		var shadow := ColorRect.new()
+		shadow.color        = TAG_SHADOW
+		shadow.position     = Vector2(tag_x + 3.0, tag_y + 3.0)
+		shadow.size         = Vector2(TAG_W, TAG_H)
+		shadow.z_index      = 1
+		shadow.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(shadow)
+		_sign_nodes[i].append(shadow)
+
+		# Main amber body.
+		var tag_bg := ColorRect.new()
+		tag_bg.color        = TAG_BG
+		tag_bg.position     = Vector2(tag_x, tag_y)
+		tag_bg.size         = Vector2(TAG_W, TAG_H)
+		tag_bg.z_index      = 2
+		tag_bg.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(tag_bg)
+		_sign_nodes[i].append(tag_bg)
+
+		# Top highlight strip — simulates light catching the upper face.
+		var hi := ColorRect.new()
+		hi.color        = TAG_HI
+		hi.position     = Vector2(tag_x, tag_y)
+		hi.size         = Vector2(TAG_W, BEVEL)
+		hi.z_index      = 3
+		hi.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(hi)
+		_sign_nodes[i].append(hi)
+
+		# Bottom shadow strip — simulates the underside receding into shadow.
+		var dk := ColorRect.new()
+		dk.color        = TAG_DK
+		dk.position     = Vector2(tag_x, tag_y + TAG_H - BEVEL)
+		dk.size         = Vector2(TAG_W, BEVEL)
+		dk.z_index      = 3
+		dk.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(dk)
+		_sign_nodes[i].append(dk)
+
+		# Left highlight strip — inset top and bottom by BEVEL so corner pixels are
+		# owned by the horizontal strips and the four corners read cleanly.
+		var left_hi := ColorRect.new()
+		left_hi.color        = TAG_HI
+		left_hi.position     = Vector2(tag_x, tag_y + BEVEL)
+		left_hi.size         = Vector2(BEVEL, TAG_H - 2.0 * BEVEL)
+		left_hi.z_index      = 3
+		left_hi.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(left_hi)
+		_sign_nodes[i].append(left_hi)
+
+		# Right shadow strip — inset top and bottom by BEVEL for the same reason.
+		var right_dk := ColorRect.new()
+		right_dk.color        = TAG_DK
+		right_dk.position     = Vector2(tag_x + TAG_W - BEVEL, tag_y + BEVEL)
+		right_dk.size         = Vector2(BEVEL, TAG_H - 2.0 * BEVEL)
+		right_dk.z_index      = 3
+		right_dk.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(right_dk)
+		_sign_nodes[i].append(right_dk)
+
+		var tag_lbl := Label.new()
+		tag_lbl.text                 = "★  NEW EQUIPMENT"
+		tag_lbl.position             = Vector2(tag_x, tag_y)
+		tag_lbl.size                 = Vector2(TAG_W, TAG_H)
+		tag_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		tag_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+		tag_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+		tag_lbl.add_theme_color_override("font_color", TAG_FG)
+		tag_lbl.add_theme_color_override("font_outline_color", TAG_FG)
+		tag_lbl.add_theme_constant_override("outline_size", 1)
+		tag_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+		tag_lbl.add_theme_font_size_override("font_size", FONT_SIZE)
+		tag_lbl.z_index              = 4
+		tag_lbl.process_mode         = Node.PROCESS_MODE_ALWAYS
+		add_child(tag_lbl)
+		_sign_nodes[i].append(tag_lbl)
+
+	# Tier signs — one per card, bottom edge, drawn last so they layer over all cards.
+	# Structure mirrors the NEW EQUIPMENT tag above but uses colors derived from the
+	# card's rarity tier so Common/Professional/Rare are visually distinct at a glance.
+	const TIER_SIGN_H:    float = 30.0
+	const TIER_SIGN_W:    float = 240.0
+	const TIER_BEVEL:     float = 3.5
+	const TIER_FONT_SIZE: int   = 18
+
+	for i in 3:
+		var cat_check: String = cards[i].get("category", "")
+		if cat_check == "unlock_trap" or cat_check == "unlock_boost":
+			continue   # unlock cards use the NEW EQUIPMENT sign instead; no tier sign shown
+		var tier: int         = cards[i].get("tier", UpgradeCard.Tier.COMMON)
+		var tier_color: Color = UpgradeCard.TIER_COLORS[tier]
+		var tier_name: String = UpgradeCard.TIER_NAMES[tier]
+
+		# Derive three tonal values from the tier's HSV: a mid-tone body, a brightened
+		# highlight, and a deep shadow. White text reads clearly against all three tiers.
+		var body_color: Color = Color.from_hsv(tier_color.h, tier_color.s, tier_color.v * 0.65, 1.0)
+		var hi_color:   Color = Color.from_hsv(tier_color.h, tier_color.s * 0.60, minf(tier_color.v * 1.35, 1.0), 1.0)
+		var dk_color:   Color = Color.from_hsv(tier_color.h, tier_color.s, tier_color.v * 0.25, 1.0)
+
+		var cx:     float = start_x + i * (CARD_W + CARD_GAP)
+		var sign_x: float = cx + (CARD_W - TIER_SIGN_W) * 0.5
+		# Position so the top of the sign sits at the bottom border of the card —
+		# the sign overlaps the bottom border (CARD_BORDER_W px) and hangs below,
+		# mirroring how the top tag overlaps the card's top border.
+		var sign_y: float = card_y + CARD_H - CARD_BORDER_W
+
+		var t_shadow := ColorRect.new()
+		t_shadow.color        = Color(0.0, 0.0, 0.0, 0.55)
+		t_shadow.position     = Vector2(sign_x + 3.0, sign_y + 3.0)
+		t_shadow.size         = Vector2(TIER_SIGN_W, TIER_SIGN_H)
+		t_shadow.z_index      = 1
+		t_shadow.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(t_shadow)
+		_sign_nodes[i].append(t_shadow)
+
+		var t_bg := ColorRect.new()
+		t_bg.color        = body_color
+		t_bg.position     = Vector2(sign_x, sign_y)
+		t_bg.size         = Vector2(TIER_SIGN_W, TIER_SIGN_H)
+		t_bg.z_index      = 2
+		t_bg.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(t_bg)
+		_sign_nodes[i].append(t_bg)
+
+		var t_hi := ColorRect.new()
+		t_hi.color        = hi_color
+		t_hi.position     = Vector2(sign_x, sign_y)
+		t_hi.size         = Vector2(TIER_SIGN_W, TIER_BEVEL)
+		t_hi.z_index      = 3
+		t_hi.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(t_hi)
+		_sign_nodes[i].append(t_hi)
+
+		var t_dk := ColorRect.new()
+		t_dk.color        = dk_color
+		t_dk.position     = Vector2(sign_x, sign_y + TIER_SIGN_H - TIER_BEVEL)
+		t_dk.size         = Vector2(TIER_SIGN_W, TIER_BEVEL)
+		t_dk.z_index      = 3
+		t_dk.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(t_dk)
+		_sign_nodes[i].append(t_dk)
+
+		var t_left_hi := ColorRect.new()
+		t_left_hi.color        = hi_color
+		t_left_hi.position     = Vector2(sign_x, sign_y + TIER_BEVEL)
+		t_left_hi.size         = Vector2(TIER_BEVEL, TIER_SIGN_H - 2.0 * TIER_BEVEL)
+		t_left_hi.z_index      = 3
+		t_left_hi.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(t_left_hi)
+		_sign_nodes[i].append(t_left_hi)
+
+		var t_right_dk := ColorRect.new()
+		t_right_dk.color        = dk_color
+		t_right_dk.position     = Vector2(sign_x + TIER_SIGN_W - TIER_BEVEL, sign_y + TIER_BEVEL)
+		t_right_dk.size         = Vector2(TIER_BEVEL, TIER_SIGN_H - 2.0 * TIER_BEVEL)
+		t_right_dk.z_index      = 3
+		t_right_dk.process_mode = Node.PROCESS_MODE_ALWAYS
+		add_child(t_right_dk)
+		_sign_nodes[i].append(t_right_dk)
+
+		var t_lbl := Label.new()
+		t_lbl.text                 = tier_name
+		t_lbl.position             = Vector2(sign_x, sign_y)
+		t_lbl.size                 = Vector2(TIER_SIGN_W, TIER_SIGN_H)
+		t_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		t_lbl.vertical_alignment   = VERTICAL_ALIGNMENT_CENTER
+		t_lbl.mouse_filter         = Control.MOUSE_FILTER_IGNORE
+		t_lbl.add_theme_color_override("font_color", Color.WHITE)
+		t_lbl.add_theme_font_override("font", UIFonts.primary_bold())
+		t_lbl.add_theme_font_size_override("font_size", TIER_FONT_SIZE)
+		t_lbl.z_index              = 4
+		t_lbl.process_mode         = Node.PROCESS_MODE_ALWAYS
+		add_child(t_lbl)
+		_sign_nodes[i].append(t_lbl)
 
 
 # ---------------------------------------------------------------------------
@@ -468,6 +884,8 @@ func _spawn_cards(cards: Array) -> void:
 ## so Godot's depth-first _unhandled_input traversal calls this method BEFORE
 ## Arena._unhandled_input() — the event is marked handled and Arena never sees it.
 func _unhandled_input(event: InputEvent) -> void:
+	# Cards handle their own touch via UpgradeCard._input.
+	# Swallow all remaining pointer events so Arena never receives them.
 	if event is InputEventScreenTouch \
 			or event is InputEventMouseButton \
 			or event is InputEventScreenDrag \
@@ -479,7 +897,12 @@ func _unhandled_input(event: InputEvent) -> void:
 # Selection
 # ---------------------------------------------------------------------------
 
-func _on_card_selected(upgrade: Dictionary) -> void:
+func _on_card_selected(upgrade: Dictionary, card_index: int) -> void:
+	# Dim the external signs for this card to match the card's own dim-on-select behaviour.
+	for node in _sign_nodes[card_index]:
+		if is_instance_valid(node):
+			node.modulate = Color(0.6, 0.6, 0.6, 1.0)
+
 	# Emit before unpausing so Arena can apply the upgrade while still paused.
 	upgrade_chosen.emit(upgrade)
 

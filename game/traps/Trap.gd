@@ -51,6 +51,19 @@ const BAIT_STATION_FRAMES: Array[Texture2D] = [preload("res://assets/bait_statio
 
 enum TrapType { SNAP_TRAP, ZAPPER, FOGGER, GLUE_BOARD, FLY_STRIP_LAUNCHER, BAIT_STATION }
 
+## Trap types that can target flying enemies.
+## Snap Trap launches with enough vertical force to catch low-flying pests.
+## Fly Strip Launcher is the dedicated anti-air option.
+## Everything else is ground-only.
+const ANTI_AIR_TYPES: Array[TrapType] = [TrapType.SNAP_TRAP, TrapType.FLY_STRIP_LAUNCHER]
+
+## Trap types that deal direct HP damage to ground-based enemies.
+## Glue Board is excluded — it applies a movement slow but deals no damage.
+## Fly Strip Launcher is excluded — it targets flying enemies only.
+const GROUND_DAMAGE_TYPES: Array[TrapType] = [
+	TrapType.SNAP_TRAP, TrapType.ZAPPER, TrapType.FOGGER, TrapType.BAIT_STATION,
+]
+
 ## Per-type stat table. All numeric values are placeholders — tuned via playtesting.
 ##   damage           — HP removed from each target per shot
 ##   range            — circular detection radius in world units (1 unit = 1 cell)
@@ -65,7 +78,7 @@ const STATS := {
 	TrapType.SNAP_TRAP:  { "damage": 5.0,  "range": 5.6, "cooldown": 1.0, "cost": 25, "color": Color(0.78, 0.52, 0.22) },
 	TrapType.ZAPPER:     { "damage": 30.0, "range": 9.6, "cooldown": 2.5, "cost": 75, "color": Color(0.10, 0.50, 1.00) },
 	TrapType.FOGGER:     { "damage": 3.0,  "range": 4.0, "cooldown": 2.2, "cost": 60, "color": Color(0.35, 0.88, 0.18) },
-	TrapType.GLUE_BOARD: { "damage": 0.20, "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(1.00, 0.58, 0.14), "pulse_interval": 3.0 },
+	TrapType.GLUE_BOARD: { "damage": 0.20, "range": 4.8, "cooldown": 0.0, "cost": 45, "color": Color(1.00, 0.40, 0.00), "pulse_interval": 3.0 },
 	TrapType.FLY_STRIP_LAUNCHER: {
 		"damage": 2.0, "range": 5.0, "cooldown": 5.0, "cost": 65, "color": Color(0.85, 0.20, 0.65),
 		"cloud_duration": 3.0, "adhesion": 0.30,
@@ -103,7 +116,8 @@ const UPGRADE_CRIT_DAMAGE_PER_LEVEL: float = 0.25   # +25% per level
 ## Values are slow factors: 0.0 = no slow, 1.0 = fully stopped.
 ## Defined as an explicit table because the intended values don't fit the shared
 ## UPGRADE_DAMAGE_FACTOR formula.
-const GLUE_ADHESION_LEVELS: Array[float] = [0.20, 0.30, 0.40, 0.50]
+## Values start at 0.35 (35% speed reduction) so the slow is noticeable but not punishing.
+const GLUE_ADHESION_LEVELS: Array[float] = [0.35, 0.45, 0.55, 0.65]
 
 ## Glue Board slow duration (seconds) at each duration upgrade level (index = _duration_level).
 ## How long the slow persists on an enemy after it leaves the board's radius.
@@ -240,9 +254,10 @@ var _hover_area:      Area3D = null
 # When true, the indicator stays visible regardless of hover state (upgrade panel open).
 var _indicator_pinned: bool  = false
 
-# Star display — one MeshInstance3D polygon star per possible star (max 3).
-# All three meshes are pre-spawned; _update_star_display() shows/hides and repositions them.
-var _star_meshes: Array[MeshInstance3D] = []
+# Progress bar display — background strip always visible, gold fill grows left-to-right
+# as each stat category is maxed. Replaces the old floating star meshes.
+var _bar_bg_mi:   MeshInstance3D = null   # always-visible dark background strip
+var _bar_fill_mi: MeshInstance3D = null   # gold fill, scales left-to-right
 
 # Boost indicator — small diamond shown in the trap's top-right corner whenever at
 # least one boost aura is currently active on this trap.
@@ -770,7 +785,20 @@ func get_boost_source_nodes() -> Array:
 	return result
 
 
-## Returns the Bug Bucks cost to place this trap.
+## Bug Bucks cost when placed_count units of this type are already on the grid.
+## Formula: base_cost × (1 + 0.05 × placed_count), rounded to nearest integer.
+## Called by Arena and HUD — keeps the formula in one place.
+static func compute_placement_cost(trap_type: TrapType, placed_count: int) -> int:
+	return roundi(float(STATS[trap_type]["cost"]) * (1.0 + 0.05 * float(placed_count)))
+
+
+## Records the Bug Bucks actually paid at placement so get_sell_value() refunds
+## the scaled cost rather than the base cost.
+func set_placement_cost(cost: int) -> void:
+	_cost = cost
+
+
+## Returns the Bug Bucks cost that was paid to place this trap.
 func get_cost() -> int:
 	return _cost
 
@@ -826,7 +854,7 @@ func get_sell_value() -> int:
 		total_spent += UPGRADE_COSTS[_trap_type][lvl]
 	for lvl in range(_crit_damage_level):
 		total_spent += UPGRADE_COSTS[_trap_type][lvl]
-	return int(total_spent * SELL_REFUND_FRACTION)
+	return int(total_spent * (SELL_REFUND_FRACTION + GameState.sell_value_bonus))
 
 
 # ---------------------------------------------------------------------------
@@ -926,10 +954,9 @@ func _fire_fogger() -> bool:
 	return false
 
 
-## Pulses adhesive on a fixed interval. On each pulse, slows every ground enemy currently
-## in range and starts a cosmetic projectile toward each. Between pulses the slow lingers
-## on enemies that have already left range, counting down each frame until _slow_duration
-## expires. Flying enemies are excluded — they never contact the adhesive surface.
+## Applies adhesive slow to ground enemies continuously. Any enemy that enters range is
+## on the pulse timer. The slow lingers for _slow_duration seconds after an enemy
+## leaves range. Flying enemies are excluded.
 func _update_glue_aoe(delta: float) -> void:
 	# Every frame: tick duration countdowns for enemies that have left range.
 	# Cannot erase from a Dictionary while iterating — collect targets first.
@@ -956,25 +983,22 @@ func _update_glue_aoe(delta: float) -> void:
 			enemy.remove_slow_source(self)
 		_glue_slowed_enemies.erase(enemy)
 
-	# Tick the pulse timer.
+	# Pulse timer: applies the slow and fires projectile arcs, animation, and sound.
 	_glue_pulse_timer -= delta
 	if _glue_pulse_timer > 0.0:
 		return
 
-	# Pulse fires: apply slow to all ground enemies currently in range.
 	var hit_any := false
 	for enemy in _active_enemies:
-		if not is_instance_valid(enemy):
-			continue
-		if enemy.get_is_flying():
+		if not is_instance_valid(enemy) or enemy.get_is_flying():
 			continue
 		if _xz_distance(enemy.global_position) <= _effective_range():
+			# Apply or refresh the slow on this enemy, then fire the cosmetic arc.
 			enemy.add_slow_source(self, _damage)
 			_glue_slowed_enemies[enemy] = -1.0
 			fired.emit(global_position, enemy.global_position, enemy, 0.0, _trap_type)
 			hit_any = true
 
-	# Always start the next cooldown, whether or not any enemies were in range.
 	_glue_pulse_timer = _glue_pulse_interval
 
 	if hit_any:
@@ -1169,22 +1193,43 @@ func _check_full_upgrade_bonus() -> void:
 	_bonus_applied = true
 
 
-## Spawns three MeshInstance3D polygon stars to reflect how many stats are maxed.
+## Spawns the horizontal gold progress bar that shows how many stat categories are maxed.
 ## Called once from initialize() — not spawned for preview instances.
-## Slot layout:
-##   [0] = center (larger)   shown for the first maxed stat
-##   [1] = left   (smaller)  shown for the second maxed stat
-##   [2] = right  (smaller)  shown for the third maxed stat
+## Background bar is always visible; gold fill grows left-to-right as stats are maxed.
 func _spawn_star_display() -> void:
-	# Center star is larger; side stars are smaller to signal hierarchy.
-	# Outer radius in world units; inner notch = outer × 0.42 (balanced proportion).
-	var radii: Array[float] = [0.34, 0.24, 0.24]   # [center, left, right]
-	var gold := Color(1.0, 0.92, 0.30, 1.0)
-	for r: float in radii:
-		var mi := _make_star_mesh(r, gold)
-		mi.visible = false
-		add_child(mi)
-		_star_meshes.append(mi)
+	const BAR_W:      float = 1.70   # slightly less than the 2m footprint width
+	const BAR_D:      float = 0.18   # depth (Z extent) for visibility from isometric camera
+	const BAR_H:      float = 0.005  # essentially flat
+	const BAR_LOCAL_Y: float = -0.065   # just above the SVG sprite (which is at local y=-0.08)
+	const BAR_LOCAL_Z: float =  0.75    # front edge of trap footprint
+
+	# Background bar — dark charcoal, always visible.
+	var bg_box    := BoxMesh.new()
+	bg_box.size    = Vector3(BAR_W, BAR_H, BAR_D)
+	_bar_bg_mi     = MeshInstance3D.new()
+	_bar_bg_mi.mesh = bg_box
+	var bg_mat            := StandardMaterial3D.new()
+	bg_mat.albedo_color    = Color(0.12, 0.12, 0.14, 0.50)
+	bg_mat.shading_mode    = BaseMaterial3D.SHADING_MODE_UNSHADED
+	bg_mat.transparency    = BaseMaterial3D.TRANSPARENCY_ALPHA
+	bg_mat.no_depth_test   = true
+	_bar_bg_mi.material_override = bg_mat
+	_bar_bg_mi.position    = Vector3(0.0, BAR_LOCAL_Y, BAR_LOCAL_Z)
+	add_child(_bar_bg_mi)
+
+	# Gold fill bar — same size at full scale; scaled and offset left-to-right at update time.
+	var fill_box    := BoxMesh.new()
+	fill_box.size    = Vector3(BAR_W, BAR_H, BAR_D)
+	_bar_fill_mi     = MeshInstance3D.new()
+	_bar_fill_mi.mesh = fill_box
+	var fill_mat            := StandardMaterial3D.new()
+	fill_mat.albedo_color    = Color(1.0, 0.82, 0.18, 1.0)
+	fill_mat.shading_mode    = BaseMaterial3D.SHADING_MODE_UNSHADED
+	fill_mat.no_depth_test   = true
+	_bar_fill_mi.material_override = fill_mat
+	_bar_fill_mi.position    = Vector3(0.0, BAR_LOCAL_Y + 0.001, BAR_LOCAL_Z)   # tiny Y offset avoids Z-fight
+	_bar_fill_mi.visible     = false
+	add_child(_bar_fill_mi)
 
 
 ## Builds a flat five-pointed star as an ArrayMesh and returns it inside a
@@ -1227,35 +1272,25 @@ static func _make_star_mesh(outer_r: float, color: Color) -> MeshInstance3D:
 	return mi
 
 
-## Refreshes star meshes, tints the footprint outline toward gold, and brightens the
+## Refreshes the progress bar, tints the footprint outline toward gold, and brightens the
 ## drop shadow as stats are maxed.  The background plate keeps its base color throughout —
 ## only the border and shadow shift, so the trap’s identity color is always visible.
 func _update_star_display() -> void:
-	if _star_meshes.is_empty():
+	if _bar_bg_mi == null:
 		return
 	var maxed: int = get_maxed_stat_count()
 
-	# --- Stars ---
-	# Layout: [left-small]  [center-large]  [right-small]
-	# Stars are polygon meshes; sizes set by outer_r in _spawn_star_display().
-	# STAR_Z/STAR_Y: position the stars just above the trap’s footprint outline.
-	# SIDE_OFFSET: spacing chosen so side stars don’t overlap the center star.
-	const STAR_Z:       float = 0.45
-	const STAR_Y:       float = 0.65
-	const SIDE_OFFSET:  float = 0.42   # wide enough to clear the doubled-size star radii
-
-	# Slot 0 = center, 1 = left, 2 = right
-	var positions := [
-		Vector3(0.0,          STAR_Y, STAR_Z),
-		Vector3(-SIDE_OFFSET, STAR_Y, STAR_Z),
-		Vector3( SIDE_OFFSET, STAR_Y, STAR_Z),
-	]
-	for i in range(_star_meshes.size()):
-		_star_meshes[i].visible  = i < maxed
-		_star_meshes[i].position = positions[i]
+	# --- Gold progress bar ---
+	const BAR_HALF_W: float = 0.85   # half of 1.70m bar width
+	var frac: float = float(maxed) / float(get_total_upgradeable_stats())
+	if _bar_fill_mi != null:
+		_bar_fill_mi.visible   = frac > 0.001
+		if frac > 0.001:
+			_bar_fill_mi.scale.x   = frac
+			# Shift left so the fill always starts at the left edge of the background bar.
+			_bar_fill_mi.position.x = -BAR_HALF_W * (1.0 - frac)
 
 	const GOLD: Color = Color(1.0, 0.82, 0.18)
-	var frac := float(maxed) / float(get_total_upgradeable_stats())
 
 	# --- Outline tint ---
 	# Lerp from base color toward gold so the border signals upgrade progress

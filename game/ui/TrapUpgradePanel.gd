@@ -149,8 +149,14 @@ func _build_ui() -> void:
 	var boosts:  Array = _trap.get_active_boost_display()
 	var boost_h: float = BOOST_SECTION_LEAD + BOOST_ENTRY_H * boosts.size() if not boosts.is_empty() else 0.0
 
-	# Height: top padding + header + description block + five stat rows + active boosts + bottom padding.
-	var panel_h := PADDING + 67.0 + DESC_H + 7.0 + (STAT_ROW_H + 7.0) * 4.0 + STAT_ROW_H + boost_h + PADDING
+	# Whether the third stat row (Fire Rate / Duration) applies to this trap.
+	# Glue Board shows Duration; active traps show Fire Rate; all others (Bait Station)
+	# have no timed stat and skip the row so no empty space appears in the panel.
+	var show_rate_row: bool = (_trap.get_type() == Trap.TrapType.GLUE_BOARD) or not _trap.is_passive()
+
+	# Height: header + description + N stat rows + active boosts.
+	var row_count: int = 5 if show_rate_row else 4
+	var panel_h := PADDING + 67.0 + DESC_H + 7.0 + (STAT_ROW_H + 7.0) * float(row_count - 1) + STAT_ROW_H + boost_h + PADDING
 
 	# Centre the panel in the arena zone (the space between the two HUD panels).
 	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
@@ -306,9 +312,15 @@ func _build_ui() -> void:
 	y += DESC_H + 8.0
 
 	# --- Stat rows: each row IS the upgrade button for that stat ---
-	_dmg_row         = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
-	_rng_row         = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
-	_rate_row        = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_dmg_row  = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_rng_row  = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
+	_rate_row = _build_stat_button_row(y, inner_w)
+	if show_rate_row:
+		y += STAT_ROW_H + 8.0
+	else:
+		# Not applicable to this trap type — hide it now and don't advance Y
+		# so the crit rows start immediately below Range with no gap.
+		_rate_row["row"].visible = false
 	_crit_chance_row = _build_stat_button_row(y, inner_w); y += STAT_ROW_H + 8.0
 	_crit_damage_row = _build_stat_button_row(y, inner_w)
 
@@ -417,21 +429,21 @@ func _refresh() -> void:
 		_refresh_stat_row(
 			_dmg_row, "Adhesion", _trap.get_damage_level(),
 			"%d%%" % int(_trap.get_adhesion_pct()),
-			"+%d%%" % int(_trap.get_adhesion_after_upgrade_pct() - _trap.get_adhesion_pct()),
+			"+%d%%" % int(abs(_trap.get_adhesion_after_upgrade_pct() - _trap.get_adhesion_pct())),
 			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
 		)
 	elif trap_type == Trap.TrapType.FOGGER:
 		_refresh_stat_row(
 			_dmg_row, "Potency", _trap.get_damage_level(),
 			"%.1f" % _trap.get_effective_damage(),
-			"+%.1f" % (_trap.get_effective_damage_after_upgrade() - _trap.get_effective_damage()),
+			"+%.1f" % abs(_trap.get_effective_damage_after_upgrade() - _trap.get_effective_damage()),
 			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
 		)
 	else:
 		_refresh_stat_row(
 			_dmg_row, "Damage", _trap.get_damage_level(),
 			"%.1f" % _trap.get_effective_damage(),
-			"+%.1f" % (_trap.get_effective_damage_after_upgrade() - _trap.get_effective_damage()),
+			"+%.1f" % abs(_trap.get_effective_damage_after_upgrade() - _trap.get_effective_damage()),
 			_trap.is_damage_maxed(), _trap.get_damage_upgrade_cost()
 		)
 
@@ -439,7 +451,7 @@ func _refresh() -> void:
 	_refresh_stat_row(
 		_rng_row, "Range", _trap.get_range_level(),
 		"%.1f" % _trap.get_range_radius(),
-		"+%.1f" % (_trap.get_range_after_upgrade() - _trap.get_range_radius()),
+		"+%.1f" % abs(_trap.get_range_after_upgrade() - _trap.get_range_radius()),
 		_trap.is_range_maxed(), _trap.get_range_upgrade_cost()
 	)
 
@@ -449,7 +461,7 @@ func _refresh() -> void:
 		_refresh_stat_row(
 			_rate_row, "Duration", _trap.get_duration_level(),
 			"%.1fs" % _trap.get_duration(),
-			"+%.1fs" % (_trap.get_duration_after_upgrade() - _trap.get_duration()),
+			"+%.1fs" % abs(_trap.get_duration_after_upgrade() - _trap.get_duration()),
 			_trap.is_duration_maxed(), _trap.get_duration_upgrade_cost()
 		)
 	elif _trap.is_passive():
@@ -459,7 +471,7 @@ func _refresh() -> void:
 		_refresh_stat_row(
 			_rate_row, "Fire Rate", _trap.get_rate_level(),
 			"%.2f /s" % _trap.get_effective_shots_per_sec(),
-			"+%.2f /s" % (_trap.get_effective_shots_per_sec_after_upgrade() - _trap.get_effective_shots_per_sec()),
+			"+%.2f /s" % abs(_trap.get_effective_shots_per_sec_after_upgrade() - _trap.get_effective_shots_per_sec()),
 			_trap.is_rate_maxed(), _trap.get_rate_upgrade_cost()
 		)
 
@@ -469,13 +481,13 @@ func _refresh() -> void:
 	_refresh_stat_row(
 		_crit_chance_row, "Crit Chance", _trap.get_crit_chance_level(),
 		"%.0f%%" % (_trap.get_crit_chance() * 100.0),
-		"+%.0f%%" % ((_trap.get_crit_chance_after_upgrade() - _trap.get_crit_chance()) * 100.0),
+		"+%.0f%%" % (abs(_trap.get_crit_chance_after_upgrade() - _trap.get_crit_chance()) * 100.0),
 		_trap.is_crit_chance_maxed(), _trap.get_crit_chance_upgrade_cost()
 	)
 	_refresh_stat_row(
 		_crit_damage_row, "Crit Bonus", _trap.get_crit_damage_level(),
 		"%.0f%%" % (_trap.get_crit_damage_bonus() * 100.0),
-		"+%.0f%%" % ((_trap.get_crit_damage_after_upgrade() - _trap.get_crit_damage_bonus()) * 100.0),
+		"+%.0f%%" % (abs(_trap.get_crit_damage_after_upgrade() - _trap.get_crit_damage_bonus()) * 100.0),
 		_trap.is_crit_damage_maxed(), _trap.get_crit_damage_upgrade_cost()
 	)
 

@@ -2,12 +2,13 @@
 ## Playtest setup dialog shown once at game start, before the first wave.
 ## Lets the developer override the starting Bug Bucks balance and the number
 ## of enemies per wave without editing source files.
-## Pressing Start applies the values and dismisses the dialog.
+## Pressing Start (or Exit Dev Mode) applies the values and dismisses the dialog.
+## Styled as a full-screen overlay matching PermanentUpgradeScreen.
 
 extends CanvasLayer
 
-## Emitted when the player presses Start. Arena connects here to apply the
-## values and then begin the first wave countdown.
+## Emitted when the player presses Start or Exit Dev Mode.  Arena connects here
+## to apply the values and then begin the first wave countdown.
 ## allowed_types is an Array of Enemy.EnemyType int values indicating which
 ## enemy types should appear in static mode; empty array means all types.
 signal confirmed(bug_bucks: int, wave_size: int, static_enemies: bool, allowed_types: Array)
@@ -15,38 +16,45 @@ signal confirmed(bug_bucks: int, wave_size: int, static_enemies: bool, allowed_t
 const DEFAULT_BUG_BUCKS: int = GameState.STARTING_BUG_BUCKS
 const DEFAULT_WAVE_SIZE:  int = 10
 
-## Two-column layout: left column holds the input controls; right column holds
-## the enemy-type selector (visible only when Static Enemies is on).
-## The panel is fixed size — it never resizes after build.
-const PANEL_W: float = 820.0
-const PANEL_H: float = 380.0
-const PADDING: float = 24.0
-const COL_GAP: float = 24.0   # gap between the left and right columns
+# ── Layout ──────────────────────────────────────────────────────────────────
 
-## Column geometry — derived from the above.
-const LEFT_COL_W:  float = (PANEL_W - PADDING * 2.0 - COL_GAP) / 2.0   # 374px
-const RIGHT_COL_X: float = PADDING + LEFT_COL_W + COL_GAP              # 422px
-const RIGHT_COL_W: float = LEFT_COL_W                                   # 374px
+const HEADER_H:        float = 66.0    # header bar height, matches PermanentUpgradeScreen
+const CONTENT_Y:       float = 67.0    # y where content area begins (header + 1px divider)
+const CONTENT_PAD_X:   float = 60.0    # horizontal margin (informational; use LEFT_COL_X)
+const CONTENT_PAD_V:   float = 24.0    # vertical margin inside the content area
 
-## Height of each control row in the left column (field rows and static toggle).
-const ROW_H_CTRL: float = 52.0
+## Left column geometry.
+const LEFT_COL_X:      float = 60.0
+const LEFT_COL_W_NEW:  float = 460.0
+
+## Right column geometry.
+const COL_GAP_NEW:     float = 40.0
+const RIGHT_COL_X_NEW: float = 560.0   # LEFT_COL_X + LEFT_COL_W_NEW + COL_GAP_NEW
+const RIGHT_COL_W_NEW: float = 560.0
+
+## Retained from original — still used by helper functions.
+const PADDING:         float = 24.0    # used inside _add_field_row / _add_divider (not layout)
+const ROW_H_CTRL:      float = 52.0    # height of each control row in the left column
 
 ## Enemy-type list layout (right column).
-const ENEMY_HEADER_H:  float = 36.0   # "Enemy Type Selection" header bar height
-const CELL_PAD:        float = 6.0    # horizontal text inset inside each cell
-const BORDER_W:        float = 3.0    # outer box border thickness
-const ROW_H:           float = 28.0   # enemy-type data row height
-const ROW_STRIDE:      float = 29.0   # ROW_H + 1px row-divider
+const ENEMY_HEADER_H:  float = 36.0    # "Enemy Type Selection" header bar height
+const CELL_PAD:        float = 6.0     # horizontal text inset inside each cell
+const BORDER_W:        float = 3.0     # outer box border thickness
+const ROW_H:           float = 28.0    # enemy-type data row height
+const ROW_STRIDE:      float = 29.0    # ROW_H + 1px row-divider
 ## ENEMY_SECTION_H = BORDER_W + 9 × ROW_H + 8 × 1px dividers + BORDER_W
 ##                 = 3 + 252 + 8 + 3 = 266px
 const ENEMY_SECTION_H: float = 266.0
 
-const COLOR_BG           := Color(0.04, 0.22, 0.00, 0.95)
-const COLOR_OUTLINE      := Color(0.22, 0.60, 0.04, 1.0)
+# ── Colors ──────────────────────────────────────────────────────────────────
+
+## Background: darker rich green matching PermanentUpgradeScreen's COLOR_PANEL.
+const COLOR_PANEL        := Color(0.02, 0.10, 0.01, 1.0)
 const COLOR_TEXT         := Color(0.90, 0.90, 0.90, 1.0)
 const COLOR_TEXT_DIM     := Color(0.55, 0.78, 0.50, 1.0)
 const COLOR_LABEL        := Color(0.96, 0.96, 0.96, 1.0)   # near-white for all field labels
 const COLOR_DIVIDER      := Color(0.06, 0.22, 0.01, 1.0)
+const COLOR_HEADER       := Color(1.00, 0.82, 0.10, 1.0)   # gold, matching PermanentUpgradeScreen
 const COLOR_BTN_NORMAL   := Color(0.02, 0.15, 0.00, 1.0)
 const COLOR_BTN_HOVER    := Color(0.07, 0.32, 0.02, 1.0)
 const COLOR_BTN_PRESSED  := Color(0.01, 0.10, 0.00, 1.0)
@@ -57,6 +65,12 @@ const COLOR_GRID         := Color(0.12, 0.42, 0.04, 1.0)   # enemy list borders 
 const COLOR_GRID_HEADER  := Color(0.01, 0.08, 0.00, 1.0)   # header bar background — darker than rows
 const COLOR_ROW_A        := Color(0.03, 0.18, 0.00, 1.0)   # alternating row background A (darker)
 const COLOR_ROW_B        := Color(0.06, 0.28, 0.01, 1.0)   # alternating row background B (lighter)
+
+## Medium-gray theme for the Exit DEVmode button.
+const COLOR_EXIT_NORMAL  := Color(0.30, 0.30, 0.32, 1.0)
+const COLOR_EXIT_HOVER   := Color(0.40, 0.40, 0.42, 1.0)
+const COLOR_EXIT_PRESSED := Color(0.22, 0.22, 0.24, 1.0)
+const COLOR_EXIT_BORDER  := Color(0.60, 0.60, 0.62, 1.0)
 
 const UIFonts = preload("res://ui/UIFonts.gd")
 const HUD     = preload("res://ui/HUD.gd")
@@ -89,8 +103,8 @@ const ENEMY_TYPE_NAMES: Dictionary = {
 
 var _field_bucks:  LineEdit = null
 var _field_waves:  LineEdit = null
+var _field_sf:     LineEdit = null
 var _check_static: Button   = null   # toggle-mode button; text = "✓" when pressed
-var _panel_rect:   Rect2    = Rect2()
 
 ## Right column container — holds the enemy-type header and selector list.
 ## Shown only when Static Enemies is toggled on.
@@ -107,67 +121,60 @@ func _ready() -> void:
 
 
 func _build_ui() -> void:
-	var vp       := get_viewport().get_visible_rect().size
-	var arena_cx := HUD.LEFT_PANEL_W + (vp.x - HUD.LEFT_PANEL_W - HUD.RIGHT_PANEL_W) * 0.5
-	var px       := arena_cx - PANEL_W * 0.5
-	var py       := maxf(8.0, (vp.y - PANEL_H) * 0.5)
+	# Full-screen background — fully opaque so the arena doesn't bleed through.
+	var bg_rect := ColorRect.new()
+	bg_rect.color = COLOR_PANEL
+	bg_rect.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	add_child(bg_rect)
 
-	# Fullscreen overlay — darkens the arena behind the dialog.
-	var overlay           := ColorRect.new()
-	overlay.anchor_right   = 1.0
-	overlay.anchor_bottom  = 1.0
-	overlay.color          = Color(0.0, 0.02, 0.0, 0.60)
-	add_child(overlay)
+	# ── Header bar ──────────────────────────────────────────────────────────
+	var title := Label.new()
+	title.text               = "PLAYTEST SETUP"
+	title.position           = Vector2(CONTENT_PAD_X, 0.0)
+	title.size               = Vector2(700.0, HEADER_H)
+	title.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	title.add_theme_font_override("font", UIFonts.primary_bold())
+	title.add_theme_font_size_override("font_size", 39)
+	title.add_theme_color_override("font_color", COLOR_HEADER)
+	title.mouse_filter       = Control.MOUSE_FILTER_IGNORE
+	add_child(title)
 
-	# Outline border (8px wider than the panel on each side).
-	var border        := ColorRect.new()
-	border.color       = COLOR_OUTLINE
-	border.position    = Vector2(px - 8.0, py - 8.0)
-	border.size        = Vector2(PANEL_W + 16.0, PANEL_H + 16.0)
-	add_child(border)
+	# 1px divider below the header.
+	var hdr_div := ColorRect.new()
+	hdr_div.color        = COLOR_DIVIDER
+	hdr_div.position     = Vector2(0.0, HEADER_H)
+	hdr_div.size         = Vector2(1280.0, 1.0)
+	hdr_div.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	add_child(hdr_div)
 
-	# Panel background.
-	var bg        := ColorRect.new()
-	bg.color       = COLOR_BG
-	bg.position    = Vector2(px, py)
-	bg.size        = Vector2(PANEL_W, PANEL_H)
-	add_child(bg)
+	# ── Left column ─────────────────────────────────────────────────────────
+	# y tracks absolute screen position as we lay out each element top-to-bottom.
+	var y := CONTENT_Y + CONTENT_PAD_V
 
-	# Panel is fixed size — _panel_rect is set once and never updated.
-	_panel_rect = Rect2(Vector2(px - 8.0, py - 8.0), Vector2(PANEL_W + 16.0, PANEL_H + 16.0))
-
-	# ── Left column ────────────────────────────────────────────────────────────
-	var y := PADDING
-
-	var lbl_title := Label.new()
-	lbl_title.text     = "Playtest Setup"
-	lbl_title.position = Vector2(PADDING, y)
-	lbl_title.add_theme_font_size_override("font_size", 44)
-	lbl_title.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 1.0))
-	lbl_title.add_theme_font_override("font", UIFonts.header())
-	bg.add_child(lbl_title)
-	y += 52.0
-
-	_add_divider(bg, y)
-	y += 14.0   # 2px line + 12px breathing room
-
-	_field_bucks = _add_field_row(bg, PADDING, y, LEFT_COL_W, ROW_H_CTRL,
+	_field_bucks = _add_field_row(self, LEFT_COL_X, y, LEFT_COL_W_NEW, ROW_H_CTRL,
 			"Bug Bucks", str(DEFAULT_BUG_BUCKS), 10000, 0)
 	y += ROW_H_CTRL
 
-	_field_waves = _add_field_row(bg, PADDING, y, LEFT_COL_W, ROW_H_CTRL,
+	_field_waves = _add_field_row(self, LEFT_COL_X, y, LEFT_COL_W_NEW, ROW_H_CTRL,
 			"Wave Size", str(DEFAULT_WAVE_SIZE), 10, 1)
 	y += ROW_H_CTRL
 
-	_add_divider(bg, y)
-	y += 14.0
+	# Service Fees — pre-filled with the current persistent balance so the
+	# playtest starts with whatever the player already has unless overridden.
+	_field_sf = _add_field_row(self, LEFT_COL_X, y, LEFT_COL_W_NEW, ROW_H_CTRL,
+			"Service Fees", str(GameState.service_fees), 10, 0)
+	y += ROW_H_CTRL
+	y += 16.0
+
+	_add_divider_at(y)
+	y += 14.0   # 2px line + 12px breathing room
 
 	# Static enemies toggle row — label + checkbox.
 	var static_row := HBoxContainer.new()
-	static_row.position            = Vector2(PADDING, y)
-	static_row.custom_minimum_size = Vector2(LEFT_COL_W, ROW_H_CTRL)
+	static_row.position            = Vector2(LEFT_COL_X, y)
+	static_row.custom_minimum_size = Vector2(LEFT_COL_W_NEW, ROW_H_CTRL)
 	static_row.add_theme_constant_override("separation", 4)
-	bg.add_child(static_row)
+	add_child(static_row)
 
 	var static_lbl := Label.new()
 	static_lbl.text                  = "Static Enemies"
@@ -191,51 +198,72 @@ func _build_ui() -> void:
 	static_row.add_child(_check_static)
 	y += ROW_H_CTRL
 
-	_add_divider(bg, y)
+	_add_divider_at(y)
 	y += 14.0
 
-	# Start button — fills the remaining height of the left column.
+	# ── Action buttons — pinned to the bottom edge of the display area ──────
+	# Two equal-width buttons with a 12px gap between them.
+	const BTN_GAP:   float = 12.0
+	const BTN_W:     float = (LEFT_COL_W_NEW - BTN_GAP) / 2.0   # 224px each
+	const BTN_FONT:  int   = 26   # 26pt — slightly smaller than old 30pt to fit narrower buttons
+
+	# Standard button height — matches ROW_H_CTRL used by the input rows above.
+	var btn_h := ROW_H_CTRL
+
+	# Pin buttons to the bottom of the 600px screen with the standard vertical margin.
+	var btn_y := 600.0 - CONTENT_PAD_V - btn_h   # 600 - 24 - 52 = 524
+
+	var exit_btn := Button.new()
+	exit_btn.text                = "Exit DEVmode"
+	exit_btn.focus_mode          = Control.FOCUS_NONE
+	exit_btn.position            = Vector2(LEFT_COL_X, btn_y)
+	exit_btn.custom_minimum_size = Vector2(BTN_W, btn_h)
+	exit_btn.add_theme_font_size_override("font_size", BTN_FONT)
+	exit_btn.add_theme_font_override("font", UIFonts.primary_bold())
+	exit_btn.pressed.connect(_on_exit_dev_mode_pressed)
+	_style_exit_button(exit_btn)
+	add_child(exit_btn)
+
 	var start_btn := Button.new()
 	start_btn.text                = "Start"
 	start_btn.focus_mode          = Control.FOCUS_NONE
-	start_btn.position            = Vector2(PADDING, y)
-	start_btn.custom_minimum_size = Vector2(LEFT_COL_W, PANEL_H - PADDING - y)
-	start_btn.add_theme_font_size_override("font_size", 30)
+	start_btn.position            = Vector2(LEFT_COL_X + BTN_W + BTN_GAP, btn_y)
+	start_btn.custom_minimum_size = Vector2(BTN_W, btn_h)
+	start_btn.add_theme_font_size_override("font_size", BTN_FONT)
 	start_btn.add_theme_font_override("font", UIFonts.primary_bold())
 	start_btn.pressed.connect(_on_start_pressed)
 	_style_start_button(start_btn)
-	bg.add_child(start_btn)
+	add_child(start_btn)
 
-	# ── Right column ───────────────────────────────────────────────────────────
-	# Centered vertically in the panel regardless of where the left column content lands.
-	# Always visible — dimmed and non-interactive when Static Enemies is off.
-	var right_col_h   := ENEMY_HEADER_H + ENEMY_SECTION_H
-	var right_col_top := (PANEL_H - right_col_h) * 0.5
+	# ── Right column — enemy-type selector ──────────────────────────────────
+	# Top-aligned with the left column's first input row (CONTENT_Y + CONTENT_PAD_V)
+	# so the list top sits flush with Bug Bucks, Wave Size, and Service Fees.
+	var right_col_h := ENEMY_HEADER_H + ENEMY_SECTION_H
 
 	_right_col = Control.new()
-	_right_col.position            = Vector2(RIGHT_COL_X, right_col_top)
-	_right_col.custom_minimum_size = Vector2(RIGHT_COL_W, right_col_h)
-	bg.add_child(_right_col)
+	_right_col.position            = Vector2(RIGHT_COL_X_NEW, CONTENT_Y + CONTENT_PAD_V)
+	_right_col.custom_minimum_size = Vector2(RIGHT_COL_W_NEW, right_col_h)
+	add_child(_right_col)
 
-	_build_enemy_header(_right_col, RIGHT_COL_W)
-	_build_enemy_section(_right_col, ENEMY_HEADER_H, RIGHT_COL_W)
+	_build_enemy_header(_right_col, RIGHT_COL_W_NEW)
+	_build_enemy_section(_right_col, ENEMY_HEADER_H, RIGHT_COL_W_NEW)
 
 	# Disable interactivity to match the unchecked default state.
 	_set_enemy_list_editable(false)
 
 
-## Adds a 2px horizontal divider spanning the left column at the given y.
-func _add_divider(parent: Control, y: float) -> void:
-	var div      := ColorRect.new()
-	div.color     = COLOR_DIVIDER
-	div.position  = Vector2(PADDING, y)
-	div.size      = Vector2(LEFT_COL_W, 2.0)
-	parent.add_child(div)
+## Adds a 2px horizontal divider spanning the left column at the given absolute y.
+func _add_divider_at(abs_y: float) -> void:
+	var div     := ColorRect.new()
+	div.color    = COLOR_DIVIDER
+	div.position = Vector2(LEFT_COL_X, abs_y)
+	div.size     = Vector2(LEFT_COL_W_NEW, 2.0)
+	add_child(div)
 
 
 ## Builds a label + [−] value [+] input row and returns the LineEdit.
 ## Buttons change the value by `step`; the field is clamped to >= min_val.
-func _add_field_row(parent: Control, x: float, y: float, w: float, h: float,
+func _add_field_row(parent: Node, x: float, y: float, w: float, h: float,
 		label_text: String, default_value: String,
 		step: int = 100, min_val: int = 0) -> LineEdit:
 	var row := HBoxContainer.new()
@@ -348,7 +376,7 @@ func _build_enemy_section(parent: Control, y: float, w: float) -> void:
 	parent.add_child(section)
 
 	var bg     := ColorRect.new()
-	bg.color    = COLOR_BG
+	bg.color    = COLOR_PANEL
 	bg.size     = Vector2(w, ENEMY_SECTION_H)
 	section.add_child(bg)
 
@@ -430,28 +458,16 @@ func _set_enemy_list_editable(editable: bool) -> void:
 		btn.disabled = not editable
 
 
-## Returns true when screen_pos falls inside the dialog panel.
-## Arena calls this to suppress the grid reticle while the dialog is open.
-func covers_point(screen_pos: Vector2) -> bool:
-	return _panel_rect.has_point(screen_pos)
+## Returns true always — the dialog is now full-screen, so it covers every point.
+func covers_point(_screen_pos: Vector2) -> bool:
+	return true
 
 
-func _input(event: InputEvent) -> void:
-	var pos   := Vector2.ZERO
-	var fired := false
-	if event is InputEventMouseButton and event.pressed:
-		pos = event.position
-		fired = true
-	elif event is InputEventScreenTouch and event.pressed:
-		pos = event.position
-		fired = true
-	if fired:
-		# Let taps on the left HUD panel through so the player can change trap
-		# type before starting without the tap also dismissing the dialog.
-		var in_left_panel := pos.x < HUD.LEFT_PANEL_W
-		if not _panel_rect.has_point(pos) and not in_left_panel:
-			get_viewport().set_input_as_handled()
-			_on_start_pressed()
+func _on_exit_dev_mode_pressed() -> void:
+	# Bypass all field values and launch with defaults and no static mode.
+	# Useful for quickly skipping the dialog without changing any settings.
+	confirmed.emit(DEFAULT_BUG_BUCKS, DEFAULT_WAVE_SIZE, false, [])
+	queue_free()
 
 
 func _on_start_pressed() -> void:
@@ -459,6 +475,12 @@ func _on_start_pressed() -> void:
 	var waves := int(_field_waves.text) if _field_waves.text.is_valid_int() else DEFAULT_WAVE_SIZE
 	bucks = maxi(bucks, 0)
 	waves = maxi(waves, 1)
+
+	# Apply the Service Fees override directly — it is persistent state, so
+	# setting it here lets the Permanent Upgrades screen reflect the playtest value.
+	var sf := int(_field_sf.text) if _field_sf.text.is_valid_int() else GameState.service_fees
+	GameState.service_fees = maxi(sf, 0)
+	GameState.service_fees_changed.emit(GameState.service_fees)
 
 	# Collect the checked enemy types — only relevant when static mode is on.
 	# An empty array passed to Arena means "use all types".
@@ -483,6 +505,28 @@ func _style_start_button(btn: Button) -> void:
 		var box := StyleBoxFlat.new()
 		box.bg_color              = state[1]
 		box.border_color          = COLOR_BTN_BORDER
+		box.set_border_width_all(4)
+		box.set_corner_radius_all(0)
+		box.content_margin_left   = 8.0
+		box.content_margin_right  = 8.0
+		box.content_margin_top    = 4.0
+		box.content_margin_bottom = 4.0
+		btn.add_theme_stylebox_override(state[0], box)
+	btn.add_theme_stylebox_override("focus", StyleBoxEmpty.new())
+	btn.add_theme_color_override("font_color", COLOR_TEXT)
+
+
+func _style_exit_button(btn: Button) -> void:
+	# Doubled border width matches the Start button's visual weight.
+	var colors: Array = [
+		["normal",  COLOR_EXIT_NORMAL],
+		["hover",   COLOR_EXIT_HOVER],
+		["pressed", COLOR_EXIT_PRESSED],
+	]
+	for state: Array in colors:
+		var box := StyleBoxFlat.new()
+		box.bg_color              = state[1]
+		box.border_color          = COLOR_EXIT_BORDER
 		box.set_border_width_all(4)
 		box.set_corner_radius_all(0)
 		box.content_margin_left   = 8.0

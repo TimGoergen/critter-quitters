@@ -1,0 +1,204 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<svg
+   width="128"
+   height="128"
+   viewBox="0 0 128 128"
+   version="1.1"
+   id="svg19"
+   sodipodi:docname="cockroach_walk_1_v2.svg"
+   inkscape:version="1.4.4 (dcaf3e7, 2026-05-05)"
+   xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape"
+   xmlns:sodipodi="http://sodipodi.sourceforge.net/DTD/sodipodi-0.dtd"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs19" />
+  <sodipodi:namedview
+     id="namedview19"
+     pagecolor="#ffffff"
+     bordercolor="#000000"
+     borderopacity="0.25"
+     inkscape:showpageshadow="2"
+     inkscape:pageopacity="0.0"
+     inkscape:pagecheckerboard="0"
+     inkscape:deskcolor="#d1d1d1"
+     inkscape:zoom="6.3046875"
+     inkscape:cx="38.701363"
+     inkscape:cy="57.655514"
+     inkscape:window-width="1920"
+     inkscape:window-height="1009"
+     inkscape:window-x="-8"
+     inkscape:window-y="-8"
+     inkscape:window-maximized="1"
+     inkscape:current-layer="svg19" />
+  <!-- Very long angular legs — cockroach legs reach near canvas edges -->
+  <!-- Group A (L-front, R-mid, L-back) forward; Group B (R-front, L-mid, R-back) back -->
+  <path
+     d="M 47.442485,67.696512 Q 37.839136,60.747836 32.503943,55.4027"
+     stroke="#4a2808"
+     stroke-width="1.86906"
+     stroke-linecap="round"
+     fill="none"
+     id="path1" />
+  <path
+     d="M 48.092482,92.677364 Q 35.236469,88.525111 26.23726,84.372857"
+     stroke="#4a2808"
+     stroke-width="2.85902"
+     stroke-linecap="round"
+     fill="none"
+     id="path2" />
+  <path
+     d="M 47.167599,106.47557 Q 36.68023,98.524649 29.339072,91.898891"
+     stroke="#4a2808"
+     stroke-width="2.06303"
+     stroke-linecap="round"
+     fill="none"
+     id="path3" />
+  <path
+     d="m 81.585062,62.656646 q 10.998331,9.210052 17.872287,17.582829"
+     stroke="#4a2808"
+     stroke-width="2.65526"
+     stroke-linecap="round"
+     fill="none"
+     id="path4" />
+  <path
+     d="m 83.812068,91.4998 q 10.779064,2.679663 17.246502,5.359329"
+     stroke="#4a2808"
+     stroke-width="2.10307"
+     stroke-linecap="round"
+     fill="none"
+     id="path5" />
+  <path
+     d="m 82.314699,104.42374 q 12.369841,8.07772 19.791741,14.53989"
+     stroke="#4a2808"
+     stroke-width="2.47388"
+     stroke-linecap="round"
+     fill="none"
+     id="path6" />
+  <!-- Antennae: extremely long, sweeping far to upper corners -->
+  <path
+     d="M 52,28.66171 C 38.90784,9.2726699 29.63002,8.4887395 12.820322,12.88228"
+     stroke="#4a2808"
+     stroke-width="2.5"
+     stroke-linecap="round"
+     fill="none"
+     id="path7"
+     sodipodi:nodetypes="cc" />
+  <path
+     d="M 74.255266,27.710037 C 89.538061,18.59837 91.477743,6.0022734 112.95911,12.565056"
+     stroke="#4a2808"
+     stroke-width="2.5"
+     stroke-linecap="round"
+     fill="none"
+     id="path8"
+     sodipodi:nodetypes="cc" />
+  <!-- Abdomen: long oval with five segmentation bands -->
+  <ellipse
+     cx="64.224312"
+     cy="85.083954"
+     rx="22"
+     ry="42"
+     fill="#7a3510"
+     id="ellipse8" />
+  <ellipse
+     cx="64"
+     cy="66"
+     rx="19"
+     ry="3"
+     fill="#4A1E08"
+     opacity="0.55"
+     id="ellipse9" />
+  <ellipse
+     cx="64"
+     cy="79"
+     rx="20"
+     ry="3"
+     fill="#4A1E08"
+     opacity="0.55"
+     id="ellipse10" />
+  <ellipse
+     cx="64"
+     cy="92"
+     rx="20"
+     ry="3"
+     fill="#4A1E08"
+     opacity="0.55"
+     id="ellipse11" />
+  <ellipse
+     cx="64"
+     cy="105"
+     rx="18"
+     ry="2.5"
+     fill="#4A1E08"
+     opacity="0.55"
+     id="ellipse12" />
+  <ellipse
+     cx="64"
+     cy="116"
+     rx="14"
+     ry="2"
+     fill="#4A1E08"
+     opacity="0.55"
+     id="ellipse13" />
+  <ellipse
+     cx="56"
+     cy="60"
+     rx="7"
+     ry="3.5"
+     fill="white"
+     opacity="0.15"
+     id="ellipse14" />
+  <!-- Pronotum: very wide shield, the head is hidden beneath it -->
+  <!-- Yellowish translucent rim — the unmistakable cockroach signature -->
+  <ellipse
+     cx="64.71376"
+     cy="36.431225"
+     rx="20.334572"
+     ry="18.493185"
+     fill="#7a3510"
+     id="ellipse16"
+     style="stroke:#ffce97;stroke-width:0.3;stroke-dasharray:none;stroke-opacity:1" />
+  <ellipse
+     cx="58"
+     cy="30"
+     rx="7"
+     ry="4.5"
+     fill="white"
+     opacity="0.15"
+     id="ellipse17" />
+  <!-- Head: small, mostly hidden under the pronotum -->
+  <ellipse
+     cx="63.365551"
+     cy="31.992565"
+     rx="8"
+     ry="6"
+     fill="#4a1e08"
+     id="ellipse18" />
+  <!-- Eyes: reddish, small, peeking from head -->
+  <circle
+     cx="57.682777"
+     cy="29.675341"
+     r="2.5"
+     fill="#cc4400"
+     id="circle18" />
+  <circle
+     cx="67.938042"
+     cy="29.833954"
+     r="2.5"
+     fill="#cc4400"
+     id="circle19" />
+  <ellipse
+     style="fill:#4a2808;fill-opacity:1;stroke-width:0.811035"
+     id="path19"
+     cx="11.340769"
+     cy="13.164807"
+     rx="2.9343247"
+     ry="2.8550186" />
+  <ellipse
+     style="fill:#4a2808;fill-opacity:1;stroke-width:0.833259"
+     id="circle20-9"
+     cx="113.87733"
+     cy="13.030979"
+     rx="3.0136309"
+     ry="2.9343247" />
+</svg>
