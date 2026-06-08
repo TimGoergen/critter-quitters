@@ -65,6 +65,12 @@ const COLOR_RESET_HOVER   := Color(0.38, 0.06, 0.06, 1.0)
 const COLOR_RESET_PRESS   := Color(0.18, 0.02, 0.02, 1.0)
 const COLOR_RESET_BORDER  := Color(0.70, 0.18, 0.18, 1.0)
 
+const COLOR_EXPORT_NORMAL := Color(0.02, 0.16, 0.22, 1.0)
+const COLOR_EXPORT_HOVER  := Color(0.04, 0.22, 0.30, 1.0)
+const COLOR_EXPORT_PRESS  := Color(0.01, 0.10, 0.15, 1.0)
+const COLOR_EXPORT_BORDER := Color(0.10, 0.52, 0.72, 1.0)
+const COLOR_EXPORT_TXT    := Color(0.72, 0.92, 1.00, 1.0)
+
 
 # ---------------------------------------------------------------------------
 # Layout
@@ -217,6 +223,12 @@ func _build_header() -> void:
 	var hbox := HBoxContainer.new()
 	hbox.add_theme_constant_override("separation", 8)
 	btn_margin.add_child(hbox)
+
+	var export_btn := _make_text_button("Export MD", 130.0,
+		COLOR_EXPORT_NORMAL, COLOR_EXPORT_HOVER, COLOR_EXPORT_PRESS, COLOR_EXPORT_BORDER,
+		COLOR_EXPORT_TXT)
+	export_btn.pressed.connect(_on_export_pressed)
+	hbox.add_child(export_btn)
 
 	var reset_btn := _make_text_button("Reset to Defaults", 170.0,
 		COLOR_RESET_NORMAL, COLOR_RESET_HOVER, COLOR_RESET_PRESS, COLOR_RESET_BORDER,
@@ -935,6 +947,136 @@ func _fmt(value: float, is_int: bool) -> String:
 # ---------------------------------------------------------------------------
 # Button handlers
 # ---------------------------------------------------------------------------
+
+func _on_export_pressed() -> void:
+	AudioManager.play_ui("button")
+	var markdown: String = BalanceConfig.export_to_markdown()
+
+	# Save to user data directory so it survives game updates.
+	const SAVE_NAME := "balance_export.md"
+	var file := FileAccess.open("user://" + SAVE_NAME, FileAccess.WRITE)
+	var save_ok: bool = file != null
+	if save_ok:
+		file.store_string(markdown)
+		file.close()
+
+	# Resolve the user:// path to a real OS path for display.
+	var os_path: String = ProjectSettings.globalize_path("user://" + SAVE_NAME)
+
+	_show_export_dialog(os_path, markdown, save_ok)
+
+
+## Shows a modal overlay with options for what to do with the exported markdown.
+func _show_export_dialog(os_path: String, markdown: String, save_ok: bool) -> void:
+	const DIALOG_W: float = 800.0
+	const DIALOG_H: float = 240.0
+
+	# Full-screen blocker — intercepts all clicks so the editor is inaccessible while the
+	# dialog is open.  Mouse filter STOP ensures nothing behind it receives input.
+	var blocker := Control.new()
+	blocker.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	blocker.mouse_filter = Control.MOUSE_FILTER_STOP
+	add_child(blocker)
+
+	var dim := ColorRect.new()
+	dim.color        = Color(0.0, 0.0, 0.0, 0.60)
+	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	dim.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	blocker.add_child(dim)
+
+	# Centered dialog panel.
+	var panel := Panel.new()
+	panel.position = Vector2((1280.0 - DIALOG_W) * 0.5, (600.0 - DIALOG_H) * 0.5)
+	panel.size     = Vector2(DIALOG_W, DIALOG_H)
+	var panel_sty  := StyleBoxFlat.new()
+	panel_sty.bg_color = Color(0.06, 0.10, 0.20, 1.0)
+	panel_sty.border_color = Color(0.10, 0.52, 0.72, 1.0)
+	panel_sty.set_border_width_all(2)
+	panel_sty.set_corner_radius_all(8)
+	panel_sty.set_content_margin_all(24.0)
+	panel.add_theme_stylebox_override("panel", panel_sty)
+	blocker.add_child(panel)
+
+	var vbox := VBoxContainer.new()
+	vbox.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	vbox.add_theme_constant_override("separation", 10)
+	panel.add_child(vbox)
+
+	# Title
+	var title := Label.new()
+	title.text                = "BALANCE SHEET EXPORTED" if save_ok else "EXPORT FAILED"
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	title.add_theme_font_override("font", UIFonts.primary_bold())
+	title.add_theme_font_size_override("font_size", 22)
+	title.add_theme_color_override("font_color", COLOR_EXPORT_TXT if save_ok else Color(1.0, 0.4, 0.4, 1.0))
+	vbox.add_child(title)
+
+	# File path (or error message).
+	var path_lbl := Label.new()
+	path_lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	path_lbl.add_theme_font_size_override("font_size", 15)
+	path_lbl.add_theme_color_override("font_color", COLOR_HINT)
+	path_lbl.text = os_path if save_ok else "Could not write to user data directory."
+	path_lbl.clip_text = true
+	vbox.add_child(path_lbl)
+
+	# Hint about what to do next.
+	var hint := Label.new()
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.add_theme_font_size_override("font_size", 14)
+	hint.add_theme_color_override("font_color", COLOR_HINT)
+	if save_ok:
+		hint.text = "Open the file in any text or markdown editor, or copy to clipboard and paste into a doc."
+	else:
+		hint.text = "Use Copy to Clipboard to save the markdown manually."
+	vbox.add_child(hint)
+
+	# Spacer
+	var spacer := Control.new()
+	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spacer)
+
+	# Button row.
+	var btn_row := HBoxContainer.new()
+	btn_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	btn_row.add_theme_constant_override("separation", 12)
+	vbox.add_child(btn_row)
+
+	var clipboard_lbl: Label = null   # updated after copy
+
+	var copy_btn := _make_text_button("Copy to Clipboard", 190.0,
+		COLOR_EXPORT_NORMAL, COLOR_EXPORT_HOVER, COLOR_EXPORT_PRESS, COLOR_EXPORT_BORDER,
+		COLOR_EXPORT_TXT)
+	btn_row.add_child(copy_btn)
+
+	# Show in file manager only makes sense where the OS exposes the filesystem.
+	if save_ok and OS.get_name() in ["Windows", "macOS", "Linux"]:
+		var show_btn := _make_text_button("Show in Explorer", 180.0,
+			Color(0.06, 0.12, 0.06, 1.0), Color(0.10, 0.18, 0.10, 1.0),
+			Color(0.03, 0.07, 0.03, 1.0), Color(0.22, 0.55, 0.22, 1.0),
+			Color(0.80, 0.95, 0.80, 1.0))
+		show_btn.pressed.connect(func() -> void:
+			OS.shell_show_in_file_manager(os_path)
+		)
+		btn_row.add_child(show_btn)
+
+	var dismiss_btn := _make_text_button("Dismiss", 110.0,
+		COLOR_CLOSE_NORMAL, COLOR_CLOSE_HOVER, COLOR_CLOSE_PRESS, COLOR_CLOSE_BORDER,
+		COLOR_TEXT)
+	dismiss_btn.pressed.connect(func() -> void:
+		blocker.queue_free()
+	)
+	btn_row.add_child(dismiss_btn)
+
+	# Clipboard copy with visual confirmation — button text changes to "Copied!" briefly.
+	copy_btn.pressed.connect(func() -> void:
+		DisplayServer.clipboard_set(markdown)
+		copy_btn.text = "Copied!"
+		await get_tree().create_timer(1.5).timeout
+		if is_instance_valid(copy_btn):
+			copy_btn.text = "Copy to Clipboard"
+	)
+
 
 func _on_close_pressed() -> void:
 	AudioManager.play_ui("button")
