@@ -25,6 +25,22 @@ func _ready() -> void:
 		_cursor_rect.size = tex.get_size()
 	add_child(_cursor_rect)
 
+	# Show/hide the custom cursor as the mouse enters and leaves the window.
+	# When the cursor exits, restore the OS cursor so the user isn't left with nothing.
+	get_viewport().mouse_entered.connect(_on_window_mouse_entered)
+	get_viewport().mouse_exited.connect(_on_window_mouse_exited)
+
+
+func _on_window_mouse_entered() -> void:
+	_cursor_rect.visible = true
+	DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_HIDDEN)
+
+
+func _on_window_mouse_exited() -> void:
+	_cursor_rect.visible = false
+	DisplayServer.mouse_set_mode(DisplayServer.MOUSE_MODE_VISIBLE)
+
+
 func _process(_delta: float) -> void:
 	if _cursor_rect == null:
 		return
