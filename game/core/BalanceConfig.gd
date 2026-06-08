@@ -399,7 +399,7 @@ func export_to_markdown() -> String:
 	lines.append("")
 
 	for t: int in range(6):
-		var s := _trap_stats[t]
+		var s: Dictionary = _trap_stats[t]
 		lines.append("### %s" % _TRAP_NAMES[t])
 		lines.append("| Stat | Value |")
 		lines.append("|------|-------|")
@@ -419,7 +419,7 @@ func export_to_markdown() -> String:
 			lines.append("| Poison Duration | %s |" % _fmt(s["poison_duration"]))
 		if s.has("poison_tick_rate"):
 			lines.append("| Poison Tick Rate | %s |" % _fmt(s["poison_tick_rate"]))
-		var c := _trap_upgrade_costs[t]
+		var c: Array = _trap_upgrade_costs[t]
 		lines.append("")
 		lines.append("**Upgrade Costs:** L1: %d BB · L2: %d BB · L3: %d BB" % [c[0], c[1], c[2]])
 		lines.append("")
@@ -449,7 +449,7 @@ func export_to_markdown() -> String:
 	lines.append("")
 
 	for b: int in range(5):
-		var s := _boost_stats[b]
+		var s: Dictionary = _boost_stats[b]
 		lines.append("### %s" % _BOOST_NAMES[b])
 		lines.append("| Stat | Value |")
 		lines.append("|------|-------|")
@@ -459,7 +459,7 @@ func export_to_markdown() -> String:
 							"kill_bonus", "reduction", "capacity", "restore_per_kill"]:
 			if s.has(key):
 				lines.append("| %s | %s |" % [key.replace("_", " ").capitalize(), _fmt(s[key])])
-		var c := _boost_upgrade_costs[b]
+		var c: Array = _boost_upgrade_costs[b]
 		lines.append("")
 		lines.append("**Upgrade Costs:** L1: %d BB · L2: %d BB · L3: %d BB" % [c[0], c[1], c[2]])
 		lines.append("**Stat B Delta:** %s · **Range Factor:** %s" % [
@@ -476,7 +476,7 @@ func export_to_markdown() -> String:
 	lines.append("")
 
 	for e: int in range(9):
-		var s := _enemy_stats[e]
+		var s: Dictionary = _enemy_stats[e]
 		lines.append("### %s" % _ENEMY_NAMES[e])
 		lines.append("| Stat | Value |")
 		lines.append("|------|-------|")
@@ -517,7 +517,7 @@ func export_to_markdown() -> String:
 	lines.append("| Enemy | First Wave | Weight | Phase Out After |")
 	lines.append("|-------|-----------|--------|----------------|")
 	for e: int in range(9):
-		var ewc := _enemy_wave_config[e]
+		var ewc: Dictionary = _enemy_wave_config[e]
 		var po: String = "—" if ewc["phase_out_after"] == 0 else str(ewc["phase_out_after"])
 		var note: String = " *(boss-only)*" if ewc["weight"] == 0 else ""
 		var aa: String = " *(requires anti-air)*" if ewc.get("requires_anti_air", false) else ""
