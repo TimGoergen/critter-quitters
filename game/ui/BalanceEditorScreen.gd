@@ -1031,10 +1031,10 @@ func _show_export_dialog(os_path: String, markdown: String, save_ok: bool) -> vo
 		hint.text = "Use Copy to Clipboard to save the markdown manually."
 	vbox.add_child(hint)
 
-	# Spacer
-	var spacer := Control.new()
-	spacer.size_flags_vertical = Control.SIZE_EXPAND_FILL
-	vbox.add_child(spacer)
+	# Equal spacers above and below the button row centre it in the remaining space.
+	var spacer_top := Control.new()
+	spacer_top.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spacer_top)
 
 	# Button row.
 	var btn_row := HBoxContainer.new()
@@ -1067,6 +1067,10 @@ func _show_export_dialog(os_path: String, markdown: String, save_ok: bool) -> vo
 		blocker.queue_free()
 	)
 	btn_row.add_child(dismiss_btn)
+
+	var spacer_bottom := Control.new()
+	spacer_bottom.size_flags_vertical = Control.SIZE_EXPAND_FILL
+	vbox.add_child(spacer_bottom)
 
 	# Clipboard copy with visual confirmation — button text changes to "Copied!" briefly.
 	copy_btn.pressed.connect(func() -> void:
