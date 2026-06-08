@@ -331,7 +331,7 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	_trap_type      = trap_type
 	_active_enemies = active_enemies
 
-	var stats  = STATS[trap_type]
+	var stats  = BalanceConfig.get_trap_stats(int(trap_type))
 	_damage    = stats["damage"]
 	_range     = stats["range"]
 	_cooldown  = stats["cooldown"]
@@ -358,7 +358,7 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 		_bait_poison_duration        = stats.get("poison_duration", 3.0)
 		_bait_poison_tick_rate       = stats.get("poison_tick_rate", 0.5)
 
-	_spawn_visual(stats["color"])
+	_spawn_visual(STATS[trap_type]["color"])
 	_spawn_star_display()
 	_spawn_boost_indicator()
 	stats_changed.connect(_rebuild_range_indicator)
@@ -366,10 +366,10 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 	if _trap_type == TrapType.GLUE_BOARD:
 		_glue_pulse_interval = stats.get("pulse_interval", 3.0)
 		_glue_pulse_timer    = 0.0   # fire immediately on the first pulse
-		_slow_duration       = GLUE_DURATION_LEVELS[0]
+		_slow_duration       = BalanceConfig.get_glue_duration_levels()[0]
 		stats_changed.connect(_refresh_glue_slow)
 	if _trap_type == TrapType.BAIT_STATION:
-		_bait_poison_duration = BAIT_POISON_DURATION_LEVELS[0]
+		_bait_poison_duration = BalanceConfig.get_bait_poison_duration_levels()[0]
 
 
 ## Lightweight setup for placement preview ghosts.
@@ -378,7 +378,7 @@ func initialize(trap_type: TrapType, active_enemies: Array) -> void:
 func initialize_preview(trap_type: TrapType) -> void:
 	_is_preview = true
 	_trap_type  = trap_type
-	_range      = STATS[trap_type]["range"]
+	_range      = BalanceConfig.get_trap_stats(int(trap_type))["range"]
 	_spawn_visual(STATS[trap_type]["color"])
 
 
@@ -405,32 +405,32 @@ func _ready() -> void:
 func get_damage_upgrade_cost() -> int:
 	if _damage_level >= MAX_UPGRADE_LEVEL:
 		return 0
-	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_trap_type][_damage_level])
+	return GameState.apply_upgrade_discount(BalanceConfig.get_trap_upgrade_costs(int(_trap_type))[_damage_level])
 
 func get_range_upgrade_cost() -> int:
 	if _range_level >= MAX_UPGRADE_LEVEL:
 		return 0
-	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_trap_type][_range_level])
+	return GameState.apply_upgrade_discount(BalanceConfig.get_trap_upgrade_costs(int(_trap_type))[_range_level])
 
 func get_rate_upgrade_cost() -> int:
 	if _rate_level >= MAX_UPGRADE_LEVEL or _base_cooldown == 0.0:
 		return 0
-	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_trap_type][_rate_level])
+	return GameState.apply_upgrade_discount(BalanceConfig.get_trap_upgrade_costs(int(_trap_type))[_rate_level])
 
 func get_duration_upgrade_cost() -> int:
 	if _duration_level >= MAX_UPGRADE_LEVEL:
 		return 0
-	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_trap_type][_duration_level])
+	return GameState.apply_upgrade_discount(BalanceConfig.get_trap_upgrade_costs(int(_trap_type))[_duration_level])
 
 func get_crit_chance_upgrade_cost() -> int:
 	if _crit_chance_level >= MAX_UPGRADE_LEVEL:
 		return 0
-	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_trap_type][_crit_chance_level])
+	return GameState.apply_upgrade_discount(BalanceConfig.get_trap_upgrade_costs(int(_trap_type))[_crit_chance_level])
 
 func get_crit_damage_upgrade_cost() -> int:
 	if _crit_damage_level >= MAX_UPGRADE_LEVEL:
 		return 0
-	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_trap_type][_crit_damage_level])
+	return GameState.apply_upgrade_discount(BalanceConfig.get_trap_upgrade_costs(int(_trap_type))[_crit_damage_level])
 
 
 # ---------------------------------------------------------------------------
@@ -442,13 +442,13 @@ func get_crit_damage_upgrade_cost() -> int:
 func get_damage_after_upgrade() -> float:
 	match _trap_type:
 		TrapType.GLUE_BOARD:
-			return GLUE_ADHESION_LEVELS[mini(_damage_level + 1, MAX_UPGRADE_LEVEL)]
+			return BalanceConfig.get_glue_adhesion_levels()[mini(_damage_level + 1, MAX_UPGRADE_LEVEL)]
 		_:
-			return _damage + _base_damage * UPGRADE_DAMAGE_FACTOR
+			return _damage + _base_damage * BalanceConfig.get_trap_upgrade_factors()["damage"]
 
 ## Range this trap would have after one range upgrade.
 func get_range_after_upgrade() -> float:
-	return _range + _base_range * UPGRADE_RANGE_FACTOR
+	return _range + _base_range * BalanceConfig.get_trap_upgrade_factors()["range"]
 
 ## Current fire rate in shots per second. Returns 0.0 for passive traps.
 func get_shots_per_sec() -> float:
@@ -456,7 +456,7 @@ func get_shots_per_sec() -> float:
 
 ## Fire rate (shots/sec) this trap would have after one fire rate upgrade.
 func get_shots_per_sec_after_upgrade() -> float:
-	var new_cooldown := maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
+	var new_cooldown := maxf(_cooldown - _base_cooldown * BalanceConfig.get_trap_upgrade_factors()["fire_rate"], 0.1)
 	return 1.0 / new_cooldown
 
 ## Effective damage including all active boost multipliers.
@@ -475,14 +475,14 @@ func get_effective_shots_per_sec() -> float:
 
 ## Effective fire rate after the next fire-rate upgrade, with boosts applied.
 func get_effective_shots_per_sec_after_upgrade() -> float:
-	return _fire_rate_multiplier / maxf(_cooldown - _base_cooldown * UPGRADE_FIRE_RATE_FACTOR, 0.1)
+	return _fire_rate_multiplier / maxf(_cooldown - _base_cooldown * BalanceConfig.get_trap_upgrade_factors()["fire_rate"], 0.1)
 
 
 ## Glue Board / Bait Station — duration value after the next duration upgrade.
 func get_duration_after_upgrade() -> float:
 	if _trap_type == TrapType.BAIT_STATION:
-		return BAIT_POISON_DURATION_LEVELS[mini(_duration_level + 1, MAX_UPGRADE_LEVEL)]
-	return GLUE_DURATION_LEVELS[mini(_duration_level + 1, MAX_UPGRADE_LEVEL)]
+		return BalanceConfig.get_bait_poison_duration_levels()[mini(_duration_level + 1, MAX_UPGRADE_LEVEL)]
+	return BalanceConfig.get_glue_duration_levels()[mini(_duration_level + 1, MAX_UPGRADE_LEVEL)]
 
 ## Crit chance value after the next crit chance upgrade.
 func get_crit_chance_after_upgrade() -> float:

@@ -217,7 +217,7 @@ func initialize(boost_type: BoostType, active_enemies: Array, trap_nodes: Dictio
 	_active_enemies = active_enemies
 	_trap_nodes     = trap_nodes
 
-	var stats: Dictionary = STATS[boost_type]
+	var stats: Dictionary = BalanceConfig.get_boost_stats(int(boost_type))
 	_range      = stats["range"]
 	_base_range = stats["range"]
 	_cost       = stats["cost"]
@@ -344,13 +344,13 @@ func is_range_maxed() -> bool:
 func get_range_upgrade_cost() -> int:
 	if is_range_maxed():
 		return 0
-	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_boost_type][_range_level])
+	return GameState.apply_upgrade_discount(BalanceConfig.get_boost_upgrade_costs(int(_boost_type))[_range_level])
 
 func get_range_after_upgrade() -> float:
-	return _range + _base_range * 0.10
+	return _range + _base_range * BalanceConfig.get_boost_range_factor()
 
 func apply_range_upgrade() -> void:
-	_range       += _base_range * 0.10
+	_range       += _base_range * BalanceConfig.get_boost_range_factor()
 	_range_level += 1
 	_check_full_upgrade_bonus()
 	stats_changed.emit()
@@ -379,7 +379,7 @@ func is_stat_b_maxed() -> bool:
 func get_stat_b_upgrade_cost() -> int:
 	if is_stat_b_maxed():
 		return 0
-	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_boost_type][_stat_b_level])
+	return GameState.apply_upgrade_discount(BalanceConfig.get_boost_upgrade_costs(int(_boost_type))[_stat_b_level])
 
 ## Returns the raw current value of stat B.
 func get_stat_b_value() -> float:
@@ -393,7 +393,7 @@ func get_stat_b_value() -> float:
 
 ## Returns what stat B will be after the next upgrade, for panel preview.
 func get_stat_b_after_upgrade() -> float:
-	return get_stat_b_value() + float(STAT_B_DELTA[_boost_type])
+	return get_stat_b_value() + BalanceConfig.get_boost_stat_b_delta(int(_boost_type))
 
 ## Formats a stat B value as a display string (current or after-upgrade).
 func format_stat_b(v: float) -> String:
@@ -406,7 +406,7 @@ func format_stat_b(v: float) -> String:
 	return "%.2f" % v
 
 func apply_stat_b_upgrade() -> void:
-	var delta := float(STAT_B_DELTA[_boost_type])
+	var delta := BalanceConfig.get_boost_stat_b_delta(int(_boost_type))
 	match _boost_type:
 		BoostType.PHEROMONE_DISPENSER: _damage_bonus    += delta
 		BoostType.COMPRESSOR:          _fire_rate_bonus  += delta
@@ -447,7 +447,7 @@ func is_stat_c_maxed() -> bool:
 func get_stat_c_upgrade_cost() -> int:
 	if is_stat_c_maxed():
 		return 0
-	return GameState.apply_upgrade_discount(UPGRADE_COSTS[_boost_type][_stat_c_level])
+	return GameState.apply_upgrade_discount(BalanceConfig.get_boost_upgrade_costs(int(_boost_type))[_stat_c_level])
 
 ## Returns the raw current value of stat C.
 func get_stat_c_value() -> float:
@@ -459,7 +459,7 @@ func get_stat_c_value() -> float:
 
 ## Returns what stat C will be after the next upgrade, for panel preview.
 func get_stat_c_after_upgrade() -> float:
-	return get_stat_c_value() + float(STAT_C_DELTA[_boost_type])
+	return get_stat_c_value() + BalanceConfig.get_boost_stat_c_delta(int(_boost_type))
 
 ## Formats a stat C value as a display string.
 func format_stat_c(v: float) -> String:
@@ -470,7 +470,7 @@ func format_stat_c(v: float) -> String:
 	return "%.1f" % v
 
 func apply_stat_c_upgrade() -> void:
-	var delta := float(STAT_C_DELTA[_boost_type])
+	var delta := BalanceConfig.get_boost_stat_c_delta(int(_boost_type))
 	match _boost_type:
 		BoostType.CASH_REGISTER:
 			_kill_bonus     += int(delta)
@@ -546,7 +546,7 @@ func get_description() -> String:
 ## Bug Bucks cost when placed_count units of this type are already on the grid.
 ## Formula: base_cost × (1 + 0.05 × placed_count), rounded to nearest integer.
 static func compute_placement_cost(boost_type: BoostType, placed_count: int) -> int:
-	return roundi(float(STATS[boost_type]["cost"]) * (1.0 + 0.05 * float(placed_count)))
+	return roundi(float(BalanceConfig.get_boost_stats(int(boost_type))["cost"]) * (1.0 + 0.05 * float(placed_count)))
 
 
 ## Records the Bug Bucks actually paid at placement so get_sell_value() refunds
